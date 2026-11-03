@@ -78,9 +78,11 @@ docker run --env-file .env -p 3000:3000 ghcr.io/your-org/ci-cd-optimizer:latest
 
 Store the private key and webhook secret in the platform's managed secret
 store. Set `DATABASE_URL` to a durable PostgreSQL database. The included
-workflow publishes immutable commit-tagged images to GHCR. Container repository
-names must remain lowercase even when the GitHub account contains uppercase
-characters.
+workflow always validates the production container. To publish immutable
+commit-tagged images, set the repository variable `GHCR_IMAGE` to a writable
+lowercase package path such as `ghcr.io/your-org/ci-cd-optimizer`. Leaving the
+variable unset keeps publication disabled without weakening container
+validation.
 
 ## Product direction
 
