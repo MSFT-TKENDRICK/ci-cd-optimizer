@@ -1,0 +1,20 @@
+name: CI/CD Optimizer
+description: Finds actionable opportunities to make builds and releases faster, more reproducible, and agent-friendly.
+url: https://github.com/MSFT-TKENDRICK/ci-cd-optimizer
+hook_attributes:
+  url: https://example.com/api/github/webhooks
+redirect_url: https://example.com
+callback_urls:
+  - https://example.com/api/github/callback
+setup_url: https://example.com/setup
+setup_on_update: true
+public: false
+default_permissions:
+  actions: read
+  checks: write
+  contents: read
+  metadata: read
+  pull_requests: read
+default_events:
+  - pull_request
+  - workflow_run

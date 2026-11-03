@@ -1,0 +1,10 @@
+enabled: true
+failOnSeverity: never
+disabledRules: []
+ignoredPaths:
+  - vendor/**
+  - node_modules/**
+  - dist/**
+  - build/**
+maxFiles: 500
+maxFileBytes: 256000
