@@ -1,4 +1,6 @@
 ---
+name: Experiment arm
+run-name: "Experiment arm ${{ github.event.inputs.experiment }}/${{ github.event.inputs.arm }}"
 description: Implements one arm of a hill-climbing experiment and opens its pull request into the experiment trunk.
 on:
   workflow_dispatch:
