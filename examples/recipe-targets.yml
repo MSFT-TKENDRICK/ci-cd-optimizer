@@ -1,0 +1,15 @@
+# .github/recipe-targets.yml in the repository that publishes recipes (where experiments run).
+# The weekly recipe-rollout workflow applies each promoted recipe to these repositories in waves. A wave widens
+# only after the previous one proved compatible, measured by CI passing on the recipe's pull requests.
+repositories:
+  - my-org/web
+  - my-org/api
+  - my-org/mobile
+  - my-org/platform-tools
+  - my-org/data-pipeline
+canaries:            # optional: applied first, in this order
+  - my-org/platform-tools
+rollout:             # optional; defaults shown
+  waves: [1, 3, "25%", "100%"]   # cumulative: repository counts or percentages of applicable repositories
+  minSamples: 5                   # until this many results, any CI failure halts the rollout
+  minCompatibility: 0.7           # then: Wilson 95% lower bound of the CI pass rate needed to widen

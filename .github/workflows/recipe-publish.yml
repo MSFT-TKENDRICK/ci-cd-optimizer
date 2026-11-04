@@ -1,0 +1,76 @@
+# Turns a promoted pipeline experiment into a reusable recipe (recipes/<experiment>.yml) once its
+# experiments/<name>/trunk pull request is merged into main, and opens a pull request to publish it.
+# Rules experiments (changes to the linter itself) are skipped. See docs/recipes.md.
+name: Recipe publish
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: recipe-publish-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event.pull_request.merged &&
+      startsWith(github.event.pull_request.head.ref, 'experiments/') &&
+      endsWith(github.event.pull_request.head.ref, '/trunk')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            .github
+            dist-action
+            recipes
+      - name: Build recipe
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          experiment="${HEAD_REF#experiments/}"
+          experiment="${experiment%/trunk}"
+          if ! [[ "$experiment" =~ ^[a-z0-9][a-z0-9-]{0,47}$ ]]; then
+            echo "::error::Unexpected experiment branch: $HEAD_REF"
+            exit 1
+          fi
+          echo "experiment=$experiment" >> "$GITHUB_OUTPUT"
+          node dist-action/index.js recipes publish --experiment "$experiment" --ref "$MERGE_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -n "$(git status --porcelain -- recipes)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open publish pull request
+        if: steps.publish.outputs.changed == 'true'
+        env:
+          # PRs opened with GITHUB_TOKEN do not trigger CI; an App token or PAT makes required checks run.
+          GH_TOKEN: ${{ secrets.CICD_OPTIMIZER_TOKEN || github.token }}
+          EXPERIMENT: ${{ steps.publish.outputs.experiment }}
+          SOURCE_PR: ${{ github.event.pull_request.number }}
+        run: |
+          branch="recipes/$EXPERIMENT"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add recipes
+          git commit -m "recipe($EXPERIMENT): publish from #$SOURCE_PR"
+          git push --force-with-lease origin "$branch"
+          gh label create ci-cd-optimizer --color 1f883d --description "CI/CD Optimizer" 2>/dev/null || true
+          gh label create recipe --color 0969da --description "Reusable CI/CD fix built from a promoted experiment" 2>/dev/null || true
+          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --base main --head "$branch" \
+              --title "recipe($EXPERIMENT): publish reusable fix" \
+              --label ci-cd-optimizer --label recipe \
+              --body "Publishes \`recipes/$EXPERIMENT.yml\`, built from the winning arm promoted in #$SOURCE_PR. Once merged, the weekly recipe rollout applies it to the repositories in \`.github/recipe-targets.yml\` in compatibility-gated waves (docs/recipes.md)."
+          fi

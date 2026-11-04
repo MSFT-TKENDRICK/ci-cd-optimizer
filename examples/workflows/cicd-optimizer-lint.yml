@@ -1,0 +1,33 @@
+# Pull request check: reports only the CI/CD findings a pull request introduces, as inline annotations.
+# Copy to .github/workflows/ in any repository. No GitHub App or extra secrets needed.
+name: CI/CD Optimizer lint
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cicd-optimizer-lint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # --base needs the base commit. A blobless partial clone fetches history without old file contents.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - uses: MSFT-TKENDRICK/ci-cd-optimizer@main # pin a commit SHA in production
+        with:
+          args: >-
+            --base ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+            --format github
+            --fail-on error

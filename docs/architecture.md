@@ -1,60 +1,91 @@
 # Architecture
 
-CI/CD Optimizer follows the same low-friction review model as dependency update
-tools: install a GitHub App, open or update a pull request, and receive a check
-run with concrete findings.
+CI/CD Optimizer is one TypeScript codebase with three entry points over a shared, side-effect-free core. Rules are pure
+functions of a repository snapshot. Everything that talks to GitHub lives in a thin service layer, so the CLI, the
+Action, the App, and the hill-climbing workflows all behave the same way.
 
-## Request flow
+```text
+                  ┌───────────────┐  ┌──────────────────────┐  ┌─────────────────────────────┐
+ entry points     │ CLI (bin.ts)  │  │ Action (action.ts →  │  │ App (app.ts, Probot         │
+                  │ lint, rules,  │  │ dist-action bundle)  │  │ webhooks)                   │
+                  │ scan, …       │  │                      │  │                             │
+                  └──────┬────────┘  └──────────┬───────────┘  └──────────────┬──────────────┘
+                         └──────────────────────┼─────────────────────────────┘
+ service/                         pull-request check · scan · workflow-run · comment commands
+                         ┌───────────┬──────────┼───────────┬──────────────┬───────────────┐
+ domain           issues/     fixes/     alerts/     telemetry/    experiments/    recipes/
+                         └───────────┴──────────┼───────────┴──────────────┴───────────────┘
+ core                       lint/  (engine · config · parsers · project model · 33 rules · formatters)
+ I/O                        github/  (REST client, repository snapshot, git, code scanning)
+```
 
-1. A pull-request webhook starts an in-progress check run.
-2. The app requests the recursive Git tree for the pull request head.
-3. Only relevant workflow, manifest, lock, monorepo, and container files are
-   downloaded. File count and size are bounded.
-4. Pure analysis rules inspect the repository snapshot.
-5. Findings are sorted by impact and emitted as a check summary and inline
-   annotations.
+## Lint engine (`src/lint`)
 
-## Telemetry flow
+The MVP and the foundation of everything else. It is modeled on ESLint.
 
-1. A completed workflow-run webhook retrieves the run's jobs and workflow
-   definition.
-2. Queue time, job duration, dependencies, and total elapsed time are normalized
-   into a snapshot.
-3. The snapshot is compared with recent successful runs of the same workflow
-   and branch, then persisted in PostgreSQL.
-4. A telemetry check publishes a Mermaid Gantt chart, dependency graph,
-   estimated critical path, slowest jobs, regression delta, and focused
-   observations.
+1. **Inventory.** `inventory.ts` selects only CI/CD-relevant files: workflows, composite actions, package manifests,
+   lockfiles, workspace configs, and container files. Its bounds keep large monorepos cheap, and pull requests only fetch
+   what's needed.
+2. **Parsing.** Position-preserving YAML (workflows), Dockerfile, and manifest parsers feed a **project model**: jobs,
+   steps, `uses` references, setup actions, caches, workspaces, packages, images, and the change context.
+3. **Rules.** Each rule is a `RuleModule { meta, check(context) }` that reports diagnostics with impact, confidence, a
+   suggestion, a stable fingerprint, and optional text-edit fixes. It never executes repository code or expands
+   expressions. There are 33 rules in 8 rulesets: `workflow`, `checkout`, `affected`, `caching`, `hermeticity`,
+   `containers`, `packages`, and `registries` ([catalog](rules.md)).
+4. **Configuration.** Presets, ruleset- and rule-level severities, options, and ignores ([configuration](configuration.md)).
+   Rules are tested with an ESLint-style `RuleTester` (valid, invalid, and autofix-output cases).
+5. **Change awareness.** `--base` lints the base revision too and keeps only **introduced** findings, so pull requests
+   are judged on what they change rather than on legacy debt.
+6. **Output.** Formatters for `stylish`, `json`, `github` annotations, `markdown`, and `sarif` (code scanning), plus
+   `fix.ts` to apply non-overlapping edits.
 
-Snapshots make recommendations progressively more repository-specific without
-executing build code or downloading build outputs.
+`lint/api.ts` is the versioned engine contract. Experiment arms are built against it and scored on the
+[benchmark corpus](../corpus/README.md).
 
-The analyzer does not execute repository code, expand workflow expressions, or
-mutate the repository. This keeps untrusted pull requests isolated from the app
-runtime.
+## Service layer (`src/service`)
 
-## Rule design principles
+| Service | Trigger | Does |
+|---|---|---|
+| `pull-request.ts` | PR webhook (App); the CLI and Action get the same result from `lint --base` | Lints head vs base, posts the **CI/CD Optimizer** check with introduced findings. |
+| `scan.ts` | Default-branch push, install, or Action `scan` | Lints the default branch, uploads SARIF, then syncs `issues/` and `fixes/`. |
+| `workflow-run.ts` | `workflow_run.completed`, or Action `telemetry` | Builds a telemetry snapshot, compares it with history, posts the Gantt/bottleneck check, and syncs `alerts/`. |
+| `comments.ts` | `@cicd-optimizer` comments | Rebase, recreate, ignore, and close commands on managed pull requests. |
 
-- **Evidence over guesses:** Findings require a detectable pattern and carry a
-  confidence level.
-- **Actionable output:** Every finding includes impact, effort, explanation, and
-  a concrete recommendation.
-- **Advisory by default:** Findings produce a neutral check. Repositories may
-  configure an enforcement threshold.
-- **Repository-aware:** Rules can correlate workflows, lockfiles, package
-  manifests, Dockerfiles, and monorepo configuration.
-- **Extensible:** Each rule implements one small interface and is independently
-  testable.
+## Acting on findings
 
-## Future evolution
+These layers are modeled on Dependabot and GitHub Advanced Security. Every write is idempotent: GitHub items carry hidden
+markers (fingerprint, revision, content signature) in `issues/markers.ts`, so re-runs update, resolve, or reopen items
+instead of duplicating them.
 
-- Parse opt-in step logs and OpenTelemetry data to distinguish cache misses,
-  compilation, tests, network transfer, and artifact handling.
-- Correlate changed paths with workflow run history to recommend job splitting,
-  runner sizing, and affected-project boundaries.
-- Add safe pull-request remediation for deterministic changes such as
-  concurrency groups, cache inputs, and artifact retention.
-- Add an organization dashboard for duplicate builds, cache hit rates, runner
-  saturation, flaky jobs, and release lead time.
-- Model shared build artifacts and package graphs across repositories while
-  preserving tenant boundaries.
+- **`issues/`**: one issue per rule (or per finding) whose severity and impact meet the configured bar. Assignable to
+  the Copilot coding agent. Issues are resolved when the finding disappears ([details](issues-and-alerts.md)).
+- **`fixes/`**: groups autofixes into branches and pull requests, Dependabot-style, with rebase, recreate, close, and
+  ignore commands.
+- **`alerts/`**: robust statistics on workflow durations: median/MAD z-scores for spikes, and a one-sided Mann-Whitney U
+  test for sustained regressions.
+  One alert issue per workflow, closed on recovery.
+- **`telemetry/`**: run snapshots (jobs, steps, queue time, `needs` graph), critical path, and Mermaid Gantt reports.
+  Snapshots are stored in memory, in a file (an Actions-cached `.cicd-telemetry` directory), or in Postgres.
+
+## Hill climbing (`src/experiments`)
+
+Deterministic machinery for the [gh-aw experiment loop](experiments.md). It covers the manifest and rubric validation
+(`manifest.ts`, `propose.ts`), measurement collection from CI and corpus evaluation in isolated worktrees (`collect.ts`,
+`evaluate.ts`, `corpus.ts`), statistics (`score.ts`, a one-sided Mann-Whitney U test), and the
+promote/reject/expire/wait decision (`decide.ts`). Agents propose, implement, and judge. This code decides.
+
+## Recipes (`src/recipes`)
+
+These turn a promoted pipeline experiment into a portable [recipe](recipes.md). The flow is `apply.ts` (autofix PR,
+partial, or adaptation issue), then `compat.ts` (Wilson-bounded CI compatibility), then `rollout.ts` (canary-first,
+compatibility-gated waves).
+
+## Trust boundaries
+
+- **Linting is static.** No repository code runs in the CLI, Action, or App, so untrusted pull requests can't reach
+  their credentials. The only place untrusted code runs is the grader's token-less evaluation step.
+- **Least-privilege writes.** The App requests only the permissions in `app.yml`. Workflows set minimal top-level
+  permissions (`{}` or read-only) and grant write scopes per job. Agentic workflows never hold write tokens; gh-aw safe outputs apply
+  validated requests.
+- **Humans stay in the loop.** Fix, recipe, and experiment trunk pull requests need review unless a repository opts in to
+  auto-merge.

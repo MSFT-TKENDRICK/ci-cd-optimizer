@@ -1,0 +1,57 @@
+# Dependabot-style scan without installing the GitHub App. Lints the default branch through the API, uploads SARIF
+# to code scanning, and syncs finding issues and autofix pull requests per .github/ci-cd-optimizer.yml.
+#
+# Tokens (all optional):
+#   vars.CICD_OPTIMIZER_APP_ID + secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY: a GitHub App installation token. Pull
+#       requests it opens trigger CI, and it can change .github/workflows/*. GITHUB_TOKEN can do neither.
+#   secrets.CICD_OPTIMIZER_TOKEN: a fine-grained personal access token, as an alternative to the App.
+#   secrets.COPILOT_ASSIGN_TOKEN: a Copilot-licensed user's token, used to assign issues to the Copilot coding agent.
+name: CI/CD Optimizer scan
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/**"
+      - "**/Dockerfile*"
+      - "**/*.dockerfile"
+      - "**/.dockerignore"
+      - "**/package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cicd-optimizer-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      issues: write
+      pull-requests: write
+      security-events: write
+    steps:
+      - name: Mint GitHub App token
+        id: app-token
+        if: vars.CICD_OPTIMIZER_APP_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
+          private-key: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
+
+      # The scan reads the repository through the API, so no checkout is needed.
+      - uses: MSFT-TKENDRICK/ci-cd-optimizer@main # pin a commit SHA in production
+        env:
+          COPILOT_ASSIGN_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
+        with:
+          command: scan
+          args: --upload-sarif
+          token: ${{ steps.app-token.outputs.token || secrets.CICD_OPTIMIZER_TOKEN || github.token }}

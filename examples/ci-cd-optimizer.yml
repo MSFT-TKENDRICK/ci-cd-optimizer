@@ -1,0 +1,43 @@
+# .github/ci-cd-optimizer.yml: a starting point for an organization monorepo optimized for agentic development.
+# Every key is optional; see docs/configuration.md.
+schemaVersion: 1
+
+extends: [recommended, agentic, github]
+
+rules:
+  # Use the organization's npm scope on the GitHub npm registry.
+  registries/github-npm: [warn, { scopes: ["@my-org"] }]
+  # Job timeouts bound runaway agent and CI loops.
+  workflow/job-timeout: [warn, { defaultMinutes: 20, maxMinutes: 60 }]
+
+failOn: error
+
+# Dependabot-alert-style issues for findings that matter, handed to the Copilot coding agent.
+issues:
+  enabled: true
+  minSeverity: warn
+  minImpact: medium
+  maxOpen: 10
+  assignCopilot: true
+  copilot:
+    customInstructions: >-
+      Fix only the reported CI/CD findings. Keep workflow behavior identical and run the affected checks.
+
+# Dependabot-style pull requests for safe, mechanical fixes.
+fixes:
+  enabled: true
+  openPullRequestsLimit: 5
+  groups:
+    workflow-hygiene:
+      rulesets: [workflow]
+    dependencies-install:
+      rules: [caching/setup-cache, hermeticity/frozen-lockfile]
+
+# Alert when a workflow or job gets statistically significantly slower on main.
+alerts:
+  branches: [main]
+  labels: [performance-regression]
+
+# Accept recipes promoted elsewhere in the organization, up to medium risk.
+recipes:
+  maxRisk: medium

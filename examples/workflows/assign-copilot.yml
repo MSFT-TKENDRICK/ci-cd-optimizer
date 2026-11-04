@@ -1,0 +1,34 @@
+# Hands issues labeled copilot:ready to the Copilot coding agent. CI/CD Optimizer adds that label when it can't
+# assign the agent itself, for example when the GitHub App runs without COPILOT_ASSIGN_TOKEN.
+#
+# secrets.COPILOT_ASSIGN_TOKEN: a fine-grained token for a Copilot-licensed user, with Issues read/write access.
+name: Assign Copilot
+
+on:
+  issues:
+    types: [labeled]
+
+permissions: {}
+
+concurrency:
+  group: assign-copilot-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  assign:
+    if: github.event.label.name == 'copilot:ready'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Assign the Copilot coding agent
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          gh api --method POST "repos/$REPO/issues/$ISSUE/assignees" \
+            -f 'assignees[]=copilot-swe-agent[bot]' \
+            -f "agent_assignment[target_repo]=$REPO" \
+            -f "agent_assignment[base_branch]=$BASE"
+          gh api --method DELETE "repos/$REPO/issues/$ISSUE/labels/copilot%3Aready" || true

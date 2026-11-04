@@ -22,8 +22,11 @@ export const DOCS_BASE = "https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/blob
 const SEVERITY_RANK: Record<ActiveSeverity, number> = { info: 1, warn: 2, error: 3 };
 const DIRECTIVE = /#\s*cicd-optimizer-disable-(next-line|file)\b([^\n]*)/;
 
+/** Explicit anchor for a rule in docs/rules.md; GitHub's heading slugs drop the "/" in rule ids. */
+export const ruleAnchor = (ruleId: string) => ruleId.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+
 export function docsUrl(ruleId: string): string {
-  return `${DOCS_BASE}#${ruleId.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+  return `${DOCS_BASE}#${ruleAnchor(ruleId)}`;
 }
 
 export interface LintOptions {

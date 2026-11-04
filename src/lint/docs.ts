@@ -1,8 +1,8 @@
 import { PRESETS } from "./config.js";
-import { docsUrl } from "./engine.js";
+import { ruleAnchor } from "./engine.js";
 import type { AnyRule } from "./types.js";
 
-/** Generates docs/rules.md from rule metadata (single source of truth; a test keeps the file current). */
+/** Generates docs/rules.md from rule metadata (single source of truth; test/lint/docs.test.ts keeps the file current). */
 export function renderRulesMarkdown(rules: AnyRule[]): string {
   const rulesets = [...new Set(rules.map((rule) => rule.meta.ruleset))];
   const lines = [
@@ -19,7 +19,7 @@ export function renderRulesMarkdown(rules: AnyRule[]): string {
     "| --- | --- | --- | --- | --- | --- |",
     ...rules.map(
       (rule) =>
-        `| [\`${rule.meta.id}\`](${docsUrl(rule.meta.id).replace(/^.*#/, "#")}) | ${rule.meta.kind} | ${rule.meta.defaultSeverity} | ${rule.meta.presets.join(", ")} | ${rule.meta.fixable ? "yes" : ""} | ${rule.meta.description.replace(/\|/g, "\\|")} |`,
+        `| [\`${rule.meta.id}\`](#${ruleAnchor(rule.meta.id)}) | ${rule.meta.kind} | ${rule.meta.defaultSeverity} | ${rule.meta.presets.join(", ")} | ${rule.meta.fixable ? "yes" : ""} | ${rule.meta.description.replace(/\|/g, "\\|")} |`,
     ),
     "",
   ];
@@ -27,7 +27,7 @@ export function renderRulesMarkdown(rules: AnyRule[]): string {
     lines.push(`## Ruleset: ${ruleset}`, "");
     for (const rule of rules.filter((candidate) => candidate.meta.ruleset === ruleset)) {
       const meta = rule.meta;
-      lines.push(`### ${meta.id}`, "", meta.description, "", `**Why:** ${meta.rationale}`, "");
+      lines.push(`<a id="${ruleAnchor(meta.id)}"></a>`, "", `### ${meta.id}`, "", meta.description, "", `**Why:** ${meta.rationale}`, "");
       lines.push(
         `- Kind: ${meta.kind}; default severity: ${meta.defaultSeverity}; impact: ${meta.impact}${meta.fixable ? "; autofix available" : ""}`,
         `- Presets: ${meta.presets.map((preset) => `\`${preset}\``).join(", ") || "none (opt-in)"}`,

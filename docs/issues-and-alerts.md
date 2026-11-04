@@ -1,0 +1,112 @@
+# Finding issues and duration alerts
+
+CI/CD Optimizer manages two kinds of issues, similar to Dependabot and code scanning alerts. Each issue carries a
+hidden marker, `<!-- cicd-optimizer:<kind> fingerprint=... -->`, so the tool can find its own issues again. It
+updates them in place rather than opening duplicates, and it never touches issues it didn't create.
+
+## Finding issues
+
+These come from `scan` (CLI or Action) and from the App's push scans of the default branch. Enable them with
+`issues.enabled: true` (see [configuration.md](configuration.md#issues-issues)).
+
+A finding qualifies for an issue when its severity is at least `issues.minSeverity` and its impact is at least
+`issues.minImpact`. `issues.rules` overrides that per rule: `true` always opens an issue and `false` never does.
+
+| Behavior | Details |
+|---|---|
+| Grouping | `groupBy: rule` (default) opens one issue per rule, listing every location with permalinks. `groupBy: finding` opens one issue per diagnostic. |
+| Labels | `cicd-optimizer`, `ruleset:<ruleset>`, `severity:<severity>`, `impact:<impact>`, plus `issues.labels`. These let triage automation and agents route issues. |
+| Updates | Issues are re-rendered only when the set of findings changes, so scans don't create notification noise. |
+| Resolution | When a finding disappears, its issue is closed with a comment (`closeResolved: true`). If it reappears, the same issue is reopened. |
+| Dismissal | Closing an issue as **not planned** dismisses that finding. It isn't reopened, much like dismissing a code scanning alert. To undo, reopen the issue. |
+| Rate limit | At most `maxOpen` finding issues are open at once. Higher severity, then higher impact, then more locations take priority. The rest are reported as skipped in the scan output. |
+
+### Assigning issues to the Copilot coding agent
+
+With `issues.assignCopilot: true`, each new or reopened issue is assigned to the Copilot coding agent, which opens
+a pull request for it. The agent receives `issues.copilot` settings such as `baseBranch`, `customInstructions`, an
+optional custom agent, and an optional model.
+
+Assignment needs a token for a user with a Copilot license. Installation tokens and `GITHUB_TOKEN` can't assign
+agents:
+
+- **CLI and Action:** set `COPILOT_ASSIGN_TOKEN` to a fine-grained token with Issues read/write access to the
+  repository.
+- **App:** set `COPILOT_ASSIGN_TOKEN` on the server.
+
+Without such a token, or if assignment fails, the issue is labeled `copilot:ready`. A workflow that holds a user
+token can then assign it; see [examples/workflows/assign-copilot.yml](../examples/workflows/assign-copilot.yml).
+Labels added by `GITHUB_TOKEN` don't trigger workflows. This hand-off therefore needs the App, an App token in the
+scan workflow (`CICD_OPTIMIZER_APP_ID`), or a `CICD_OPTIMIZER_TOKEN` personal access token.
+
+Fixable findings can also become Dependabot-style pull requests directly, with no agent involved. See
+[configuration.md](configuration.md#fix-pull-requests-fixes).
+
+## Duration alerts
+
+These come from `telemetry` (CLI or Action, triggered by `workflow_run: completed`) and from the App's `workflow_run`
+handler. Alerts are on by default; turn them off with `alerts.enabled: false`.
+
+### What is measured
+
+Every completed run is snapshotted: jobs, steps, runner queue time, and the job dependency graph. The snapshots
+form duration series:
+
+- One series for the whole workflow.
+- One series per job. Matrix legs share a job key, and the slowest leg counts as the job's wall time.
+
+Only successful runs on `alerts.branches` (all branches when empty) are counted, so failing builds that exit early
+don't drag the baseline down.
+
+History comes from the first available source:
+
+1. Postgres (`DATABASE_URL`), App only.
+2. A JSON Lines snapshot store (`telemetry --store`), which a workflow can persist with `actions/cache`.
+3. The Actions API, rebuilt on every run.
+
+### Detection
+
+Two complementary tests run on every series. A sustained regression takes precedence over a spike on the same series.
+
+| Kind | Test | Fires when |
+|---|---|---|
+| **Spike** | Robust z-score of the latest run against the median and MAD of up to `window` prior runs. MAD has a floor of max(2% of median, 1 s). | z > `zThreshold` (3.5) and the increase is material. |
+| **Regression** | One-sided Mann-Whitney U test of the last `regressionWindow` runs against the `window` runs before them. | p < `pValue` (0.01) and the median shift is material. |
+
+"Material" means at least `minIncreasePercent` (20%) **and** `minIncreaseSeconds` (30 s) above the baseline median.
+This prevents alerts on a 2-second job that becomes 3 seconds, or on a 2-hour job that varies by a minute. No series
+alerts until it has `minSamples` (10) baseline runs.
+
+Severity: a spike of +100% or more, or a regression of +50% or more, is **critical** (`severity:error`). Anything
+else is a **warning** (`severity:warn`).
+
+The robust statistics resist outliers already in the baseline. The rank test catches step changes, such as a
+cache that stopped hitting or a new slow test, that are too small for any single run to stand out.
+
+### Lifecycle
+
+The tool keeps one alert issue per workflow, listing every anomalous series. Each one shows its baseline, the observed
+duration, the statistic behind it, a duration chart, and links to the runs involved.
+
+- **New anomaly:** the issue is opened, labeled `cicd-optimizer`, `alert:duration`, and `severity:*`, and assigned per
+  `alerts.assignees` and `alerts.assignCopilot`.
+- **Anomaly changes:** if a series, kind, or severity changes, the issue is updated with a comment. Otherwise it's
+  updated silently.
+- **Recovery:** the issue closes once every alerted series has `recoveryRuns` (3) consecutive runs back within the
+  baseline it had when the alert opened. Comparing against the original baseline matters. Otherwise a lasting
+  slowdown would become the new normal and look like a recovery.
+- **Snooze:** closing an alert as **not planned** silences that workflow for `snoozeDays` (14).
+
+### Reports
+
+The telemetry report includes:
+
+- A Mermaid Gantt chart of jobs, with critical-path jobs in red and a lane for time spent waiting for a runner.
+- The job dependency graph with the critical path highlighted.
+- Queue time.
+- The longest jobs and slowest steps.
+- Recommendations based on the critical path and queue time.
+- Jobs slower than their baseline.
+
+It's written to the step summary and, with `--check`, posted as a neutral check run on the commit. The App always
+posts the check.

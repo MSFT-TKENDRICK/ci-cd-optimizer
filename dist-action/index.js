@@ -12842,8 +12842,9 @@ function buildProject(input2) {
 var DOCS_BASE = "https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/blob/main/docs/rules.md";
 var SEVERITY_RANK = { info: 1, warn: 2, error: 3 };
 var DIRECTIVE = /#\s*cicd-optimizer-disable-(next-line|file)\b([^\n]*)/;
+var ruleAnchor = (ruleId) => ruleId.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 function docsUrl(ruleId) {
-  return `${DOCS_BASE}#${ruleId.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+  return `${DOCS_BASE}#${ruleAnchor(ruleId)}`;
 }
 function parseIds(text) {
   const body = text.split(/\s--\s/)[0]?.trim() ?? "";
@@ -13035,7 +13036,7 @@ function renderRulesMarkdown(rules9) {
     "| Rule | Kind | Default | Presets | Fixable | Description |",
     "| --- | --- | --- | --- | --- | --- |",
     ...rules9.map(
-      (rule) => `| [\`${rule.meta.id}\`](${docsUrl(rule.meta.id).replace(/^.*#/, "#")}) | ${rule.meta.kind} | ${rule.meta.defaultSeverity} | ${rule.meta.presets.join(", ")} | ${rule.meta.fixable ? "yes" : ""} | ${rule.meta.description.replace(/\|/g, "\\|")} |`
+      (rule) => `| [\`${rule.meta.id}\`](#${ruleAnchor(rule.meta.id)}) | ${rule.meta.kind} | ${rule.meta.defaultSeverity} | ${rule.meta.presets.join(", ")} | ${rule.meta.fixable ? "yes" : ""} | ${rule.meta.description.replace(/\|/g, "\\|")} |`
     ),
     ""
   ];
@@ -13043,7 +13044,7 @@ function renderRulesMarkdown(rules9) {
     lines.push(`## Ruleset: ${ruleset}`, "");
     for (const rule of rules9.filter((candidate) => candidate.meta.ruleset === ruleset)) {
       const meta = rule.meta;
-      lines.push(`### ${meta.id}`, "", meta.description, "", `**Why:** ${meta.rationale}`, "");
+      lines.push(`<a id="${ruleAnchor(meta.id)}"></a>`, "", `### ${meta.id}`, "", meta.description, "", `**Why:** ${meta.rationale}`, "");
       lines.push(
         `- Kind: ${meta.kind}; default severity: ${meta.defaultSeverity}; impact: ${meta.impact}${meta.fixable ? "; autofix available" : ""}`,
         `- Presets: ${meta.presets.map((preset) => `\`${preset}\``).join(", ") || "none (opt-in)"}`

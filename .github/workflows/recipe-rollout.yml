@@ -1,0 +1,99 @@
+# Rolls published recipes out to other repositories Dependabot-style: canaries first, then waves that
+# only advance while the recipe's CI compatibility score (pass rate in repos that already merged or ran
+# it) stays above rollout.minCompatibility. Incompatible targets get an adaptation issue that can be
+# assigned to the Copilot coding agent instead of a pull request. See docs/recipes.md.
+#
+# Needs a GitHub App installed on the target repositories (contents, pull requests, issues, checks:
+# read) - set vars.CICD_OPTIMIZER_APP_ID and secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY. Targets and wave
+# sizes live in .github/recipe-targets.yml.
+name: Recipe rollout
+
+on:
+  schedule:
+    - cron: "17 6 * * 2"
+  workflow_dispatch:
+    inputs:
+      recipe:
+        description: Only roll out this recipe id (default all recipes/*.yml)
+        required: false
+        type: string
+      dry-run:
+        description: Plan without opening pull requests or issues
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: recipe-rollout
+  cancel-in-progress: false
+
+jobs:
+  rollout:
+    if: vars.CICD_OPTIMIZER_APP_ID != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            .github
+            dist-action
+            recipes
+      - name: Mint App token for target repositories
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
+          private-key: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - name: Roll out recipes
+        id: rollout
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          COPILOT_ASSIGN_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
+          ONLY: ${{ inputs.recipe }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          if [ ! -f .github/recipe-targets.yml ]; then
+            echo "No .github/recipe-targets.yml; nothing to roll out." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ -n "$ONLY" ] && ! [[ "$ONLY" =~ ^[a-z0-9][a-z0-9-]{0,47}$ ]]; then
+            echo "::error::Invalid recipe id: $ONLY"
+            exit 1
+          fi
+          shopt -s nullglob
+          flags=(--targets .github/recipe-targets.yml --summary "$RUNNER_TEMP/rollout.md")
+          if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); else flags+=(--write); fi
+          status=0
+          for recipe in recipes/*.yml; do
+            if [ -n "$ONLY" ] && [ "$recipe" != "recipes/$ONLY.yml" ]; then continue; fi
+            node dist-action/index.js recipes rollout --recipe "$recipe" "${flags[@]}" || status=1
+            cat "$RUNNER_TEMP/rollout.md" >> "$GITHUB_STEP_SUMMARY"
+          done
+          if [ -n "$(git status --porcelain -- recipes)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$status"
+      - name: Publish compatibility scores
+        if: always() && steps.rollout.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CICD_OPTIMIZER_TOKEN || github.token }}
+        run: |
+          branch="recipes/compatibility"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add recipes
+          git commit -m "recipes: update compatibility scores"
+          git push --force origin "$branch"
+          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --base main --head "$branch" \
+              --title "recipes: update compatibility scores" \
+              --body "Compatibility counts recorded by the weekly recipe rollout. Merging publishes the scores that gate the next rollout wave."
+          fi

@@ -34,7 +34,7 @@ metrics:
 selection:
   judgeWeight: 0.2       # share of the final score from the grader agent's rubric judgment
   minSamples: 5          # CI runs per arm before a pipeline experiment can be decided
-  pValue: 0.05           # Welch t-test threshold against trunk (control)
+  pValue: 0.05           # one-sided Mann-Whitney U vs trunk (control); insignificant changes score 0
   minImprovement: 0.02   # weighted relative improvement required to promote
   maxAgeDays: 14         # expire experiments without a significant winner
   maxConcurrent: 3
