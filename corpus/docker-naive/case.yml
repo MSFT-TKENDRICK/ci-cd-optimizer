@@ -1,0 +1,11 @@
+description: Single-stage Node image that reinstalls dependencies on every source change.
+rules: [hermeticity/docker-base-digest, containers/dependency-layer, containers/multi-stage, containers/apt-hygiene, containers/dockerignore, containers/cache-mount]
+expected:
+  - { rule: containers/multi-stage, path: Dockerfile, line: 1 }
+  - { rule: hermeticity/docker-base-digest, path: Dockerfile, line: 1 }
+  - { rule: containers/apt-hygiene, path: Dockerfile, line: 3 }
+  - { rule: containers/apt-hygiene, path: Dockerfile, line: 4 }
+  - { rule: containers/cache-mount, path: Dockerfile, line: 4 }
+  - { rule: containers/dependency-layer, path: Dockerfile, line: 5 }
+  - { rule: containers/dockerignore, path: Dockerfile, line: 5 }
+  - { rule: containers/cache-mount, path: Dockerfile, line: 6 }

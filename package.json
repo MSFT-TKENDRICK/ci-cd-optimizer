@@ -10,7 +10,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "bundle": "esbuild src/bin.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist-action/index.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --legal-comments=none",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "bundle": "esbuild src/action.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist-action/index.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --legal-comments=none",
     "cli": "tsx src/bin.ts",
     "docs:rules": "tsx src/bin.ts rules --format markdown --output docs/rules.md",
     "dev": "tsx watch src/index.ts",

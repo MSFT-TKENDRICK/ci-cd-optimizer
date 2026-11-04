@@ -1,0 +1,2 @@
+.github/workflows/*.lock.yml linguist-generated=true
+dist-action/** linguist-generated=true

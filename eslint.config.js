@@ -5,7 +5,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist/**", "dist-action/**", "coverage/**"],
+    ignores: ["dist/**", "dist-action/**", "coverage/**", "corpus/**"],
   },
   {
     rules: {

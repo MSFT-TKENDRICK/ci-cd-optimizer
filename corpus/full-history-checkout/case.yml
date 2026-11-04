@@ -1,0 +1,4 @@
+description: Full-history clone used only for version calculation.
+rules: [checkout/partial-clone]
+expected:
+  - { rule: checkout/partial-clone, path: .github/workflows/release.yml }

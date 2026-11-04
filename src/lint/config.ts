@@ -122,7 +122,8 @@ export const DEFAULT_CONFIG: LintConfig = {
   extends: ["recommended"],
   rulesets: {},
   rules: {},
-  ignorePaths: ["vendor/**", "node_modules/**", "**/node_modules/**", "dist/**", "build/**"],
+  // gh-aw compiles `.md` workflows into `.lock.yml`; findings there are fixed in the source, not the generated file.
+  ignorePaths: ["vendor/**", "node_modules/**", "**/node_modules/**", "dist/**", "build/**", ".github/workflows/*.lock.yml"],
   failOn: "error",
   limits: { maxFiles: 2000, maxFileBytes: 512_000 },
   issues: {

@@ -1,0 +1,54 @@
+# Snapshots every completed CI and Container run, compares it with prior runs, writes the Gantt / critical-path
+# report to the run summary and a check run, and opens or resolves duration-regression alert issues.
+# Snapshots persist between runs in an actions/cache entry; without one, history is rebuilt from the Actions API.
+name: CI/CD Optimizer telemetry
+
+on:
+  workflow_run:
+    workflows: [CI, Container]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cicd-optimizer-telemetry
+  cancel-in-progress: false
+
+jobs:
+  telemetry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: write
+      contents: read
+      issues: write
+    steps:
+      # workflow_run always checks out the default branch, never the code of the run being analyzed.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            dist-action
+
+      - name: Restore snapshot store
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cicd-telemetry
+          key: cicd-telemetry-${{ github.run_id }}
+          restore-keys: cicd-telemetry-
+
+      - name: Analyze run
+        uses: ./
+        with:
+          command: telemetry
+          args: --run-id ${{ github.event.workflow_run.id }} --store .cicd-telemetry/runs.jsonl --check
+
+      # Each run saves a new immutable entry; restore-keys picks the newest, and old entries age out of the cache.
+      - name: Save snapshot store
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cicd-telemetry
+          key: cicd-telemetry-${{ github.run_id }}

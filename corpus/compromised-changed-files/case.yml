@@ -1,0 +1,4 @@
+description: Change detection through a tj-actions/changed-files release affected by CVE-2025-30066.
+rules: [affected/trusted-change-detection]
+expected:
+  - { rule: affected/trusted-change-detection, path: .github/workflows/ci.yml }

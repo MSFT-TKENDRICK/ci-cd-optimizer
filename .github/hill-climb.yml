@@ -1,0 +1,59 @@
+# Hill-climbing configuration for experiments/<name>/<arm> branches. Reference: docs/experiments.md
+# Protected: arms cannot change this file, experiment manifests, or the benchmark corpus.
+
+rubric:
+  # Weighted 1-5 scores a proposal must reach before the generator may open it.
+  minScore: 3.5
+  criteria:
+    - id: impact
+      weight: 0.3
+      description: Expected reduction in build, test, or release wall-clock time for high-volume agent-authored changes.
+    - id: evidence
+      weight: 0.2
+      description: Grounded in this repository's telemetry or findings, or in authoritative platform documentation.
+    - id: safety
+      weight: 0.2
+      description: Preserves security, hermeticity, required checks, and deploy correctness; easy to revert.
+    - id: generality
+      weight: 0.15
+      description: Likely to transfer to other repositories as a rule or recipe rather than a one-off tweak.
+    - id: measurability
+      weight: 0.15
+      description: Success is measurable with the configured metrics within the experiment window.
+
+metrics:
+  # kind: rules -> scored on the benchmark corpus (corpus/<case>/case.yml).
+  - { id: precision, source: corpus, direction: maximize, weight: 0.35, maxRegression: 0.02 }
+  - { id: recall, source: corpus, direction: maximize, weight: 0.35, maxRegression: 0.05 }
+  - { id: fixRate, source: corpus, direction: maximize, weight: 0.15 }
+  - { id: durationMs, source: corpus, direction: minimize, weight: 0.15, maxRegression: 0.5 }
+  # kind: pipeline -> measured from successful CI runs on each arm's head commit.
+  - { id: ciWallClock, source: ci, workflow: ci.yml, direction: minimize, weight: 0.6, maxRegression: 0.1 }
+  - { id: ciTestJob, source: ci, workflow: ci.yml, job: test, direction: minimize, weight: 0.4, maxRegression: 0.15 }
+
+selection:
+  judgeWeight: 0.2       # share of the final score from the grader agent's rubric judgment
+  minSamples: 5          # CI runs per arm before a pipeline experiment can be decided
+  pValue: 0.05           # Welch t-test threshold against trunk (control)
+  minImprovement: 0.02   # weighted relative improvement required to promote
+  maxAgeDays: 14         # expire experiments without a significant winner
+  maxConcurrent: 3
+  maxArms: 4
+
+protectedPaths:
+  - .github/hill-climb.yml
+  - experiments/*/experiment.yml
+  - corpus/**
+
+promotion:
+  autoMerge: false       # winners merge into trunk; the trunk PR to main is left for human review
+  reviewers: [MSFT-TKENDRICK]
+  labels: [hill-climb]
+
+evaluation:
+  corpus: corpus
+  engine: dist/lint/api.js
+  install: npm ci --ignore-scripts --no-audit --no-fund
+  build: npm run build
+  test: npm test
+  timingRuns: 3

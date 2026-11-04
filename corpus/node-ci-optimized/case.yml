@@ -1,0 +1,3 @@
+description: The same project with the recommended fixes applied; every finding here is a false positive.
+rules: [workflow/job-timeout, workflow/concurrency, workflow/artifact-retention, workflow/outdated-action-major, hermeticity/pin-runner, hermeticity/frozen-lockfile, caching/setup-cache, workflow/merge-group]
+expected: []

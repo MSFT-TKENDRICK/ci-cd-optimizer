@@ -1,0 +1,4 @@
+description: Gradle build without a dependency or build cache.
+rules: [caching/build-tool-cache, caching/setup-cache]
+expected:
+  - { rule: caching/build-tool-cache, path: .github/workflows/ci.yml }

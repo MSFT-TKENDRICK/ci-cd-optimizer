@@ -1,0 +1,4 @@
+description: npm workspaces that pin the same dependency to different versions.
+rules: [packages/version-drift]
+expected:
+  - { rule: packages/version-drift, path: packages/api/package.json }

@@ -1,0 +1,29 @@
+name: CI/CD Optimizer
+description: Lint workflows, Dockerfiles, and manifests for CI/CD performance; open Dependabot-style fixes, issues, and duration alerts.
+author: MSFT-TKENDRICK
+branding:
+  icon: zap
+  color: green
+inputs:
+  command:
+    description: "CLI command: lint, scan, telemetry, experiments, recipes, or rules."
+    required: false
+    default: lint
+  args:
+    description: Arguments for the command. Whitespace or newline separated; single and double quotes group words.
+    required: false
+    default: ""
+  token:
+    description: Token for GitHub API calls. Pushing fixes that edit .github/workflows needs a GitHub App or fine-grained token with the workflows permission.
+    required: false
+    default: ${{ github.token }}
+  working-directory:
+    description: Directory to run in, relative to the workspace.
+    required: false
+    default: ""
+outputs:
+  exit-code:
+    description: The command's exit code (0 ok, 1 threshold exceeded, 2 usage or configuration error).
+runs:
+  using: node24
+  main: dist-action/index.js

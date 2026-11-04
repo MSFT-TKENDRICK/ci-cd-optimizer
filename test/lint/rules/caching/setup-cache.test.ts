@@ -38,6 +38,10 @@ ruleTester(rule, {
       name: "package-manager-cache: false is a deliberate opt-out",
       files: { ".github/workflows/ci.yml": wf(`${NODE}          package-manager-cache: false\n`), ...NPM },
     },
+    {
+      name: "setup-node only runs a pre-bundled script (no install, lockfile may be outside a sparse checkout)",
+      files: { ".github/workflows/ci.yml": wf(`${NODE}      - run: node dist-action/index.js lint . --fail-on error\n      - run: echo done\n`), ...NPM },
+    },
     { name: "setup-go caches by default", files: { ".github/workflows/ci.yml": wf("      - uses: actions/setup-go@v7\n"), "go.mod": "module x\n" } },
     { name: "setup-python without dependency files", files: wf("      - uses: actions/setup-python@v7\n        with:\n          python-version: '3.13'\n") },
     {
@@ -58,6 +62,21 @@ ruleTester(rule, {
     { name: "dotnet without lock files", files: { ".github/workflows/ci.yml": wf("      - uses: actions/setup-dotnet@v6\n"), "app.csproj": "" } },
   ],
   invalid: [
+    {
+      name: "npm ci after setup-node is flagged",
+      files: { ".github/workflows/ci.yml": wf(`${NODE}      - run: npm ci\n      - run: node dist/index.js\n`), ...NPM },
+      errors: [{ line: 6 }],
+    },
+    {
+      name: "opaque scripts and task runners may install, so they are flagged",
+      files: { ".github/workflows/ci.yml": wf(`${NODE}      - run: ./scripts/build.sh\n`), ...NPM },
+      errors: 1,
+    },
+    {
+      name: "installs inside compound commands are detected",
+      files: { ".github/workflows/ci.yml": wf(`${NODE}      - run: if [ -f package.json ]; then cd app && pnpm install; fi\n`), ...NPM },
+      errors: 1,
+    },
     {
       name: "setup-node without cache gets cache: npm",
       files: { ".github/workflows/ci.yml": wf(NODE), ...NPM },

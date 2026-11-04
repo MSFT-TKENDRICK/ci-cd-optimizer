@@ -1,0 +1,12 @@
+name: CI
+on:
+  pull_request:
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: tj-actions/changed-files@v45
+        id: changed
+      - run: echo "${{ steps.changed.outputs.all_changed_files }}"

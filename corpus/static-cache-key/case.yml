@@ -1,0 +1,4 @@
+description: An actions/cache key that never changes, so the cache is never refreshed.
+rules: [caching/cache-key]
+expected:
+  - { rule: caching/cache-key, path: .github/workflows/ci.yml }

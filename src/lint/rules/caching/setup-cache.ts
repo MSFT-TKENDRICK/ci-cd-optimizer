@@ -86,6 +86,15 @@ function declaredNodeManager(project: ProjectModel): string | undefined {
   return typeof devEngines?.packageManager?.name === "string" ? `${devEngines.packageManager.name}@` : undefined;
 }
 
+/** Package managers, task runners and scripts that may install Node packages; matched anywhere so compound commands stay conservative. */
+const MAY_INSTALL = /(^|[\s;&|(`])(npm|pnpm|yarn|npx|bun|bunx|corepack|make|just|task|turbo|nx|lerna|rush)(\s|$)|(^|\s)(\.{1,2}\/|bash\s|sh\s|source\s)|\.(sh|bash)\b/;
+
+/** True unless the job's later steps run commands and none of them could install packages (e.g. only `node dist/index.js`). */
+function mayInstallNodePackages(after: StepModel[]): boolean {
+  const commands = after.flatMap((step) => commandsOf(step).map((entry) => entry.command));
+  return commands.length === 0 || commands.some((command) => MAY_INSTALL.test(command));
+}
+
 function earlierCommands(before: StepModel[]): string[] {
   return before.flatMap((step) => commandsOf(step).map((entry) => entry.command));
 }
@@ -114,7 +123,7 @@ function checkNode(project: ProjectModel, step: StepModel, before: StepModel[], 
       suggestion: "Add `cache: <npm|pnpm|yarn>` with a `cache-dependency-path` pointing at the lockfile(s).",
     };
   }
-  if (covered(all, manager)) return undefined;
+  if (covered(all, manager) || !mayInstallNodePackages(all.slice(all.indexOf(step) + 1))) return undefined;
   const declared = declaredNodeManager(project);
   const major = actionMajor(step, file);
   if (manager === "npm" && declared?.startsWith("npm@") && (major === undefined || major >= 6)) return undefined;

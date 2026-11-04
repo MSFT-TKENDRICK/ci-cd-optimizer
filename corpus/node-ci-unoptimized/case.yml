@@ -1,0 +1,11 @@
+description: Single-package Node CI with every common pull request inefficiency.
+rules: [workflow/job-timeout, workflow/concurrency, workflow/artifact-retention, workflow/outdated-action-major, hermeticity/pin-runner, hermeticity/frozen-lockfile, caching/setup-cache]
+expected:
+  - { rule: workflow/concurrency, path: .github/workflows/ci.yml }
+  - { rule: workflow/job-timeout, path: .github/workflows/ci.yml }
+  - { rule: hermeticity/pin-runner, path: .github/workflows/ci.yml }
+  - { rule: workflow/outdated-action-major, path: .github/workflows/ci.yml }
+  - { rule: workflow/outdated-action-major, path: .github/workflows/ci.yml }
+  - { rule: caching/setup-cache, path: .github/workflows/ci.yml }
+  - { rule: hermeticity/frozen-lockfile, path: .github/workflows/ci.yml }
+  - { rule: workflow/artifact-retention, path: .github/workflows/ci.yml }

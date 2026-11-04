@@ -2,27 +2,50 @@ name: CI
 
 on:
   pull_request:
+  merge_group:
   push:
     branches: [main]
+  # Experiments dispatch repeated runs on arm branches to collect duration samples (docs/experiments.md).
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
+# Independent jobs run in parallel so the slowest check (typed ESLint) bounds wall-clock time.
 jobs:
-  validate:
-    runs-on: ubuntu-latest
+  test:
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
       - run: npm test
+
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: npm run lint
+
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
       - run: npm run build
+      - name: Action bundle is up to date
+        run: |
+          npm run bundle
+          git diff --exit-code --stat -- dist-action || { echo "::error::dist-action is stale; run npm run bundle and commit it."; exit 1; }
+      - name: Dogfood the linter on this repository
+        uses: ./
+        with:
+          command: lint
+          args: --format github --fail-on error

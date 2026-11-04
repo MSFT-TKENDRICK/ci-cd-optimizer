@@ -1,0 +1,4 @@
+description: Image built in CI without importing or exporting a layer cache, and not published to GHCR.
+rules: [caching/docker-layer-cache, registries/ghcr]
+expected:
+  - { rule: caching/docker-layer-cache, path: .github/workflows/image.yml }

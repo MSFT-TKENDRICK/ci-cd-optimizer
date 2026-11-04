@@ -1,0 +1,3 @@
+description: Multi-stage image with a pinned base, dependency layer, and cache mounts; findings are false positives.
+rules: [hermeticity/docker-base-digest, containers/dependency-layer, containers/multi-stage, containers/apt-hygiene, containers/dockerignore, containers/cache-mount]
+expected: []
