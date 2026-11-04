@@ -1,139 +1,146 @@
 import type { Probot } from "probot";
-import { analyze, shouldFail } from "./analyzer.js";
-import { loadRepositoryFiles } from "./github.js";
-import { createAnnotations, createSummary } from "./report.js";
-import { createTelemetryReport } from "./telemetry/report.js";
-import { createWorkflowSnapshot } from "./telemetry/snapshot.js";
-import { PostgresTelemetryStore, type TelemetryStore } from "./telemetry/store.js";
+import { fromOctokit, type GitHubClient, type RepoRef } from "./github/client.js";
+import { restClient } from "./github/rest.js";
+import { isInventoryPath } from "./lint/inventory.js";
+import { CHECK_NAME } from "./service/checks.js";
+import { handleIssueComment } from "./service/comments.js";
+import { runPullRequestCheck, type PullRequestRef } from "./service/pull-request.js";
+import { describeScan, scanRepository } from "./service/scan.js";
+import { processWorkflowRun } from "./service/workflow-run.js";
+import type { WorkflowRunPayload } from "./telemetry/snapshot.js";
+import { PostgresTelemetryStore } from "./telemetry/postgres-store.js";
+import type { TelemetryStore } from "./telemetry/store.js";
 
-const checkName = "CI/CD Optimizer";
+export interface AppOptions {
+  /** Snapshot store; defaults to Postgres when `DATABASE_URL` is set, otherwise history comes from the Actions API. */
+  store?: () => Promise<TelemetryStore | undefined>;
+  /** Client for a Copilot-licensed user (`COPILOT_ASSIGN_TOKEN`), so issues can be assigned to the coding agent. */
+  copilotClient?: GitHubClient;
+  /** Upload scan results to code scanning (`CICD_OPTIMIZER_UPLOAD_SARIF`, default true). */
+  uploadSarif?: boolean;
+}
 
-export default function app(probot: Probot): void {
-  const telemetryStore = createTelemetryStore(probot);
+interface PushPayload {
+  ref: string;
+  deleted?: boolean;
+  commits?: Array<{ added?: string[]; modified?: string[]; removed?: string[] }>;
+  repository: { default_branch?: string };
+}
 
-  probot.on(
-    [
-      "pull_request.opened",
-      "pull_request.synchronize",
-      "pull_request.reopened",
-      "pull_request.ready_for_review",
-    ],
-    async (context) => {
-      const pullRequest = context.payload.pull_request;
-      if (pullRequest.draft) return;
+/** Push webhooks list at most 20 commits; beyond that the file list is incomplete. */
+const PUSH_COMMIT_LIMIT = 20;
 
-      const owner = context.payload.repository.owner.login;
-      const repo = context.payload.repository.name;
-      const headSha = pullRequest.head.sha;
+/** A push to the default branch that may have changed CI/CD-relevant files (or whose file list is incomplete). */
+export function pushNeedsScan(push: PushPayload): boolean {
+  if (push.deleted || !push.repository.default_branch || push.ref !== `refs/heads/${push.repository.default_branch}`) return false;
+  const commits = push.commits ?? [];
+  if (commits.length === 0 || commits.length >= PUSH_COMMIT_LIMIT) return true;
+  return commits.some((commit) => [...(commit.added ?? []), ...(commit.modified ?? []), ...(commit.removed ?? [])].some(isInventoryPath));
+}
 
-      const check = await context.octokit.request("POST /repos/{owner}/{repo}/check-runs", {
-        owner,
-        repo,
-        name: checkName,
-        head_sha: headSha,
-        status: "in_progress",
-        started_at: new Date().toISOString(),
-        output: {
-          title: "Analyzing build and release configuration",
-          summary: "Scanning relevant workflows, manifests, and container definitions.",
-        },
-      });
+interface CheckRunPullRequest {
+  number: number;
+  head: { sha: string };
+  base: { ref: string; sha: string };
+}
 
-      try {
-        const snapshot = await loadRepositoryFiles(context, owner, repo, headSha);
-        const findings = analyze(snapshot.files, snapshot.config);
-        const failure = shouldFail(findings, snapshot.config.failOnSeverity);
+/** The pull request a re-requested "CI/CD Optimizer" check belongs to (only same-repository pull requests are listed). */
+export function rerequestedPullRequest(checkRun: { name: string; head_sha: string; pull_requests?: CheckRunPullRequest[] }): PullRequestRef | undefined {
+  if (checkRun.name !== CHECK_NAME) return undefined;
+  const pr = checkRun.pull_requests?.find((candidate) => candidate.head.sha === checkRun.head_sha) ?? checkRun.pull_requests?.[0];
+  return pr ? { number: pr.number, headSha: checkRun.head_sha, baseRef: pr.base.ref, baseSha: pr.base.sha } : undefined;
+}
 
-        await context.octokit.request(
-          "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}",
-          {
-          owner,
-          repo,
-          check_run_id: check.data.id,
-          status: "completed",
-          completed_at: new Date().toISOString(),
-          conclusion: failure ? "failure" : findings.length > 0 ? "neutral" : "success",
-          output: {
-            title:
-              findings.length > 0
-                ? `${findings.length} optimization ${findings.length === 1 ? "opportunity" : "opportunities"}`
-                : "No optimization findings",
-            summary: createSummary(findings, snapshot.truncated),
-            annotations: createAnnotations(findings),
-          },
-          },
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        context.log.error({ error }, "CI/CD analysis failed");
-        await context.octokit.request(
-          "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}",
-          {
-          owner,
-          repo,
-          check_run_id: check.data.id,
-          status: "completed",
-          completed_at: new Date().toISOString(),
-          conclusion: "action_required",
-          output: {
-            title: "Analysis could not complete",
-            summary: `The app encountered an error while analyzing this commit: ${message}`,
-          },
-          },
-        );
-      }
-    },
-  );
-
-  probot.on("workflow_run.completed", async (context) => {
-    const store = await telemetryStore;
-    if (!store) {
-      context.log.warn(
-        "DATABASE_URL is not configured; workflow telemetry snapshots are disabled",
-      );
-      return;
-    }
-
-    const snapshot = await createWorkflowSnapshot(context);
-    const baseline = await store.baseline(snapshot);
-    await store.save(snapshot);
-
-    const check = await context.octokit.request("POST /repos/{owner}/{repo}/check-runs", {
-      owner: snapshot.owner,
-      repo: snapshot.repo,
-      name: "CI/CD Telemetry",
-      head_sha: snapshot.headSha,
-      status: "completed",
-      completed_at: new Date().toISOString(),
-      conclusion: "neutral",
-      details_url: context.payload.workflow_run.html_url,
-      output: {
-        title: `${snapshot.workflowName}: ${formatDuration(snapshot.durationMs)}`,
-        summary: createTelemetryReport(snapshot, baseline),
-      },
-    });
-    context.log.info(
-      { checkRunId: check.data.id, workflowRunId: snapshot.runId },
-      "Published workflow telemetry report",
-    );
+/** `owner/name` strings from installation payloads. */
+export function installationRepos(repositories: ReadonlyArray<{ full_name: string }> | undefined): RepoRef[] {
+  return (repositories ?? []).flatMap((repository) => {
+    const [owner, repo] = repository.full_name.split("/");
+    return owner && repo ? [{ owner, repo }] : [];
   });
 }
 
-async function createTelemetryStore(probot: Probot): Promise<TelemetryStore | undefined> {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) return undefined;
-  const store = new PostgresTelemetryStore(databaseUrl);
-  try {
-    await store.initialize();
-  } catch (error: unknown) {
-    probot.log.error({ error }, "Failed to initialize telemetry database");
-    return undefined;
-  }
-  return store;
+function defaultStore(log: Probot["log"]): () => Promise<TelemetryStore | undefined> {
+  let pending: Promise<TelemetryStore | undefined> | undefined;
+  return () => {
+    pending ??= (async () => {
+      const url = process.env.DATABASE_URL;
+      if (!url) return undefined;
+      const store = new PostgresTelemetryStore(url);
+      try {
+        await store.initialize();
+        return store;
+      } catch (error) {
+        log.error({ error }, "Telemetry database unavailable; falling back to Actions API history");
+        pending = undefined;
+        return undefined;
+      }
+    })();
+    return pending;
+  };
 }
 
-function formatDuration(milliseconds: number): string {
-  const seconds = Math.round(milliseconds / 1000);
-  const minutes = Math.floor(seconds / 60);
-  return minutes > 0 ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+export function createApp(options: AppOptions = {}): (probot: Probot) => void {
+  return (probot) => {
+    const store = options.store ?? defaultStore(probot.log);
+    const copilotToken = process.env.COPILOT_ASSIGN_TOKEN;
+    const copilotClient = options.copilotClient ?? (copilotToken ? restClient({ token: copilotToken }) : undefined);
+    const uploadSarif = options.uploadSarif ?? process.env.CICD_OPTIMIZER_UPLOAD_SARIF !== "false";
+    const shared = { ...(copilotClient ? { copilotClient } : {}) };
+
+    const scan = async (client: GitHubClient, repo: RepoRef, log: Probot["log"]) => {
+      const result = await scanRepository(client, repo, { uploadSarif, ...shared });
+      log.info({ repo: `${repo.owner}/${repo.repo}`, status: result.status }, describeScan(result));
+    };
+
+    probot.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened", "pull_request.ready_for_review"], async (context) => {
+      const pr = context.payload.pull_request;
+      const result = await runPullRequestCheck(fromOctokit(context.octokit), context.repo(), {
+        number: pr.number,
+        headSha: pr.head.sha,
+        baseRef: pr.base.ref,
+        baseSha: pr.base.sha,
+      });
+      context.log.info({ pr: pr.number, conclusion: result.conclusion, introduced: result.introduced.length }, "Pull request check completed");
+    });
+
+    probot.on("check_run.rerequested", async (context) => {
+      const pr = rerequestedPullRequest(context.payload.check_run);
+      if (pr) await runPullRequestCheck(fromOctokit(context.octokit), context.repo(), pr);
+    });
+
+    probot.on("push", async (context) => {
+      if (pushNeedsScan(context.payload)) await scan(fromOctokit(context.octokit), context.repo(), context.log);
+    });
+
+    probot.on(["installation.created", "installation_repositories.added"], async (context) => {
+      const payload = context.payload;
+      const repositories = "repositories_added" in payload ? payload.repositories_added : payload.repositories;
+      const client = fromOctokit(context.octokit);
+      for (const repo of installationRepos(repositories)) {
+        try {
+          await scan(client, repo, context.log);
+        } catch (error) {
+          context.log.error({ error, repo: `${repo.owner}/${repo.repo}` }, "Initial scan failed");
+        }
+      }
+    });
+
+    probot.on("workflow_run.completed", async (context) => {
+      const result = await processWorkflowRun(fromOctokit(context.octokit), context.repo(), context.payload.workflow_run as WorkflowRunPayload, {
+        ...shared,
+        ...(await store().then((value) => (value ? { store: value } : {}))),
+      });
+      context.log.info(
+        { runId: context.payload.workflow_run.id, status: result.status, alerts: result.alerts?.detected.length ?? 0 },
+        result.reason ?? "Workflow run telemetry processed",
+      );
+    });
+
+    probot.on("issue_comment.created", async (context) => {
+      const result = await handleIssueComment(fromOctokit(context.octokit), context.repo(), { issue: context.payload.issue, comment: context.payload.comment });
+      if (result.status !== "ignored") context.log.info({ issue: context.payload.issue.number, status: result.status }, "Handled comment command");
+    });
+  };
 }
+
+export default createApp();

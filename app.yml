@@ -10,11 +10,24 @@ setup_url: https://example.com/setup
 setup_on_update: true
 public: false
 default_permissions:
+  # Read workflow runs and job/step timings for telemetry and duration alerts.
   actions: read
+  # "CI/CD Optimizer" pull request check and per-workflow "CI/CD Telemetry" reports.
   checks: write
-  contents: read
+  # Read workflows/manifests; push branches for autofix pull requests.
+  contents: write
+  # Finding and duration-alert issues (Dependabot-alert style), assignable to the Copilot coding agent.
+  issues: write
   metadata: read
-  pull_requests: read
+  # Autofix and recipe pull requests, and their @cicd-optimizer commands.
+  pull_requests: write
+  # Upload SARIF so findings appear under Security > Code scanning.
+  security_events: write
+  # Autofix pull requests edit files under .github/workflows.
+  workflows: write
 default_events:
+  - check_run
+  - issue_comment
   - pull_request
+  - push
   - workflow_run

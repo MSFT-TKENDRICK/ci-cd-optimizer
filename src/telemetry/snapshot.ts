@@ -1,66 +1,125 @@
-import { load } from "js-yaml";
-import type { Context } from "probot";
-import type { JobSnapshot, WorkflowSnapshot } from "../types.js";
+import { parse } from "yaml";
+import { readFileAt } from "../github/git.js";
+import type { GitHubClient, RepoRef } from "../github/client.js";
+import { mapLimit } from "../utils.js";
+import type { JobSnapshot, StepSnapshot, WorkflowSnapshot } from "./types.js";
 
-type WorkflowRunContext = Context<"workflow_run.completed">;
-
-interface WorkflowJobDefinition {
-  name?: unknown;
-  needs?: unknown;
+/** The subset of a `workflow_run` webhook payload / REST object the snapshot needs. */
+export interface WorkflowRunPayload {
+  id: number;
+  name?: string | null;
+  path: string;
+  workflow_id: number;
+  run_attempt?: number;
+  head_sha: string;
+  head_branch: string | null;
+  event: string;
+  status?: string | null;
+  conclusion: string | null;
+  created_at: string;
+  run_started_at?: string | null;
+  updated_at: string;
+  html_url?: string;
 }
 
-interface WorkflowJob {
+interface ApiStep {
+  number: number;
+  name: string;
+  conclusion: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface ApiJob {
   id: number;
   name: string;
   conclusion: string | null;
+  created_at?: string | null;
   started_at: string | null;
   completed_at: string | null;
+  runner_name?: string | null;
+  labels?: string[];
+  steps?: ApiStep[];
 }
 
-export async function createWorkflowSnapshot(
-  context: WorkflowRunContext,
-): Promise<WorkflowSnapshot> {
-  const run = context.payload.workflow_run;
-  const owner = context.payload.repository.owner.login;
-  const repo = context.payload.repository.name;
-  const jobs = (await context.octokit.paginate(
-    "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs",
-    {
-      owner,
-      repo,
-      run_id: run.id,
-      per_page: 100,
+export interface JobDefinition {
+  name?: string;
+  needs: string[];
+}
+
+export type JobDefinitions = ReadonlyMap<string, JobDefinition>;
+
+/** Strips the `@ref` suffix GitHub appends to reusable/dynamic workflow paths. */
+export function workflowPath(path: string): string {
+  return path.replace(/@.*$/, "");
+}
+
+export function parseJobDefinitions(text: string): Map<string, JobDefinition> {
+  let document: unknown;
+  try {
+    document = parse(text);
+  } catch {
+    return new Map();
+  }
+  if (!isRecord(document) || !isRecord(document.jobs)) return new Map();
+  const definitions = new Map<string, JobDefinition>();
+  for (const [key, value] of Object.entries(document.jobs)) {
+    if (!isRecord(value)) continue;
+    definitions.set(key, { ...(typeof value.name === "string" ? { name: value.name } : {}), needs: parseNeeds(value.needs) });
+  }
+  return definitions;
+}
+
+export async function loadJobDefinitions(client: GitHubClient, repo: RepoRef, path: string, ref: string): Promise<Map<string, JobDefinition>> {
+  try {
+    const text = await readFileAt(client, repo, workflowPath(path), ref);
+    return text === undefined ? new Map() : parseJobDefinitions(text);
+  } catch {
+    return new Map();
+  }
+}
+
+export async function listRunJobs(client: GitHubClient, repo: RepoRef, runId: number, maxPages = 5): Promise<ApiJob[]> {
+  const jobs: ApiJob[] = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const response = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs", {
+      ...repo,
+      run_id: runId,
       filter: "latest",
-    },
-  )) as WorkflowJob[];
-  const definitions = await loadJobDefinitions(context, owner, repo, run.path, run.head_sha);
-
-  const snapshots = jobs
-    .filter((job) => job.started_at && job.completed_at)
-    .map((job): JobSnapshot => {
-      const key = matchJobKey(job.name, definitions);
-      const definition = key ? definitions.get(key) : undefined;
-      const startedAt = job.started_at as string;
-      const completedAt = job.completed_at as string;
-      return {
-        id: job.id,
-        key: key ?? job.name,
-        name: job.name,
-        conclusion: job.conclusion,
-        startedAt,
-        completedAt,
-        durationMs: elapsed(startedAt, completedAt),
-        needs: parseNeeds(definition?.needs),
-      };
+      per_page: 100,
+      page,
     });
+    const batch = (response.data as { jobs?: ApiJob[] }).jobs ?? [];
+    jobs.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return jobs;
+}
 
+export async function buildWorkflowSnapshot(
+  client: GitHubClient,
+  repo: RepoRef,
+  run: WorkflowRunPayload,
+  options: { definitions?: JobDefinitions } = {},
+): Promise<WorkflowSnapshot> {
+  const [jobs, definitions] = await Promise.all([
+    listRunJobs(client, repo, run.id),
+    options.definitions ? Promise.resolve(options.definitions) : loadJobDefinitions(client, repo, run.path, run.head_sha),
+  ]);
+  return snapshotFromRun(repo, run, jobs, definitions);
+}
+
+export function snapshotFromRun(repo: RepoRef, run: WorkflowRunPayload, apiJobs: readonly ApiJob[], definitions: JobDefinitions): WorkflowSnapshot {
+  const jobs = apiJobs.filter((job) => job.started_at && job.completed_at).map((job) => jobSnapshot(job, definitions));
   const startedAt = run.run_started_at ?? run.created_at;
-  const completedAt = run.updated_at;
+  const lastJob = jobs.map((job) => job.completedAt).sort().at(-1);
+  const completedAt = lastJob && Date.parse(lastJob) > Date.parse(startedAt) ? lastJob : run.updated_at;
   return {
-    owner,
-    repo,
+    owner: repo.owner,
+    repo: repo.repo,
     workflowId: run.workflow_id,
-    workflowName: run.name ?? run.path,
+    workflowName: run.name ?? workflowPath(run.path),
+    path: workflowPath(run.path),
     runId: run.id,
     runAttempt: run.run_attempt ?? 1,
     headSha: run.head_sha,
@@ -72,52 +131,93 @@ export async function createWorkflowSnapshot(
     completedAt,
     queueMs: elapsed(run.created_at, startedAt),
     durationMs: elapsed(startedAt, completedAt),
-    jobs: snapshots,
+    ...(run.html_url ? { htmlUrl: run.html_url } : {}),
+    jobs,
   };
 }
 
-async function loadJobDefinitions(
-  context: WorkflowRunContext,
-  owner: string,
-  repo: string,
-  path: string,
-  ref: string,
-): Promise<Map<string, WorkflowJobDefinition>> {
-  try {
-    const response = await context.octokit.request(
-      "GET /repos/{owner}/{repo}/contents/{path}",
-      { owner, repo, path, ref },
+function jobSnapshot(job: ApiJob, definitions: JobDefinitions): JobSnapshot {
+  const key = matchJobKey(job.name, definitions);
+  const startedAt = job.started_at as string;
+  const completedAt = job.completed_at as string;
+  const steps = (job.steps ?? [])
+    .filter((step) => step.started_at && step.completed_at)
+    .map(
+      (step): StepSnapshot => ({
+        number: step.number,
+        name: step.name,
+        conclusion: step.conclusion,
+        startedAt: step.started_at as string,
+        completedAt: step.completed_at as string,
+        durationMs: elapsed(step.started_at as string, step.completed_at as string),
+      }),
     );
-    const data = response.data as
-      | { type: "file"; content: string }
-      | Array<{ type: string }>;
-    if (Array.isArray(data) || data.type !== "file") {
-      return new Map();
-    }
-    const document: unknown = load(Buffer.from(data.content, "base64").toString("utf8"));
-    if (!isRecord(document) || !isRecord(document.jobs)) return new Map();
-    return new Map(
-      Object.entries(document.jobs)
-        .filter((entry): entry is [string, WorkflowJobDefinition] => isRecord(entry[1]))
-        .map(([key, definition]) => [key, definition]),
-    );
-  } catch {
-    return new Map();
-  }
+  return {
+    id: job.id,
+    key: key ?? job.name,
+    name: job.name,
+    conclusion: job.conclusion,
+    startedAt,
+    completedAt,
+    durationMs: elapsed(startedAt, completedAt),
+    needs: key ? (definitions.get(key)?.needs ?? []) : [],
+    ...(job.created_at ? { queuedAt: job.created_at, queueMs: elapsed(job.created_at, startedAt) } : {}),
+    ...(job.runner_name ? { runnerName: job.runner_name } : {}),
+    ...(job.labels && job.labels.length > 0 ? { labels: job.labels } : {}),
+    ...(steps.length > 0 ? { steps } : {}),
+  };
 }
 
-function matchJobKey(
-  jobName: string,
-  definitions: ReadonlyMap<string, WorkflowJobDefinition>,
-): string | undefined {
+/**
+ * Maps a job's display name back to its `jobs.<key>`: exact key or `name:`, matrix legs (`key (a, b)`),
+ * reusable-workflow callers (`key / inner`), and `name:` templates with `${{ }}` expressions.
+ */
+export function matchJobKey(jobName: string, definitions: JobDefinitions): string | undefined {
   for (const [key, definition] of definitions) {
-    const configuredName = typeof definition.name === "string" ? definition.name : undefined;
-    if (jobName === key || jobName === configuredName) return key;
-    if (jobName.startsWith(`${key} (`) || (configuredName && jobName.startsWith(`${configuredName} (`))) {
-      return key;
+    for (const candidate of [key, definition.name]) {
+      if (!candidate) continue;
+      if (jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `)) return key;
+      if (candidate.includes("${{") && templatePattern(candidate).test(jobName)) return key;
     }
   }
   return undefined;
+}
+
+function templatePattern(template: string): RegExp {
+  const source = template
+    .split(/\$\{\{[^}]*\}\}/)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join(".*");
+  return new RegExp(`^${source}(?: \\(.*\\)| / .*)?$`);
+}
+
+export interface RunHistoryOptions {
+  workflowId: number;
+  /** `null` lists every branch. */
+  branch: string | null;
+  limit: number;
+  /** Definitions from the current run, reused so job keys stay consistent across history. */
+  definitions: JobDefinitions;
+  excludeRunId?: number;
+  concurrency?: number;
+}
+
+/** Backfills recent completed runs from the Actions API, oldest first. Used when no store is configured or it is still cold. */
+export async function loadRunHistory(client: GitHubClient, repo: RepoRef, options: RunHistoryOptions): Promise<WorkflowSnapshot[]> {
+  const response = await client.request("GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs", {
+    ...repo,
+    workflow_id: options.workflowId,
+    status: "completed",
+    per_page: Math.min(100, options.limit + 1),
+    ...(options.branch ? { branch: options.branch } : {}),
+  });
+  const runs = ((response.data as { workflow_runs?: WorkflowRunPayload[] }).workflow_runs ?? [])
+    .filter((run) => run.id !== options.excludeRunId)
+    .slice(0, options.limit);
+  const snapshots = await mapLimit(runs, options.concurrency ?? 4, async (run) =>
+    snapshotFromRun(repo, run, await listRunJobs(client, repo, run.id, 1), options.definitions),
+  );
+  return snapshots.sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId);
 }
 
 function parseNeeds(value: unknown): string[] {

@@ -1,29 +1,34 @@
-import type { RepositoryFile } from "./types.js";
-
-export function lineOf(content: string, needle: string): number | undefined {
-  const index = content.indexOf(needle);
-  if (index < 0) return undefined;
-  return content.slice(0, index).split("\n").length;
-}
-
-export function workflowFiles(files: RepositoryFile[]): RepositoryFile[] {
-  return files.filter(
-    (file) =>
-      file.path.startsWith(".github/workflows/") &&
-      (file.path.endsWith(".yml") || file.path.endsWith(".yaml")),
-  );
-}
-
-export function dockerfiles(files: RepositoryFile[]): RepositoryFile[] {
-  return files.filter((file) => /(^|\/)Dockerfile(?:\.[^/]+)?$/i.test(file.path));
-}
-
-export function hasAnyFile(files: RepositoryFile[], patterns: RegExp[]): boolean {
-  return files.some((file) => patterns.some((pattern) => pattern.test(file.path)));
-}
-
+// `*` matches within a path segment, `**` across segments (a `**` + `/` prefix also matches zero segments), `?` one character.
 export function matchesGlob(path: string, glob: string): boolean {
-  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  const regex = escaped.replace(/\*\*/g, ".*").replace(/\*/g, "[^/]*").replace(/\?/g, ".");
+  let regex = "";
+  for (let index = 0; index < glob.length; index += 1) {
+    const char = glob[index] as string;
+    if (char === "*" && glob[index + 1] === "*") {
+      if (glob[index + 2] === "/") {
+        regex += "(?:.*/)?";
+        index += 2;
+      } else {
+        regex += ".*";
+        index += 1;
+      }
+    } else if (char === "*") regex += "[^/]*";
+    else if (char === "?") regex += "[^/]";
+    else regex += char.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  }
   return new RegExp(`^${regex}$`).test(path);
+}
+
+/** Maps with at most `limit` promises in flight, preserving order. */
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index] as T);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }

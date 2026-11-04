@@ -1,6 +1,8 @@
-import type { JobSnapshot, WorkflowBaseline, WorkflowSnapshot } from "../types.js";
+import type { JobSnapshot, WorkflowBaseline, WorkflowSnapshot } from "./types.js";
 
-interface CriticalPath {
+const QUEUE_THRESHOLD_MS = 5_000;
+
+export interface CriticalPath {
   durationMs: number;
   jobKeys: string[];
 }
@@ -26,7 +28,7 @@ export function createTelemetryReport(
     "",
     "### Timeline",
     "",
-    createGantt(snapshot),
+    createGantt(snapshot, criticalPath.jobKeys),
     "",
     "### Job dependencies",
     "",
@@ -41,6 +43,8 @@ export function createTelemetryReport(
         `| ${escapeCell(job.name)} | ${formatDuration(job.durationMs)} | ${percentage(job.durationMs, snapshot.durationMs)} |`,
     ),
     "",
+    ...slowestSteps(snapshot),
+    ...jobRegressions(snapshot, baseline),
     ...recommendations(snapshot, criticalPath, baseline),
   ].join("\n");
 }
@@ -79,25 +83,84 @@ export function calculateCriticalPath(jobs: JobSnapshot[]): CriticalPath {
   );
 }
 
-function createGantt(snapshot: WorkflowSnapshot): string {
+function createGantt(snapshot: WorkflowSnapshot, criticalKeys: readonly string[]): string {
+  const critical = new Set(criticalKeys);
   const jobs = [...snapshot.jobs].sort(
     (left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt),
   );
+  const waits = jobs.filter((job) => job.queuedAt && (job.queueMs ?? 0) >= QUEUE_THRESHOLD_MS);
+  const tags = (job: JobSnapshot) =>
+    [critical.has(job.key) ? "crit" : "", job.conclusion === "success" ? "done" : job.conclusion === "failure" ? "active" : ""]
+      .filter(Boolean)
+      .map((tag) => `${tag}, `)
+      .join("");
   return [
     "```mermaid",
     "gantt",
     `    title ${sanitizeMermaid(snapshot.workflowName)} run ${snapshot.runId}`,
     "    dateFormat  YYYY-MM-DDTHH:mm:ss",
     "    axisFormat  %H:%M:%S",
+    ...(waits.length > 0
+      ? [
+          "    section Runner queue",
+          ...waits.map(
+            (job, index) =>
+              `    ${sanitizeMermaid(job.name)} wait :q${index}, ${withoutMillis(job.queuedAt as string)}, ${withoutMillis(job.startedAt)}`,
+          ),
+        ]
+      : []),
     "    section Jobs",
     ...jobs.map(
       (job, index) =>
-        `    ${sanitizeMermaid(job.name)} :${job.conclusion === "success" ? "done, " : ""}j${index}, ${withoutMillis(job.startedAt)}, ${withoutMillis(job.completedAt)}`,
+        `    ${sanitizeMermaid(job.name)} :${tags(job)}j${index}, ${withoutMillis(job.startedAt)}, ${withoutMillis(job.completedAt)}`,
     ),
     "```",
+    "",
+    "_Red bars are on the critical path; the runner queue lane shows time jobs spent waiting for a runner._",
   ].join("\n");
 }
 
+function slowestSteps(snapshot: WorkflowSnapshot, limit = 10): string[] {
+  const steps = snapshot.jobs
+    .flatMap((job) => (job.steps ?? []).map((step) => ({ job, step })))
+    .sort((a, b) => b.step.durationMs - a.step.durationMs)
+    .slice(0, limit);
+  if (steps.length === 0) return [];
+  return [
+    "### Slowest steps",
+    "",
+    "| Job | Step | Duration | Share of job |",
+    "|---|---|---:|---:|",
+    ...steps.map(
+      ({ job, step }) =>
+        `| ${escapeCell(job.name)} | ${escapeCell(step.name)} | ${formatDuration(step.durationMs)} | ${percentage(step.durationMs, job.durationMs)} |`,
+    ),
+    "",
+  ];
+}
+
+function jobRegressions(snapshot: WorkflowSnapshot, baseline?: WorkflowBaseline): string[] {
+  if (!baseline?.jobs) return [];
+  const rows = snapshot.jobs
+    .map((job) => ({ job, median: baseline.jobs?.[job.key] }))
+    .filter(
+      (row): row is { job: JobSnapshot; median: number } =>
+        row.median !== undefined && row.job.durationMs - row.median >= 30_000 && row.job.durationMs > row.median * 1.25,
+    )
+    .sort((a, b) => b.job.durationMs - b.median - (a.job.durationMs - a.median));
+  if (rows.length === 0) return [];
+  return [
+    "### Jobs slower than baseline",
+    "",
+    "| Job | This run | Median | Delta |",
+    "|---|---:|---:|---:|",
+    ...rows.map(
+      ({ job, median }) =>
+        `| ${escapeCell(job.name)} | ${formatDuration(job.durationMs)} | ${formatDuration(median)} | +${formatDuration(job.durationMs - median)} |`,
+    ),
+    "",
+  ];
+}
 function createDependencyGraph(jobs: JobSnapshot[], criticalKeys: string[]): string {
   const identifiers = new Map(jobs.map((job, index) => [job.key, `J${index}`]));
   const critical = new Set(criticalKeys);
@@ -129,6 +192,13 @@ function recommendations(
   if (longest && longest.durationMs > snapshot.durationMs * 0.5) {
     messages.push(
       `- **${longest.name} dominates the run** at ${percentage(longest.durationMs, snapshot.durationMs)}. Profile its internal steps, then consider test sharding, incremental builds, or a larger runner.`,
+    );
+  }
+  const waits = snapshot.jobs.filter((job) => (job.queueMs ?? 0) >= 60_000);
+  if (waits.length > 0) {
+    const worst = waits.reduce((a, b) => ((a.queueMs ?? 0) >= (b.queueMs ?? 0) ? a : b));
+    messages.push(
+      `- **${waits.length} job(s) waited over a minute for a runner** (worst: ${worst.name}, ${formatDuration(worst.queueMs ?? 0)}${worst.labels ? ` on \`${worst.labels.join(", ")}\`` : ""}). Check runner pool capacity or move short jobs to a less contended label.`,
     );
   }
   if (snapshot.queueMs > 60_000) {

@@ -1,12 +1,18 @@
 {
   "name": "ci-cd-optimizer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "A GitHub App that finds actionable CI/CD performance and platform engineering optimizations.",
+  "description": "Dependabot for CI/CD performance: a configurable linter, GitHub App, and Action that finds and fixes build and release bottlenecks.",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "ci-cd-optimizer": "dist/bin.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "bundle": "esbuild src/bin.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist-action/index.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --legal-comments=none",
+    "cli": "tsx src/bin.ts",
+    "docs:rules": "tsx src/bin.ts rules --format markdown --output docs/rules.md",
     "dev": "tsx watch src/index.ts",
     "lint": "eslint .",
     "start": "node dist/index.js",
@@ -17,13 +23,13 @@
     "node": ">=22"
   },
   "dependencies": {
-    "js-yaml": "^4.1.0",
     "postgres": "^3.4.5",
-    "probot": "^14.0.2"
+    "probot": "^14.0.2",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.2",
+    "esbuild": "^0.28.2",
     "eslint": "^9.17.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
