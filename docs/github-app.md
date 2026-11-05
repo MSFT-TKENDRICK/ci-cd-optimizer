@@ -102,9 +102,62 @@ performance success; completed adaptation issues remain unknown. The `knowledge`
 inspection, refresh and explicit exploratory evaluations ([usage and limits](recipes.md#evidence-backed-application-history)).
 These operations fail closed on missing source/Actions access and do not expose source-catalog payloads through a target query.
 
-The evidence tables are append-only observations, not a retention policy or audit-grade tamper-proof ledger. Operators
-must configure backups, database access, capacity, deletion/retention procedures and repository-removal policy before
+The evidence tables are append-only during collection, not an audit-grade tamper-proof ledger. Operator-only
+[knowledge maintenance](#knowledge-retention-and-removal) provides preview-first pruning and scoped erasure.
+Operators must still configure backups, database access, capacity and whole-service removal procedures before
 production rollout. No unauthenticated knowledge HTTP API, learned mitigation recommender, or automatic deletion on uninstall is enabled.
+
+### Knowledge retention and removal
+
+The default is **retain until explicitly removed**. No scheduled deletion, retention age, or uninstall-triggered
+erasure is silently chosen. Removing/suspending the App revokes future GitHub access; it does not delete database
+history, and reinstalling can resume authorized use. Repository renames/transfers preserve stable repository identity,
+but never authorize data access: interactive knowledge commands still require current GitHub access to the exact
+source revisions and Actions attempts. Cached metadata alone is insufficient. A transfer does not permit reading
+another repository's source-catalog payloads or enable cross-organization recommendations.
+
+`maintenance` is an **infrastructure-operator command**, not a GitHub-authorized user API. It uses the database role
+from `DATABASE_URL`, including for repositories no longer accessible after uninstall. Keep these credentials away
+from untrusted jobs/users; permission to read a GitHub repository does not grant maintenance rights. Commands do not
+initialize/migrate the schema: start the updated App against the database first. Previews use a read-only repeatable-read
+transaction and return counts, limitations and a confirmation digest, not private source payloads:
+
+```sh
+ci-cd-optimizer maintenance prune --host https://github.com --repository-id 123456 \
+  --before 2026-10-01T00:00:00.000Z
+ci-cd-optimizer maintenance purge --host https://github.com --repository-id 123456
+```
+
+`prune` uses an exclusive capture-time cutoff. It removes a logical run only when **every** stored attempt/correction
+is older than the cutoff and none is referenced by a mitigation event/evaluation. This prevents deletion from
+resurrecting an apparently clean first attempt. It also removes old topology snapshots only when no remaining run
+or application references them. Definitions, applications, lifecycle events, and evaluations are retained.
+
+`purge` removes the selected repository's knowledge plus applications of definitions sourced from that repository.
+Those dependent applications can belong to **other repositories**; the preview explicitly counts them. Their events
+and evaluations are removed too, rather than leaving dangling evidence or retaining a supposedly erased private
+definition. Unrelated target observations, topologies and definitions remain. Review that impact before erasing a catalog.
+
+Before applying either plan, pause **all** App workers and scheduled/CLI knowledge writers, review the preview, and
+repeat the same command with `--apply --confirm <preview-digest> --writers-paused`. The acknowledgement is an
+operator assertion, not a process-control mechanism. Application takes database write-excluding table locks, recomputes
+the plan, rejects stale confirmation, and deletes in one transaction. Failure rolls back every deletion. A new preview
+is required if the selection changed. Subsequent ingestion can recreate evidence, so leave removed repositories
+disabled and do not replay their deliveries. Plans above 10,000 records of any evidence kind fail instead of deleting
+an arbitrary partial set; use smaller retention windows or a separately reviewed bulk-erasure procedure.
+
+**This is not whole-service erasure.** Legacy `workflow_run_snapshots` uses historical owner/name aliases, and
+`webhook_jobs` can contain pending/failed delivery payloads and error messages. These are deliberately not inferred
+from a stable knowledge repository ID. Before repository removal/transfer, inventory every historical alias, stop
+ingestion, remove/reconcile queued jobs, and apply an independently reviewed telemetry/queue cleanup procedure.
+Include logs, exports, cached artifacts, credentials, and backup copies in the removal inventory. Already-created
+GitHub PRs/issues are not deleted by database maintenance.
+
+Use encrypted, access-controlled backups with documented expiry and a deletion ledger outside the erased records.
+Test restores in an isolated database, rerun migrations, reapply recorded erasures before serving restored data, and
+verify that removed scopes cannot be served or reingested. Define RPO/RTO and monitor table/index size, queued payloads,
+connection use, lock timeouts, storage headroom and oldest retained capture. Pinned evaluations intentionally retain
+their evidence beyond an age cutoff; monitor that retained volume rather than assuming pruning caps all storage.
 Default inventory ignores and extraction limits remain visible in every record; do not interpret missing evidence as
 proof that a project does not use a tool.
 

@@ -211,6 +211,26 @@ export interface MitigationEvaluation {
   limitations: string[];
 }
 
+export interface KnowledgeMaintenanceRequest extends KnowledgeScope {
+  mode: "prune" | "purge";
+  /** Required for prune: an exclusive, canonical UTC capture-time cutoff. */
+  before?: string;
+  /** Absent means preview. An exact current preview digest explicitly authorizes application. */
+  confirmation?: string;
+}
+
+export interface KnowledgeMaintenancePlan {
+  version: 1;
+  scope: KnowledgeScope;
+  mode: "prune" | "purge";
+  before?: string;
+  digest: string;
+  applied: boolean;
+  counts: Record<"definitions" | "applications" | "events" | "evaluations" | "runs" | "snapshots", number>;
+  crossRepositoryApplications: number;
+  limitations: string[];
+}
+
 export interface KnowledgeStore {
   initialize(): Promise<void>;
   save(snapshot: KnowledgeSnapshot): Promise<void>;
@@ -233,5 +253,7 @@ export interface KnowledgeStore {
   listMitigationApplicationEvents(scope: KnowledgeScope, applicationId: string, limit: number): Promise<MitigationApplicationEvent[]>;
   saveMitigationEvaluation(evaluation: MitigationEvaluation): Promise<void>;
   listMitigationEvaluations(scope: KnowledgeScope, applicationId: string, limit: number): Promise<MitigationEvaluation[]>;
+  /** Operator-only; not a user-facing repository authorization boundary. */
+  maintain(request: KnowledgeMaintenanceRequest): Promise<KnowledgeMaintenancePlan>;
   close?(): Promise<void>;
 }

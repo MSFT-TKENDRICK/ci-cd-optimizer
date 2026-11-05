@@ -171,6 +171,8 @@ export function mitigationCases(getStore: () => KnowledgeStore): void {
     const legacyEvaluation = createMitigationEvaluation({ ...evaluation, limitations: ["Observational comparison; does not establish causality."] });
     await store.saveMitigationEvaluation(legacyEvaluation);
     expect(await store.listMitigationEvaluations(repository, applied.id, 10)).toHaveLength(2);
+    const maintenance = await store.maintain({ ...repository, mode: "prune", before: "2026-11-03T00:00:00.000Z" });
+    expect(maintenance.counts).toMatchObject({ runs: 0, snapshots: 0, evaluations: 0 });
     expect(await store.listMitigationEvaluations({ ...repository, repositoryId: "43" }, applied.id, 10)).toEqual([]);
     await expect(store.listMitigationEvaluations(repository, applied.id, 101)).rejects.toThrow("limit");
     const incorrect = createMitigationEvaluation({

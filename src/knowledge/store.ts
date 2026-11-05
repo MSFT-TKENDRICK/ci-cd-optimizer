@@ -5,11 +5,12 @@ import {
   validateMitigationEvaluation, verifyMitigationEvaluation,
 } from "./mitigation.js";
 import { runObservationSummary, validateRunObservation, validateRunObservationQuery, validateRunSource } from "./run-observation.js";
+import { planMaintenance, validateMaintenanceRequest, type MaintenanceTargets } from "./maintenance.js";
 import { MAX_RUN_OBSERVATIONS, MAX_RUN_OBSERVATION_BYTES, runWindowFromRows, validateRunWindowQuery } from "./run-window.js";
 import type {
   KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, MitigationApplication,
   MitigationApplicationEvent, MitigationDefinition, MitigationEvaluation, RunObservation, RunObservationQuery,
-  RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery,
+  RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery, KnowledgeMaintenanceRequest, KnowledgeMaintenancePlan,
 } from "./types.js";
 
 export function validateQuery(query: KnowledgeQuery): void {
@@ -137,6 +138,57 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
     }
     this.mitigationDefinitions.set(definition.id, definition);
     return structuredClone(definition);
+  }
+
+  async maintain(input: KnowledgeMaintenanceRequest): Promise<KnowledgeMaintenancePlan> {
+    const request = structuredClone(input);
+    validateMaintenanceRequest(request);
+    const targets: MaintenanceTargets = { definitions: [], applications: [], events: [], evaluations: [], runs: [], snapshots: [], crossRepositoryApplications: 0 };
+    if (request.mode === "purge") {
+      targets.definitions = [...this.mitigationDefinitions.values()].filter((item) => sameScope(item.source, request)).map(({ id }) => id);
+      const definitions = new Set(targets.definitions);
+      const applications = [...this.mitigationApplications.values()].filter((item) => sameScope(item.target, request) || definitions.has(item.definitionId));
+      targets.crossRepositoryApplications = applications.filter((item) => !sameScope(item.target, request)).length;
+      targets.applications = applications.map(({ id }) => id);
+      const applicationIds = new Set(targets.applications);
+      targets.events = [...this.mitigationEvents.values()].filter((item) => applicationIds.has(item.applicationId)).map(({ id }) => id);
+      targets.evaluations = [...this.mitigationEvaluations.values()].filter((item) => applicationIds.has(item.applicationId)).map(({ id }) => id);
+      targets.runs = [...this.observations.values()].filter((item) => inScope(item, request)).map(({ id }) => id);
+      targets.snapshots = [...this.snapshots.values()].filter((item) => sameScope(item.repository, request)).map(({ id }) => id);
+    } else {
+      const pinned = new Set([
+        ...[...this.mitigationEvents.values()].flatMap((item) => item.runObservationId ? [item.runObservationId] : []),
+        ...[...this.mitigationEvaluations.values()].flatMap((item) => [...item.controlObservationIds, ...item.treatmentObservationIds]),
+      ]);
+      const groups = new Map<number, RunObservation[]>();
+      for (const observation of this.observations.values()) {
+        if (!inScope(observation, request)) continue;
+        const group = groups.get(observation.run.runId) ?? [];
+        group.push(observation);
+        groups.set(observation.run.runId, group);
+      }
+      const before = Date.parse(request.before!);
+      targets.runs = [...groups.values()].filter((group) =>
+        group.every((item) => Date.parse(item.observedAt) < before && !pinned.has(item.id))).flatMap((group) => group.map(({ id }) => id));
+      const deleting = new Set(targets.runs);
+      const referenced = new Set([
+        ...[...this.mitigationApplications.values()].map((item) => item.topologySnapshotId),
+        ...[...this.observations.values()].flatMap((item) =>
+          !deleting.has(item.id) && item.source.status === "linked" ? [item.source.snapshotId] : []),
+      ]);
+      targets.snapshots = [...this.snapshots.values()].filter((item) =>
+        sameScope(item.repository, request) && Date.parse(item.collectedAt) < before && !referenced.has(item.id)).map(({ id }) => id);
+    }
+    const plan = planMaintenance(request, targets);
+    if (plan.applied) {
+      for (const id of targets.evaluations) this.mitigationEvaluations.delete(id);
+      for (const id of targets.events) this.mitigationEvents.delete(id);
+      for (const id of targets.applications) this.mitigationApplications.delete(id);
+      for (const id of targets.definitions) this.mitigationDefinitions.delete(id);
+      for (const id of targets.runs) this.observations.delete(id);
+      for (const id of targets.snapshots) this.snapshots.delete(id);
+    }
+    return plan;
   }
   async loadMitigationDefinition(scope: KnowledgeScope, id: string): Promise<MitigationDefinition | undefined> {
     validateScope(scope);

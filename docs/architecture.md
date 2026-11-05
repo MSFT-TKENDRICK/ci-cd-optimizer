@@ -206,6 +206,20 @@ other confounders can violate test assumptions. It is not proof that the mitigat
 benefit another project. Insufficient samples remain inconclusive; missing evidence can be recorded as unknown.
 Evaluations do not establish randomized or otherwise statistically independent runs.
 
+### Operator-controlled evidence lifecycle
+
+Collection remains append-only; explicit maintenance is separate from application/query authorization.
+`KnowledgeStore.maintain` previews pruning or erasure by stable host/repository scope. Pruning selects complete logical
+run groups using their newest capture, preserves any group referenced by a lifecycle event/evaluation, and removes only
+unreferenced old topology. Purging also follows source-definition references into dependent target applications, making
+that cross-repository impact explicit rather than breaking foreign keys or leaving orphaned claims.
+
+An application requires the exact digest of a current preview. Postgres recomputes the target identities while holding
+write-excluding table locks and applies all related deletes atomically; failures/stale digests change nothing. Preview
+transactions are read-only and do not run migrations. Selection caps fail explicitly, never truncate a deletion.
+No automatic age, transfer, uninstall or suspension policy triggers writes. Legacy telemetry, webhook payloads and
+backups remain separate operator inventories; see the [removal and restore procedure](github-app.md#knowledge-retention-and-removal).
+
 ### Immutable duration evidence
 
 `readRunWindow` provides one consistent, scoped database read of at most 100 logical runs, with the reference run

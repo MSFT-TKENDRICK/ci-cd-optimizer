@@ -6,12 +6,14 @@ import {
   validateMitigationEvaluation, verifyMitigationEvaluation,
 } from "./mitigation.js";
 import { validateQuery, validateSnapshot } from "./store.js";
+import { MAINTENANCE_LIMIT, planMaintenance, validateMaintenanceRequest, type MaintenanceTargets } from "./maintenance.js";
 import { validateRunObservation, validateRunObservationQuery, validateRunSource } from "./run-observation.js";
 import { MAX_RUN_OBSERVATIONS, MAX_RUN_OBSERVATION_BYTES, runWindowFromRows, validateRunWindowQuery } from "./run-window.js";
 import type {
   KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, MitigationApplication,
   MitigationApplicationEvent, MitigationDefinition, MitigationEvaluation, ProjectEvidence, ProjectRelationship,
   TechnologyEvidence, RunObservation, RunObservationQuery, RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery,
+  KnowledgeMaintenanceRequest, KnowledgeMaintenancePlan,
 } from "./types.js";
 
 interface Header {
@@ -90,6 +92,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS knowledge_run_scope_reference ON knowledge_run_observations (id, host, repository_id)`;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_run_scope ON knowledge_run_observations (host, repository_id, observed_at DESC, id DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_run_attempt ON knowledge_run_observations (host, repository_id, run_id, run_attempt)`;
+      await sql`CREATE INDEX IF NOT EXISTS knowledge_run_source ON knowledge_run_observations (source_snapshot_id)`;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_run_workflow ON knowledge_run_observations (host, repository_id, workflow_id, (observation->'run'->>'branch'), run_id)`;
       await sql`
         CREATE TABLE IF NOT EXISTS mitigation_definitions (
@@ -147,6 +150,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
         )
       `;
       await sql`CREATE INDEX IF NOT EXISTS mitigation_event_application ON mitigation_application_events (host, repository_id, application_id, observed_at, id)`;
+      await sql`CREATE INDEX IF NOT EXISTS mitigation_event_observation ON mitigation_application_events (run_observation_id)`;
       await sql`
         CREATE TABLE IF NOT EXISTS mitigation_evaluations (
           id TEXT PRIMARY KEY, version INTEGER NOT NULL CHECK (version = 1),
@@ -171,6 +175,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
             REFERENCES knowledge_run_observations (id, host, repository_id)
         )
       `;
+      await sql`CREATE INDEX IF NOT EXISTS mitigation_sample_observation ON mitigation_evaluation_samples (run_observation_id)`;
     });
   }
   async save(input: KnowledgeSnapshot): Promise<void> {
@@ -374,6 +379,104 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
         ON CONFLICT (id) DO NOTHING
       `;
       return definition;
+    });
+  }
+
+  async maintain(input: KnowledgeMaintenanceRequest): Promise<KnowledgeMaintenancePlan> {
+    const request = structuredClone(input);
+    validateMaintenanceRequest(request);
+    return this.sql.begin(request.confirmation ? "isolation level read committed" : "isolation level repeatable read read only", async (sql) => {
+      await sql`SET LOCAL lock_timeout = '10s'`;
+      await sql`SET LOCAL statement_timeout = '60s'`;
+      if (request.confirmation) {
+        await sql`
+          LOCK TABLE knowledge_snapshots, knowledge_projects, knowledge_technologies, knowledge_relationships,
+            knowledge_run_observations, mitigation_definitions, mitigation_applications, mitigation_application_projects,
+            mitigation_application_events, mitigation_evaluations, mitigation_evaluation_samples
+          IN SHARE ROW EXCLUSIVE MODE
+        `;
+      }
+      const targets: MaintenanceTargets = { definitions: [], applications: [], events: [], evaluations: [], runs: [], snapshots: [], crossRepositoryApplications: 0 };
+      if (request.mode === "purge") {
+        targets.definitions = (await sql<{ id: string }[]>`
+          SELECT id FROM mitigation_definitions WHERE host = ${request.host} AND repository_id = ${request.repositoryId}
+          ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+        const applications = await sql<{ id: string; host: string; repository_id: string }[]>`
+          SELECT id, host, repository_id FROM mitigation_applications
+          WHERE (host = ${request.host} AND repository_id = ${request.repositoryId})
+            OR definition_id IN (SELECT id FROM mitigation_definitions WHERE host = ${request.host} AND repository_id = ${request.repositoryId})
+          ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `;
+        targets.applications = applications.map(({ id }) => id);
+        targets.crossRepositoryApplications = applications.filter((item) => item.host !== request.host || item.repository_id !== request.repositoryId).length;
+        if (targets.applications.length) {
+          targets.events = (await sql<{ id: string }[]>`
+            SELECT id FROM mitigation_application_events WHERE application_id IN ${sql(targets.applications)}
+            ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+          `).map(({ id }) => id);
+          targets.evaluations = (await sql<{ id: string }[]>`
+            SELECT id FROM mitigation_evaluations WHERE application_id IN ${sql(targets.applications)}
+            ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+          `).map(({ id }) => id);
+        }
+        targets.runs = (await sql<{ id: string }[]>`
+          SELECT id FROM knowledge_run_observations WHERE host = ${request.host} AND repository_id = ${request.repositoryId}
+          ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+        targets.snapshots = (await sql<{ id: string }[]>`
+          SELECT id FROM knowledge_snapshots WHERE host = ${request.host} AND repository_id = ${request.repositoryId}
+          ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+      } else {
+        targets.runs = (await sql<{ id: string }[]>`
+          WITH candidates AS (
+            SELECT run_id FROM knowledge_run_observations
+            WHERE host = ${request.host} AND repository_id = ${request.repositoryId}
+            GROUP BY run_id HAVING max(observed_at) < ${new Date(request.before!)}
+          )
+          SELECT o.id FROM knowledge_run_observations o
+          WHERE o.host = ${request.host} AND o.repository_id = ${request.repositoryId}
+            AND o.run_id IN (SELECT run_id FROM candidates)
+            AND NOT EXISTS (
+              SELECT 1 FROM knowledge_run_observations pinned
+              WHERE pinned.host = o.host AND pinned.repository_id = o.repository_id AND pinned.run_id = o.run_id
+                AND (EXISTS (SELECT 1 FROM mitigation_evaluation_samples s WHERE s.run_observation_id = pinned.id)
+                  OR EXISTS (SELECT 1 FROM mitigation_application_events e WHERE e.run_observation_id = pinned.id))
+            )
+          ORDER BY o.id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+        targets.snapshots = (await sql<{ id: string }[]>`
+          SELECT s.id FROM knowledge_snapshots s
+          WHERE s.host = ${request.host} AND s.repository_id = ${request.repositoryId} AND s.collected_at < ${new Date(request.before!)}
+            AND NOT EXISTS (SELECT 1 FROM mitigation_applications a WHERE a.topology_snapshot_id = s.id)
+            AND NOT EXISTS (
+              SELECT 1 FROM knowledge_run_observations r WHERE r.source_snapshot_id = s.id
+                ${targets.runs.length ? sql`AND r.id NOT IN ${sql(targets.runs)}` : sql``}
+            )
+          ORDER BY s.id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+      }
+      const plan = planMaintenance(request, targets);
+      if (!plan.applied) return plan;
+      if (targets.evaluations.length) {
+        await sql`DELETE FROM mitigation_evaluation_samples WHERE evaluation_id IN ${sql(targets.evaluations)}`;
+        await sql`DELETE FROM mitigation_evaluations WHERE id IN ${sql(targets.evaluations)}`;
+      }
+      if (targets.events.length) await sql`DELETE FROM mitigation_application_events WHERE id IN ${sql(targets.events)}`;
+      if (targets.applications.length) {
+        await sql`DELETE FROM mitigation_application_projects WHERE application_id IN ${sql(targets.applications)}`;
+        await sql`DELETE FROM mitigation_applications WHERE id IN ${sql(targets.applications)}`;
+      }
+      if (targets.definitions.length) await sql`DELETE FROM mitigation_definitions WHERE id IN ${sql(targets.definitions)}`;
+      if (targets.runs.length) await sql`DELETE FROM knowledge_run_observations WHERE id IN ${sql(targets.runs)}`;
+      if (targets.snapshots.length) {
+        await sql`DELETE FROM knowledge_relationships WHERE snapshot_id IN ${sql(targets.snapshots)}`;
+        await sql`DELETE FROM knowledge_technologies WHERE snapshot_id IN ${sql(targets.snapshots)}`;
+        await sql`DELETE FROM knowledge_projects WHERE snapshot_id IN ${sql(targets.snapshots)}`;
+        await sql`DELETE FROM knowledge_snapshots WHERE id IN ${sql(targets.snapshots)}`;
+      }
+      return plan;
     });
   }
   async loadMitigationDefinition(scope: KnowledgeScope, id: string): Promise<MitigationDefinition | undefined> {

@@ -43,6 +43,12 @@ describe("CLI knowledge connection ownership", () => {
     expect(close).not.toHaveBeenCalled();
   });
 
+  it("can open an owned maintenance connection without running schema initialization", async () => {
+    await usingKnowledgeStore(io(), true, async (factory) => factory!(), { initialize: false });
+    expect(mocks.initialize).not.toHaveBeenCalled();
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+
   it("cleans up failed initialization and preserves both operation and cleanup errors", async () => {
     const failure = new Error("initialization failed");
     mocks.initialize.mockRejectedValue(failure);

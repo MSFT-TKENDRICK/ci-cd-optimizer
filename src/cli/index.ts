@@ -9,6 +9,7 @@ import { recipesCommand, RECIPES_HELP } from "./recipes.js";
 import { scanCommand, SCAN_HELP } from "./scan.js";
 import { telemetryCommand, TELEMETRY_HELP } from "./telemetry.js";
 import { knowledgeCommand, KNOWLEDGE_HELP } from "./knowledge.js";
+import { maintenanceCommand, MAINTENANCE_HELP } from "./maintenance.js";
 
 export const HELP = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimizer for GitHub repositories
 
@@ -22,6 +23,7 @@ Commands:
   experiments <cmd>     Hill-climbing experiments: list, context, create, collect, evaluate, decide
   recipes <cmd>         Reusable fixes from promoted experiments: publish, apply, status, rollout
   knowledge <cmd>       Authorized mitigation history: applications, runs, inspect, refresh, evaluate
+  maintenance <cmd>     Operator-only knowledge retention and erasure (preview by default)
   help [command]        Show help
   version               Print the version
 
@@ -55,6 +57,7 @@ const COMMANDS: Record<string, { run: (args: string[], io: CliIO) => Promise<num
   scan: { run: scanCommand, help: SCAN_HELP },
   telemetry: { run: telemetryCommand, help: TELEMETRY_HELP },
   knowledge: { run: knowledgeCommand, help: KNOWLEDGE_HELP },
+  maintenance: { run: maintenanceCommand, help: MAINTENANCE_HELP },
 };
 
 /** Parses argv (without the node and script entries) and returns the exit code. Never calls process.exit. */
