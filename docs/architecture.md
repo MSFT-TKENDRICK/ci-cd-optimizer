@@ -220,6 +220,32 @@ transactions are read-only and do not run migrations. Selection caps fail explic
 No automatic age, transfer, uninstall or suspension policy triggers writes. Legacy telemetry, webhook payloads and
 backups remain separate operator inventories; see the [removal and restore procedure](github-app.md#knowledge-retention-and-removal).
 
+### Reported task execution context
+
+Opt-in `execution capture` measures one explicitly invoked child process, its initial working directory, timestamps,
+elapsed time, exit/signal, Git HEAD before execution and the recorder's Node version. It never runs in the App.
+Additional installed-tool versions and cache outcomes are supplied by workflow instrumentation with an explicit
+`workflow-report` basis. Missing cache observations remain unknown, not misses or hits. A reported Git HEAD does not
+prove a clean worktree, prevent the task from changing files/directories, or identify every executed project.
+
+The bounded, allowlisted `ExecutionReport` has repository/run/attempt/revision/job context and single-command coverage.
+Authenticated import pins an exact `RunObservation` and numerical Actions job ID, checks the run/attempt/revision,
+job interval and logical job key, and freshly authorizes both run and reported checkout revisions. Import never
+executes commands or repository code. Storage uses a same-scope run-observation FK and a content-addressed immutable
+payload; corrected or conflicting reports remain separate. Queries require fresh Actions/job/Contents access.
+
+This boundary authenticates the **association**, not the supplied report's origin or assertions. Records are always
+`operator-supplied`, never automatically attested. [GitHub artifact metadata](https://docs.github.com/en/rest/actions/artifacts#get-an-artifact)
+contains run and commit identifiers but no attempt field, so a filename cannot establish attempt provenance.
+[Artifact attestations](https://docs.github.com/en/actions/concepts/security/artifact-attestations) establish provenance
+only when verified against policy; even verified provenance does not prove arbitrary cache/performance assertions.
+This implementation does not add attestation permissions or require signing routine CI reports.
+
+Reported paths/tools/cache outcomes are not promoted into declaration facts, verified project attribution, duration
+cohorts or causal mitigation evidence. They are queryable observations for investigation and future explicit
+corroboration. Retention previews include their identities/counts and delete them transactionally with eligible
+logical runs; referenced run evidence remains pinned. [Capture/import examples](github-app.md#optional-task-execution-reports).
+
 ### Immutable duration evidence
 
 `readRunWindow` provides one consistent, scoped database read of at most 100 logical runs, with the reference run

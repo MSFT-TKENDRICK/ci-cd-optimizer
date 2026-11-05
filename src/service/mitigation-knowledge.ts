@@ -33,6 +33,7 @@ function authorization(client: GitHubClient, repo: RepoRef, identity: Repository
     revisions.add(sha);
   };
   return {
+    revision: authorizeRevision,
     application: async (application: MitigationApplication) => {
       const topology = await store.load(identity, application.topologySnapshotId);
       if (!topology) throw new Error("Mitigation target topology is unavailable");
@@ -58,6 +59,15 @@ function authorization(client: GitHubClient, repo: RepoRef, identity: Repository
       return observation;
     },
   };
+}
+
+export async function authorizedRunKnowledge(client: GitHubClient, repo: RepoRef, factory: StoreFactory, id: string) {
+  evidenceId(id);
+  const identity = await authorizeRepository(client, repo);
+  const store = await factory();
+  const access = authorization(client, repo, identity, store);
+  const observation = await access.observation(id);
+  return { identity, store, access, observation };
 }
 
 async function authorizedApplication(client: GitHubClient, repo: RepoRef, factory: StoreFactory, id: string) {

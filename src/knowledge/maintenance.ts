@@ -2,7 +2,7 @@ import { identity, validateScope } from "./identity.js";
 import type { KnowledgeMaintenancePlan, KnowledgeMaintenanceRequest } from "./types.js";
 
 export const MAINTENANCE_LIMIT = 10_000;
-export const MAINTENANCE_KINDS = ["definitions", "applications", "events", "evaluations", "runs", "snapshots"] as const;
+export const MAINTENANCE_KINDS = ["definitions", "applications", "events", "evaluations", "runs", "snapshots", "executions"] as const;
 export type MaintenanceTargets = Record<typeof MAINTENANCE_KINDS[number], string[]> & { crossRepositoryApplications: number };
 
 export function validateMaintenanceRequest(request: KnowledgeMaintenanceRequest): void {
@@ -43,6 +43,7 @@ export function planMaintenance(request: KnowledgeMaintenanceRequest, targets: M
       definitions: targets.definitions.length, applications: targets.applications.length,
       events: targets.events.length, evaluations: targets.evaluations.length,
       runs: targets.runs.length, snapshots: targets.snapshots.length,
+      executions: targets.executions.length,
     },
     crossRepositoryApplications: targets.crossRepositoryApplications,
     limitations: [

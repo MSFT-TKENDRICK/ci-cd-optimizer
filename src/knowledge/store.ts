@@ -6,11 +6,12 @@ import {
 } from "./mitigation.js";
 import { runObservationSummary, validateRunObservation, validateRunObservationQuery, validateRunSource } from "./run-observation.js";
 import { planMaintenance, validateMaintenanceRequest, type MaintenanceTargets } from "./maintenance.js";
+import { validateExecutionObservation } from "./execution.js";
 import { MAX_RUN_OBSERVATIONS, MAX_RUN_OBSERVATION_BYTES, runWindowFromRows, validateRunWindowQuery } from "./run-window.js";
 import type {
   KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, MitigationApplication,
   MitigationApplicationEvent, MitigationDefinition, MitigationEvaluation, RunObservation, RunObservationQuery,
-  RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery, KnowledgeMaintenanceRequest, KnowledgeMaintenancePlan,
+  RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery, KnowledgeMaintenanceRequest, KnowledgeMaintenancePlan, ExecutionObservation,
 } from "./types.js";
 
 export function validateQuery(query: KnowledgeQuery): void {
@@ -59,6 +60,7 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
   private readonly mitigationApplications = new Map<string, MitigationApplication>();
   private readonly mitigationEvents = new Map<string, MitigationApplicationEvent>();
   private readonly mitigationEvaluations = new Map<string, MitigationEvaluation>();
+  private readonly executions = new Map<string, ExecutionObservation>();
   async initialize(): Promise<void> {}
   async save(snapshot: KnowledgeSnapshot): Promise<void> {
     validateSnapshot(snapshot);
@@ -143,7 +145,7 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
   async maintain(input: KnowledgeMaintenanceRequest): Promise<KnowledgeMaintenancePlan> {
     const request = structuredClone(input);
     validateMaintenanceRequest(request);
-    const targets: MaintenanceTargets = { definitions: [], applications: [], events: [], evaluations: [], runs: [], snapshots: [], crossRepositoryApplications: 0 };
+    const targets: MaintenanceTargets = { definitions: [], applications: [], events: [], evaluations: [], runs: [], snapshots: [], executions: [], crossRepositoryApplications: 0 };
     if (request.mode === "purge") {
       targets.definitions = [...this.mitigationDefinitions.values()].filter((item) => sameScope(item.source, request)).map(({ id }) => id);
       const definitions = new Set(targets.definitions);
@@ -179,16 +181,34 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
       targets.snapshots = [...this.snapshots.values()].filter((item) =>
         sameScope(item.repository, request) && Date.parse(item.collectedAt) < before && !referenced.has(item.id)).map(({ id }) => id);
     }
+    const removingRuns = new Set(targets.runs);
+    targets.executions = [...this.executions.values()].filter((item) => removingRuns.has(item.runObservationId)).map(({ id }) => id);
     const plan = planMaintenance(request, targets);
     if (plan.applied) {
       for (const id of targets.evaluations) this.mitigationEvaluations.delete(id);
       for (const id of targets.events) this.mitigationEvents.delete(id);
       for (const id of targets.applications) this.mitigationApplications.delete(id);
       for (const id of targets.definitions) this.mitigationDefinitions.delete(id);
+      for (const id of targets.executions) this.executions.delete(id);
       for (const id of targets.runs) this.observations.delete(id);
       for (const id of targets.snapshots) this.snapshots.delete(id);
     }
     return plan;
+  }
+
+  async saveExecutionObservation(input: ExecutionObservation): Promise<void> {
+    const item = structuredClone(input);
+    validateExecutionObservation(item);
+    const observation = this.observations.get(item.runObservationId);
+    if (!observation) throw new Error("Execution references unavailable run evidence");
+    validateExecutionObservation(item, observation);
+    if (!this.executions.has(item.id)) this.executions.set(item.id, item);
+  }
+  async listExecutionObservations(scope: KnowledgeScope, runObservationId: string, limit: number): Promise<ExecutionObservation[]> {
+    validateScope(scope); validateEvidenceLimit(limit);
+    if (!/^[a-f0-9]{64}$/.test(runObservationId)) throw new Error("Execution run observation ID is invalid");
+    return [...this.executions.values()].filter((item) => sameScope(item.repository, scope) && item.runObservationId === runObservationId)
+      .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || a.id.localeCompare(b.id)).slice(0, limit).map((item) => structuredClone(item));
   }
   async loadMitigationDefinition(scope: KnowledgeScope, id: string): Promise<MitigationDefinition | undefined> {
     validateScope(scope);

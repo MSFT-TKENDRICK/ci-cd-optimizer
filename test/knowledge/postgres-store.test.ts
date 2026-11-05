@@ -10,6 +10,7 @@ import { input, now, repository, revision, snapshot } from "./fixtures.js";
 import { runWindowCases } from "./run-window-cases.js";
 import { legacyDefinition, mitigationCases } from "./mitigation-cases.js";
 import { maintenanceCases } from "./maintenance-cases.js";
+import { executionCases } from "./execution-cases.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
@@ -24,6 +25,7 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
   runWindowCases(() => store);
   mitigationCases(() => store);
   maintenanceCases(() => store);
+  executionCases(() => store);
 
   it("rolls every maintenance deletion back on failure and permits a complete retry", async () => {
     const project = snapshot();
@@ -203,6 +205,7 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
     await store.save(project);
     await database.sql`DROP TABLE mitigation_application_events`;
     await database.sql`DROP TABLE mitigation_evaluation_samples`;
+    await database.sql`DROP TABLE knowledge_execution_observations`;
     await database.sql`DROP TABLE knowledge_run_observations`;
     await database.sql`DROP INDEX knowledge_snapshot_reference`;
     await store.initialize();

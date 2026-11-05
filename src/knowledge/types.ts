@@ -219,6 +219,42 @@ export interface KnowledgeMaintenanceRequest extends KnowledgeScope {
   confirmation?: string;
 }
 
+export interface ExecutionReport {
+  version: 1;
+  repository: KnowledgeScope;
+  runId: number;
+  runAttempt: number;
+  headSha: string;
+  checkoutSha: string;
+  jobKey: string;
+  projectPath: string;
+  task: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  exitCode: number | null;
+  signal: string | null;
+  tools: Array<{
+    name: "node" | "npm" | "pnpm" | "yarn" | "bun" | "typescript" | "nx" | "turborepo" | "docker" | "git" | "python" | "dotnet" | "java" | "gradle" | "bazel" | "pants";
+    version: string;
+    basis: "recorder-runtime" | "workflow-report";
+  }>;
+  caches: Array<{ tool: "actions-cache" | "turborepo" | "nx" | "docker" | "bazel" | "gradle" | "custom"; result: "hit" | "miss" | "partial" | "unknown"; basis: "workflow-report" }>;
+  coverage: "single-command";
+}
+
+export interface ExecutionObservation {
+  version: 1;
+  id: string;
+  repository: KnowledgeScope;
+  runObservationId: string;
+  jobId: number;
+  report: ExecutionReport;
+  /** Run association is authenticated separately; the supplied report itself is not attested. */
+  provenance: "operator-supplied";
+  recordedAt: string;
+}
+
 export interface KnowledgeMaintenancePlan {
   version: 1;
   scope: KnowledgeScope;
@@ -226,7 +262,7 @@ export interface KnowledgeMaintenancePlan {
   before?: string;
   digest: string;
   applied: boolean;
-  counts: Record<"definitions" | "applications" | "events" | "evaluations" | "runs" | "snapshots", number>;
+  counts: Record<"definitions" | "applications" | "events" | "evaluations" | "runs" | "snapshots" | "executions", number>;
   crossRepositoryApplications: number;
   limitations: string[];
 }
@@ -253,6 +289,8 @@ export interface KnowledgeStore {
   listMitigationApplicationEvents(scope: KnowledgeScope, applicationId: string, limit: number): Promise<MitigationApplicationEvent[]>;
   saveMitigationEvaluation(evaluation: MitigationEvaluation): Promise<void>;
   listMitigationEvaluations(scope: KnowledgeScope, applicationId: string, limit: number): Promise<MitigationEvaluation[]>;
+  saveExecutionObservation(observation: ExecutionObservation): Promise<void>;
+  listExecutionObservations(scope: KnowledgeScope, runObservationId: string, limit: number): Promise<ExecutionObservation[]>;
   /** Operator-only; not a user-facing repository authorization boundary. */
   maintain(request: KnowledgeMaintenanceRequest): Promise<KnowledgeMaintenancePlan>;
   close?(): Promise<void>;

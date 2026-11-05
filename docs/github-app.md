@@ -158,6 +158,64 @@ Test restores in an isolated database, rerun migrations, reapply recorded erasur
 verify that removed scopes cannot be served or reingested. Define RPO/RTO and monitor table/index size, queued payloads,
 connection use, lock timeouts, storage headroom and oldest retained capture. Pinned evaluations intentionally retain
 their evidence beyond an age cutoff; monitor that retained volume rather than assuming pruning caps all storage.
+
+### Optional task execution reports
+
+The installed CLI can wrap a command **on the Actions runner**, from the repository root:
+
+```sh
+ci-cd-optimizer execution capture --project packages/a --task build \
+  --output runtime-build.json -- node ./build.mjs
+```
+
+The executable runs with `packages/a` as its initial directory. Output paths are relative to the repository root;
+their parent directory must exist and existing files are not overwritten. Use a distinct report per command/matrix
+job/attempt. The recorder requires the standard `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY_ID`, `GITHUB_RUN_ID`,
+`GITHUB_RUN_ATTEMPT`, `GITHUB_SHA` and `GITHUB_JOB` environment variables. It records Git HEAD before execution,
+elapsed and wall-clock time, child exit/signal, and its own Node version. Child output streams normally but is not
+copied into the report; command arguments and environment variables are also excluded. Child failures still produce
+a report and propagate their exit code. This does not inventory dirty files or prove that the child used only the
+initial directory/commit. Native executables are invoked without an implicit shell; Windows `.cmd` scripts require
+an explicitly requested command interpreter.
+
+For installed versions and cache observations emitted by the build tool, add `--observations runtime-observations.json`.
+That bounded JSON file is read **after** the command finishes, so instrumentation can write it:
+
+```json
+{
+  "tools": [{ "name": "turborepo", "version": "2.5.0", "basis": "workflow-report" }],
+  "caches": [{ "tool": "turborepo", "result": "partial" }]
+}
+```
+
+These are workflow-reported observations, not inferred from `package.json`, tool presence or fast execution.
+Do not substitute configured version ranges for installed versions. Cache results are `hit`, `miss`, `partial` or
+`unknown`; an absent entry establishes nothing. Raw cache keys, URLs, credentials, command text and arbitrary fields
+are not retained. The recorder's Node observation cannot be overridden. Reports/observation inputs are capped at
+64 KiB, with bounded allowlisted tool/cache lists.
+
+Retain/download the JSON through your existing approved artifact process. After the App has collected the completed
+run, use an authorized client sharing its database to import and inspect it:
+
+```sh
+ci-cd-optimizer knowledge runs --repo acme/web --run-id 12345
+ci-cd-optimizer execution import --repo acme/web --observation <run-observation-id> \
+  --job-id <numerical-actions-job-id> --file runtime-build.json
+ci-cd-optimizer execution list --repo acme/web --observation <run-observation-id>
+```
+
+Import requires current Contents/Actions access to the exact run attempt, job and both reported source revisions.
+The numerical job must belong to that attempt, match its collected logical job key, and contain the reported task
+interval. Unsupported/ambiguous job mapping or clock intervals fail explicitly rather than choosing a matrix job.
+Import executes **no** report-supplied command or repository code. Reports remain immutable and scoped; changing
+claims creates another record rather than overwriting evidence.
+
+**A local report is still operator-supplied.** Matching real Actions metadata is not artifact-origin verification,
+attestation or proof of its cache claims. The App does not automatically download reports or treat them as trusted
+benefit measurements, executed-project attribution or independent statistical samples. A Gantt/job duration remains
+GitHub-observed telemetry; the report supplies additional, clearly labeled investigation context. Sensitive project
+paths/task labels still require database/export protections. Knowledge maintenance deletes these reports with their
+eligible runs and includes them in preview confirmation.
 Default inventory ignores and extraction limits remain visible in every record; do not interpret missing evidence as
 proof that a project does not use a tool.
 

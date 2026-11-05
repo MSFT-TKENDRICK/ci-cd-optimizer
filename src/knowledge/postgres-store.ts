@@ -7,13 +7,14 @@ import {
 } from "./mitigation.js";
 import { validateQuery, validateSnapshot } from "./store.js";
 import { MAINTENANCE_LIMIT, planMaintenance, validateMaintenanceRequest, type MaintenanceTargets } from "./maintenance.js";
+import { validateExecutionObservation } from "./execution.js";
 import { validateRunObservation, validateRunObservationQuery, validateRunSource } from "./run-observation.js";
 import { MAX_RUN_OBSERVATIONS, MAX_RUN_OBSERVATION_BYTES, runWindowFromRows, validateRunWindowQuery } from "./run-window.js";
 import type {
   KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, MitigationApplication,
   MitigationApplicationEvent, MitigationDefinition, MitigationEvaluation, ProjectEvidence, ProjectRelationship,
   TechnologyEvidence, RunObservation, RunObservationQuery, RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery,
-  KnowledgeMaintenanceRequest, KnowledgeMaintenancePlan,
+  KnowledgeMaintenanceRequest, KnowledgeMaintenancePlan, ExecutionObservation,
 } from "./types.js";
 
 interface Header {
@@ -176,6 +177,15 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
         )
       `;
       await sql`CREATE INDEX IF NOT EXISTS mitigation_sample_observation ON mitigation_evaluation_samples (run_observation_id)`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS knowledge_execution_observations (
+          id TEXT PRIMARY KEY, version INTEGER NOT NULL CHECK (version = 1),
+          host TEXT NOT NULL, repository_id TEXT NOT NULL, run_observation_id TEXT NOT NULL,
+          job_id BIGINT NOT NULL CHECK (job_id > 0), recorded_at TIMESTAMPTZ NOT NULL, execution JSONB NOT NULL,
+          FOREIGN KEY (run_observation_id, host, repository_id) REFERENCES knowledge_run_observations (id, host, repository_id)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS knowledge_execution_run ON knowledge_execution_observations (run_observation_id, host, repository_id, recorded_at DESC, id)`;
     });
   }
   async save(input: KnowledgeSnapshot): Promise<void> {
@@ -392,11 +402,11 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
         await sql`
           LOCK TABLE knowledge_snapshots, knowledge_projects, knowledge_technologies, knowledge_relationships,
             knowledge_run_observations, mitigation_definitions, mitigation_applications, mitigation_application_projects,
-            mitigation_application_events, mitigation_evaluations, mitigation_evaluation_samples
+            mitigation_application_events, mitigation_evaluations, mitigation_evaluation_samples, knowledge_execution_observations
           IN SHARE ROW EXCLUSIVE MODE
         `;
       }
-      const targets: MaintenanceTargets = { definitions: [], applications: [], events: [], evaluations: [], runs: [], snapshots: [], crossRepositoryApplications: 0 };
+      const targets: MaintenanceTargets = { definitions: [], applications: [], events: [], evaluations: [], runs: [], snapshots: [], executions: [], crossRepositoryApplications: 0 };
       if (request.mode === "purge") {
         targets.definitions = (await sql<{ id: string }[]>`
           SELECT id FROM mitigation_definitions WHERE host = ${request.host} AND repository_id = ${request.repositoryId}
@@ -457,6 +467,12 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
           ORDER BY s.id LIMIT ${MAINTENANCE_LIMIT + 1}
         `).map(({ id }) => id);
       }
+      if (targets.runs.length) {
+        targets.executions = (await sql<{ id: string }[]>`
+          SELECT id FROM knowledge_execution_observations WHERE run_observation_id IN ${sql(targets.runs)}
+          ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+      }
       const plan = planMaintenance(request, targets);
       if (!plan.applied) return plan;
       if (targets.evaluations.length) {
@@ -469,6 +485,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
         await sql`DELETE FROM mitigation_applications WHERE id IN ${sql(targets.applications)}`;
       }
       if (targets.definitions.length) await sql`DELETE FROM mitigation_definitions WHERE id IN ${sql(targets.definitions)}`;
+      if (targets.executions.length) await sql`DELETE FROM knowledge_execution_observations WHERE id IN ${sql(targets.executions)}`;
       if (targets.runs.length) await sql`DELETE FROM knowledge_run_observations WHERE id IN ${sql(targets.runs)}`;
       if (targets.snapshots.length) {
         await sql`DELETE FROM knowledge_relationships WHERE snapshot_id IN ${sql(targets.snapshots)}`;
@@ -478,6 +495,41 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
       }
       return plan;
     });
+  }
+
+  async saveExecutionObservation(input: ExecutionObservation): Promise<void> {
+    const item = structuredClone(input);
+    validateExecutionObservation(item);
+    await this.sql.begin(async (sql) => {
+      const [row] = await sql<{ observation: RunObservation }[]>`
+        SELECT observation FROM knowledge_run_observations
+        WHERE id = ${item.runObservationId} AND host = ${item.repository.host} AND repository_id = ${item.repository.repositoryId}
+      `;
+      if (!row) throw new Error("Execution references unavailable run evidence");
+      validateRunObservation(row.observation);
+      validateExecutionObservation(item, row.observation);
+      await sql`
+        INSERT INTO knowledge_execution_observations (id, version, host, repository_id, run_observation_id, job_id, recorded_at, execution)
+        VALUES (${item.id}, ${item.version}, ${item.repository.host}, ${item.repository.repositoryId}, ${item.runObservationId},
+          ${item.jobId}, ${new Date(item.recordedAt)}, ${sql.json(JSON.parse(JSON.stringify(item)) as postgres.JSONValue)})
+        ON CONFLICT (id) DO NOTHING
+      `;
+    });
+  }
+  async listExecutionObservations(scope: KnowledgeScope, runObservationId: string, limit: number): Promise<ExecutionObservation[]> {
+    validateScope(scope); validateMitigationLimit(limit);
+    if (!/^[a-f0-9]{64}$/.test(runObservationId)) throw new Error("Execution run observation ID is invalid");
+    const rows = await this.sql<{ id: string; execution: ExecutionObservation }[]>`
+      SELECT id, execution FROM knowledge_execution_observations
+      WHERE host = ${scope.host} AND repository_id = ${scope.repositoryId} AND run_observation_id = ${runObservationId}
+      ORDER BY recorded_at DESC, id LIMIT ${limit}
+    `;
+    for (const { id, execution } of rows) {
+      validateExecutionObservation(execution);
+      if (execution.id !== id || execution.repository.host !== scope.host || execution.repository.repositoryId !== scope.repositoryId ||
+          execution.runObservationId !== runObservationId) throw new Error("Stored execution does not match its indexed scope");
+    }
+    return rows.map(({ execution }) => execution);
   }
   async loadMitigationDefinition(scope: KnowledgeScope, id: string): Promise<MitigationDefinition | undefined> {
     validateScope(scope);

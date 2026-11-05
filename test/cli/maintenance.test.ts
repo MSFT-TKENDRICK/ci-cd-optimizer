@@ -31,7 +31,7 @@ describe("operator knowledge maintenance", () => {
 
   it("rejects oversized plans rather than silently deleting a partial selection", () => {
     expect(() => planMaintenance({ ...repository, mode: "purge" }, {
-      definitions: [], applications: [], events: [], evaluations: [], snapshots: [], crossRepositoryApplications: 0,
+      definitions: [], applications: [], events: [], evaluations: [], snapshots: [], executions: [], crossRepositoryApplications: 0,
       runs: Array.from({ length: MAINTENANCE_LIMIT + 1 }, (_, index) => identity(index)),
     })).toThrow("Maintenance exceeds");
   });
