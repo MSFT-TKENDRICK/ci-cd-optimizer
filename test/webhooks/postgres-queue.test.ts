@@ -38,6 +38,80 @@ describe.skipIf(!databaseUrl)("durable Postgres webhook queue", () => {
   });
   afterAll(async () => { await db?.close(); });
 
+  it("checks queue readiness without creating or changing deliveries", async () => {
+    const worker = queue();
+    await worker.checkReadiness();
+    expect(await db.sql`SELECT scope FROM webhook_scopes`).toHaveLength(0);
+    expect(await db.sql`SELECT delivery_id FROM webhook_jobs`).toHaveLength(0);
+    const event = push();
+    await worker.enqueue(event);
+    const before = await db.sql`SELECT * FROM webhook_jobs ORDER BY sequence`;
+    await worker.checkReadiness();
+    expect(await db.sql`SELECT * FROM webhook_jobs ORDER BY sequence`).toEqual(before);
+  });
+
+  it("rejects a read-only database session even when the schema is readable", async () => {
+    const url = new URL(db.url);
+    url.searchParams.set("options", `${url.searchParams.get("options")} -c default_transaction_read_only=on`);
+    const reader = new PostgresWebhookQueue(url.toString());
+    queues.push(reader);
+    await expect(reader.checkReadiness()).rejects.toThrow("writable database");
+    await queue().checkReadiness();
+  });
+
+  it("rejects a database role that can read the queue but cannot write it", async () => {
+    const role = `readiness_${randomUUID().replaceAll("-", "")}`;
+    const [database] = await db.sql<{ schema: string }[]>`SELECT current_schema() AS schema`;
+    if (!database?.schema) throw new Error("Readiness tests require an isolated schema");
+    const schema = database.schema;
+    const url = new URL(db.url);
+    url.searchParams.set("options", `${url.searchParams.get("options")} -c role=${role}`);
+    const reader = new PostgresWebhookQueue(url.toString());
+    await db.sql`CREATE ROLE ${db.sql(role)} NOLOGIN`;
+    try {
+      await db.sql`GRANT USAGE ON SCHEMA ${db.sql(schema)} TO ${db.sql(role)}`;
+      await db.sql`GRANT SELECT ON webhook_scopes, webhook_jobs TO ${db.sql(role)}`;
+      await expect(reader.checkReadiness()).rejects.toThrow("table access");
+    } finally {
+      await reader.close();
+      await db.sql`REVOKE ALL ON webhook_scopes, webhook_jobs FROM ${db.sql(role)}`;
+      await db.sql`REVOKE ALL ON SCHEMA ${db.sql(schema)} FROM ${db.sql(role)}`;
+      await db.sql`DROP ROLE ${db.sql(role)}`;
+    }
+    await queue().checkReadiness();
+  });
+
+  it("rejects missing queue tables without initializing them", async () => {
+    const empty = await isolatedDatabase(databaseUrl!);
+    const worker = new PostgresWebhookQueue(empty.url);
+    try {
+      await expect(worker.checkReadiness()).rejects.toThrow("does not exist");
+      expect((await empty.sql`SELECT to_regclass('webhook_jobs') AS table_name`)[0]?.table_name).toBeNull();
+    } finally {
+      await worker.close();
+      await empty.close();
+    }
+  });
+
+  it("bounds schema-lock waits and recovers after the lock is released", async () => {
+    const worker = queue();
+    const locked = latch();
+    const release = latch();
+    const transaction = db.sql.begin(async (sql) => {
+      await sql`LOCK TABLE webhook_jobs IN ACCESS EXCLUSIVE MODE`;
+      locked.release();
+      await release.promise;
+    });
+    try {
+      await locked.promise;
+      await expect(worker.checkReadiness()).rejects.toThrow("statement timeout");
+    } finally {
+      release.release();
+      await transaction;
+    }
+    await worker.checkReadiness();
+  });
+
   it("persists accepted work across a connection restart and clears completed payloads", async () => {
     const first = queue();
     const event = push();

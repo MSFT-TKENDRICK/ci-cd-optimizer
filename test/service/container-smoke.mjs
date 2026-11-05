@@ -69,6 +69,15 @@ async function waitForHealth(origin) {
   assert.fail(`Container did not become reachable at ${origin}: ${lastError}`);
 }
 
+async function readiness(origin, expected) {
+  const started = Date.now();
+  const response = await fetch(`${origin}/ready`, { signal: AbortSignal.timeout(3000) });
+  assert.equal(response.status, expected);
+  assert.equal(await response.text(), expected === 200 ? "READY" : "NOT READY");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.ok(Date.now() - started < 2500, "Readiness must respond independently of a stalled database");
+}
+
 function isolatedOrigin() {
   const networks = JSON.parse(docker("inspect", "--format", "{{json .NetworkSettings.Networks}}", name));
   assert.deepEqual(Object.keys(networks), [network], "Authenticated scenarios must have no external network");
@@ -109,6 +118,7 @@ try {
   startContainer(gateway, true);
   const port = docker("port", name, "3000/tcp").split(":").at(-1);
   await waitForHealth(`http://127.0.0.1:${port}`);
+  if (durable) await readiness(`http://127.0.0.1:${port}`, 200);
   docker("network", "disconnect", "bridge", name);
   let origin = isolatedOrigin();
   const send = async (event, payload, signature = "valid", id = randomUUID()) => {
@@ -198,6 +208,7 @@ try {
     assert.notEqual(docker("inspect", "--format", "{{.Id}}", name), previousContainer, "Recovery must use a fresh container");
     origin = isolatedOrigin();
     await waitForHealth(origin);
+    await readiness(origin, 200);
     for (const id of [interrupted.id, following.id]) {
       await waitFor(() => job(id) === "completed:1", "A fresh image process did not recover accepted work");
       assert.equal(sql(`SELECT (delivery IS NULL AND completed_at IS NOT NULL AND last_error IS NULL)::text FROM webhook_jobs WHERE delivery_id = '${id}'`), "true");
@@ -216,6 +227,9 @@ try {
     docker("pause", process.env.SMOKE_DATABASE_CONTAINER);
     databasePaused = true;
     assert.equal(docker("inspect", "--format", "{{.State.Paused}}", process.env.SMOKE_DATABASE_CONTAINER), "true");
+    await setTimeout(1100);
+    await readiness(origin, 503);
+    await waitForHealth(origin);
     const unavailableStarted = Date.now();
     const unavailable = await send("pull_request", pullRequestPayload());
     assert.equal(unavailable.status, 503, "Unavailable persistence must not be acknowledged as HTTP 200/202");
@@ -224,6 +238,7 @@ try {
     docker("unpause", process.env.SMOKE_DATABASE_CONTAINER);
     databasePaused = false;
     await waitFor(() => job(unavailable.id) === "completed:1", "Late persistence did not recover after the database resumed");
+    await readiness(origin, 200);
     verifyChecks("acme", 5);
     const lateRequests = github.requests.length;
     assert.equal((await send("pull_request", pullRequestPayload(), "valid", unavailable.id)).status, 200);
@@ -255,4 +270,4 @@ try {
   try { await github?.close(); } catch (error) { failures.push(error); }
 }
 if (failures.length) throw new AggregateError(failures, "Container smoke or cleanup failed");
-console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, isolated signed/unsigned webhooks, JWT and installation-token HTTP exchange, scoped token reuse, PR analysis and check publication, denied-token recovery${durable ? ", durable worker retry, pre-write SIGKILL recovery in a fresh container, same-scope FIFO, independent-scope progress, reauthentication, completed-delivery deduplication, database-outage HTTP 503 and late-commit recovery" : ""}, graceful SIGTERM and cleanup.`);
+console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, isolated signed/unsigned webhooks, JWT and installation-token HTTP exchange, scoped token reuse, PR analysis and check publication, denied-token recovery${durable ? ", durable worker retry, pre-write SIGKILL recovery in a fresh container, same-scope FIFO, independent-scope progress, reauthentication, completed-delivery deduplication, database-outage HTTP 503 and late-commit recovery, bounded database readiness with independent liveness and recovery" : ""}, graceful SIGTERM and cleanup.`);

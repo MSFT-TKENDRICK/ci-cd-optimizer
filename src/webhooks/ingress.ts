@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Probot } from "probot";
 import { httpStatus } from "../github/client.js";
-import type { DeliveryQueue } from "./postgres-queue.js";
+import type { DeliveryQueue, PostgresWebhookQueue } from "./postgres-queue.js";
+import { createReadinessCheck } from "./readiness.js";
 import { registerDurableIngress } from "./worker.js";
 
 const MAX_PAYLOAD_BYTES = 25 * 1024 * 1024;
@@ -119,15 +120,29 @@ export async function createDurableMiddleware(
 
 export async function startDurableServer(
   probot: Probot,
-  queue: Pick<DeliveryQueue, "enqueue">,
+  queue: Pick<PostgresWebhookQueue, "enqueue" | "checkReadiness">,
   { host = "localhost", port = 3000 }: { host?: string; port?: number } = {},
-): Promise<{ stop(): Promise<void> }> {
+): Promise<{ port: number; stop(): Promise<void> }> {
   const middleware = await createDurableMiddleware(probot, queue);
+  const path = probot.webhookPath.replace(/\/+$/, "") || "/";
+  if (path === "/ping" || path === "/ready") throw new Error("Durable webhook paths /ping and /ready are reserved for health probes");
+  const checkReadiness = createReadinessCheck(queue, probot.log);
+  let stopping = false;
+  let closed: Promise<void> | undefined;
   const server = createServer((request, response) => {
-    void middleware(request, response).then((handled) => {
+    void middleware(request, response).then(async (handled) => {
       if (handled) return;
       if (request.method === "GET" && request.url === "/ping") response.writeHead(200, { "content-type": "text/plain" }).end("PONG");
-      else response.writeHead(404).end();
+      else if (request.method === "GET" && request.url === "/ready") {
+        const ready = !stopping && await checkReadiness() && !stopping;
+        if (response.destroyed || response.writableEnded) return;
+        const body = ready ? "READY" : "NOT READY";
+        response.writeHead(ready ? 200 : 503, {
+          "content-type": "text/plain; charset=utf-8",
+          "content-length": Buffer.byteLength(body),
+          "cache-control": "no-store",
+        }).end(body);
+      } else response.writeHead(404).end();
     }).catch((error: unknown) => {
       probot.log.error({ error }, "Durable HTTP transport failed");
       reply(response, 500);
@@ -139,6 +154,15 @@ export async function startDurableServer(
     server.once("error", reject);
     server.listen({ host, port }, () => { server.off("error", reject); resolve(); });
   });
-  probot.log.info({ host, port }, "Durable webhook ingress listening");
-  return { stop: () => new Promise<void>((resolve, reject) => { server.close((error) => { if (error) reject(error); else resolve(); }); }) };
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Durable ingress requires a TCP listening address");
+  probot.log.info({ host, port: address.port }, "Durable webhook ingress listening");
+  return {
+    port: address.port,
+    stop: () => {
+      stopping = true;
+      closed ??= new Promise<void>((resolve, reject) => { server.close((error) => { if (error) reject(error); else resolve(); }); });
+      return closed;
+    },
+  };
 }

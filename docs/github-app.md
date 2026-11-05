@@ -235,6 +235,22 @@ Run it on any container host with a public HTTPS endpoint, such as Azure Contain
 process is stateless apart from the optional Postgres database. `GET /ping` returns `200 PONG` for an HTTP liveness
 probe; it does not verify credentials, installation access, database availability, or GitHub connectivity.
 
+With `WEBHOOK_QUEUE=postgres`, use `GET /ready` for a separate **durable-ingress readiness** probe. It returns
+`200 READY` when the queue database is reachable, not read-only, and exposes the expected queue schema with
+SELECT/INSERT/UPDATE table access; otherwise it returns `503 NOT READY`. It reads no delivery payloads and inserts
+no probe jobs. Responses contain no database details and disable HTTP caching. `/ping` stays responsive during a
+database outage, so use it for liveness rather than restarting healthy processes because a shared database is down.
+
+Readiness has a one-second response deadline and caches either result for one second. Concurrent requests share
+one database probe. A query that outlives the deadline keeps readiness false and prevents additional probes until
+it settles; a late success is not accepted without a new check. Database statements have a 750 ms timeout, including
+schema-lock waits. Shutdown withholds readiness even if an in-flight probe succeeds. `/ping` and `/ready` are
+reserved webhook paths in durable mode. Direct mode retains its existing `/ping` and has no `/ready` endpoint.
+
+This is a bounded dependency check, not a synthetic write or a production certification. It does not establish
+GitHub authentication/permissions, worker progress, storage capacity, future transaction success, HTTPS, or backup
+readiness. Configure separate queue-age/failure/restart monitoring and perform the live checks after deployment.
+
 ### Production-image verification
 
 CI runs `test/service/container-smoke.mjs` against the actual image in both direct and Postgres modes. Each run
@@ -260,6 +276,9 @@ remote write**, not a claim of exactly-once effects when a crash occurs after Gi
 The real test database is also paused beyond the persistence deadline. Ingress must fail with HTTP 503, not
 acknowledge unstored work with HTTP 200/202. After the database resumes, the pending operation may commit late;
 its analysis must complete and subsequent redelivery must be deduplicated.
+The same outage must make `/ready` return a bounded HTTP 503 while `/ping` remains healthy; after database recovery,
+a fresh readiness check must succeed. The image is also checked for readiness through its published loopback port
+before the external bridge is disconnected.
 
 The durable smoke test requires `SMOKE_DATABASE_URL` and `SMOKE_DATABASE_CONTAINER` for a disposable test Postgres
 container, as supplied by CI. It temporarily attaches that container to its isolated network and changes test-job

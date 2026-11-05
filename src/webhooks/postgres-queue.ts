@@ -75,6 +75,28 @@ export class PostgresWebhookQueue implements DeliveryQueue {
     });
   }
 
+  async checkReadiness(): Promise<void> {
+    await this.sql.begin(async (sql) => {
+      await sql`SET LOCAL statement_timeout = '750ms'`;
+      const [access] = await sql<{ ready: boolean }[]>`
+        SELECT current_setting('transaction_read_only') = 'off'
+          AND has_table_privilege('webhook_scopes', 'SELECT')
+          AND has_table_privilege('webhook_scopes', 'INSERT')
+          AND has_table_privilege('webhook_scopes', 'UPDATE')
+          AND has_table_privilege('webhook_jobs', 'SELECT')
+          AND has_table_privilege('webhook_jobs', 'INSERT')
+          AND has_table_privilege('webhook_jobs', 'UPDATE') AS ready
+      `;
+      if (!access?.ready) throw new Error("Webhook queue requires a writable database and SELECT/INSERT/UPDATE table access");
+      // Check the expected schema without reading payloads, locking jobs, or creating probe deliveries.
+      await sql`
+        SELECT j.sequence, j.delivery_id, j.scope, j.delivery, j.status, j.attempts,
+          j.received_at, j.available_at, j.completed_at, j.last_error, s.scope
+        FROM webhook_jobs j CROSS JOIN webhook_scopes s LIMIT 0
+      `;
+    });
+  }
+
   async enqueue(delivery: Delivery): Promise<void> {
     if (!delivery.id.trim()) throw new Error("Webhook delivery ID is required");
     const jobs = deliveryJobs(delivery).map((job) => ({ delivery_id: delivery.id, ...job }));

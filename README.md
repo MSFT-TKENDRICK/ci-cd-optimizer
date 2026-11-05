@@ -169,6 +169,10 @@ npm run docs:rules       # regenerate docs/rules.md
 npm run cli -- experiments evaluate --engine dist/lint/api.js --corpus corpus   # benchmark
 ```
 
+Postgres integration tests run when `DATABASE_URL` is set. Use only a disposable test database: they create/drop
+isolated schemas, and readiness permission tests create a temporary NOLOGIN role (requiring `CREATEROLE`) and remove
+its grants and role afterward. CI provides its own disposable Postgres service; never use production credentials.
+
 Rules live in `src/lint/rules/<ruleset>/<rule>.ts` and are tested with the ESLint-style `RuleTester` in
 `test/lint/rule-tester.ts`. Every rule needs valid and invalid cases plus autofix output checks. New rules should
 also add a corpus case ([corpus/README.md](corpus/README.md)) so precision and recall stay measured.
