@@ -86,6 +86,17 @@ finding issue and fix PR creation, PR checks, invalid signatures, and failed sca
 production image and verifies non-root startup, published-port `/ping` access, and signed/unsigned webhook handling.
 These checks use ephemeral test credentials and do **not** register or install an App.
 
+Within one App instance, repository scans (push and installation events), telemetry updates, and fix/recipe commands
+share a case-insensitive, per-repository FIFO queue. The queue covers both reading current managed items and applying
+the resulting changes, so overlapping deliveries cannot both reconcile against the same pre-write state. A failed
+operation still fails its delivery but releases the next operation. Different repositories and independent PR checks
+can run concurrently.
+
+This queue is in memory: it does not survive a restart, suppress repeated delivery IDs, or coordinate multiple
+replicas, Actions, or CLI processes. Waiting in the queue counts toward webhook response time. Until a durable
+delivery/worker system is deployed, use one App instance, avoid other concurrent write-enabled scanners, and monitor
+and redeliver failed or timed-out deliveries.
+
 Before declaring a deployment production-ready, verify a real installation-token exchange, webhook delivery to the
 HTTPS endpoint, a controlled finding issue and workflow fix PR, the PR's CI run, and telemetry on the intended repository.
 Also test restart/redelivery behavior on the chosen host. A published GHCR image or a zero-findings scan is not evidence
@@ -101,5 +112,6 @@ that these write paths work with the live App's permissions.
 
 The App and `command: scan` share identifiers: issues are matched by hidden fingerprints, fix pull requests by branch,
 and code scanning alerts by their fingerprints. Sequential scans therefore update existing items. This is not a
-distributed lock or an exactly-once delivery guarantee. Avoid overlapping write-enabled scans from the App, Actions,
-or multiple replicas until the deployment coordinates execution; simultaneous first scans can race to create items.
+distributed lock or an exactly-once delivery guarantee. The App's queue only coordinates its own handlers. Avoid
+overlapping write-enabled scans from the App, Actions, or multiple replicas until the deployment coordinates execution;
+simultaneous first scans in separate processes can still race to create items.

@@ -7,6 +7,7 @@ import { handleIssueComment } from "./service/comments.js";
 import { runPullRequestCheck, type PullRequestRef } from "./service/pull-request.js";
 import { describeScan, scanRepository } from "./service/scan.js";
 import { processWorkflowRun } from "./service/workflow-run.js";
+import { RepositoryQueue } from "./service/repository-queue.js";
 import type { WorkflowRunPayload } from "./telemetry/snapshot.js";
 import { PostgresTelemetryStore } from "./telemetry/postgres-store.js";
 import type { TelemetryStore } from "./telemetry/store.js";
@@ -92,11 +93,12 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
     const copilotClient = options.copilotClient ?? (copilotToken ? restClient({ token: copilotToken }) : undefined);
     const uploadSarif = options.uploadSarif ?? process.env.CICD_OPTIMIZER_UPLOAD_SARIF !== "false";
     const shared = { ...(copilotClient ? { copilotClient } : {}) };
+    const repositoryQueue = new RepositoryQueue();
 
-    const scan = async (client: GitHubClient, repo: RepoRef, log: Probot["log"]) => {
+    const scan = (client: GitHubClient, repo: RepoRef, log: Probot["log"]) => repositoryQueue.run(repo, async () => {
       const result = await scanRepository(client, repo, { uploadSarif, ...shared });
       log.info({ repo: `${repo.owner}/${repo.repo}`, status: result.status }, describeScan(result));
-    };
+    });
 
     probot.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened", "pull_request.ready_for_review"], async (context) => {
       const pr = context.payload.pull_request;
@@ -134,7 +136,7 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
       if (errors.length > 0) throw new AggregateError(errors, "One or more initial repository scans failed");
     });
 
-    probot.on("workflow_run.completed", async (context) => {
+    probot.on("workflow_run.completed", (context) => repositoryQueue.run(context.repo(), async () => {
       const result = await processWorkflowRun(fromOctokit(context.octokit), context.repo(), context.payload.workflow_run as WorkflowRunPayload, {
         ...shared,
         ...(await store().then((value) => (value ? { store: value } : {}))),
@@ -143,12 +145,12 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
         { runId: context.payload.workflow_run.id, status: result.status, alerts: result.alerts?.detected.length ?? 0 },
         result.reason ?? "Workflow run telemetry processed",
       );
-    });
+    }));
 
-    probot.on("issue_comment.created", async (context) => {
+    probot.on("issue_comment.created", (context) => repositoryQueue.run(context.repo(), async () => {
       const result = await handleIssueComment(fromOctokit(context.octokit), context.repo(), { issue: context.payload.issue, comment: context.payload.comment });
       if (result.status !== "ignored") context.log.info({ issue: context.payload.issue.number, status: result.status }, "Handled comment command");
-    });
+    }));
   };
 }
 

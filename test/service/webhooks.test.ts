@@ -35,8 +35,10 @@ const endpoints = [
   "GET /repos/{owner}/{repo}/git/commits/{commit_sha}",
   "GET /repos/{owner}/{repo}/pulls/{pull_number}",
   "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
+  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs",
   "POST /repos/{owner}/{repo}/issues",
   "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
+  "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
   "POST /repos/{owner}/{repo}/labels",
   "POST /repos/{owner}/{repo}/git/trees",
   "POST /repos/{owner}/{repo}/git/commits",
@@ -44,6 +46,8 @@ const endpoints = [
   "POST /repos/{owner}/{repo}/pulls",
   "POST /repos/{owner}/{repo}/check-runs",
   "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}",
+  "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
+  "DELETE /repos/{owner}/{repo}/git/refs/{ref}",
 ].map((route) => {
   const names: string[] = [];
   const pattern = route.replace(/\{([^}]+)\}/g, (_match, name: string) => {
@@ -76,9 +80,13 @@ async function harness(state: FakeApiState = {}) {
       if (!match) continue;
       const parameters: Record<string, unknown> = Object.fromEntries(url.searchParams);
       endpoint.names.forEach((name, index) => { parameters[name] = decodeURIComponent(match[index + 1] ?? ""); });
-      if (request.method !== "GET") Object.assign(parameters, JSON.parse(await request.text()));
+      if (request.method !== "GET") {
+        const body = await request.text();
+        if (body) Object.assign(parameters, JSON.parse(body));
+      }
       try {
         const response = await api.request(endpoint.route, parameters);
+        if (request.method === "DELETE") return new Response(null, { status: 204 });
         return Response.json(response.data, { status: request.method === "POST" ? 201 : 200 });
       } catch (error) {
         const status = httpStatus(error);
@@ -183,7 +191,7 @@ describe("signed GitHub App HTTP delivery", () => {
     expect(await app.send("push", push)).toBe(500);
   });
 
-  it.each(["push", "installation", "installation_repositories"])("serializes a push and overlapping %s without duplicate issues or fix PRs", async (event) => {
+  it.each(["push", "installation", "installation_repositories", "issue_comment", "workflow_run"])("serializes a push and overlapping %s without duplicate issues or fix PRs", async (event) => {
     const issues: Array<Record<string, unknown>> = [];
     const pullHeads: NonNullable<FakeApiState["pullHeads"]> = {};
     const app = await harness({
@@ -220,7 +228,18 @@ describe("signed GitHub App HTTP delivery", () => {
     const arrived = latch();
     app.probot.onAny(() => { arrived.release(); });
     const repositories = [{ full_name: "acme/widgets" }];
-    const second = app.send(event, event === "push" ? push : {
+    const second = app.send(event, event === "push" ? push : event === "issue_comment" ? {
+      repository, installation: { id: 123 }, action: "created",
+      issue: { number: 42, pull_request: {} },
+      comment: { body: "@cicd-optimizer close", author_association: "OWNER", user: { login: "maintainer", type: "User" } },
+    } : event === "workflow_run" ? {
+      repository, installation: { id: 123 }, action: "completed",
+      workflow_run: {
+        id: 200, workflow_id: 7, name: "CI", path: WORKFLOW, head_sha: "main-sha", head_branch: "main",
+        status: "completed", conclusion: "success", event: "push", run_attempt: 1,
+        created_at: "2026-11-01T00:00:00Z", run_started_at: "2026-11-01T00:00:05Z", updated_at: "2026-11-01T00:01:00Z",
+      },
+    } : {
       installation: { id: 123 }, action: event === "installation" ? "created" : "added",
       ...(event === "installation" ? { repositories } : { repositories_added: repositories }),
     });
@@ -236,6 +255,13 @@ describe("signed GitHub App HTTP delivery", () => {
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toHaveLength(1);
+    if (event === "issue_comment") {
+      expect(callsTo(app.api, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")[0]?.parameters).toMatchObject({ pull_number: "42", state: "closed" });
+      expect(callsTo(app.api, "DELETE /repos/{owner}/{repo}/git/refs/{ref}")).toHaveLength(1);
+    }
+    if (event === "workflow_run") {
+      expect(callsTo(app.api, "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs")).toHaveLength(1);
+    }
   });
 
   it("processes another repository while a scan is blocked", async () => {
@@ -271,6 +297,32 @@ describe("signed GitHub App HTTP delivery", () => {
     const outcomes = await Promise.all([app.send("push", push), app.send("push", push)]);
     expect(outcomes.sort()).toEqual([200, 500]);
     expect(await app.send("push", push)).toBe(200);
+  });
+
+  it("does not delay an independent PR check behind a blocked repository scan", async () => {
+    const app = await harness({ config: TIMEOUT_ONLY, refs: { main: { [WORKFLOW]: CLEAN } } });
+    const blocked = latch();
+    const release = latch();
+    const original = app.api.request.bind(app.api);
+    vi.spyOn(app.api, "request").mockImplementation(async (route, parameters = {}) => {
+      if (route === "GET /repos/{owner}/{repo}") {
+        blocked.release();
+        await release.promise;
+      }
+      return original(route, parameters);
+    });
+    const scan = app.send("push", push);
+    await blocked.promise;
+    try {
+      expect(await app.send("pull_request", {
+        repository, installation: { id: 123 }, action: "opened",
+        pull_request: { number: 7, head: { sha: "head" }, base: { sha: "base", ref: "main" } },
+      })).toBe(200);
+      expect(callsTo(app.api, "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}")[0]?.parameters).toMatchObject({ conclusion: "success" });
+    } finally {
+      release.release();
+      expect(await scan).toBe(200);
+    }
   });
 
   it.each(["installation", "installation_repositories"])("attempts all %s scans and returns failure if any fail", async (event) => {
