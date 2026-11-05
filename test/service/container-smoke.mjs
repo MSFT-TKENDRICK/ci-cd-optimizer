@@ -209,17 +209,18 @@ try {
     origin = isolatedOrigin();
     await waitForHealth(origin);
     await readiness(origin, 200);
-    for (const id of [interrupted.id, following.id]) {
-      await waitFor(() => job(id) === "completed:1", "A fresh image process did not recover accepted work");
+    for (const [id, attempts] of [[interrupted.id, 2], [following.id, 1]]) {
+      // The killed worker's claim counts as an attempt.
+      await waitFor(() => job(id) === `completed:${attempts}`, "A fresh image process did not recover accepted work");
       assert.equal(sql(`SELECT (delivery IS NULL AND completed_at IS NOT NULL AND last_error IS NULL)::text FROM webhook_jobs WHERE delivery_id = '${id}'`), "true");
     }
     verifyChecks("acme", 4);
     assert.deepEqual(completed("acme").slice(2).map((check) => check.deliveryId), [interrupted.id, following.id], "Recovery did not preserve same-scope FIFO");
     assert.deepEqual(github.issued, [123, 456, 123], "The fresh process must authenticate again, then reuse its installation token");
     const recoveredRequests = github.requests.length;
-    for (const id of [interrupted.id, following.id]) {
+    for (const [id, attempts] of [[interrupted.id, 2], [following.id, 1]]) {
       assert.equal((await send("pull_request", pullRequestPayload(), "valid", id)).status, 200);
-      assert.equal(job(id), "completed:1");
+      assert.equal(job(id), `completed:${attempts}`);
     }
     assert.equal(github.requests.length, recoveredRequests, "Completed redelivery after replacement must not access the API");
     assert.equal(github.checks.length, 6, "Crash recovery or completed redelivery duplicated a pre-write check");

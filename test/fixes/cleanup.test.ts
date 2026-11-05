@@ -199,7 +199,8 @@ describe("conditional fix branch cleanup", () => {
     f.pull.body = oldBody;
     f.pull.head.ref = "main";
     f.heads.main = "new-commit";
-    await expect(f.scan()).rejects.toThrow("base branch");
+    // A base-branch head is never adopted as an owned fix branch, so the PR is left alone.
+    await f.scan();
     expect(f.pull.state).toBe("open");
     expect(callsTo(f.client, "POST /graphql")).toEqual([]);
   });

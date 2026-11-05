@@ -21548,7 +21548,7 @@ function computeFixChanges(options) {
   return changes;
 }
 function edited(pr) {
-  return !pr.commitSha || !pr.headSha || pr.commitSha !== pr.headSha;
+  return !pr.branch || !pr.commitSha || !pr.headSha || pr.commitSha !== pr.headSha;
 }
 function planFixPullRequests(changes, existing, options) {
   const actions = [];
@@ -21739,6 +21739,11 @@ function pendingUpdate(parsed, number2) {
   }
   return { fromSha: attrs.pendingFrom, commitSha: attrs.pendingCommit, signature: attrs.pendingSignature, baseSha: attrs.pendingBase, rules: list(attrs.pendingRules) };
 }
+function ownedBranch(ref, group, baseRef, discovery) {
+  const slug = branchFor(group, { branchPrefix: "" });
+  if (!ref || !slug || ref === baseRef) return void 0;
+  return ref === slug || ref.endsWith(`/${slug}`) || discovery !== void 0 && ref === branchFor(group, discovery) ? ref : void 0;
+}
 async function listManagedPullRequests(client, repo, discovery) {
   const raw = await paginate(client, "GET /repos/{owner}/{repo}/issues", { ...repo, state: "all", labels: "cicd-optimizer" });
   const details = /* @__PURE__ */ new Map();
@@ -21786,11 +21791,13 @@ async function listManagedPullRequests(client, repo, discovery) {
     if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
     const pending = pendingUpdate(parsed, issue.number);
     const currentCleanup = branchCleanup(parsed, issue.number);
+    const group = parsed.fingerprint.slice("group:".length);
+    const branch = ownedBranch(head?.ref, group, pull.base?.ref, discovery);
     const pr = {
       number: issue.number,
       state: issue.state,
       merged: Boolean(issue.pull_request?.merged_at),
-      group: parsed.fingerprint.slice("group:".length),
+      group,
       title: issue.title,
       body: issue.body ?? "",
       labels: (issue.labels ?? []).map((label) => typeof label === "string" ? label : label.name ?? ""),
@@ -21804,7 +21811,7 @@ async function listManagedPullRequests(client, repo, discovery) {
       ...pending ? { pendingUpdate: pending } : {},
       ...currentCleanup ? { cleanup: currentCleanup } : {},
       ...head?.sha ? { headSha: head.sha } : {},
-      ...head?.ref ? { branch: head.ref } : {}
+      ...branch ? { branch } : {}
     };
     if (pending && head?.sha === pending.commitSha) pr.rules = pending.rules;
     result.push(pr);
@@ -21826,7 +21833,7 @@ async function currentFix(client, repo, previous2) {
   const pull = response.data;
   const parsed = parseMarker(pull.body);
   const expected = parseMarker(previous2.body);
-  if (!parsed || parsed.kind !== "fix" || parsed.fingerprint !== `group:${previous2.group}` || !expected || [.../* @__PURE__ */ new Set([...Object.keys(parsed.attributes), ...Object.keys(expected.attributes)])].some((key2) => parsed.attributes[key2] !== expected.attributes[key2]) || pull.state !== previous2.state || !pull.head?.sha || pull.head.sha !== previous2.headSha || !previous2.branch || pull.head.ref !== previous2.branch || pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
+  if (!parsed || parsed.kind !== "fix" || parsed.fingerprint !== `group:${previous2.group}` || !expected || [.../* @__PURE__ */ new Set([...Object.keys(parsed.attributes), ...Object.keys(expected.attributes)])].some((key2) => parsed.attributes[key2] !== expected.attributes[key2]) || pull.state !== previous2.state || !pull.head?.sha || pull.head.sha !== previous2.headSha || previous2.branch !== void 0 && pull.head.ref !== previous2.branch || pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
     throw new Error(`PR #${previous2.number} changed since planning; retry without overwriting its branch or marker.`);
   }
   return { pull, parsed };
@@ -21871,12 +21878,13 @@ async function prepareClose(client, repo, previous2, attributes = {}, comment) {
     return { ...previous2, body: body2 };
   }
   const { pull } = await currentFix(client, repo, previous2);
-  if (!previous2.branch || !previous2.headSha || previous2.branch === pull.base?.ref) throw new Error("Refusing cleanup of an unknown or base branch.");
-  const cleanup = { branch: previous2.branch, headSha: previous2.headSha, status: "pending" };
-  const body = cleanupBody(updateMarker(pull.body ?? "", "fix", `group:${previous2.group}`, attributes), previous2.group, cleanup);
+  if (!previous2.headSha || previous2.branch === pull.base?.ref) throw new Error("Refusing cleanup of an unknown or base branch.");
+  const cleanup = previous2.branch ? { branch: previous2.branch, headSha: previous2.headSha, status: "pending" } : void 0;
+  const marked = updateMarker(pull.body ?? "", "fix", `group:${previous2.group}`, attributes);
+  const body = cleanup ? cleanupBody(marked, previous2.group, cleanup) : marked;
   if (comment) await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: previous2.number, body: comment });
   await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous2.number, state: "closed", body });
-  return { ...previous2, state: "closed", body, cleanup };
+  return { ...previous2, state: "closed", body, ...cleanup ? { cleanup } : {} };
 }
 async function finishBranchCleanup(client, repo, previous2) {
   const expected = previous2.cleanup;
@@ -24154,9 +24162,22 @@ function planAlertSync(input2) {
   const alerts = detectAnomalies(scopedSeries, input2.config);
   const history = input2.existing.filter((issue) => issue.fingerprint === fingerprint2).sort((a, b) => b.number - a.number);
   const open3 = history.find((issue) => issue.state === "open");
-  const latestClosed = history.find((issue) => issue.state === "closed");
+  const legacy = alertIssueFingerprint(input2.workflowId);
+  const related = input2.contextKey === void 0 ? [] : input2.existing.filter((issue) => issue.fingerprint === legacy || issue.fingerprint.startsWith(`${legacy}/`) && issue.fingerprint !== fingerprint2 && issue.attributes.branch === (input2.branch ?? ""));
+  const latestClosed = [...history, ...related].sort((a, b) => b.number - a.number).find((issue) => issue.state === "closed");
   const actions = [];
   const plan = { actions, skipped: [], alerts };
+  for (const issue of related) {
+    if (issue.state !== "open") continue;
+    const stale = issue.fingerprint === legacy || input2.activeContexts !== void 0 && !input2.activeContexts.has(issue.attributes.context ?? "");
+    if (!stale) continue;
+    actions.push({
+      type: "close",
+      number: issue.number,
+      fingerprint: issue.fingerprint,
+      comment: "Superseded: this alert tracked a job layout, runner routing, or alert identity that no longer runs on this branch. Durations are now compared per workload context; a new alert opens if the slowdown persists."
+    });
+  }
   if (alerts.length === 0) {
     if (!open3) return plan;
     const baselines2 = readBaselines(open3);
@@ -24206,7 +24227,7 @@ function planAlertSync(input2) {
     fingerprint: fingerprint2,
     signature: signature2,
     title: rendered.title,
-    body: `${marker("alert", fingerprint2, { signature: signature2, shape, workflow: String(input2.workflowId), ...input2.contextKey ? { context: input2.contextKey } : {}, baselines: JSON.stringify(baselines) })}
+    body: `${marker("alert", fingerprint2, { signature: signature2, shape, workflow: String(input2.workflowId), ...input2.contextKey ? { context: input2.contextKey, branch: input2.branch ?? "" } : {}, baselines: JSON.stringify(baselines) })}
 ${rendered.body}`,
     labels: [.../* @__PURE__ */ new Set(["cicd-optimizer", "alert:duration", critical ? "severity:error" : "severity:warn", ...input2.config.labels])],
     assignees: input2.config.assignees,
@@ -24581,15 +24602,30 @@ function jobSnapshot(job, definitions, key2) {
   };
 }
 function matchJobKey(jobName, definitions) {
-  const matches = /* @__PURE__ */ new Set();
-  for (const [key2, definition] of definitions) {
-    for (const candidate of [key2, definition.name]) {
-      if (!candidate) continue;
-      if (jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `) || candidate.includes("${{") && matchesNameTemplate(candidate, jobName)) matches.add(key2);
-      if (matches.size > 1) return void 0;
+  const tiers = [
+    (candidate) => jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `) || candidate.includes("${{") && hasTemplateLiteral(candidate) && matchesNameTemplate(candidate, jobName),
+    (candidate) => candidate.includes("${{") && !hasTemplateLiteral(candidate) && matchesNameTemplate(candidate, jobName)
+  ];
+  for (const matchesTier of tiers) {
+    const matches = /* @__PURE__ */ new Set();
+    for (const [key2, definition] of definitions) {
+      if ([key2, definition.name].some((candidate) => candidate && matchesTier(candidate))) matches.add(key2);
     }
+    if (matches.size > 1) return void 0;
+    if (matches.size === 1) return [...matches][0];
   }
-  return [...matches][0];
+  return void 0;
+}
+function hasTemplateLiteral(template) {
+  for (let cursor = 0; cursor < template.length; ) {
+    const opening = template.indexOf("${{", cursor);
+    if (opening === -1) return template.slice(cursor).trim().length > 0;
+    if (template.slice(cursor, opening).trim()) return true;
+    const closing = template.indexOf("}}", opening + 3);
+    if (closing === -1) return true;
+    cursor = closing + 2;
+  }
+  return false;
 }
 function matchesNameTemplate(template, name) {
   if (["\r", "\n", "\u2028", "\u2029"].some((character) => name.includes(character))) return false;
@@ -24975,8 +25011,11 @@ async function processWorkflowRun(client, repo, run4, options = {}) {
   if (contextKey && !knowledgeComparison?.alertHistoryUncertain && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run4, config.alerts.branches, branch)) {
     const series = buildSeries([...prior, snapshot]);
     const existing = await listManagedIssues(client, repo, "alert");
+    const branchRuns = history.filter((item) => item.workflowId === snapshot.workflowId && item.branch === snapshot.branch).slice(-historyLimit(config));
+    const activeContexts = branchRuns.length >= historyLimit(config) ? new Set(branchRuns.map(comparisonKey).filter((key2) => key2 !== void 0)) : void 0;
     const plan = planAlertSync({
       contextKey,
+      ...activeContexts ? { activeContexts } : {},
       owner: repo.owner,
       repo: repo.repo,
       branch: run4.head_branch,
