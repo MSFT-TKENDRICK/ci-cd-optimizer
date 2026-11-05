@@ -2329,7 +2329,7 @@ var require_string = __commonJS({
   "node_modules/yaml/dist/schema/common/string.js"(exports) {
     "use strict";
     var stringifyString = require_stringifyString();
-    var string2 = {
+    var string3 = {
       identify: (value2) => typeof value2 === "string",
       default: true,
       tag: "tag:yaml.org,2002:str",
@@ -2339,7 +2339,7 @@ var require_string = __commonJS({
         return stringifyString.stringifyString(item, ctx, onComment, onChompKeep);
       }
     };
-    exports.string = string2;
+    exports.string = string3;
   }
 });
 
@@ -2510,14 +2510,14 @@ var require_schema = __commonJS({
     var map = require_map();
     var _null = require_null();
     var seq = require_seq();
-    var string2 = require_string();
+    var string3 = require_string();
     var bool2 = require_bool();
     var float = require_float();
     var int = require_int();
     var schema = [
       map.map,
       seq.seq,
-      string2.string,
+      string3.string,
       _null.nullTag,
       bool2.boolTag,
       int.intOct,
@@ -3164,7 +3164,7 @@ var require_schema3 = __commonJS({
     var map = require_map();
     var _null = require_null();
     var seq = require_seq();
-    var string2 = require_string();
+    var string3 = require_string();
     var binary = require_binary();
     var bool2 = require_bool2();
     var float = require_float2();
@@ -3177,7 +3177,7 @@ var require_schema3 = __commonJS({
     var schema = [
       map.map,
       seq.seq,
-      string2.string,
+      string3.string,
       _null.nullTag,
       bool2.trueTag,
       bool2.falseTag,
@@ -3208,7 +3208,7 @@ var require_tags = __commonJS({
     var map = require_map();
     var _null = require_null();
     var seq = require_seq();
-    var string2 = require_string();
+    var string3 = require_string();
     var bool2 = require_bool();
     var float = require_float();
     var int = require_int();
@@ -3223,7 +3223,7 @@ var require_tags = __commonJS({
     var timestamp4 = require_timestamp();
     var schemas = /* @__PURE__ */ new Map([
       ["core", schema.schema],
-      ["failsafe", [map.map, seq.seq, string2.string]],
+      ["failsafe", [map.map, seq.seq, string3.string]],
       ["json", schema$1.schema],
       ["yaml11", schema$2.schema],
       ["yaml-1.1", schema$2.schema]
@@ -3302,7 +3302,7 @@ var require_Schema = __commonJS({
     var identity3 = require_identity();
     var map = require_map();
     var seq = require_seq();
-    var string2 = require_string();
+    var string3 = require_string();
     var tags = require_tags();
     var sortMapEntriesByKey = (a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
     var Schema = class _Schema {
@@ -3313,7 +3313,7 @@ var require_Schema = __commonJS({
         this.tags = tags.getTags(customTags, this.name, merge3);
         this.toStringOptions = toStringDefaults ?? null;
         Object.defineProperty(this, identity3.MAP, { value: map.map });
-        Object.defineProperty(this, identity3.SCALAR, { value: string2.string });
+        Object.defineProperty(this, identity3.SCALAR, { value: string3.string });
         Object.defineProperty(this, identity3.SEQ, { value: seq.seq });
         this.sortMapEntries = typeof sortMapEntries === "function" ? sortMapEntries : sortMapEntries === true ? sortMapEntriesByKey : null;
       }
@@ -8171,8 +8171,8 @@ function Types(options = {}) {
   const custom = Object.values(options.types || {}), named = custom.filter((x) => [x.to].concat(x.from || []).some((y) => typeof y === "string")), oids = {};
   register(custom.filter((x) => !named.includes(x)));
   const bases = {};
-  return { parser, decoder, serializer, load, infer, resolve: resolve3, named: named.length > 0, parsers, serializers };
-  function resolve3(type) {
+  return { parser, decoder, serializer, load, infer, resolve: resolve4, named: named.length > 0, parsers, serializers };
+  function resolve4(type) {
     return typeof type === "string" ? oids[type] || 0 : type;
   }
   function decoder(oid, parse11) {
@@ -8224,7 +8224,7 @@ function Types(options = {}) {
     if (missing.length) {
       throw Errors.generic("TYPE_NOT_FOUND", missing.length > 1 ? "The types " + missing.join(", ") + " do not exist" : "The type " + missing[0] + " does not exist");
     }
-    register(named.map((x) => ({ ...x, to: resolve3(x.to), from: [].concat(x.from || []).map(resolve3) })));
+    register(named.map((x) => ({ ...x, to: resolve4(x.to), from: [].concat(x.from || []).map(resolve4) })));
   }
   function fetched(run4) {
     return run4(
@@ -8478,10 +8478,10 @@ function build(query2, options) {
   return { strings: query2.strings, dynamic: o.dynamic, types: types2, text: text4, values: values2, oids };
 }
 function stringify3(q, o) {
-  let string2 = q.strings[0];
+  let string3 = q.strings[0];
   for (let i = 1; i < q.strings.length; i++)
-    string2 += part(string2, q.args[i - 1], o, q.strings[i]) + q.strings[i];
-  return string2;
+    string3 += part(string3, q.args[i - 1], o, q.strings[i]) + q.strings[i];
+  return string3;
 }
 function part(before, x, o, after2 = "") {
   if (x instanceof Builder || x instanceof Identifier || isFragment(x) || Array.isArray(x) && isFragment(x[0]))
@@ -8931,12 +8931,12 @@ var init_query = __esm({
     CLOSE = {};
     Query = class _Query extends Promise {
       constructor(strings2, args, handler, options = {}) {
-        let resolve3, reject;
+        let resolve4, reject;
         super((a, b) => {
-          resolve3 = a;
+          resolve4 = a;
           reject = b;
         });
-        this.fulfil = resolve3;
+        this.fulfil = resolve4;
         this.fail = reject;
         this[isQuery] = true;
         this.tagged = Array.isArray(strings2.raw);
@@ -9047,12 +9047,12 @@ var init_query = __esm({
               if (this.executed && !this.active)
                 return { done: true };
               prev && prev();
-              const promise = new Promise((resolve3, reject) => {
+              const promise = new Promise((resolve4, reject) => {
                 this.cursorFn = (value2) => {
-                  resolve3({ value: value2, done: false });
+                  resolve4({ value: value2, done: false });
                   return new Promise((r) => prev = r);
                 };
-                this.resolve = (x) => (this.active = false, this.settled = true, this.trace && traced(this, null, x), resolve3({ done: true }));
+                this.resolve = (x) => (this.active = false, this.settled = true, this.trace && traced(this, null, x), resolve4({ done: true }));
                 this.reject = (x) => (this.active = false, this.settled = true, this.trace && traced(this, x), reject(x));
               });
               this.execute();
@@ -9521,7 +9521,7 @@ function secureOptions(ssl) {
   return ssl === "require" || ssl === "allow" || ssl === "prefer" ? workers ? {} : { rejectUnauthorized: false } : typeof ssl === "object" ? ssl : {};
 }
 function connect(options, host, port, track) {
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     const tlsNow = direct(options), plain3 = !secured(options), reads = (plain3 || tlsNow) && onreadSafe && options.onread !== false && {
       buffer: Buffer.allocUnsafe(65536),
       callback: (n, b) => socket.ondata(b.subarray(0, n))
@@ -9540,7 +9540,7 @@ function connect(options, host, port, track) {
     socket.once(tlsNow ? "secureConnect" : "connect", () => {
       socket.off("error", reject);
       socket.setNoDelay(true);
-      resolve3(socket);
+      resolve4(socket);
     });
   });
 }
@@ -9616,7 +9616,7 @@ function wrap(socket, host) {
     x.onclose(failure);
   }
   function upgrade(options = {}) {
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       unlisten();
       const secure = tls.connect({
         socket,
@@ -9631,7 +9631,7 @@ function wrap(socket, host) {
         secure.off("error", fail);
         socket = secure;
         listen();
-        resolve3(x);
+        resolve4(x);
       }
       secure.once("secureConnect", ready);
       secure.once("error", fail);
@@ -9702,7 +9702,7 @@ function fits(want, { readOnly, standby }) {
 }
 function attempt(options, host, port, signal) {
   const { setTimeout: setTimeout2, clearTimeout: clearTimeout2 } = options.timers, fail = (code2) => Errors.connection(code2, options, host, port);
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     const timer = options.connect_timeout && setTimeout2(() => done2(true, fail("CONNECT_TIMEOUT")), options.connect_timeout * 1e3);
     let socket = null, raw = null, settled = false;
     session().then((x) => done2(false, null, x), (e) => done2(true, e));
@@ -9719,7 +9719,7 @@ function attempt(options, host, port, signal) {
       }
       ready.socket.onclose = () => {
       };
-      resolve3(ready);
+      resolve4(ready);
     }
     async function session() {
       socket = await Socket(options, host, port, (x) => raw = x);
@@ -9733,7 +9733,7 @@ function attempt(options, host, port, signal) {
       return startup2(user, options.database || user);
     }
     function startup2(user, database) {
-      return new Promise((resolve4, reject2) => {
+      return new Promise((resolve5, reject2) => {
         const stored = () => pgpass(options.passfile, options.path ? "localhost" : host, port, database, user) || "", auth = Auth({ user, pass: options.pass || stored, binding: options.channel_binding, socket }), parameters = {}, backend = { pid: null, secret: null }, frames = Frames(frame, false, (error2) => (reject2(error2), socket.destroy())), rows = [];
         let probing = false, status = null, authing = Promise.resolve();
         socket.ondata = (x) => frames.push(x);
@@ -9773,7 +9773,7 @@ function attempt(options, host, port, signal) {
           socket.ondata = () => {
           };
           socket.pause();
-          resolve4({
+          resolve5({
             socket,
             rest,
             backend,
@@ -9813,8 +9813,8 @@ async function cancel2(options, host, port, { pid, secret }) {
     socket.destroy();
     throw error2;
   }
-  return new Promise((resolve3) => {
-    socket.onclose = () => resolve3();
+  return new Promise((resolve4) => {
+    socket.onclose = () => resolve4();
     socket.end(Cancel(pid, secret));
   });
 }
@@ -9929,8 +9929,8 @@ function pgpass(file, host, port, database, user) {
     return null;
   let text4;
   try {
-    const stat4 = fs.statSync(file);
-    if (!stat4.isFile() || process.platform !== "win32" && stat4.mode & 63)
+    const stat5 = fs.statSync(file);
+    if (!stat5.isFile() || process.platform !== "win32" && stat5.mode & 63)
       return null;
     text4 = fs.readFileSync(file, "utf8");
   } catch (_) {
@@ -10004,7 +10004,7 @@ var init_startup = __esm({
 // node_modules/postgres/src/connection.js
 import Stream from "stream";
 function Connection(ready, options, events) {
-  const { socket } = ready, timers = options.timers, defer = timers.nextTick || process.nextTick, { transform } = options, sent = [], pending = [], running = /* @__PURE__ */ new Set(), open2 = /* @__PURE__ */ new Set(), prepared = /* @__PURE__ */ new Map(), out = Writer(), frames = Frames(frame, socket.shared, (error2) => (connection2.fatal = error2, socket.destroy()));
+  const { socket } = ready, timers = options.timers, defer = timers.nextTick || process.nextTick, { transform } = options, sent = [], pending = [], running = /* @__PURE__ */ new Set(), open3 = /* @__PURE__ */ new Set(), prepared = /* @__PURE__ */ new Map(), out = Writer(), frames = Frames(frame, socket.shared, (error2) => (connection2.fatal = error2, socket.destroy()));
   let blocker = null, rolling = false, fence = null, drained = null, status = ready.status, flushing = false, closed = null, closing = null, portals = 0, traced3 = 0, epoch2 = 0, headSince = 0, notables = 0;
   const connection2 = {
     id: ids++,
@@ -10088,7 +10088,7 @@ function Connection(ready, options, events) {
     x.query && (x.query.state = connection2.backend);
     if (fence)
       pending.splice(pending.indexOf(fence), 0, x);
-    else if (x.ends && open2.size)
+    else if (x.ends && open3.size)
       pending.push(fence = x);
     else if (blocker || pending.length)
       pending.push(x);
@@ -10131,7 +10131,7 @@ function Connection(ready, options, events) {
       sync2(x, true);
     }
     x.fresh && register(x.fresh);
-    x.portal && x.kind === "query" && open2.add(x);
+    x.portal && x.kind === "query" && open3.add(x);
     x.query && (x.query.active = sent.length === 0);
     x.ends && epoch2++;
     x.epoch = epoch2;
@@ -10328,13 +10328,13 @@ function Connection(ready, options, events) {
     return !!b && a.length === params.length && params.every((x, i) => x === a[i]) && b.length === columns2.length && columns2.every((x, i) => x.type === b[i].type);
   }
   function describe3(statement2, oids) {
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       const x = Exchange("describe", null, connection2.lease, (x2) => {
         parse8(out, "", statement2.text, oids);
         describe2(out, "S", "");
         sync2(x2);
       });
-      x.resolve = resolve3;
+      x.resolve = resolve4;
       x.reject = reject;
       queue(x);
     });
@@ -10372,7 +10372,7 @@ function Connection(ready, options, events) {
     const x = sent.find((x2) => x2.query === query2);
     if (!x)
       return Promise.resolve();
-    return x === sent[0] && query2.active ? ready.cancel() : new Promise((resolve3, reject) => x.cancel = { resolve: resolve3, reject });
+    return x === sent[0] && query2.active ? ready.cancel() : new Promise((resolve4, reject) => x.cancel = { resolve: resolve4, reject });
   }
   function close2() {
     closing || (closing = new Promise((r) => {
@@ -10411,7 +10411,7 @@ function Connection(ready, options, events) {
     pending.splice(0).forEach((x) => x.own ? settle(x) : settleError(x, closed));
     running.forEach((query2) => query2.settled || query2.reject(decorate(query2, closed)));
     running.clear();
-    open2.clear();
+    open3.clear();
     connection2.onended && connection2.onended();
     events.onclose(connection2, closed);
   }
@@ -10628,7 +10628,7 @@ function Connection(ready, options, events) {
     x.last ? x.last.then(() => query2.settled || finish2(x), (error2) => query2.settled || query2.reject(decorate(query2, error2))) : query2.settled || finish2(x);
   }
   function unfence(cursor) {
-    if (!open2.delete(cursor) || open2.size || !fence)
+    if (!open3.delete(cursor) || open3.size || !fence)
       return;
     fence = null;
     release();
@@ -11244,11 +11244,11 @@ function Pool(options, types2) {
     hold(c2);
     typesLoading = true;
     c2.loading = true;
-    types2.load((text4) => new Promise((resolve3, reject2) => {
+    types2.load((text4) => new Promise((resolve4, reject2) => {
       const q = new Query([text4], [], Object.assign(() => {
       }, { options }), { simple: true });
       q.executed = true;
-      q.then(resolve3, reject2);
+      q.then(resolve4, reject2);
       c2.simple(q, text4);
     })).then(
       () => typesLoaded = true,
@@ -11364,8 +11364,8 @@ function Pool(options, types2) {
     const missing = retype();
     if (missing)
       throw missing;
-    return new Promise((resolve3, reject2) => {
-      waiting.push(wait({ lease: true, kind, resolve: resolve3, reject: reject2, queued: listened(channels.pool) ? now2() : 0 }));
+    return new Promise((resolve4, reject2) => {
+      waiting.push(wait({ lease: true, kind, resolve: resolve4, reject: reject2, queued: listened(channels.pool) ? now2() : 0 }));
       drain();
     });
   }
@@ -11389,9 +11389,9 @@ function Pool(options, types2) {
           return q.reject(queryError(c2.closed, q, options.debug));
         if (released)
           return q.reject(queryError(ended(x), q, options.debug));
-        chain = chain.then(() => new Promise((resolve3) => {
-          q.onwrite = resolve3;
-          q.then(resolve3, resolve3);
+        chain = chain.then(() => new Promise((resolve4) => {
+          q.onwrite = resolve4;
+          q.then(resolve4, resolve4);
           query2(q, x);
         }));
       },
@@ -11431,8 +11431,8 @@ function Pool(options, types2) {
   function end({ timeout = null } = {}) {
     if (ending2)
       return ending2;
-    ending2 = new Promise((resolve3) => {
-      pool.ended = resolve3;
+    ending2 = new Promise((resolve4) => {
+      pool.ended = resolve4;
       timeout !== null && (endTimer = setTimeout2(destroy, timeout * 1e3));
       retryTimer && (clearTimeout2(retryTimer), retryTimer = null);
       Promise.resolve().then(finishing);
@@ -11451,9 +11451,9 @@ function Pool(options, types2) {
     if (connections.size === 0 && (opening === 0 || signal.aborted) && waiting.length === 0) {
       endTimer && clearTimeout2(endTimer);
       retryTimer && clearTimeout2(retryTimer);
-      const resolve3 = pool.ended;
+      const resolve4 = pool.ended;
       pool.ended = null;
-      resolve3();
+      resolve4();
     }
   }
   function destroy() {
@@ -11933,7 +11933,7 @@ var init_subscribe = __esm({
 // node_modules/postgres/src/large.js
 import Stream2 from "stream";
 function largeObject(sql, oid, mode = 131072 | 262144) {
-  return new Promise(async (resolve3, reject) => {
+  return new Promise(async (resolve4, reject) => {
     await sql.begin(async (sql2) => {
       let finish2;
       !oid && ([{ oid }] = await sql2`select lo_creat(-1) as oid`);
@@ -11959,7 +11959,7 @@ function largeObject(sql, oid, mode = 131072 | 262144) {
           ) seek
         `
       };
-      resolve3(lo);
+      resolve4(lo);
       return new Promise(async (r) => finish2 = r);
       async function readable({
         highWaterMark = 2048 * 8,
@@ -12052,9 +12052,9 @@ function Postgres(a, b) {
     function sql2(strings2, ...args) {
       return strings2 && Array.isArray(strings2.raw) ? new Query(strings2, args, handler2) : typeof strings2 === "string" && !args.length ? new Identifier(options.transform.column.to ? options.transform.column.to(strings2) : strings2) : new Builder(strings2, args);
     }
-    function unsafe(string2, args = [], options2 = {}) {
+    function unsafe(string3, args = [], options2 = {}) {
       arguments.length === 2 && !Array.isArray(args) && (options2 = args, args = []);
-      return new Query([string2], args, handler2, {
+      return new Query([string3], args, handler2, {
         prepare: false,
         ...options2,
         simple: "simple" in options2 ? options2.simple : args.length === 0
@@ -12065,10 +12065,10 @@ function Postgres(a, b) {
     }
     function file(path, args = [], options2 = {}) {
       arguments.length === 2 && !Array.isArray(args) && (options2 = args, args = []);
-      const fileHandler = (query2) => fs2.readFile(path, "utf8", (err, string2) => {
+      const fileHandler = (query2) => fs2.readFile(path, "utf8", (err, string3) => {
         if (err)
           return query2.reject(err);
-        query2.strings = [string2];
+        query2.strings = [string3];
         handler2(query2);
       });
       Object.assign(fileHandler, handler2);
@@ -12152,9 +12152,9 @@ function Postgres(a, b) {
       };
       name && await control(lease, "savepoint " + identifier(name));
       try {
-        result = await new Promise((resolve3, reject) => {
+        result = await new Promise((resolve4, reject) => {
           const x = fn2(scoped);
-          Promise.resolve(Array.isArray(x) ? Promise.all(x) : x).then(resolve3, reject);
+          Promise.resolve(Array.isArray(x) ? Promise.all(x) : x).then(resolve4, reject);
         });
         if (uncaught && !stopped())
           throw uncaught;
@@ -12489,6 +12489,214 @@ var init_src = __esm({
   }
 });
 
+// src/knowledge/maintenance.ts
+function validateMaintenanceRequest(request) {
+  validateScope(request);
+  if (request.mode !== "prune" && request.mode !== "purge") throw new Error("Knowledge maintenance requires prune or purge mode");
+  if (request.mode === "prune") {
+    if (typeof request.before !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(request.before) || !Number.isFinite(Date.parse(request.before)) || new Date(request.before).toISOString() !== request.before || Date.parse(request.before) > Date.now()) {
+      throw new Error("Pruning requires a valid, nonfuture UTC cutoff in YYYY-MM-DDTHH:mm:ss.sssZ form");
+    }
+  } else if (request.before !== void 0) throw new Error("Purge does not accept a retention cutoff");
+  if (request.confirmation !== void 0 && !/^[a-f0-9]{64}$/.test(request.confirmation)) {
+    throw new Error("Maintenance confirmation must be the preview's SHA-256 digest");
+  }
+}
+function planMaintenance(request, targets) {
+  validateMaintenanceRequest(request);
+  for (const kind of MAINTENANCE_KINDS) {
+    if (targets[kind].length > MAINTENANCE_LIMIT) {
+      throw new Error(`Maintenance exceeds ${MAINTENANCE_LIMIT} ${kind}; use a smaller pruning window or an operator-reviewed bulk erasure procedure`);
+    }
+    if (new Set(targets[kind]).size !== targets[kind].length || targets[kind].some((id) => !/^[a-f0-9]{64}$/.test(id))) {
+      throw new Error("Maintenance encountered invalid or duplicate stored evidence identities");
+    }
+  }
+  const scope2 = { host: request.host, repositoryId: request.repositoryId };
+  const policy2 = { version: 1, scope: scope2, mode: request.mode, ...request.before ? { before: request.before } : {} };
+  const digest = identity([
+    "knowledge-maintenance-v1",
+    policy2,
+    MAINTENANCE_KINDS.map((kind) => [kind, [...targets[kind]].sort()]),
+    targets.crossRepositoryApplications
+  ]);
+  if (request.confirmation !== void 0 && request.confirmation !== digest) {
+    throw new Error("Maintenance plan changed or confirmation does not match; review a fresh preview");
+  }
+  return {
+    ...policy2,
+    digest,
+    applied: request.confirmation !== void 0,
+    counts: {
+      definitions: targets.definitions.length,
+      applications: targets.applications.length,
+      events: targets.events.length,
+      evaluations: targets.evaluations.length,
+      runs: targets.runs.length,
+      snapshots: targets.snapshots.length,
+      executions: targets.executions.length
+    },
+    crossRepositoryApplications: targets.crossRepositoryApplications,
+    limitations: [
+      "Knowledge tables only; legacy telemetry, webhook jobs, backups, logs, exports and GitHub items are not deleted.",
+      "Pause all App workers and scheduled/CLI knowledge writers before applying; subsequent ingestion can recreate evidence.",
+      "Counts cover evidence records; deleting a snapshot also removes its normalized project, technology and relationship rows."
+    ]
+  };
+}
+var MAINTENANCE_LIMIT, MAINTENANCE_KINDS;
+var init_maintenance = __esm({
+  "src/knowledge/maintenance.ts"() {
+    "use strict";
+    init_identity();
+    MAINTENANCE_LIMIT = 1e4;
+    MAINTENANCE_KINDS = ["definitions", "applications", "events", "evaluations", "runs", "snapshots", "executions"];
+  }
+});
+
+// src/knowledge/execution.ts
+function object(value2) {
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) throw new Error("Execution evidence must be an object");
+  return value2;
+}
+function string2(value2, pattern, field3) {
+  if (typeof value2 !== "string" || [...value2].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) || !pattern.test(value2)) throw new Error(`Execution ${field3} is invalid`);
+  return value2;
+}
+function integer2(value2, field3, minimum = 1) {
+  if (!Number.isSafeInteger(value2) || Number(value2) < minimum) throw new Error(`Execution ${field3} must be a safe integer >= ${minimum}`);
+  return Number(value2);
+}
+function time2(value2) {
+  const result = string2(value2, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, "timestamp");
+  if (!Number.isFinite(Date.parse(result)) || new Date(result).toISOString() !== result) throw new Error("Execution timestamp is invalid");
+  return result;
+}
+function enumeration(value2, allowed, field3) {
+  if (typeof value2 !== "string" || !allowed.includes(value2)) throw new Error(`Execution ${field3} is unsupported`);
+  return value2;
+}
+function executionProjectPath(value2) {
+  const path = string2(value2, /^(?:\.|[^\\:]{1,1024})$/, "project path");
+  if (path !== "." && path.split("/").some((part2) => !part2 || part2 === "." || part2 === "..")) {
+    throw new Error("Execution project path must be a canonical repository-relative directory");
+  }
+  return path;
+}
+function executionTools(value2) {
+  if (!Array.isArray(value2) || value2.length > 32) throw new Error("Execution tools must be a bounded list");
+  const result = value2.map((entry) => {
+    const item = object(entry);
+    return {
+      name: enumeration(item.name, tools, "tool"),
+      version: string2(item.version, /^v?\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]{1,60})?$/, "installed tool version"),
+      basis: enumeration(item.basis, ["recorder-runtime", "workflow-report"], "tool basis")
+    };
+  });
+  if (new Set(result.map(({ name }) => name)).size !== result.length) throw new Error("Execution tools must be unique");
+  if (result.some((item) => item.basis === "recorder-runtime" && item.name !== "node")) throw new Error("Only Node is directly observed by this recorder");
+  return result.sort((a, b) => a.name.localeCompare(b.name));
+}
+function executionCaches(value2) {
+  if (!Array.isArray(value2) || value2.length > 16) throw new Error("Execution caches must be a bounded list");
+  const result = value2.map((entry) => {
+    const item = object(entry);
+    return { tool: enumeration(item.tool, caches, "cache tool"), result: enumeration(item.result, states2, "cache result"), basis: "workflow-report" };
+  });
+  if (new Set(result.map(({ tool: tool2 }) => tool2)).size !== result.length) throw new Error("Execution cache tools must be unique");
+  return result.sort((a, b) => a.tool.localeCompare(b.tool));
+}
+function parseExecutionReport(value2) {
+  const input2 = object(value2);
+  if (input2.version !== 1 || input2.coverage !== "single-command") throw new Error("Execution report version/coverage is unsupported");
+  const scope2 = object(input2.repository);
+  const repository = {
+    host: string2(scope2.host, /^https:\/\/.{1,253}$/, "host"),
+    repositoryId: string2(scope2.repositoryId, /^[1-9]\d{0,19}$/, "repository ID")
+  };
+  validateScope(repository);
+  const headSha = string2(input2.headSha, /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/, "run revision");
+  const checkoutSha = string2(input2.checkoutSha, /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/, "checkout revision");
+  const startedAt = time2(input2.startedAt);
+  const completedAt = time2(input2.completedAt);
+  const durationMs = input2.durationMs;
+  if (typeof durationMs !== "number" || !Number.isFinite(durationMs) || durationMs < 0 || durationMs > 14 * 864e5 || Date.parse(completedAt) < Date.parse(startedAt) || Math.abs(Date.parse(completedAt) - Date.parse(startedAt) - durationMs) > 1e3) {
+    throw new Error("Execution duration is invalid or disagrees with wall-clock timestamps");
+  }
+  const exitCode = input2.exitCode === null ? null : integer2(input2.exitCode, "exit code", 0);
+  const signal = input2.signal === null ? null : string2(input2.signal, /^SIG[A-Z0-9]{1,12}$/, "signal");
+  if (exitCode !== null && exitCode > 4294967295 || exitCode === null === (signal === null)) throw new Error("Execution requires either an exit code or termination signal");
+  return {
+    version: 1,
+    repository,
+    runId: integer2(input2.runId, "run ID"),
+    runAttempt: integer2(input2.runAttempt, "attempt"),
+    headSha,
+    checkoutSha,
+    jobKey: string2(input2.jobKey, /^[A-Za-z_][A-Za-z0-9_-]{0,99}$/, "workflow job key"),
+    projectPath: executionProjectPath(input2.projectPath),
+    task: string2(input2.task, /^[A-Za-z0-9][A-Za-z0-9_.: -]{0,127}$/, "task label"),
+    startedAt,
+    completedAt,
+    durationMs,
+    exitCode,
+    signal,
+    tools: executionTools(input2.tools),
+    caches: executionCaches(input2.caches),
+    coverage: "single-command"
+  };
+}
+function executionObservationIdentity(item) {
+  return identity(["execution-observation-v1", item.repository, item.runObservationId, item.jobId, item.report, item.provenance]);
+}
+function createExecutionObservation(report, runObservationId, jobId, now2 = /* @__PURE__ */ new Date()) {
+  const normalized = parseExecutionReport(report);
+  const body = {
+    version: 1,
+    repository: normalized.repository,
+    runObservationId,
+    jobId,
+    report: normalized,
+    provenance: "operator-supplied",
+    recordedAt: now2.toISOString()
+  };
+  const result = { ...body, id: executionObservationIdentity(body) };
+  validateExecutionObservation(result);
+  return result;
+}
+function validateExecutionObservation(item, observation) {
+  validateScope(item.repository);
+  if (item.version !== 1 || item.provenance !== "operator-supplied" || !/^[a-f0-9]{64}$/.test(item.runObservationId)) throw new Error("Execution observation identity/provenance is invalid");
+  integer2(item.jobId, "job ID");
+  time2(item.recordedAt);
+  const report = parseExecutionReport(item.report);
+  if (identity(report) !== identity(item.report) || item.id !== executionObservationIdentity(item) || report.repository.host !== item.repository.host || report.repository.repositoryId !== item.repository.repositoryId) {
+    throw new Error("Execution observation does not match its content");
+  }
+  if (Date.parse(item.recordedAt) < Date.parse(report.completedAt)) throw new Error("Execution observation cannot predate task completion");
+  if (!observation) return;
+  const run4 = observation.run;
+  const job = run4.jobs.find(({ id }) => id === item.jobId);
+  validateRevision(report.checkoutSha);
+  if (observation.id !== item.runObservationId || observation.repository.host !== item.repository.host || observation.repository.repositoryId !== item.repository.repositoryId || run4.runId !== report.runId || run4.runAttempt !== report.runAttempt || run4.headSha !== report.headSha || !job || job.key !== report.jobKey) {
+    throw new Error("Execution report does not match the exact repository/run/attempt/job evidence");
+  }
+  if (Date.parse(report.startedAt) < Date.parse(job.startedAt) || Date.parse(report.completedAt) > Date.parse(job.completedAt)) {
+    throw new Error("Execution report is outside its recorded job interval");
+  }
+}
+var MAX_EXECUTION_BYTES, tools, caches, states2;
+var init_execution = __esm({
+  "src/knowledge/execution.ts"() {
+    "use strict";
+    init_identity();
+    MAX_EXECUTION_BYTES = 64 * 1024;
+    tools = ["node", "npm", "pnpm", "yarn", "bun", "typescript", "nx", "turborepo", "docker", "git", "python", "dotnet", "java", "gradle", "bazel", "pants"];
+    caches = ["actions-cache", "turborepo", "nx", "docker", "bazel", "gradle", "custom"];
+    states2 = ["hit", "miss", "partial", "unknown"];
+  }
+});
+
 // src/knowledge/run-window.ts
 function validateRunWindowQuery(query2) {
   validateRunObservationQuery({ ...query2, runId: query2.referenceRunId });
@@ -12560,6 +12768,8 @@ var init_store = __esm({
     init_identity();
     init_mitigation();
     init_run_observation();
+    init_maintenance();
+    init_execution();
     init_run_window();
   }
 });
@@ -12583,6 +12793,8 @@ var init_postgres_store = __esm({
     init_identity();
     init_mitigation();
     init_store();
+    init_maintenance();
+    init_execution();
     init_run_observation();
     init_run_window();
     summary = (row) => ({
@@ -12651,6 +12863,7 @@ var init_postgres_store = __esm({
           await sql`CREATE UNIQUE INDEX IF NOT EXISTS knowledge_run_scope_reference ON knowledge_run_observations (id, host, repository_id)`;
           await sql`CREATE INDEX IF NOT EXISTS knowledge_run_scope ON knowledge_run_observations (host, repository_id, observed_at DESC, id DESC)`;
           await sql`CREATE INDEX IF NOT EXISTS knowledge_run_attempt ON knowledge_run_observations (host, repository_id, run_id, run_attempt)`;
+          await sql`CREATE INDEX IF NOT EXISTS knowledge_run_source ON knowledge_run_observations (source_snapshot_id)`;
           await sql`CREATE INDEX IF NOT EXISTS knowledge_run_workflow ON knowledge_run_observations (host, repository_id, workflow_id, (observation->'run'->>'branch'), run_id)`;
           await sql`
         CREATE TABLE IF NOT EXISTS mitigation_definitions (
@@ -12708,6 +12921,7 @@ var init_postgres_store = __esm({
         )
       `;
           await sql`CREATE INDEX IF NOT EXISTS mitigation_event_application ON mitigation_application_events (host, repository_id, application_id, observed_at, id)`;
+          await sql`CREATE INDEX IF NOT EXISTS mitigation_event_observation ON mitigation_application_events (run_observation_id)`;
           await sql`
         CREATE TABLE IF NOT EXISTS mitigation_evaluations (
           id TEXT PRIMARY KEY, version INTEGER NOT NULL CHECK (version = 1),
@@ -12732,6 +12946,16 @@ var init_postgres_store = __esm({
             REFERENCES knowledge_run_observations (id, host, repository_id)
         )
       `;
+          await sql`CREATE INDEX IF NOT EXISTS mitigation_sample_observation ON mitigation_evaluation_samples (run_observation_id)`;
+          await sql`
+        CREATE TABLE IF NOT EXISTS knowledge_execution_observations (
+          id TEXT PRIMARY KEY, version INTEGER NOT NULL CHECK (version = 1),
+          host TEXT NOT NULL, repository_id TEXT NOT NULL, run_observation_id TEXT NOT NULL,
+          job_id BIGINT NOT NULL CHECK (job_id > 0), recorded_at TIMESTAMPTZ NOT NULL, execution JSONB NOT NULL,
+          FOREIGN KEY (run_observation_id, host, repository_id) REFERENCES knowledge_run_observations (id, host, repository_id)
+        )
+      `;
+          await sql`CREATE INDEX IF NOT EXISTS knowledge_execution_run ON knowledge_execution_observations (run_observation_id, host, repository_id, recorded_at DESC, id)`;
         });
       }
       async save(input2) {
@@ -12957,6 +13181,144 @@ var init_postgres_store = __esm({
       `;
           return definition;
         });
+      }
+      async maintain(input2) {
+        const request = structuredClone(input2);
+        validateMaintenanceRequest(request);
+        return this.sql.begin(request.confirmation ? "isolation level read committed" : "isolation level repeatable read read only", async (sql) => {
+          await sql`SET LOCAL lock_timeout = '10s'`;
+          await sql`SET LOCAL statement_timeout = '60s'`;
+          if (request.confirmation) {
+            await sql`
+          LOCK TABLE knowledge_snapshots, knowledge_projects, knowledge_technologies, knowledge_relationships,
+            knowledge_run_observations, mitigation_definitions, mitigation_applications, mitigation_application_projects,
+            mitigation_application_events, mitigation_evaluations, mitigation_evaluation_samples, knowledge_execution_observations
+          IN SHARE ROW EXCLUSIVE MODE
+        `;
+          }
+          const targets = { definitions: [], applications: [], events: [], evaluations: [], runs: [], snapshots: [], executions: [], crossRepositoryApplications: 0 };
+          if (request.mode === "purge") {
+            targets.definitions = (await sql`
+          SELECT id FROM mitigation_definitions WHERE host = ${request.host} AND repository_id = ${request.repositoryId}
+          ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+            const applications = await sql`
+          SELECT id, host, repository_id FROM mitigation_applications
+          WHERE (host = ${request.host} AND repository_id = ${request.repositoryId})
+            OR definition_id IN (SELECT id FROM mitigation_definitions WHERE host = ${request.host} AND repository_id = ${request.repositoryId})
+          ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `;
+            targets.applications = applications.map(({ id }) => id);
+            targets.crossRepositoryApplications = applications.filter((item) => item.host !== request.host || item.repository_id !== request.repositoryId).length;
+            if (targets.applications.length) {
+              targets.events = (await sql`
+            SELECT id FROM mitigation_application_events WHERE application_id IN ${sql(targets.applications)}
+            ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+          `).map(({ id }) => id);
+              targets.evaluations = (await sql`
+            SELECT id FROM mitigation_evaluations WHERE application_id IN ${sql(targets.applications)}
+            ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+          `).map(({ id }) => id);
+            }
+            targets.runs = (await sql`
+          SELECT id FROM knowledge_run_observations WHERE host = ${request.host} AND repository_id = ${request.repositoryId}
+          ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+            targets.snapshots = (await sql`
+          SELECT id FROM knowledge_snapshots WHERE host = ${request.host} AND repository_id = ${request.repositoryId}
+          ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+          } else {
+            targets.runs = (await sql`
+          WITH candidates AS (
+            SELECT run_id FROM knowledge_run_observations
+            WHERE host = ${request.host} AND repository_id = ${request.repositoryId}
+            GROUP BY run_id HAVING max(observed_at) < ${new Date(request.before)}
+          )
+          SELECT o.id FROM knowledge_run_observations o
+          WHERE o.host = ${request.host} AND o.repository_id = ${request.repositoryId}
+            AND o.run_id IN (SELECT run_id FROM candidates)
+            AND NOT EXISTS (
+              SELECT 1 FROM knowledge_run_observations pinned
+              WHERE pinned.host = o.host AND pinned.repository_id = o.repository_id AND pinned.run_id = o.run_id
+                AND (EXISTS (SELECT 1 FROM mitigation_evaluation_samples s WHERE s.run_observation_id = pinned.id)
+                  OR EXISTS (SELECT 1 FROM mitigation_application_events e WHERE e.run_observation_id = pinned.id))
+            )
+          ORDER BY o.id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+            targets.snapshots = (await sql`
+          SELECT s.id FROM knowledge_snapshots s
+          WHERE s.host = ${request.host} AND s.repository_id = ${request.repositoryId} AND s.collected_at < ${new Date(request.before)}
+            AND NOT EXISTS (SELECT 1 FROM mitigation_applications a WHERE a.topology_snapshot_id = s.id)
+            AND NOT EXISTS (
+              SELECT 1 FROM knowledge_run_observations r WHERE r.source_snapshot_id = s.id
+                ${targets.runs.length ? sql`AND r.id NOT IN ${sql(targets.runs)}` : sql``}
+            )
+          ORDER BY s.id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+          }
+          if (targets.runs.length) {
+            targets.executions = (await sql`
+          SELECT id FROM knowledge_execution_observations WHERE run_observation_id IN ${sql(targets.runs)}
+          ORDER BY id LIMIT ${MAINTENANCE_LIMIT + 1}
+        `).map(({ id }) => id);
+          }
+          const plan = planMaintenance(request, targets);
+          if (!plan.applied) return plan;
+          if (targets.evaluations.length) {
+            await sql`DELETE FROM mitigation_evaluation_samples WHERE evaluation_id IN ${sql(targets.evaluations)}`;
+            await sql`DELETE FROM mitigation_evaluations WHERE id IN ${sql(targets.evaluations)}`;
+          }
+          if (targets.events.length) await sql`DELETE FROM mitigation_application_events WHERE id IN ${sql(targets.events)}`;
+          if (targets.applications.length) {
+            await sql`DELETE FROM mitigation_application_projects WHERE application_id IN ${sql(targets.applications)}`;
+            await sql`DELETE FROM mitigation_applications WHERE id IN ${sql(targets.applications)}`;
+          }
+          if (targets.definitions.length) await sql`DELETE FROM mitigation_definitions WHERE id IN ${sql(targets.definitions)}`;
+          if (targets.executions.length) await sql`DELETE FROM knowledge_execution_observations WHERE id IN ${sql(targets.executions)}`;
+          if (targets.runs.length) await sql`DELETE FROM knowledge_run_observations WHERE id IN ${sql(targets.runs)}`;
+          if (targets.snapshots.length) {
+            await sql`DELETE FROM knowledge_relationships WHERE snapshot_id IN ${sql(targets.snapshots)}`;
+            await sql`DELETE FROM knowledge_technologies WHERE snapshot_id IN ${sql(targets.snapshots)}`;
+            await sql`DELETE FROM knowledge_projects WHERE snapshot_id IN ${sql(targets.snapshots)}`;
+            await sql`DELETE FROM knowledge_snapshots WHERE id IN ${sql(targets.snapshots)}`;
+          }
+          return plan;
+        });
+      }
+      async saveExecutionObservation(input2) {
+        const item = structuredClone(input2);
+        validateExecutionObservation(item);
+        await this.sql.begin(async (sql) => {
+          const [row] = await sql`
+        SELECT observation FROM knowledge_run_observations
+        WHERE id = ${item.runObservationId} AND host = ${item.repository.host} AND repository_id = ${item.repository.repositoryId}
+      `;
+          if (!row) throw new Error("Execution references unavailable run evidence");
+          validateRunObservation(row.observation);
+          validateExecutionObservation(item, row.observation);
+          await sql`
+        INSERT INTO knowledge_execution_observations (id, version, host, repository_id, run_observation_id, job_id, recorded_at, execution)
+        VALUES (${item.id}, ${item.version}, ${item.repository.host}, ${item.repository.repositoryId}, ${item.runObservationId},
+          ${item.jobId}, ${new Date(item.recordedAt)}, ${sql.json(JSON.parse(JSON.stringify(item)))})
+        ON CONFLICT (id) DO NOTHING
+      `;
+        });
+      }
+      async listExecutionObservations(scope2, runObservationId, limit3) {
+        validateScope(scope2);
+        validateMitigationLimit(limit3);
+        if (!/^[a-f0-9]{64}$/.test(runObservationId)) throw new Error("Execution run observation ID is invalid");
+        const rows = await this.sql`
+      SELECT id, execution FROM knowledge_execution_observations
+      WHERE host = ${scope2.host} AND repository_id = ${scope2.repositoryId} AND run_observation_id = ${runObservationId}
+      ORDER BY recorded_at DESC, id LIMIT ${limit3}
+    `;
+        for (const { id, execution } of rows) {
+          validateExecutionObservation(execution);
+          if (execution.id !== id || execution.repository.host !== scope2.host || execution.repository.repositoryId !== scope2.repositoryId || execution.runObservationId !== runObservationId) throw new Error("Stored execution does not match its indexed scope");
+        }
+        return rows.map(({ execution }) => execution);
       }
       async loadMitigationDefinition(scope2, id) {
         validateScope(scope2);
@@ -13333,7 +13695,7 @@ function actionInvocation(argv, env, processCwd) {
 }
 
 // src/cli/index.ts
-import { parseArgs as parseArgs7 } from "node:util";
+import { parseArgs as parseArgs9 } from "node:util";
 
 // src/lint/parsers/workflow.ts
 var import_yaml2 = __toESM(require_dist(), 1);
@@ -13925,9 +14287,9 @@ function detectsChanges(project, { workflow, job }) {
   );
 }
 function runnerHint(project) {
-  const tools = project.facts.monorepoTools.value;
-  if (tools.includes("nx")) return " Inside each job, `nx affected` (with `nrwl/nx-set-shas@v5`) narrows the work further.";
-  if (tools.includes("turbo")) return " Inside each job, `turbo run <task> --affected` narrows the work further.";
+  const tools2 = project.facts.monorepoTools.value;
+  if (tools2.includes("nx")) return " Inside each job, `nx affected` (with `nrwl/nx-set-shas@v5`) narrows the work further.";
+  if (tools2.includes("turbo")) return " Inside each job, `turbo run <task> --affected` narrows the work further.";
   return "";
 }
 var change_detection_default = defineRule({
@@ -14053,9 +14415,9 @@ function scriptName(tokens, toolIndex) {
   return run4 >= 0 ? rest[run4 + 1] : rest[0];
 }
 function npmAlternative(project, script) {
-  const tools = project.facts.monorepoTools.value;
-  if (tools.includes("nx")) return `Use \`nx affected -t ${script}\` so only projects affected by the change run.`;
-  if (tools.includes("turbo")) return `Use \`turbo run ${script} --affected\` so only packages affected by the change run.`;
+  const tools2 = project.facts.monorepoTools.value;
+  if (tools2.includes("nx")) return `Use \`nx affected -t ${script}\` so only projects affected by the change run.`;
+  if (tools2.includes("turbo")) return `Use \`turbo run ${script} --affected\` so only packages affected by the change run.`;
   return `Compute the changed workspaces (for example from \`git diff --name-only origin/\${{ github.base_ref }}...HEAD\`) and pass them with \`-w <workspace>\`, or adopt a task runner with affected detection (Nx, Turborepo).`;
 }
 function detect(project, command) {
@@ -16235,8 +16597,8 @@ var multi_stage_default = defineRule({
         for (const command of commands) {
           const install = systemInstall(command.words);
           if (install && !purges) {
-            const tools = install.packages.map(packageName).filter((name) => BUILD_PACKAGES.has(name));
-            if (tools.length > 0) evidence2.push({ label: `${install.installer} installs ${tools.map((tool2) => `\`${tool2}\``).join(", ")}`, line: command.line });
+            const tools2 = install.packages.map(packageName).filter((name) => BUILD_PACKAGES.has(name));
+            if (tools2.length > 0) evidence2.push({ label: `${install.installer} installs ${tools2.map((tool2) => `\`${tool2}\``).join(", ")}`, line: command.line });
             continue;
           }
           const dev = devInstall(command.words);
@@ -18660,16 +19022,16 @@ function buildProject(input2) {
   const rootLock = lockfiles.find((path) => !path.includes("/"));
   const declaredManager = typeof rootManifest?.json.packageManager === "string" ? rootManifest.json.packageManager.split("@")[0] : void 0;
   const packageManager = declaredManager ?? (rootLock ? LOCKFILES[rootLock] : void 0);
-  const tools = [
+  const tools2 = [
     ...new Set(
       input2.files.map((file) => TOOL_FILES[file.path]).filter((tool2) => tool2 !== void 0)
     )
   ];
   const globs = workspaceGlobsFrom(rootManifest, files);
   const workspacePackages = manifests.filter(
-    (manifest) => manifest.dir !== "" && (globs.length > 0 ? globs.some((glob) => matchesGlob(manifest.dir, glob) || matchesGlob(`${manifest.dir}/`, glob)) : tools.length > 0)
+    (manifest) => manifest.dir !== "" && (globs.length > 0 ? globs.some((glob) => matchesGlob(manifest.dir, glob) || matchesGlob(`${manifest.dir}/`, glob)) : tools2.length > 0)
   );
-  const isMonorepo = globs.length > 0 || tools.includes("nx") || tools.includes("turbo") || tools.includes("lerna") || tools.includes("rush") || tools.includes("bazel") || tools.includes("pants");
+  const isMonorepo = globs.length > 0 || tools2.includes("nx") || tools2.includes("turbo") || tools2.includes("lerna") || tools2.includes("rush") || tools2.includes("bazel") || tools2.includes("pants");
   const dockerignoreDirs = new Set(
     input2.files.filter((file) => /(^|\/)\.dockerignore$/.test(file.path) || /\.dockerignore$/.test(file.path)).map((file) => {
       const slash = file.path.lastIndexOf("/");
@@ -18702,7 +19064,7 @@ function buildProject(input2) {
     ...rootManifest ? { rootManifest } : {},
     facts: {
       packageManager: packageManager || complete ? known(packageManager) : unknown(packageManager),
-      monorepoTools: complete || tools.length > 0 ? known(tools) : unknown(tools),
+      monorepoTools: complete || tools2.length > 0 ? known(tools2) : unknown(tools2),
       workspaceGlobs: repository ? known(globs) : unknown(globs),
       workspacePackages: repository ? known(workspacePackages) : unknown(workspacePackages),
       isMonorepo: isMonorepo || repository ? known(isMonorepo) : unknown(false),
@@ -19741,11 +20103,11 @@ import { join as join3 } from "node:path";
 var quote = (value2) => `"${value2.replace(/(["\\$`])/g, "\\$1")}"`;
 var tail = (text4, lines = 20) => text4.trim().split("\n").slice(-lines).join("\n");
 async function evaluateBranches(options) {
-  const { root, config, exec } = options;
+  const { root, config, exec: exec2 } = options;
   const log = options.log ?? (() => void 0);
   const load = options.loadEngine ?? loadEngine;
   const workdir = options.workdir ?? await mkdtemp(join3(tmpdir(), "cicd-eval-"));
-  const git2 = (args) => exec(`git ${args}`, { cwd: root });
+  const git2 = (args) => exec2(`git ${args}`, { cwd: root });
   const evaluations = [];
   let cases;
   let corpusError;
@@ -19781,13 +20143,13 @@ ${tail(added.output)}`);
       ]) {
         if (!command) continue;
         log(`[${branch.arm}] ${step}: ${command}`);
-        const result = await exec(command, { cwd: dir });
+        const result = await exec2(command, { cwd: dir });
         if (result.code !== 0) throw new Error(`${step} failed (exit ${result.code}):
 ${tail(result.output)}`);
       }
       if (config.evaluation.test) {
         log(`[${branch.arm}] test: ${config.evaluation.test}`);
-        const result = await exec(config.evaluation.test, { cwd: dir });
+        const result = await exec2(config.evaluation.test, { cwd: dir });
         evaluation.testsPassed = result.code === 0;
         if (!evaluation.testsPassed) log(`[${branch.arm}] tests failed:
 ${tail(result.output)}`);
@@ -19986,14 +20348,14 @@ async function cleanupBranch(client, repo, pull, notes) {
     return;
   }
   if (pull.head === pull.base) throw new Error("Refusing cleanup of an experiment's base branch.");
-  const open2 = await client.request("GET /repos/{owner}/{repo}/pulls", {
+  const open3 = await client.request("GET /repos/{owner}/{repo}/pulls", {
     ...repo,
     state: "open",
     head: `${repo.owner}:${pull.head}`,
     per_page: 1
   });
-  if (!Array.isArray(open2.data)) throw new Error("GitHub did not return the open PRs required for experiment cleanup.");
-  if (open2.data.length > 0) {
+  if (!Array.isArray(open3.data)) throw new Error("GitHub did not return the open PRs required for experiment cleanup.");
+  if (open3.data.length > 0) {
     notes.push(`Branch ${pull.head} retained because an open PR uses it.`);
     return;
   }
@@ -20746,10 +21108,10 @@ async function loadManifest(client, repo, name, config, ref = trunkBranch(name))
   return parsed.manifest;
 }
 async function runningExperiments(client, repo, config, only) {
-  const states2 = groupExperiments(await listExperimentPullRequests(client, repo, "open")).filter((state) => state.trunk?.state === "open" && (!only || state.name === only));
-  if (only && states2.length === 0) throw new UsageError(`No open experiment named "${only}".`);
+  const states3 = groupExperiments(await listExperimentPullRequests(client, repo, "open")).filter((state) => state.trunk?.state === "open" && (!only || state.name === only));
+  if (only && states3.length === 0) throw new UsageError(`No open experiment named "${only}".`);
   const result = [];
-  for (const state of states2) {
+  for (const state of states3) {
     try {
       result.push({ state, manifest: await loadManifest(client, repo, state.name, config, state.trunk?.headSha) });
     } catch (error2) {
@@ -21002,13 +21364,13 @@ async function decideCommand(args, io) {
   const repo = repoFrom(values2.repo, io);
   const client = githubClient(io);
   const judged = values2["agent-output"] ? judgments(await agentItems(io, values2["agent-output"], "grade_experiments")) : [];
-  const states2 = groupExperiments(await listExperimentPullRequests(client, repo, "open"));
+  const states3 = groupExperiments(await listExperimentPullRequests(client, repo, "open"));
   const now2 = io.now?.() ?? /* @__PURE__ */ new Date();
   const reports = [];
   for (const file of await measurementFiles(io, values2.measurements)) {
     let measurements = JSON.parse(await readFile4(file, "utf8"));
     const name = measurements.experiment;
-    const state = states2.find((candidate) => candidate.name === name);
+    const state = states3.find((candidate) => candidate.name === name);
     if (!state?.trunk) {
       io.stderr(`Skipping ${name}: no open trunk pull request.`);
       continue;
@@ -21193,7 +21555,7 @@ function planFixPullRequests(changes, existing, options) {
   const skipped = [];
   const newestFirst = existing.map((pr) => pr.pendingUpdate && pr.headSha === pr.pendingUpdate.commitSha ? { ...pr, commitSha: pr.pendingUpdate.commitSha, signature: pr.pendingUpdate.signature } : pr).sort((a, b) => b.number - a.number);
   const wanted = new Set(changes.map((change) => change.group));
-  let open2 = existing.filter((pr) => pr.state === "open").length;
+  let open3 = existing.filter((pr) => pr.state === "open").length;
   for (const pr of newestFirst) {
     if (pr.state !== "open" || wanted.has(pr.group)) continue;
     if (pr.cleanup && !options.rebase?.has(pr.group) && !options.recreate?.has(pr.group)) {
@@ -21211,7 +21573,7 @@ function planFixPullRequests(changes, existing, options) {
       ...pr.branch !== void 0 ? { branch: pr.branch } : {},
       comment: "These fixes are no longer needed: the base branch already contains them, or the rules no longer apply. Closing."
     });
-    open2 -= 1;
+    open3 -= 1;
   }
   for (const change of changes) {
     const current = newestFirst.find((pr) => pr.group === change.group && pr.state === "open");
@@ -21235,12 +21597,12 @@ function planFixPullRequests(changes, existing, options) {
       skipped.push({ group: change.group, reason: "declined", number: latest.number });
       continue;
     }
-    if (open2 >= options.openPullRequestsLimit) {
+    if (open3 >= options.openPullRequestsLimit) {
       skipped.push({ group: change.group, reason: "limit" });
       continue;
     }
     actions.push({ type: "create", change });
-    open2 += 1;
+    open3 += 1;
   }
   const metadata = [];
   for (const pr of newestFirst) {
@@ -21538,9 +21900,9 @@ async function finishBranchCleanup(client, repo, previous2) {
   } else if (pull.head.ref !== cleanup.branch) status = "changed";
   else {
     if (cleanup.branch === pull.base?.ref) throw new Error("Refusing cleanup of a PR's base branch.");
-    const open2 = await client.request("GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open", head: `${repo.owner}:${cleanup.branch}`, per_page: 1 });
-    if (!Array.isArray(open2.data)) throw new Error("GitHub did not return the open PRs required for branch cleanup.");
-    status = open2.data.length > 0 ? "in-use" : await deleteBranch(client, repo, cleanup.branch, cleanup.headSha);
+    const open3 = await client.request("GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open", head: `${repo.owner}:${cleanup.branch}`, per_page: 1 });
+    if (!Array.isArray(open3.data)) throw new Error("GitHub did not return the open PRs required for branch cleanup.");
+    status = open3.data.length > 0 ? "in-use" : await deleteBranch(client, repo, cleanup.branch, cleanup.headSha);
   }
   const latest = await read2();
   if (latest.cleanup.status !== "pending") return { ...previous2, body: latest.pull.body ?? "", cleanup: latest.cleanup };
@@ -21815,7 +22177,7 @@ function planIssueSync(existing, desired, options) {
     byFingerprint.set(issue.fingerprint, [...byFingerprint.get(issue.fingerprint) ?? [], issue]);
   }
   const wanted = new Set(desired.map((issue) => issue.fingerprint));
-  let open2 = existing.filter((issue) => issue.state === "open").length;
+  let open3 = existing.filter((issue) => issue.state === "open").length;
   if (options.closeResolved) {
     for (const issue of existing) {
       if (issue.state !== "open" || wanted.has(issue.fingerprint)) continue;
@@ -21825,7 +22187,7 @@ function planIssueSync(existing, desired, options) {
         fingerprint: issue.fingerprint,
         comment: options.resolvedComment ?? "CI/CD Optimizer no longer detects this finding, so this issue is resolved. :tada:"
       });
-      open2 -= 1;
+      open3 -= 1;
     }
   }
   const pending = [];
@@ -21846,13 +22208,13 @@ function planIssueSync(existing, desired, options) {
     pending.push(issue);
   }
   for (const issue of pending.sort((a, b) => b.priority - a.priority || a.fingerprint.localeCompare(b.fingerprint))) {
-    if (open2 >= options.maxOpen) {
+    if (open3 >= options.maxOpen) {
       skipped.push({ fingerprint: issue.fingerprint, reason: "limit" });
       continue;
     }
     const latest = byFingerprint.get(issue.fingerprint)?.[0];
     actions.push(latest ? { type: "reopen", number: latest.number, desired: issue } : { type: "create", desired: issue });
-    open2 += 1;
+    open3 += 1;
   }
   return { actions, skipped };
 }
@@ -22713,8 +23075,8 @@ async function applyRecipe(client, target, recipe, options = {}) {
     result.issue = issue.number;
     if (issue.copilot) result.copilot = issue.copilot;
   } else if (wantsIssue) {
-    const open2 = existingIssues.find((candidate) => candidate.state === "open");
-    if (open2) result.issue = open2.number;
+    const open3 = existingIssues.find((candidate) => candidate.state === "open");
+    if (open3) result.issue = open3.number;
   }
   result.attempted = result.pullRequest !== void 0 || result.issue !== void 0;
   if (knowledge) result.knowledge = {
@@ -22866,7 +23228,7 @@ function planRollout(options) {
 }
 
 // src/cli/knowledge-store.ts
-async function usingKnowledgeStore(io, enabled, action) {
+async function usingKnowledgeStore(io, enabled, action, options = {}) {
   let owned;
   let pending;
   const get = () => {
@@ -22875,7 +23237,7 @@ async function usingKnowledgeStore(io, enabled, action) {
       if (!io.env.DATABASE_URL) throw new UsageError("Knowledge persistence requires DATABASE_URL; no database URL is accepted on the command line.");
       const { PostgresKnowledgeStore: PostgresKnowledgeStore2 } = await Promise.resolve().then(() => (init_postgres_store(), postgres_store_exports));
       owned = new PostgresKnowledgeStore2(io.env.DATABASE_URL);
-      await owned.initialize();
+      if (options.initialize !== false) await owned.initialize();
       return owned;
     })();
     return pending;
@@ -23791,13 +24153,13 @@ function planAlertSync(input2) {
   const seriesMap = new Map(scopedSeries.map((series) => [seriesFingerprint(series), series]));
   const alerts = detectAnomalies(scopedSeries, input2.config);
   const history = input2.existing.filter((issue) => issue.fingerprint === fingerprint2).sort((a, b) => b.number - a.number);
-  const open2 = history.find((issue) => issue.state === "open");
+  const open3 = history.find((issue) => issue.state === "open");
   const latestClosed = history.find((issue) => issue.state === "closed");
   const actions = [];
   const plan = { actions, skipped: [], alerts };
   if (alerts.length === 0) {
-    if (!open2) return plan;
-    const baselines2 = readBaselines(open2);
+    if (!open3) return plan;
+    const baselines2 = readBaselines(open3);
     const keys = Object.keys(baselines2);
     const recovered = keys.length > 0 && keys.every((key2) => {
       const series = seriesMap.get(seriesFingerprint({
@@ -23810,21 +24172,21 @@ function planAlertSync(input2) {
     if (recovered) {
       actions.push({
         type: "close",
-        number: open2.number,
+        number: open3.number,
         fingerprint: fingerprint2,
         comment: `Durations are back within the baseline for the last ${input2.config.recoveryRuns} runs (${keys.map((key2) => `${key2 === "*" ? "workflow" : `\`${key2}\``} \u2264 ${formatDuration(baselines2[key2])} + tolerance`).join(", ")}). Closing this alert. :tada:`
       });
     }
     return plan;
   }
-  if (!open2 && latestClosed?.stateReason === "not_planned" && latestClosed.closedAt) {
+  if (!open3 && latestClosed?.stateReason === "not_planned" && latestClosed.closedAt) {
     const snoozedUntil = Date.parse(latestClosed.closedAt) + input2.config.snoozeDays * 864e5;
     if (input2.now.getTime() < snoozedUntil) {
       plan.skipped.push({ fingerprint: fingerprint2, reason: "dismissed", number: latestClosed.number });
       return plan;
     }
   }
-  const baselines = readBaselines(open2);
+  const baselines = readBaselines(open3);
   for (const alert of alerts) baselines[seriesKey(alert)] ??= Math.round(alert.baselineMedianMs);
   const shape = shapeOf(alerts);
   const latestRun = Math.max(...alerts.map((alert) => alert.runId));
@@ -23836,7 +24198,7 @@ function planAlertSync(input2) {
     recoveryRuns: input2.config.recoveryRuns,
     snoozeDays: input2.config.snoozeDays,
     baselines,
-    ...!open2 && latestClosed ? { previousIssue: latestClosed.number } : {}
+    ...!open3 && latestClosed ? { previousIssue: latestClosed.number } : {}
   });
   const signature2 = signatureOf([shape, String(latestRun)]);
   const critical = alerts.some((alert) => alert.severity === "critical");
@@ -23851,15 +24213,15 @@ ${rendered.body}`,
     assignCopilot: input2.config.assignCopilot,
     priority: critical ? 2 : 1
   };
-  if (!open2) {
+  if (!open3) {
     actions.push({ type: "create", desired });
     return plan;
   }
-  if (open2.signature === signature2) return plan;
-  const changed = open2.attributes.shape !== shape;
+  if (open3.signature === signature2) return plan;
+  const changed = open3.attributes.shape !== shape;
   actions.push({
     type: "update",
-    number: open2.number,
+    number: open3.number,
     desired,
     ...changed ? {
       comment: `The anomaly changed on run [#${latestRun}](https://github.com/${input2.owner}/${input2.repo}/actions/runs/${latestRun}): ${alerts.map((alert) => `${alert.jobKey === void 0 ? "workflow" : `\`${alert.jobName ?? alert.jobKey}\``} ${alert.kind} +${Math.round(alert.increasePercent)}% (${alert.severity})`).join("; ")}.`
@@ -24857,6 +25219,7 @@ function authorization(client, repo, identity3, store) {
     revisions.add(sha);
   };
   return {
+    revision: authorizeRevision,
     application: async (application) => {
       const topology = await store.load(identity3, application.topologySnapshotId);
       if (!topology) throw new Error("Mitigation target topology is unavailable");
@@ -24883,6 +25246,14 @@ function authorization(client, repo, identity3, store) {
       return observation;
     }
   };
+}
+async function authorizedRunKnowledge(client, repo, factory, id) {
+  evidenceId(id);
+  const identity3 = await authorizeRepository(client, repo);
+  const store = await factory();
+  const access = authorization(client, repo, identity3, store);
+  const observation = await access.observation(id);
+  return { identity: identity3, store, access, observation };
 }
 async function authorizedApplication(client, repo, factory, id) {
   evidenceId(id);
@@ -25023,6 +25394,280 @@ async function knowledgeCommand(args, io) {
   return 0;
 }
 
+// src/cli/maintenance.ts
+init_maintenance();
+import { parseArgs as parseArgs7 } from "node:util";
+var MAINTENANCE_HELP = `Usage: ci-cd-optimizer maintenance <prune|purge> --host <HTTPS-origin> --repository-id <stable-id> [options]
+
+Operator-only access using DATABASE_URL, not a GitHub token. Preview is the default.
+  prune     Remove old, unreferenced knowledge; requires --before <YYYY-MM-DDTHH:mm:ss.sssZ>
+  purge     Remove repository knowledge and applications of its definitions (including other targets)
+
+To apply a reviewed preview: --apply --confirm <preview-digest> --writers-paused
+Stop all App workers and scheduled/CLI knowledge writers first. Changed plans fail without deleting anything.
+Prune preserves whole logical runs referenced by events/evaluations, all mitigation history, and referenced topology.
+Neither mode removes legacy telemetry, webhook jobs, backups, logs, exports or GitHub items.
+No automatic retention or deletion on uninstall is enabled.
+`;
+async function maintenanceCommand(args, io) {
+  const [mode, ...rest] = args;
+  if (!mode || mode === "--help" || mode === "-h") {
+    io.stdout(MAINTENANCE_HELP);
+    return 0;
+  }
+  if (mode !== "prune" && mode !== "purge") throw new UsageError("Maintenance requires prune or purge.");
+  const { values: values2 } = parseArgs7({
+    args: rest,
+    strict: true,
+    options: {
+      host: { type: "string" },
+      "repository-id": { type: "string" },
+      before: { type: "string" },
+      apply: { type: "boolean", default: false },
+      confirm: { type: "string" },
+      "writers-paused": { type: "boolean", default: false },
+      help: { type: "boolean", short: "h" }
+    }
+  });
+  if (values2.help) {
+    io.stdout(MAINTENANCE_HELP);
+    return 0;
+  }
+  if (values2.apply && (!values2.confirm || !values2["writers-paused"])) {
+    throw new UsageError("Applying maintenance requires --confirm <preview-digest> and --writers-paused.");
+  }
+  if (!values2.apply && (values2.confirm !== void 0 || values2["writers-paused"])) {
+    throw new UsageError("--confirm and --writers-paused require --apply; omit all three for preview.");
+  }
+  const request = {
+    host: values2.host ?? "",
+    repositoryId: values2["repository-id"] ?? "",
+    mode,
+    ...values2.before !== void 0 ? { before: values2.before } : {},
+    ...values2.confirm !== void 0 ? { confirmation: values2.confirm } : {}
+  };
+  try {
+    validateMaintenanceRequest(request);
+  } catch (error2) {
+    throw new UsageError(error2 instanceof Error ? error2.message : String(error2), { cause: error2 });
+  }
+  const result = await usingKnowledgeStore(io, true, async (factory) => (await factory()).maintain(request), { initialize: false });
+  io.stdout(JSON.stringify(result, null, 2));
+  return 0;
+}
+
+// src/cli/execution.ts
+import { parseArgs as parseArgs8 } from "node:util";
+
+// src/telemetry/execution-capture.ts
+init_execution();
+import { execFile as execFile2, spawn as spawn2 } from "node:child_process";
+import { lstat, open as open2, realpath, stat as stat4, writeFile as writeFile4 } from "node:fs/promises";
+import { dirname as dirname4, isAbsolute as isAbsolute3, relative as relative4, resolve as resolve3 } from "node:path";
+import { promisify as promisify2 } from "node:util";
+var exec = promisify2(execFile2);
+async function readExecutionJson(path) {
+  const file = await open2(path, "r");
+  try {
+    if (!(await file.stat()).isFile()) throw new Error("Execution input must be a regular file");
+    const buffer = Buffer.alloc(MAX_EXECUTION_BYTES + 1);
+    let size = 0;
+    while (size < buffer.length) {
+      const read2 = await file.read(buffer, size, buffer.length - size, size);
+      if (read2.bytesRead === 0) break;
+      size += read2.bytesRead;
+    }
+    if (size > MAX_EXECUTION_BYTES) throw new Error(`Execution input exceeds ${MAX_EXECUTION_BYTES} bytes`);
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, size)));
+  } finally {
+    await file.close();
+  }
+}
+async function captureExecution(io, options, command) {
+  if (!command[0]) throw new Error("Execution capture requires an executable after --");
+  executionProjectPath(options.project);
+  const root = await realpath(io.cwd);
+  const output2 = resolve3(root, options.output);
+  if (!(await stat4(dirname4(output2))).isDirectory()) throw new Error("Execution output parent must be an existing directory");
+  try {
+    await lstat(output2);
+    throw new Error("Execution output already exists");
+  } catch (error2) {
+    if (error2.code !== "ENOENT") throw error2;
+  }
+  const env = { ...process.env, ...io.env };
+  const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd: root, env, maxBuffer: 4096 });
+  if (await realpath(top.stdout.trim()) !== root) throw new Error("Run execution capture from the repository root");
+  const directory = await realpath(resolve3(root, options.project));
+  const path = relative4(root, directory);
+  if (isAbsolute3(path) || path === ".." || path.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+    throw new Error("Execution project resolves outside the repository");
+  }
+  const checkout = await exec("git", ["rev-parse", "--verify", "HEAD"], { cwd: root, env, maxBuffer: 4096 });
+  const stamp = (/* @__PURE__ */ new Date()).toISOString();
+  const template = parseExecutionReport({
+    version: 1,
+    repository: { host: io.env.GITHUB_SERVER_URL, repositoryId: io.env.GITHUB_REPOSITORY_ID },
+    runId: Number(io.env.GITHUB_RUN_ID),
+    runAttempt: Number(io.env.GITHUB_RUN_ATTEMPT),
+    headSha: io.env.GITHUB_SHA,
+    checkoutSha: checkout.stdout.trim(),
+    jobKey: io.env.GITHUB_JOB,
+    projectPath: path ? path.split("\\").join("/") : ".",
+    task: options.task,
+    startedAt: stamp,
+    completedAt: stamp,
+    durationMs: 0,
+    exitCode: 0,
+    signal: null,
+    tools: [{ name: "node", version: process.version, basis: "recorder-runtime" }],
+    caches: [],
+    coverage: "single-command"
+  });
+  const startedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const started = performance.now();
+  const result = await new Promise((resolveResult, reject) => {
+    const child = spawn2(command[0], command.slice(1), { cwd: directory, env, stdio: "inherit", shell: false });
+    child.once("error", reject);
+    child.once("close", (exitCode, signal) => resolveResult({ exitCode, signal }));
+  });
+  const durationMs = Math.round((performance.now() - started) * 1e3) / 1e3;
+  const completedAt = (/* @__PURE__ */ new Date()).toISOString();
+  let tools2 = template.tools;
+  let caches2 = template.caches;
+  if (options.observations) {
+    const supplied = await readExecutionJson(resolve3(root, options.observations));
+    if (!supplied || typeof supplied !== "object" || Array.isArray(supplied)) throw new Error("Runtime observations must be an object");
+    const fields = supplied;
+    const additional = executionTools(fields.tools ?? []);
+    if (additional.some((item) => item.name === "node" || item.basis !== "workflow-report")) {
+      throw new Error("Additional tools must use workflow-report basis and must not override recorder Node");
+    }
+    tools2 = [...tools2, ...additional];
+    caches2 = executionCaches(fields.caches ?? []);
+  }
+  const report = parseExecutionReport({ ...template, ...result, startedAt, completedAt, durationMs, tools: tools2, caches: caches2 });
+  await writeFile4(output2, `${JSON.stringify(report, null, 2)}
+`, { encoding: "utf8", flag: "wx" });
+  return report;
+}
+
+// src/service/execution-knowledge.ts
+init_execution();
+var limitations = [
+  "Operator-supplied report; GitHub access verifies run association, not report origin, attestation, or claim truth.",
+  "Single-command coverage; project paths and installed tools/cache outcomes are reported, not inferred from declarations.",
+  "Reports are not used automatically as duration samples, verified project attribution, cache savings, or causal mitigation evidence."
+];
+async function authorizeJob(client, repo, execution, observation) {
+  validateExecutionObservation(execution, observation);
+  const response = await client.request("GET /repos/{owner}/{repo}/actions/jobs/{job_id}", { ...repo, job_id: execution.jobId });
+  const data = response.data;
+  if (data?.id !== execution.jobId || data.run_id !== observation.run.runId || data.run_attempt !== observation.run.runAttempt || data.head_sha !== observation.run.headSha) {
+    throw new Error("Actions job does not match the execution report's exact run attempt");
+  }
+}
+async function importExecutionKnowledge(client, repo, factory, runObservationId, jobId, input2, now2) {
+  const report = parseExecutionReport(input2);
+  const context3 = await authorizedRunKnowledge(client, repo, factory, runObservationId);
+  const execution = createExecutionObservation(report, runObservationId, jobId, now2);
+  await authorizeJob(client, repo, execution, context3.observation);
+  await context3.access.revision(report.checkoutSha);
+  await context3.store.saveExecutionObservation(execution);
+  return { execution, limitations };
+}
+async function listExecutionKnowledge(client, repo, factory, runObservationId, limit3 = 20) {
+  if (!Number.isSafeInteger(limit3) || limit3 < 1 || limit3 > 100) throw new Error("Execution result limit must be between 1 and 100");
+  const context3 = await authorizedRunKnowledge(client, repo, factory, runObservationId);
+  const executions = await context3.store.listExecutionObservations(context3.identity, runObservationId, limit3);
+  const jobs = /* @__PURE__ */ new Set();
+  for (const execution of executions) {
+    validateExecutionObservation(execution, context3.observation);
+    if (!jobs.has(execution.jobId)) {
+      await authorizeJob(client, repo, execution, context3.observation);
+      jobs.add(execution.jobId);
+    }
+    await context3.access.revision(execution.report.checkoutSha);
+  }
+  return { executions, coverage: "bounded", limit: limit3, limitations };
+}
+
+// src/cli/execution.ts
+var EXECUTION_HELP = `Usage: ci-cd-optimizer execution <capture|import|list> [options]
+
+capture --project <relative-directory> --task <label> --output <new-json-file> [--observations <json>] -- <executable> [args...]
+  Runs one explicitly requested command from a repository root on an Actions runner. Requires GITHUB_SERVER_URL,
+  GITHUB_REPOSITORY_ID, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_SHA and GITHUB_JOB. Records actual checkout SHA,
+  elapsed time, exit/signal and recorder Node version. Optional tools/cache observations remain workflow-reported.
+  Never captures command arguments, output, environment variables, cache keys or credentials. Propagates child exit code.
+
+import --repo <owner/repo> --observation <run-observation-id> --job-id <Actions-job-id> --file <json>
+list   --repo <owner/repo> --observation <run-observation-id> [--limit 1-100]
+  Uses DATABASE_URL and fresh Contents/Actions authorization. Import never runs the captured command.
+  Association with a real run/attempt/job does not authenticate a local report's origin or establish causality.
+`;
+async function executionCommand(args, io) {
+  const [command, ...rest] = args;
+  if (!command || command === "--help" || command === "-h") {
+    io.stdout(EXECUTION_HELP);
+    return 0;
+  }
+  if (command === "capture") {
+    const separator = rest.indexOf("--");
+    const { values: values3 } = parseArgs8({
+      args: separator < 0 ? rest : rest.slice(0, separator),
+      strict: true,
+      options: {
+        project: { type: "string" },
+        task: { type: "string" },
+        output: { type: "string" },
+        observations: { type: "string" },
+        help: { type: "boolean", short: "h" }
+      }
+    });
+    if (values3.help) {
+      io.stdout(EXECUTION_HELP);
+      return 0;
+    }
+    if (!values3.project || !values3.task || !values3.output || separator < 0) throw new UsageError("Capture requires --project, --task, --output and -- <executable>.");
+    const report = await captureExecution(io, {
+      project: values3.project,
+      task: values3.task,
+      output: values3.output,
+      ...values3.observations ? { observations: values3.observations } : {}
+    }, rest.slice(separator + 1));
+    io.stdout(JSON.stringify({ output: values3.output, exitCode: report.exitCode, signal: report.signal, coverage: report.coverage }));
+    return report.exitCode ?? 1;
+  }
+  if (command !== "import" && command !== "list") throw new UsageError("Execution requires capture, import or list.");
+  const { values: values2 } = parseArgs8({
+    args: rest,
+    strict: true,
+    options: {
+      repo: { type: "string" },
+      observation: { type: "string" },
+      "job-id": { type: "string" },
+      file: { type: "string" },
+      limit: { type: "string", default: "20" },
+      help: { type: "boolean", short: "h" }
+    }
+  });
+  if (values2.help) {
+    io.stdout(EXECUTION_HELP);
+    return 0;
+  }
+  if (!/^[a-f0-9]{64}$/.test(values2.observation ?? "")) throw new UsageError("--observation requires an immutable SHA-256 run observation ID.");
+  const jobId = Number(values2["job-id"]);
+  const limit3 = Number(values2.limit);
+  if (!Number.isSafeInteger(limit3) || limit3 < 1 || limit3 > 100) throw new UsageError("--limit must be between 1 and 100.");
+  if (command === "import" && (!values2.file || !Number.isSafeInteger(jobId) || jobId < 1)) throw new UsageError("Import requires --file and a positive --job-id.");
+  const repo = repoFrom(values2.repo, io);
+  const client = githubClient(io);
+  const result = await usingKnowledgeStore(io, true, async (factory) => command === "list" ? listExecutionKnowledge(client, repo, factory, values2.observation, limit3) : importExecutionKnowledge(client, repo, factory, values2.observation, jobId, await readExecutionJson(resolvePath(io, values2.file)), io.now?.()));
+  io.stdout(JSON.stringify(result, null, 2));
+  return 0;
+}
+
 // src/cli/index.ts
 var HELP2 = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimizer for GitHub repositories
 
@@ -25036,6 +25681,8 @@ Commands:
   experiments <cmd>     Hill-climbing experiments: list, context, create, collect, evaluate, decide
   recipes <cmd>         Reusable fixes from promoted experiments: publish, apply, status, rollout
   knowledge <cmd>       Authorized mitigation history: applications, runs, inspect, refresh, evaluate
+  maintenance <cmd>     Operator-only knowledge retention and erasure (preview by default)
+  execution <cmd>       Opt-in task capture and authorized runtime report import/inspection
   help [command]        Show help
   version               Print the version
 
@@ -25043,7 +25690,7 @@ Exit codes: 0 success, 1 findings at or above --fail-on (or a failed operation),
 `;
 var RULES_HELP = `Usage: ci-cd-optimizer rules [--format text|json|markdown] [--output <file>]`;
 async function rulesCommand(args, io) {
-  const { values: values2 } = parseArgs7({ args, strict: true, options: { format: { type: "string", short: "f", default: "text" }, output: { type: "string", short: "o" }, help: { type: "boolean", short: "h", default: false } } });
+  const { values: values2 } = parseArgs9({ args, strict: true, options: { format: { type: "string", short: "f", default: "text" }, output: { type: "string", short: "o" }, help: { type: "boolean", short: "h", default: false } } });
   if (values2.help) {
     io.stdout(RULES_HELP);
     return 0;
@@ -25065,7 +25712,9 @@ var COMMANDS3 = {
   recipes: { run: recipesCommand, help: RECIPES_HELP },
   scan: { run: scanCommand, help: SCAN_HELP },
   telemetry: { run: telemetryCommand, help: TELEMETRY_HELP },
-  knowledge: { run: knowledgeCommand, help: KNOWLEDGE_HELP }
+  knowledge: { run: knowledgeCommand, help: KNOWLEDGE_HELP },
+  maintenance: { run: maintenanceCommand, help: MAINTENANCE_HELP },
+  execution: { run: executionCommand, help: EXECUTION_HELP }
 };
 async function run3(argv, io) {
   const [first, ...rest] = argv;
@@ -25099,9 +25748,9 @@ function isArgError(error2) {
   return typeof code2 === "string" && code2.startsWith("ERR_PARSE_ARGS");
 }
 async function isDirectory(io, path) {
-  const { stat: stat4 } = await import("node:fs/promises");
-  const { resolve: resolve3 } = await import("node:path");
-  return stat4(resolve3(io.cwd, path)).then((info) => info.isDirectory(), () => false);
+  const { stat: stat5 } = await import("node:fs/promises");
+  const { resolve: resolve4 } = await import("node:path");
+  return stat5(resolve4(io.cwd, path)).then((info) => info.isDirectory(), () => false);
 }
 
 // src/action.ts

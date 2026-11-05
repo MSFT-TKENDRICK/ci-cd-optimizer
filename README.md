@@ -122,6 +122,24 @@ the measured improvement.
 
 See [docs/recipes.md](docs/recipes.md).
 
+## Evidence-backed project history
+
+The hosted App uses PostgreSQL to link revision-specific project/technology declarations, immutable run attempts,
+conservative duration cohorts, and versioned mitigation applications/evaluations. Opt-in `recipes apply|rollout
+--record-knowledge` verifies a published recipe before recording target proposals. `knowledge applications|runs|inspect`
+provides authorized history; `knowledge refresh|evaluate` records lifecycle state and explicit observational comparisons.
+Merging a PR, closing an issue, or passing compatibility checks is not treated as proof of performance benefit.
+
+`execution capture` can wrap a runner command and record timing, checkout context and reported tool/cache observations.
+`execution import|list` checks exact run/attempt/job access while retaining **operator-supplied**, non-attested provenance.
+Reports never execute code during import and do not silently become trusted duration samples or project attribution.
+
+History is retained by default. Operator-only `maintenance prune|purge` previews its impact and requires a current
+confirmation digest before any deletion; referenced evidence is preserved during pruning. No automatic deletion on
+App removal is enabled. See [runtime report usage](docs/github-app.md#optional-task-execution-reports),
+[retention/removal procedures](docs/github-app.md#knowledge-retention-and-removal), and
+[model boundaries](docs/architecture.md#project-declaration-evidence-srcknowledge).
+
 ## Tokens and permissions
 
 | Credential | Used by | Needed for |
@@ -130,6 +148,7 @@ See [docs/recipes.md](docs/recipes.md).
 | `secrets.CICD_OPTIMIZER_TOKEN` (optional App token or fine-grained PAT) | Scan, gh-aw safe outputs, recipe PRs | Pushing fixes that edit `.github/workflows` (`workflows` permission); PRs that trigger CI |
 | `vars.CICD_OPTIMIZER_APP_ID` + `secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY` | Scan, recipe rollout | Installation tokens; cross-repository recipe PRs |
 | `secrets.COPILOT_ASSIGN_TOKEN` (user token) | Scan, telemetry, rollout | Assigning issues to the Copilot coding agent |
+| `secrets.CICD_OPTIMIZER_DATABASE_URL` (optional) | Recipe rollout | Protected access to the App's evidence database; never expose it to untrusted experiment arms |
 | `permissions: copilot-requests: write` | gh-aw workflows | Copilot inference without a PAT (requires an org Copilot subscription; otherwise set `COPILOT_GITHUB_TOKEN`) |
 
 > **Security review note.** `CICD_OPTIMIZER_TOKEN` is the only secret the agentic workflows add. It is used only in

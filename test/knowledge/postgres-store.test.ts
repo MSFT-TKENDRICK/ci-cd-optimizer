@@ -10,7 +10,7 @@ import { input, now, repository, revision, snapshot } from "./fixtures.js";
 import { runWindowCases } from "./run-window-cases.js";
 import { legacyDefinition, mitigationCases } from "./mitigation-cases.js";
 import { maintenanceCases } from "./maintenance-cases.js";
-import { executionCases } from "./execution-cases.js";
+import { executionCases, executionFixture } from "./execution-cases.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
@@ -36,6 +36,9 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
       change: { kind: "commit", sha: revision }, createdAt: now.toISOString(),
     });
     await store.saveMitigationApplication(application);
+    const { observation, execution } = executionFixture();
+    await store.saveRunObservation(observation);
+    await store.saveExecutionObservation(execution);
     const plan = await store.maintain({ ...repository, mode: "purge" });
     await database.sql`CREATE FUNCTION reject_maintenance() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test-reject-maintenance'; END $$`;
     await database.sql`CREATE TRIGGER reject_maintenance BEFORE DELETE ON knowledge_snapshots FOR EACH ROW EXECUTE FUNCTION reject_maintenance()`;
@@ -43,6 +46,7 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
     expect(await store.loadMitigationApplication(repository, application.id)).toEqual(application);
     expect(await store.loadMitigationDefinition(repository, definition.id)).toEqual(definition);
     expect(await store.load(repository, project.id)).toEqual(project);
+    expect(await store.listExecutionObservations(repository, observation.id, 10)).toEqual([execution]);
     await database.sql`DROP TRIGGER reject_maintenance ON knowledge_snapshots`;
     await database.sql`DROP FUNCTION reject_maintenance()`;
     await store.maintain({ ...repository, mode: "purge", confirmation: plan.digest });

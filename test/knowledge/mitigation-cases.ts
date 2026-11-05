@@ -184,6 +184,11 @@ export function mitigationCases(getStore: () => KnowledgeStore): void {
       limitations: evaluation.limitations,
     });
     await expect(store.saveMitigationEvaluation(incorrect)).rejects.toThrow("statistics do not match");
+    const purge = await store.maintain({ ...repository, mode: "purge" });
+    expect(purge.counts).toMatchObject({ evaluations: 2, runs: 8, events: 2 });
+    await store.maintain({ ...repository, mode: "purge", confirmation: purge.digest });
+    expect(await store.listMitigationEvaluations(repository, applied.id, 10)).toEqual([]);
+    expect(await store.listRunObservations({ ...repository, limit: 10 })).toEqual([]);
   });
 
   it("preserves unknown/inconclusive results without manufacturing a success", async () => {
