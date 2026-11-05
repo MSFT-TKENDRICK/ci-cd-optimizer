@@ -1,6 +1,7 @@
 import { createHmac, generateKeyPairSync, randomUUID, verify } from "node:crypto";
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { setImmediate } from "node:timers/promises";
 import { createNodeMiddleware, Probot, ProbotOctokit } from "probot";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app.js";
@@ -15,6 +16,12 @@ const repository = { name: "widgets", full_name: "acme/widgets", owner: { login:
 const push = { repository, installation: { id: 123 }, ref: "refs/heads/main", commits: [{ modified: [WORKFLOW] }] };
 const cleanups: Array<() => Promise<void>> = [];
 
+function latch() {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => { release = resolve; });
+  return { promise, release };
+}
+
 // Resolve concrete HTTP requests back to the service fake's route templates. Unknown routes fail closed.
 const endpoints = [
   "GET /repos/{owner}/{repo}",
@@ -26,6 +33,7 @@ const endpoints = [
   "GET /repos/{owner}/{repo}/labels",
   "GET /repos/{owner}/{repo}/git/ref/{ref}",
   "GET /repos/{owner}/{repo}/git/commits/{commit_sha}",
+  "GET /repos/{owner}/{repo}/pulls/{pull_number}",
   "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
   "POST /repos/{owner}/{repo}/issues",
   "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
@@ -173,6 +181,96 @@ describe("signed GitHub App HTTP delivery", () => {
   it("returns a failed delivery when a push scan cannot complete", async () => {
     const app = await harness({ failOn: () => true });
     expect(await app.send("push", push)).toBe(500);
+  });
+
+  it.each(["push", "installation", "installation_repositories"])("serializes a push and overlapping %s without duplicate issues or fix PRs", async (event) => {
+    const issues: Array<Record<string, unknown>> = [];
+    const pullHeads: NonNullable<FakeApiState["pullHeads"]> = {};
+    const app = await harness({
+      config: `${TIMEOUT_ONLY}issues:\n  enabled: true\nfixes:\n  enabled: true\n`,
+      refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } },
+      issues, pullHeads,
+    });
+    const blocked = latch();
+    const release = latch();
+    const original = app.api.request.bind(app.api);
+    let firstIssue = true;
+    vi.spyOn(app.api, "request").mockImplementation(async (route, parameters = {}) => {
+      const response = await original(route, parameters);
+      if (route === "POST /repos/{owner}/{repo}/issues" || route === "POST /repos/{owner}/{repo}/pulls") {
+        const data = response.data;
+        if (!data || typeof data !== "object" || !("number" in data) || typeof data.number !== "number") throw new Error("Expected created issue/PR");
+        if (route.endsWith("/issues") && firstIssue) {
+          firstIssue = false;
+          blocked.release();
+          // Keep the first creation invisible so an overlapping reconciliation would plan a duplicate.
+          await release.promise;
+        }
+        const pull = route.endsWith("/pulls");
+        issues.push({
+          number: data.number, title: parameters.title, body: parameters.body, state: "open",
+          labels: [{ name: "cicd-optimizer" }], ...(pull ? { pull_request: { merged_at: null } } : {}),
+        });
+        if (pull) pullHeads[data.number] = { sha: "new-commit", ref: String(parameters.head) };
+      }
+      return response;
+    });
+    const first = app.send("push", push);
+    await blocked.promise;
+    const arrived = latch();
+    app.probot.onAny(() => { arrived.release(); });
+    const repositories = [{ full_name: "acme/widgets" }];
+    const second = app.send(event, event === "push" ? push : {
+      installation: { id: 123 }, action: event === "installation" ? "created" : "added",
+      ...(event === "installation" ? { repositories } : { repositories_added: repositories }),
+    });
+    try {
+      await arrived.promise;
+      // API calls are in-memory promises; let this delivery's continuations run while the first is held.
+      await setImmediate();
+      expect(callsTo(app.api, "GET /repos/{owner}/{repo}")).toHaveLength(1);
+    } finally {
+      release.release();
+      expect(await Promise.all([first, second])).toEqual([200, 200]);
+    }
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toHaveLength(1);
+  });
+
+  it("processes another repository while a scan is blocked", async () => {
+    const app = await harness({ config: TIMEOUT_ONLY, refs: { main: { [WORKFLOW]: CLEAN } } });
+    const blocked = latch();
+    const release = latch();
+    const original = app.api.request.bind(app.api);
+    vi.spyOn(app.api, "request").mockImplementation(async (route, parameters = {}) => {
+      if (route === "GET /repos/{owner}/{repo}" && parameters.repo === "widgets") {
+        blocked.release();
+        await release.promise;
+      }
+      return original(route, parameters);
+    });
+    const first = app.send("push", push);
+    await blocked.promise;
+    try {
+      expect(await app.send("push", { ...push, repository: { ...repository, name: "other", full_name: "acme/other" } })).toBe(200);
+      expect(callsTo(app.api, "GET /repos/{owner}/{repo}").map((call) => call.parameters.repo)).toEqual(["other"]);
+    } finally {
+      release.release();
+      expect(await first).toBe(200);
+    }
+  });
+
+  it("processes the next delivery after a scan fails", async () => {
+    let attempts = 0;
+    const app = await harness({
+      config: TIMEOUT_ONLY,
+      refs: { main: { [WORKFLOW]: CLEAN } },
+      failOn: (route) => route === "GET /repos/{owner}/{repo}" && ++attempts === 1,
+    });
+    const outcomes = await Promise.all([app.send("push", push), app.send("push", push)]);
+    expect(outcomes.sort()).toEqual([200, 500]);
+    expect(await app.send("push", push)).toBe(200);
   });
 
   it.each(["installation", "installation_repositories"])("attempts all %s scans and returns failure if any fail", async (event) => {
