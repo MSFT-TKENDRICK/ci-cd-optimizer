@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { createHmac, generateKeyPairSync, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import console from "node:console";
+import process from "node:process";
 import { setTimeout } from "node:timers/promises";
 
+const { fetch, AbortSignal } = globalThis;
 const name = `cicd-optimizer-smoke-${randomUUID()}`;
 const secret = randomUUID();
 const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });

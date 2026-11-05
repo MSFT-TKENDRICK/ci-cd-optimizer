@@ -28,6 +28,7 @@ const endpoints = [
   "GET /repos/{owner}/{repo}/git/commits/{commit_sha}",
   "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
   "POST /repos/{owner}/{repo}/issues",
+  "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
   "POST /repos/{owner}/{repo}/labels",
   "POST /repos/{owner}/{repo}/git/trees",
   "POST /repos/{owner}/{repo}/git/commits",
@@ -182,6 +183,17 @@ describe("signed GitHub App HTTP delivery", () => {
       ...(event === "installation" ? { repositories } : { repositories_added: repositories }),
     })).toBe(500);
     expect(callsTo(app.api, "GET /repos/{owner}/{repo}").map((call) => call.parameters.repo)).toEqual(["one", "two"]);
+  });
+
+  it.each(["installation", "installation_repositories"])("accepts %s delivery when all repository scans succeed", async (event) => {
+    const app = await harness({ config: TIMEOUT_ONLY, refs: { main: { [WORKFLOW]: CLEAN } } });
+    const repositories = [{ full_name: "acme/one" }, { full_name: "acme/two" }];
+    expect(await app.send(event, {
+      installation: { id: 123 }, action: event === "installation" ? "created" : "added",
+      ...(event === "installation" ? { repositories } : { repositories_added: repositories }),
+    })).toBe(200);
+    expect(callsTo(app.api, "GET /repos/{owner}/{repo}").map((call) => call.parameters.repo)).toEqual(["one", "two"]);
+    expect(app.tokenRequests()).toBe(1);
   });
 
   it.each([undefined, "", "  ", "development", "replace-me"])("refuses production startup with placeholder secret %j", async (value) => {
