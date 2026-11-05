@@ -129,6 +129,13 @@ when the configured prefix changes. Missing ownership/head evidence protects the
 and labeled fork PRs are not treated as writable local branches. GitHub Enterprise deployments must support
 `updateRefs`; the App adapter uses the Enterprise `/api/graphql` endpoint.
 
+Closed history is verified against PR details too; labels or commit markers alone do not prove local branch
+ownership. Reuse requires the same repository, exact head branch and commit, intended base, closed state and
+reconciled update/cleanup intents. The App checks again after building the commit and before writing the ref,
+including whether another open PR now uses that branch. Lookup failures are not treated as missing branches.
+Discovery details are reused to avoid redundant per-PR requests; history not returned by those queries requires
+an individual lookup. These metadata checks are preflight checks, not atomic locks against later PR-state changes.
+
 Existing PR updates first persist their intended commit, signature, base, rules and rendered description in the PR,
 with a visible **Update pending** notice. The old committed marker stays in place until the expected-head ref write
 finishes. A retry recognizes the exact intended head and finalizes only the marker, preserving the staged recipe

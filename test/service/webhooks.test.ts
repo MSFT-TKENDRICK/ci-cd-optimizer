@@ -379,6 +379,27 @@ describe("signed GitHub App HTTP delivery", () => {
     expect(callsTo(app.api, "POST /graphql")).toHaveLength(1);
   });
 
+  it.each(["same branch", "fork", "different branch"])("verifies closed-history reuse through signed HTTP (%s)", async (history) => {
+    const files = { [WORKFLOW]: MISSING_TIMEOUT };
+    const heads: Record<string, string> = {};
+    const state: FakeApiState = { config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n`, refs: { main: files }, pulls: [], branchHeads: heads };
+    const app = await harness(state);
+    expect(await app.send("push", push)).toBe(200);
+    const pull = state.pulls?.[0];
+    if (!pull) throw new Error("Expected created PR");
+    const branch = pull.head.ref;
+    pull.state = "closed";
+    if (history === "fork") pull.head.repo.full_name = "someone/widgets";
+    if (history === "different branch") pull.head.ref = "legacy/workflow";
+    files[WORKFLOW] += "# changed base contents\n";
+    app.api.calls.length = 0;
+    expect(await app.send("push", push)).toBe(history === "same branch" ? 200 : 500);
+    expect(callsTo(app.api, "POST /graphql")).toHaveLength(history === "same branch" ? 1 : 0);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")).toHaveLength(history === "same branch" ? 1 : 0);
+    expect(heads[branch]).toBe("new-commit");
+    if (history !== "same branch") expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toEqual([]);
+  });
+
   it.each(["invalid", "missing"] as const)("rejects a %s signature without authenticating or writing", async (signature) => {
     const app = await harness();
     expect(await app.send("push", push, signature)).toBe(400);

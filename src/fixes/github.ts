@@ -105,14 +105,17 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
   if (discovery) {
     const known = new Set(raw.map((issue) => issue.number));
     for (const group of new Set(discovery.groups)) {
-      if (raw.some((issue) => issue.pull_request && issue.state === "open" && parseMarker(issue.body)?.fingerprint === `group:${group}`)) continue;
       const branch = branchFor(group, discovery);
       const pulls = await paginate<RawPull>(client, "GET /repos/{owner}/{repo}/pulls", {
         ...repo, state: "all", head: `${repo.owner}:${branch}`, base: discovery.baseBranch, sort: "created", direction: "desc",
       });
       if (pulls.length === 1000) throw new Error(`Fix PR discovery reached its 1000-result limit for ${branch}; refusing an incomplete reconciliation.`);
       for (const pull of pulls) {
-        if (known.has(pull.number) || pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase() ||
+        if (known.has(pull.number)) {
+          details.set(pull.number, pull);
+          continue;
+        }
+        if (pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase() ||
           pull.head.ref !== branch || pull.base.ref !== discovery.baseBranch) continue;
         const parsed = parseMarker(pull.body);
         if (parsed?.kind !== "fix" || parsed.fingerprint !== `group:${group}` || !parsed.attributes.signature || !parsed.attributes.commit) continue;
@@ -127,22 +130,17 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
     if (!issue.pull_request) continue;
     let parsed = parseMarker(issue.body);
     if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
-    const initialAttributes = parsed.attributes;
-    const cleanup = branchCleanup(parsed, issue.number);
-    let head: RawPull["head"] | undefined;
-    if (issue.state === "open" || cleanup?.status === "pending" || UPDATE_KEYS.some((key) => key in initialAttributes)) {
-      let pull = details.get(issue.number);
-      if (!pull) {
-        const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: issue.number });
-        pull = response.data as RawPull;
-      }
-      head = pull.head;
-      if (head?.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) continue;
-      // Read body and head together; the issues listing may predate a partially completed update.
-      issue = { ...issue, ...pull, pull_request: { ...issue.pull_request, ...(pull.merged_at !== undefined ? { merged_at: pull.merged_at } : {}) } };
-      parsed = parseMarker(issue.body);
-      if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
+    let pull = details.get(issue.number);
+    if (!pull) {
+      const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: issue.number });
+      pull = response.data as RawPull;
     }
+    const head = pull.head;
+    if (head?.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) continue;
+    // Closed history also influences declines, dismissals and branch reuse; an issue marker is not ownership evidence.
+    issue = { ...issue, ...pull, pull_request: { ...issue.pull_request, ...(pull.merged_at !== undefined ? { merged_at: pull.merged_at } : {}) } };
+    parsed = parseMarker(issue.body);
+    if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
     const pending = pendingUpdate(parsed, issue.number);
     const currentCleanup = branchCleanup(parsed, issue.number);
     const pr: ManagedPullRequest = {
@@ -216,6 +214,25 @@ async function currentFix(client: GitHubClient, repo: RepoRef, previous: Managed
     throw new Error(`PR #${previous.number} changed since planning; retry without overwriting its branch or marker.`);
   }
   return { pull, parsed };
+}
+
+async function verifyBranchReuse(client: GitHubClient, repo: RepoRef, previous: ManagedPullRequest, baseBranch: string): Promise<void> {
+  const { pull, parsed } = await currentFix(client, repo, previous);
+  if (pull.state !== "closed" || pull.base?.ref !== baseBranch || parsed.attributes.commit !== pull.head.sha ||
+    pendingUpdate(parsed, previous.number) || branchCleanup(parsed, previous.number)?.status === "pending") {
+    throw new Error(`PR #${previous.number} does not authorize reuse of this branch and base; reconcile it before retrying.`);
+  }
+}
+
+async function requireUnusedBranch(client: GitHubClient, repo: RepoRef, branch: string): Promise<void> {
+  const response = await client.request("GET /repos/{owner}/{repo}/pulls", {
+    ...repo, state: "open", head: `${repo.owner}:${branch}`, per_page: 100,
+  });
+  if (!Array.isArray(response.data)) throw new Error("GitHub did not return the open PRs required for branch reuse.");
+  if ((response.data as RawPull[]).some((pull) => pull.head.ref === branch &&
+    pull.head.repo?.full_name.toLowerCase() === `${repo.owner}/${repo.repo}`.toLowerCase())) {
+    throw new Error(`An open PR already uses ${branch}; reconcile it before creating another. Its branch was not changed.`);
+  }
 }
 
 /** Finish or discard a write-ahead intent without writing a ref or regenerating the current body. */
@@ -359,23 +376,23 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
     const branch = action.type === "update" ? previous?.branch : change.branch;
     if (!branch || branch === options.baseBranch) throw new Error("A fix requires a known branch distinct from the repository's base branch.");
     let expectedHead = previous?.headSha;
+    let reused: ManagedPullRequest | undefined;
     if (action.type === "update" && !expectedHead) throw new Error(`Missing current head for PR #${action.number}; refusing an unconditional update.`);
     if (action.type === "create") {
-      const response = await client.request("GET /repos/{owner}/{repo}/pulls", {
-        ...repo, state: "open", head: `${repo.owner}:${change.branch}`, per_page: 100,
-      });
-      if ((response.data as RawPull[]).some((pull) => pull.head.ref === change.branch &&
-        pull.head.repo?.full_name.toLowerCase() === `${repo.owner}/${repo.repo}`.toLowerCase())) {
-        throw new Error(`An open PR already uses ${change.branch}; reconcile it before creating another. Its branch was not changed.`);
-      }
+      await requireUnusedBranch(client, repo, branch);
+      let currentSha: string | undefined;
       try {
-        const currentSha = await branchSha(client, repo, change.branch);
-        if (!options.existing.some((pr) => pr.state === "closed" && pr.group === change.group && pr.commitSha === currentSha)) {
-          throw new Error(`Refusing to overwrite unrecognized or modified branch ${change.branch}; reconcile it before retrying.`);
-        }
-        expectedHead = currentSha;
+        currentSha = await branchSha(client, repo, branch);
+        if (!currentSha) throw new Error(`GitHub did not return the current head of ${branch}.`);
       } catch (error) {
         if (httpStatus(error) !== 404) throw error;
+      }
+      if (currentSha) {
+        reused = [...existing.values()].find((pr) => pr.state === "closed" && pr.group === change.group &&
+          pr.branch === branch && pr.commitSha === currentSha && pr.headSha === currentSha);
+        if (!reused) throw new Error(`Refusing to overwrite unrecognized or modified branch ${branch}; reconcile it before retrying.`);
+        await verifyBranchReuse(client, repo, reused, options.baseBranch);
+        expectedHead = currentSha;
       }
     }
     const commitSha = await commitFiles(client, repo, options.baseSha, change.files, commitMessage(change));
@@ -408,6 +425,10 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
       body = updateMarker(body, "fix", `group:${change.group}`, { pendingReviewers: options.config.reviewers.join(",") });
     }
     body = managedBody(body);
+    if (reused) {
+      await verifyBranchReuse(client, repo, reused, options.baseBranch);
+      await requireUnusedBranch(client, repo, branch);
+    }
     if (expectedHead) await updateBranch(client, repo, branch, commitSha, expectedHead);
     else await pushBranch(client, repo, branch, commitSha);
     const created = await client.request("POST /repos/{owner}/{repo}/pulls", {

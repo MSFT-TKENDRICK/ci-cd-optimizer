@@ -84,9 +84,9 @@ describe("listManagedPullRequests", () => {
     await expect(listManagedPullRequests(client, repo, { baseBranch: "main", branchPrefix: "ci/", groups: ["hermeticity"] })).rejects.toThrow("403");
   });
 
-  it("does not adopt a labeled fork PR as a writable repository branch", async () => {
+  it.each(["open", "closed"])("does not adopt a labeled %s fork PR as repository history", async (state) => {
     const client = fakeClient((route) => route.endsWith("/issues") ? [{
-      number: 7, title: "fork", state: "open", pull_request: {}, labels: ["cicd-optimizer"],
+      number: 7, title: "fork", state, pull_request: {}, labels: ["cicd-optimizer"],
       body: marker("fix", "group:hermeticity", { signature: "s", commit: "c" }),
     }] : { head: { sha: "c", ref: change.branch, repo: { full_name: "fork/widgets" } } });
     expect(await listManagedPullRequests(client, repo)).toEqual([]);
@@ -107,7 +107,7 @@ describe("listManagedPullRequests", () => {
     else expect(await result).toHaveLength(999);
   });
 
-  it("finds fix pull requests by marker and reads the head of open ones", async () => {
+  it("finds fix pull requests by marker and verifies open and closed history", async () => {
     const client = fakeClient((route) => {
       if (route.startsWith("GET /repos/{owner}/{repo}/issues"))
         return [
@@ -123,8 +123,48 @@ describe("listManagedPullRequests", () => {
     expect(prs.map((pr) => pr.number)).toEqual([1, 2]);
     expect(prs[0]).toMatchObject({ group: "caching", signature: "s", commitSha: "c1", headSha: "c2", branch: "cicd-optimizer/caching", rules: ["caching/a", "caching/b"] });
     expect(prs[1]).toMatchObject({ state: "closed", merged: false, ignoredRules: ["workflow/x"] });
-    expect(client.calls.filter((call) => call.route.includes("/pulls/"))).toHaveLength(1);
+    expect(client.calls.filter((call) => call.route.includes("/pulls/"))).toHaveLength(2);
     expect(dismissalsFrom(prs).rules).toEqual(new Set(["workflow/x"]));
+  });
+
+  it("refreshes labeled history from discovery details without another per-PR request", async () => {
+    const stale = {
+      number: 7, title: "old", state: "closed", labels: [IGNORED_LABEL], pull_request: {},
+      body: marker("fix", "group:hermeticity", { signature: "old", commit: "old", ignored: "hermeticity/pin-actions" }),
+    };
+    const fresh = {
+      ...stale, state: "open", labels: ["cicd-optimizer"],
+      body: marker("fix", "group:hermeticity", { signature: "fresh", commit: "fresh" }),
+      head: { ref: change.branch, sha: "fresh", repo: { full_name: "acme/widgets" } }, base: { ref: "main" },
+    };
+    const client = fakeClient((route) => {
+      if (route.endsWith("/issues")) return [stale];
+      if (route === "GET /repos/{owner}/{repo}/pulls") return [fresh];
+      throw new Error(`Unexpected request: ${route}`);
+    });
+    const prs = await listManagedPullRequests(client, repo, { baseBranch: "main", branchPrefix: "cicd-optimizer/", groups: ["hermeticity"] });
+    expect(prs[0]).toMatchObject({ state: "open", signature: "fresh", headSha: "fresh", ignoredRules: [] });
+    expect(dismissalsFrom(prs).rules.size).toBe(0);
+    expect(client.calls).toHaveLength(2);
+  });
+
+  it("does not let a labeled fork hide an unlabeled same-repository PR", async () => {
+    const body = marker("fix", "group:hermeticity", { signature: "s", commit: "c" });
+    const local = { number: 8, title: "local", body, state: "open", labels: [], head: { ref: change.branch, sha: "c", repo: { full_name: "acme/widgets" } }, base: { ref: "main" } };
+    const client = fakeClient((route) => {
+      if (route.endsWith("/issues")) return [{ number: 7, title: "fork", state: "open", body, pull_request: {} }];
+      if (route === "GET /repos/{owner}/{repo}/pulls") return [local];
+      return { ...local, number: 7, head: { ...local.head, repo: { full_name: "fork/widgets" } } };
+    });
+    expect((await listManagedPullRequests(client, repo, { baseBranch: "main", branchPrefix: "cicd-optimizer/", groups: ["hermeticity"] })).map((pr) => pr.number)).toEqual([8]);
+  });
+
+  it.each([404, 403, 500])("propagates closed-history lookup failures (%s)", async (status) => {
+    const client = fakeClient((route) => {
+      if (route.endsWith("/issues")) return [{ number: 7, title: "closed", state: "closed", body: marker("fix", "group:hermeticity"), pull_request: {} }];
+      throw httpError(status);
+    });
+    await expect(listManagedPullRequests(client, repo)).rejects.toThrow(String(status));
   });
 });
 
@@ -199,7 +239,14 @@ describe("applyFixActions", () => {
   });
 
   it("can reuse an unchanged bot branch from a closed PR for a new change", async () => {
+    const previous = managed({
+      state: "closed", commitSha: "old-bot", headSha: "old-bot",
+      body: marker("fix", "group:hermeticity", { signature: "old", commit: "old-bot" }),
+    });
     const client = fakeClient((route) => {
+      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return {
+        ...previous, head: { sha: "old-bot", ref: change.branch, repo: { full_name: "acme/widgets" } }, base: { ref: "main" },
+      };
       if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
       if (route === "POST /graphql") return { data: { updateRefs: {} } };
       if (route === "GET /repos/{owner}/{repo}/git/ref/{ref}") return { object: { sha: "old-bot" } };
@@ -211,7 +258,7 @@ describe("applyFixActions", () => {
     });
     await applyFixActions(client, repo, [{ type: "create", change }], {
       baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [],
-      existing: [managed({ state: "closed", commitSha: "old-bot" })],
+      existing: [previous],
     });
     expect(client.calls.find((call) => call.route === "POST /graphql")?.parameters.variables)
       .toMatchObject({ input: { refUpdates: [{ beforeOid: "old-bot", afterOid: "new-bot", force: true }] } });
