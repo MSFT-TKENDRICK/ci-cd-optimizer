@@ -217,7 +217,7 @@ describe("signed GitHub App HTTP delivery", () => {
         if (!injected && route === failedRoute) { injected = true; throw httpError(status); }
         return response;
       });
-      expect(await app.send("push", push)).toBe(500);
+      expect(await app.send("push", push)).toBe(status);
       const pull = state.pulls?.[0];
       if (!pull) throw new Error("Expected a persisted PR before failure");
       expect(pull.head.ref).toBe("ci-bot/workflow");
