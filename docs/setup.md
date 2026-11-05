@@ -33,8 +33,9 @@ its `resolved` URL prefix to `https://registry.npmjs.org/` before committing. Be
 `replace-registry-host=npmjs` still routes your own installs through your configured registry, local installs keep
 working.
 
-Dependabot bumps the `node` base image only within the current major, because it can't update the distroless
-`nodejs22` runtime stage. Move both Dockerfile stages and `.nvmrc` to a new Node major together.
+Dependabot bumps the `node` base image and `@types/node` only within the current major, because it can't update the
+distroless `nodejs22` runtime stage. Move both Dockerfile stages, `.nvmrc`, and `@types/node` to a new Node major
+together. `eslint` and `@eslint/js` share one update group, so their majors land in a single PR.
 
 Under **Settings → Actions → General**, keep **Workflow permissions** at *Read repository contents and packages
 permissions*. Workflows request the write scopes they need.

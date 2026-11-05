@@ -9,12 +9,19 @@ updates:
       default-days: 3
     open-pull-requests-limit: 5
     groups:
+      # eslint.config.js imports @eslint/js directly; it must move in lockstep with eslint, majors included.
+      eslint:
+        patterns: ["eslint", "@eslint/js"]
       production:
         dependency-type: production
         update-types: [minor, patch]
       development:
         dependency-type: development
         update-types: [minor, patch]
+    ignore:
+      # Types track the Node runtime in .nvmrc (22); bump them with the Node major, not on their own.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
