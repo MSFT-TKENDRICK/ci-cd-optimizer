@@ -138,7 +138,7 @@ try {
   }
 
   const denied = await send("pull_request", pullRequestPayload(456));
-  assert.equal(denied.status, durable ? 200 : 500);
+  assert.equal(denied.status, durable ? 200 : 403);
   if (durable) await waitFor(() => job(denied.id) === "pending:1", "A denied installation must be retained for retry");
   assert.deepEqual(github.denied, [456]);
   assert.equal(github.checks.filter((check) => check.owner === "blocked").length, 0, "Token denial must not create a check");
