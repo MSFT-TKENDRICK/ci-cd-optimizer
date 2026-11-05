@@ -114,6 +114,7 @@ try {
       signal: AbortSignal.timeout(10_000),
     });
     await response.text();
+    github.assertClean();
     return { id, status: response.status };
   };
   assert.equal((await send("ping", { zen: "Local image smoke test" })).status, 200);
@@ -162,6 +163,10 @@ try {
   assert.equal(docker("inspect", "--format", "{{.State.ExitCode}}", name), "0", "SIGTERM did not shut down cleanly");
 } catch (error) {
   failures.push(error);
+  if (github) {
+    console.error("Synthetic API trace:", JSON.stringify({ requests: github.requests, issued: github.issued, denied: github.denied }));
+    try { github.assertClean(); } catch (fixtureError) { failures.push(fixtureError); }
+  }
   if (containerCreated) {
     try { console.error(docker("logs", name)); } catch (logError) { failures.push(logError); }
   }
