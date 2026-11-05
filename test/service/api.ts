@@ -16,6 +16,8 @@ export interface FakePull {
 }
 
 export interface FakeApiState {
+  repositoryMetadata?: Record<string, unknown>;
+  commitSha?: string;
   defaultBranch?: string;
   /** Repository files per ref (branch name or commit sha). */
   refs?: Record<string, Record<string, string>>;
@@ -58,7 +60,7 @@ export function fakeApi(state: FakeApiState = {}) {
     if (state.failOn?.(route)) throw httpError(500);
     switch (route) {
       case "GET /repos/{owner}/{repo}":
-        return { default_branch: branch, node_id: "repository-node" };
+        return { default_branch: branch, node_id: "repository-node", ...state.repositoryMetadata };
       case "GET /repos/{owner}/{repo}/collaborators/{username}/permission":
         return { permission: state.collaboratorPermission ?? "write" };
       case "GET /repos/{owner}/{repo}/contents/{path}": {
@@ -70,7 +72,7 @@ export function fakeApi(state: FakeApiState = {}) {
       }
       case "GET /repos/{owner}/{repo}/commits/{ref}": {
         const ref = String(parameters.ref);
-        return { sha: refs[ref] && ref === branch ? `${ref}-sha` : ref, commit: { tree: { sha: `tree:${ref}` } } };
+        return { sha: state.commitSha ?? (refs[ref] && ref === branch ? `${ref}-sha` : ref), commit: { tree: { sha: `tree:${ref}` } } };
       }
       case "GET /repos/{owner}/{repo}/git/trees/{tree_sha}": {
         const ref = String(parameters.tree_sha).slice("tree:".length);

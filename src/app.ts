@@ -11,10 +11,14 @@ import { RepositoryQueue } from "./service/repository-queue.js";
 import type { WorkflowRunPayload } from "./telemetry/snapshot.js";
 import { PostgresTelemetryStore } from "./telemetry/postgres-store.js";
 import type { TelemetryStore } from "./telemetry/store.js";
+import { PostgresKnowledgeStore } from "./knowledge/postgres-store.js";
+import type { KnowledgeStore } from "./knowledge/types.js";
 
 export interface AppOptions {
   /** Snapshot store; defaults to Postgres when `DATABASE_URL` is set, otherwise history comes from the Actions API. */
   store?: () => Promise<TelemetryStore | undefined>;
+  /** Revision evidence store; defaults to Postgres when DATABASE_URL is set. Configured persistence fails closed. */
+  knowledgeStore?: () => Promise<KnowledgeStore | undefined>;
   /** Client for a Copilot-licensed user (`COPILOT_ASSIGN_TOKEN`), so issues can be assigned to the coding agent. */
   copilotClient?: GitHubClient;
   /** Upload scan results to code scanning (`CICD_OPTIMIZER_UPLOAD_SARIF`, default true). */
@@ -97,10 +101,35 @@ function defaultStore(log: Probot["log"]): () => Promise<TelemetryStore | undefi
   };
 }
 
+function defaultKnowledgeStore(log: Probot["log"]): () => Promise<KnowledgeStore | undefined> {
+  let pending: Promise<KnowledgeStore | undefined> | undefined;
+  return () => {
+    pending ??= (async () => {
+      const url = process.env.DATABASE_URL;
+      if (!url) return undefined;
+      const store = new PostgresKnowledgeStore(url);
+      try {
+        await store.initialize();
+        return store;
+      } catch (error) {
+        try { await store.close(); }
+        catch (closeError) { log.error({ error: closeError }, "Failed to close knowledge database after initialization failure"); }
+        throw error;
+      }
+    })().catch((error: unknown) => {
+      pending = undefined;
+      log.error({ error }, "Knowledge database unavailable; repository scan failed and can be retried");
+      throw error;
+    });
+    return pending;
+  };
+}
+
 export function createApp(options: AppOptions = {}): (probot: Probot) => void {
   return (probot) => {
     validateProductionConfiguration();
     const store = options.store ?? defaultStore(probot.log);
+    const knowledgeStore = options.knowledgeStore ?? defaultKnowledgeStore(probot.log);
     const copilotToken = process.env.COPILOT_ASSIGN_TOKEN;
     const copilotClient = options.copilotClient ?? (copilotToken ? restClient({ token: copilotToken }) : undefined);
     const uploadSarif = options.uploadSarif ?? process.env.CICD_OPTIMIZER_UPLOAD_SARIF !== "false";
@@ -108,7 +137,7 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
     const repositoryQueue = new RepositoryQueue();
 
     const scan = (client: GitHubClient, repo: RepoRef, log: Probot["log"]) => repositoryQueue.run(repo, async () => {
-      const result = await scanRepository(client, repo, { uploadSarif, ...shared });
+      const result = await scanRepository(client, repo, { uploadSarif, knowledgeStore, ...shared });
       log.info({ repo: `${repo.owner}/${repo.repo}`, status: result.status }, describeScan(result));
     });
 

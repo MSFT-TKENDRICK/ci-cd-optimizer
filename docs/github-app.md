@@ -50,13 +50,33 @@ events above. The webhook path is `/api/github/webhooks`. For Actions-only use w
 |---|---|---|
 | `APP_ID`, `PRIVATE_KEY`, `WEBHOOK_SECRET` | yes | App credentials ([.env.example](../.env.example)). |
 | `HOST`, `PORT`, `LOG_LEVEL` | no | Bind address, HTTP port (default 3000), and log level. Probot defaults to `localhost`; the container sets `HOST=0.0.0.0` so published ports and ingress can reach it. |
-| `DATABASE_URL` | when queue mode is `postgres` | Postgres connection for durable webhook jobs and telemetry history. In direct mode it remains optional; without it, telemetry history comes from the Actions API. Tables are created on first use. |
+| `DATABASE_URL` | when queue mode is `postgres` | Postgres connection for durable webhook jobs, telemetry history and revision-linked project declaration evidence. In direct mode it remains optional; without it, telemetry history comes from the Actions API and knowledge is not persisted. Tables are created on first use. |
 | `WEBHOOK_QUEUE` | no | `direct` (compatibility default) runs handlers in the HTTP request. Set `postgres` for durable hosted processing; requires `DATABASE_URL`. Unknown values fail startup. |
 | `COPILOT_ASSIGN_TOKEN` | no | Token for a Copilot-licensed user, used to [assign issues to the Copilot coding agent](issues-and-alerts.md#assigning-issues-to-the-copilot-coding-agent). App installation tokens can't assign Copilot. Without this token, issues get the `copilot:ready` label instead. |
 | `CICD_OPTIMIZER_UPLOAD_SARIF` | no | Set to `false` to skip code scanning uploads. Uploads fail softly when code scanning is unavailable, for example on private repositories without GitHub Advanced Security. |
 
 With `NODE_ENV=production`, startup rejects missing or blank webhook secrets and the placeholders `development` and
 `replace-me`. Use a unique secret matching the App's webhook settings. Never expose a development-mode server publicly.
+
+### Project knowledge collection
+
+When `DATABASE_URL` is configured, enabled push/installation repository scans save [revision-linked declaration
+evidence](architecture.md#project-declaration-evidence-srcknowledge) before publishing GitHub findings. The App creates
+`knowledge_snapshots`, `knowledge_projects`, `knowledge_technologies`, and `knowledge_relationships` transactionally on
+first eligible scan. Initialization is serialized across replicas. Initialization/save failures fail the scan instead
+of silently reporting durable learning; failed initialization closes its pool and permits a later retry. Durable
+queue mode retries processing; direct mode requires redelivery. Disabled/invalid repository configurations do not
+initialize knowledge persistence. No additional GitHub permission is required.
+
+For a non-persisting preview, run `ci-cd-optimizer scan --knowledge --dry-run --format json`. CLI/Action `scan` does not
+implicitly use `DATABASE_URL`; `--knowledge` adds evidence to output only. Dry runs never initialize or save a knowledge
+store. Without `--dry-run`, the scan's normal configured GitHub issue/fix behavior still applies.
+
+The evidence tables are append-only observations, not a retention policy or audit-grade tamper-proof ledger. Operators
+must configure backups, database access, capacity, deletion/retention procedures and repository-removal policy before
+production rollout. No knowledge API, learned mitigation recommender, or automatic deletion on uninstall is enabled.
+Default inventory ignores and extraction limits remain visible in every record; do not interpret missing evidence as
+proof that a project does not use a tool.
 
 ## Deploy
 

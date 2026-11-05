@@ -18,6 +18,7 @@ Options:
       --upload-sarif        Upload findings to code scanning (needs security-events: write)
       --no-issues           Do not open, update, or close finding issues
       --no-fixes            Do not open or update autofix pull requests
+      --knowledge           Include revision-linked declaration evidence (use --format json for details; no database writes)
       --dry-run             Plan everything, write nothing
       --fail-on <sev>       Exit 1 when findings reach: info | warn | error | never (default: never)
   -f, --format text|json    Output format (default: text)
@@ -49,6 +50,7 @@ function summary(scan: ScanResult) {
     ...(scan.result ? { diagnostics: scan.result.diagnostics } : {}),
     ...(scan.inventoryComplete !== undefined ? { inventoryComplete: scan.inventoryComplete } : {}),
     ...(scan.sarif ? { sarif: scan.sarif } : {}),
+    ...(scan.knowledge ? { knowledge: scan.knowledge } : {}),
     ...(scan.issues
       ? {
           issues: {
@@ -80,6 +82,7 @@ export async function scanCommand(args: string[], io: CliIO): Promise<number> {
       "upload-sarif": { type: "boolean", default: false },
       "no-issues": { type: "boolean", default: false },
       "no-fixes": { type: "boolean", default: false },
+      knowledge: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       "fail-on": { type: "string", default: "never" },
       format: { type: "string", short: "f", default: "text" },
@@ -100,6 +103,7 @@ export async function scanCommand(args: string[], io: CliIO): Promise<number> {
     uploadSarif: values["upload-sarif"],
     issues: !values["no-issues"],
     fixes: !values["no-fixes"],
+    knowledge: values.knowledge,
     ...(values.ref ? { ref: values.ref } : {}),
     ...(copilot ? { copilotClient: copilot } : {}),
   });

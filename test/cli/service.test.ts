@@ -42,6 +42,21 @@ function cli(client: FakeApi, env: Record<string, string> = {}) {
 }
 
 describe("scan command", () => {
+  it("includes opt-in knowledge in JSON without writing to a database or GitHub", async () => {
+    const client = fakeApi({
+      config: TIMEOUT_ONLY, commitSha: "a".repeat(40),
+      repositoryMetadata: { id: 42, html_url: "https://github.com/acme/widgets", name: "widgets", owner: { login: "acme" } },
+      refs: { main: { "package.json": '{"name":"root","devDependencies":{"turbo":"^2.0.0"}}' } },
+    });
+    const session = cli(client);
+    expect(await session.run("scan", "--knowledge", "--dry-run", "--format", "json")).toBe(0);
+    expect(session.json().knowledge).toMatchObject({ persistence: "dry-run", snapshot: {
+      repository: { repositoryId: "42", host: "https://github.com" },
+      technologies: [expect.objectContaining({ technology: "turborepo", basis: "dependency" })],
+    } });
+    expect(writes(client)).toEqual([]);
+  });
+
   it("prints help", async () => {
     const session = cli(fakeApi());
     expect(await session.run("scan", "--help")).toBe(0);

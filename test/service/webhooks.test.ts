@@ -5,6 +5,9 @@ import { setImmediate } from "node:timers/promises";
 import { createNodeMiddleware, Probot, ProbotOctokit } from "probot";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app.js";
+import type { KnowledgeStore } from "../../src/knowledge/types.js";
+import { MemoryKnowledgeStore } from "../../src/knowledge/store.js";
+import { PostgresKnowledgeStore } from "../../src/knowledge/postgres-store.js";
 import { createDurableMiddleware } from "../../src/webhooks/ingress.js";
 import { httpStatus } from "../../src/github/client.js";
 import { marker, parseMarker } from "../../src/issues/markers.js";
@@ -66,7 +69,7 @@ const endpoints = [
   return { route, names, pattern: new RegExp(`^${pattern}$`) };
 });
 
-async function harness(state: FakeApiState = {}, durable?: Pick<DeliveryQueue, "enqueue">) {
+async function harness(state: FakeApiState = {}, durable?: Pick<DeliveryQueue, "enqueue">, knowledgeStore: (() => Promise<KnowledgeStore | undefined>) | null = async () => undefined) {
   const api = fakeApi(state);
   let tokenRequests = 0;
   const unexpected: string[] = [];
@@ -115,7 +118,7 @@ async function harness(state: FakeApiState = {}, durable?: Pick<DeliveryQueue, "
     Octokit: ProbotOctokit.defaults({ request: { fetch: githubFetch }, retry: { enabled: false }, throttle: { enabled: false } }),
   };
   const probot = new Probot(options);
-  const app = createApp({ uploadSarif: false, store: async () => undefined });
+  const app = createApp({ uploadSarif: false, store: async () => undefined, ...(knowledgeStore ? { knowledgeStore } : {}) });
   if (durable) await probot.load(app);
   const middleware = durable
     ? await createDurableMiddleware(new Probot(options), durable)
@@ -159,6 +162,58 @@ afterEach(async () => {
 });
 
 describe("signed GitHub App HTTP delivery", () => {
+  const knowledgeState = (): FakeApiState => ({
+    config: TIMEOUT_ONLY, commitSha: "a".repeat(40),
+    repositoryMetadata: { id: 42, html_url: "https://github.com/acme/widgets", name: "widgets", owner: { login: "acme" } },
+    refs: { main: { "package.json": '{"name":"root","devDependencies":{"turbo":"^2.0.0"}}' } },
+  });
+  const knowledgeScope = { host: "https://github.com", repositoryId: "42" };
+
+  it("persists knowledge through authenticated push delivery and rejects failed saves", async () => {
+    const store = new MemoryKnowledgeStore();
+    const app = await harness(knowledgeState(), undefined, async () => store);
+    const save = vi.spyOn(store, "save").mockRejectedValueOnce(new Error("Database write failed"));
+    expect(await app.send("push", push)).toBe(500);
+    expect(await store.list({ ...knowledgeScope, limit: 10 })).toEqual([]);
+    expect(await app.send("push", push)).toBe(200);
+    expect(await app.send("push", push)).toBe(200);
+    expect(save).toHaveBeenCalledTimes(3);
+    expect(await store.list({ ...knowledgeScope, limit: 10 })).toHaveLength(1);
+  });
+
+  it("cleans up failed configured-store initialization and retries rather than silently discarding knowledge", async () => {
+    vi.stubEnv("DATABASE_URL", "postgres://localhost/not-used");
+    const initialize = vi.spyOn(PostgresKnowledgeStore.prototype, "initialize").mockRejectedValueOnce(new Error("Init failed")).mockResolvedValue(undefined);
+    const close = vi.spyOn(PostgresKnowledgeStore.prototype, "close");
+    const save = vi.spyOn(PostgresKnowledgeStore.prototype, "save").mockResolvedValue(undefined);
+    try {
+      const app = await harness(knowledgeState(), undefined, null);
+      expect(await app.send("push", push)).toBe(500);
+      expect(close).toHaveBeenCalledOnce();
+      expect(save).not.toHaveBeenCalled();
+      expect(await app.send("push", push)).toBe(200);
+      expect(await app.send("push", push)).toBe(200);
+      expect(initialize).toHaveBeenCalledTimes(2);
+      expect(save).toHaveBeenCalledTimes(2);
+    } finally {
+      for (const instance of initialize.mock.contexts) await instance.close();
+      initialize.mockRestore(); close.mockRestore(); save.mockRestore();
+    }
+  });
+
+  it.skipIf(!process.env.DATABASE_URL)("round-trips push evidence through signed HTTP and a real Postgres store", async () => {
+    const database = await isolatedDatabase(process.env.DATABASE_URL!);
+    const store = new PostgresKnowledgeStore(database.url);
+    try {
+      await store.initialize();
+      const app = await harness(knowledgeState(), undefined, async () => store);
+      expect(await app.send("push", push)).toBe(200);
+      const [saved] = await store.list({ ...knowledgeScope, limit: 10 });
+      expect(saved?.revision).toBe("a".repeat(40));
+      expect((await store.load(knowledgeScope, saved!.id))?.technologies[0]?.technology).toBe("turborepo");
+    } finally { await store.close(); await database.close(); }
+  });
+
   it("acknowledges durable ingress without running the analysis in the request", async () => {
     const enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockResolvedValue(undefined);
     const app = await harness({}, { enqueue });

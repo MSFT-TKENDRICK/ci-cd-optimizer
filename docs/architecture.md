@@ -87,11 +87,56 @@ constructor), using each run's latest attempt to assign its retention group. Evi
 single-writer; use Postgres for coordinated hosted replicas. Postgres retention, backups and access control remain
 operator responsibilities. Migration details are in [GitHub App deployment](github-app.md#telemetry-schema-upgrades).
 
-This foundation does not yet implement project/task/version topology, technology detection, context-conditioned
+This telemetry foundation does not itself implement project/task/version topology, runtime technology detection, context-conditioned
 duration models beyond the conservative cohorts below, mitigation applications/evaluations, semantic retrieval or cross-organization learning. Those should
 build on relational evidence and typed relationships, not natural-language summaries treated as facts. Latest-attempt
 deduplication prevents retry sample inflation; it does not prove that different workloads, partial reruns or runner
 environments are comparable, or that an observed improvement was caused by a mitigation.
+
+### Project declaration evidence (`src/knowledge`)
+
+A separate relational evidence model captures supported project and technology **declarations** at immutable source
+revisions. PostgreSQL is the hosted source of truth; the memory adapter supports isolated tests. This is not an
+installed-version inventory, task graph, cache-hit measurement, or proof that a tool will improve a build.
+
+`KnowledgeSnapshot` contains a repository identity, source revision, coverage, project nodes, technology evidence and
+typed relationships. Repository identity is the authenticated API's stable numeric ID plus canonical GitHub HTTPS host;
+owner/repository names are historical aliases. Projects use repository identity, kind and directory, not package names.
+Renaming a package/repository preserves the project ID; moving a package intentionally creates a new ID until explicit
+lineage is available. Configuration files without a colocated package belong to a distinct configuration-root project,
+not to every package beneath the repository.
+
+Each fact records the source path, JSON pointer (or file presence), and SHA-256 of collected source content.
+Node/package-manager engines, package-manager pins, Nx/Turborepo/TypeScript/Lerna/Rush dependencies and supported build
+tool config filenames are declarations only. Version expressions are not resolved versions. Unsupported expressions,
+URLs and local paths are retained as opaque digests, not copied into the knowledge store. Names, paths and safe
+declarations still constitute private repository metadata: protect the database and exports accordingly.
+
+Root `package.json` and `pnpm-workspace.yaml` define explicit workspace membership, including exclusions. There is no
+fallback that treats all manifests as members because a tool config exists. Simple `workspace:` dependencies can link
+by a unique collected workspace name only when discovery is complete, no ignores/truncations are present, and workspace
+declarations agree. Duplicate names remain ambiguous; ordinary registry ranges remain unresolved, even if a local
+package shares the name. Declared package relationships are never substituted for observed workflow/task dependencies.
+
+Coverage is relative to the configured supported inventory, not every technology in the repository. Malformed,
+conflicting or unsupported declarations are recorded with sanitized problem codes. Extraction caps relationship and
+technology evidence at 10,000 facts and marks omissions explicitly. Truncated/ignored discovery cannot prove local
+target uniqueness or tool absence. The default inventory ignores therefore deliberately keep dependency resolution
+conservative; explicit membership and positive tool evidence remain available. `technologyStatus` queries only direct
+project declarations and returns `observed`, `not-observed`, or `unknown`, never installed/running/beneficial.
+
+Snapshots are content-addressed using canonical evidence plus coverage, source revision and repository aliases;
+collection time alone does not create another observation. A repeat preserves the first persisted collection time.
+Different coverage or source revisions remain distinct records. Postgres stores normalized snapshots, projects,
+technologies and relationships in one transaction with snapshot-scoped foreign keys. Failed writes roll back completely.
+Inputs are copied at the persistence boundary, and loaded evidence is checked against its content identity.
+
+`KnowledgeStore.list` requires host and repository ID, a limit of 0-100, and optional revision/project/technology filters.
+Combined project/technology filters must match the same project. Reads never silently cross repositories or hosts;
+this scoping is not an authorization layer for exposing arbitrary user-supplied IDs. Any future user-facing retrieval
+must first establish repository access. These records are not yet joined to runtime observations or mitigation
+applications/evaluations; no causal recommendation, cross-organization learning, vector index or natural-language SQL
+interface is inferred from this foundation.
 
 ### Workload comparison contract
 

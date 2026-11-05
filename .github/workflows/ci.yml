@@ -45,7 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
-      - run: npx vitest run test/telemetry/postgres-store.test.ts test/webhooks/postgres-queue.test.ts test/service/webhooks.test.ts
+      - run: npx vitest run test/telemetry/postgres-store.test.ts test/knowledge/postgres-store.test.ts test/webhooks/postgres-queue.test.ts test/service/webhooks.test.ts
 
   app:
     # Exercise the shipped image through its published port, not just service mocks.
