@@ -44,6 +44,8 @@ export function server(state: FakeRepository = {}) {
         return [];
       case "GET /repos/{owner}/{repo}/git/commits/{commit_sha}":
         return { tree: { sha: "base-tree" } };
+      case "GET /repos/{owner}/{repo}/git/ref/{ref}":
+        throw httpError(404);
       case "POST /repos/{owner}/{repo}/git/trees":
         return { sha: "new-tree" };
       case "POST /repos/{owner}/{repo}/git/commits":

@@ -83,6 +83,21 @@ describe("listManagedPullRequests", () => {
     await expect(listManagedPullRequests(client, repo, { baseBranch: "main", branchPrefix: "ci/", groups: ["hermeticity"] })).rejects.toThrow("403");
   });
 
+  it.each([999, 1000])("fails closed at the discovery limit (%s results)", async (count) => {
+    const client = fakeClient((route, parameters) => {
+      if (route.endsWith("/issues")) return [];
+      const start = (Number(parameters.page) - 1) * 100;
+      return Array.from({ length: Math.min(100, count - start) }, (_, index) => ({
+        number: start + index + 1, title: "historic fix", state: "closed",
+        body: marker("fix", "group:hermeticity", { signature: "s", commit: "c" }),
+        head: { ref: change.branch, sha: "c", repo: { full_name: "acme/widgets" } }, base: { ref: "main" },
+      }));
+    });
+    const result = listManagedPullRequests(client, repo, { baseBranch: "main", branchPrefix: "cicd-optimizer/", groups: ["hermeticity"] });
+    if (count === 1000) await expect(result).rejects.toThrow("1000-result limit");
+    else expect(await result).toHaveLength(999);
+  });
+
   it("finds fix pull requests by marker and reads the head of open ones", async () => {
     const client = fakeClient((route) => {
       if (route.startsWith("GET /repos/{owner}/{repo}/issues"))
@@ -111,6 +126,7 @@ describe("applyFixActions", () => {
       if (route === "GET /repos/{owner}/{repo}/pulls") return [];
       if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return { body };
       if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers") return { users: [], teams: [] };
+      if (route === "GET /repos/{owner}/{repo}/git/ref/{ref}") throw httpError(404);
       if (route.startsWith("GET /repos/{owner}/{repo}/labels")) return [];
       if (route.startsWith("GET /repos/{owner}/{repo}/git/commits")) return { tree: { sha: "base-tree" } };
       if (route.startsWith("POST /repos/{owner}/{repo}/git/trees")) return { sha: "new-tree" };
@@ -145,6 +161,49 @@ describe("applyFixActions", () => {
       baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [], existing: [],
     })).rejects.toThrow("Its branch was not changed");
     expect(client.calls.some((call) => call.route.includes("/git/"))).toBe(false);
+  });
+
+  it("does not overwrite an existing branch with no recognized PR", async () => {
+    const client = fakeClient((route) => {
+      if (route === "GET /repos/{owner}/{repo}/git/ref/{ref}") return { object: { sha: "human" } };
+      return [];
+    });
+    await expect(applyFixActions(client, repo, [{ type: "create", change }], {
+      baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [], existing: [],
+    })).rejects.toThrow("unrecognized or modified branch");
+    expect(client.calls.some((call) => !call.route.startsWith("GET") && call.route.includes("/git/"))).toBe(false);
+  });
+
+  it("does not force-push a branch created by someone else after preflight", async () => {
+    const client = fakeClient((route) => {
+      if (route === "GET /repos/{owner}/{repo}/git/ref/{ref}") throw httpError(404);
+      if (route === "POST /repos/{owner}/{repo}/git/refs") throw httpError(422);
+      if (route === "GET /repos/{owner}/{repo}/git/commits/{commit_sha}") return { tree: { sha: "tree" } };
+      if (route.startsWith("POST /repos/{owner}/{repo}/git/")) return { sha: "commit" };
+      return [];
+    });
+    await expect(applyFixActions(client, repo, [{ type: "create", change }], {
+      baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [], existing: [],
+    })).rejects.toThrow("422");
+    expect(client.calls.some((call) => call.route.startsWith("PATCH"))).toBe(false);
+    expect(client.calls.some((call) => call.route === "POST /repos/{owner}/{repo}/pulls")).toBe(false);
+  });
+
+  it("can reuse an unchanged bot branch from a closed PR for a new change", async () => {
+    const client = fakeClient((route) => {
+      if (route === "GET /repos/{owner}/{repo}/git/ref/{ref}") return { object: { sha: "old-bot" } };
+      if (route === "GET /repos/{owner}/{repo}/git/commits/{commit_sha}") return { tree: { sha: "tree" } };
+      if (route === "POST /repos/{owner}/{repo}/git/refs") throw httpError(422);
+      if (route.startsWith("POST /repos/{owner}/{repo}/git/")) return { sha: "new-bot" };
+      if (route === "POST /repos/{owner}/{repo}/pulls") return { number: 42 };
+      return [];
+    });
+    await applyFixActions(client, repo, [{ type: "create", change }], {
+      baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [],
+      existing: [managed({ state: "closed", commitSha: "old-bot" })],
+    });
+    expect(client.calls.find((call) => call.route === "PATCH /repos/{owner}/{repo}/git/refs/{ref}")?.parameters)
+      .toMatchObject({ sha: "new-bot", force: true });
   });
 
   it("force-updates an existing branch and refreshes the pull request on update", async () => {

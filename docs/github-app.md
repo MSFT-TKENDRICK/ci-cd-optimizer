@@ -111,12 +111,15 @@ an incomplete history. Keep the original group and branch prefix configured unti
 
 New PRs record pending reviewer setup in their fix marker. Retrying restores missing labels and finishes that setup
 without rebuilding the branch, skipping users/teams whose review requests are still pending. Removed configuration
-entries are not requested on retry. GitHub reviewer errors (including 422) now fail explicitly instead of being ignored;
-correct the reviewer configuration, or make a draft PR ready for review, before redelivery. A review completed between
+entries are not requested on retry. Draft PRs defer reviewer setup until a fix/recipe scan after they become ready.
+GitHub reviewer errors (including 422) now fail explicitly instead of being ignored; correct the reviewer configuration
+before redelivery. A review completed between
 the original request and recovery can still be requested again: this is not an exactly-once notification guarantee.
 Older PRs created without the pending-reviewer marker cannot retroactively recover a lost reviewer request.
-Branch-only writes made before PR creation, comment replays, and other partial operations still require operator
-reconciliation; the queue is not a transaction across GitHub and Postgres.
+Creation refuses an existing branch unless its tip matches a recorded bot commit from a closed PR in that group, and
+never force-pushes a ref that appeared after a missing-ref preflight. A branch-only write made before PR creation
+therefore requires operator reconciliation rather than an unsafe overwrite. Comment replays and other partial
+operations can still require reconciliation; the queue is not a transaction across GitHub and Postgres.
 
 Monitor queue age and failed jobs in addition to `/ping` and process health:
 

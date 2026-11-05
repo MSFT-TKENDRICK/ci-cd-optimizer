@@ -114,6 +114,11 @@ fixes:
       paths: [.github/workflows/legacy-*.yml]
 ```
 
+Scans reconcile missing configured labels and unfinished reviewer setup as `metadata` actions, also visible in dry-run
+output. These do not rebuild the branch, including when someone has pushed human commits. Draft PRs retain pending
+reviewer setup until a scan after they become ready. Removing a management/configured label alone does not opt out:
+use the ignore controls below. See [partial-write recovery](github-app.md#durable-hosted-processing) for limits.
+
 Comment on a fix pull request to control it:
 
 Commands require current repository **write**, **maintain**, or **admin** permission, checked through GitHub's API when

@@ -19,12 +19,12 @@ export async function commitFiles(client: GitHubClient, repo: RepoRef, baseSha: 
   return (commit.data as { sha: string }).sha;
 }
 
-/** Points `branch` at `sha`, creating it or force-updating it. */
-export async function pushBranch(client: GitHubClient, repo: RepoRef, branch: string, sha: string): Promise<void> {
+/** Points `branch` at `sha`; callers creating a new branch can forbid overwriting an existing ref. */
+export async function pushBranch(client: GitHubClient, repo: RepoRef, branch: string, sha: string, overwriteExisting = true): Promise<void> {
   try {
     await client.request("POST /repos/{owner}/{repo}/git/refs", { ...repo, ref: `refs/heads/${branch}`, sha });
   } catch (error) {
-    if (httpStatus(error) !== 422) throw error;
+    if (httpStatus(error) !== 422 || !overwriteExisting) throw error;
     await client.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", { ...repo, ref: `heads/${branch}`, sha, force: true });
   }
 }

@@ -1,7 +1,7 @@
 import type { FixesConfig } from "../lint/config.js";
 import type { AnyRule } from "../lint/types.js";
-import { ensureLabels, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
-import { commitFiles, deleteBranch, pushBranch } from "../github/git.js";
+import { ensureLabels, httpStatus, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
+import { branchSha, commitFiles, deleteBranch, pushBranch } from "../github/git.js";
 import { parseMarker, updateMarker } from "../issues/markers.js";
 import type { FixCommand } from "./commands.js";
 import { branchFor, type Dismissals, type ExistingFixPullRequest, type FixAction, type FixChange } from "./plan.js";
@@ -23,6 +23,7 @@ interface RawIssue {
   title: string;
   body?: string | null;
   state: "open" | "closed";
+  draft?: boolean;
   labels?: Array<string | { name?: string }>;
   pull_request?: { merged_at?: string | null };
 }
@@ -82,6 +83,7 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
       ignoredRules: list(parsed.attributes.ignored),
       ignoredGroup: parsed.attributes.ignoredGroup === "true",
       pendingReviewers: list(parsed.attributes.pendingReviewers),
+      ...(issue.draft !== undefined ? { draft: issue.draft } : {}),
       ...(parsed.attributes.signature ? { signature: parsed.attributes.signature } : {}),
       ...(parsed.attributes.commit ? { commitSha: parsed.attributes.commit } : {}),
     };
@@ -89,7 +91,9 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
       let head: { sha?: string; ref?: string } | undefined = heads.get(pr.number);
       if (!head) {
         const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr.number });
-        head = (response.data as { head?: { sha?: string; ref?: string } }).head;
+        const pull = response.data as { head?: { sha?: string; ref?: string }; draft?: boolean };
+        head = pull.head;
+        if (pull.draft !== undefined) pr.draft = pull.draft;
       }
       if (head?.sha) pr.headSha = head.sha;
       if (head?.ref) pr.branch = head.ref;
@@ -134,12 +138,13 @@ export interface AppliedFixAction {
 
 async function finishReviewRequests(client: GitHubClient, repo: RepoRef, number: number, group: string, reviewers: readonly string[]): Promise<void> {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number });
-  const body = (response.data as { body: string | null }).body;
+  const { body, draft } = response.data as { body: string | null; draft?: boolean };
   const parsed = parseMarker(body);
   if (!parsed || parsed.kind !== "fix" || parsed.fingerprint !== `group:${group}`) {
     throw new Error(`Fix marker changed on PR #${number}; refusing to overwrite its body.`);
   }
-  if (!parsed.attributes.pendingReviewers) return;
+  // GitHub cannot request reviews on a draft. Keep the marker for the next scan after it becomes ready.
+  if (!parsed.attributes.pendingReviewers || draft) return;
   if (reviewers.length > 0) {
     const requested = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", { ...repo, pull_number: number });
     const current = requested.data as { users: Array<{ login: string }>; teams: Array<{ slug: string }> };
@@ -171,7 +176,7 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
       }
       const previous = options.existing.find((pr) => pr.number === action.number);
       const closing = actions.some((candidate) => candidate.type === "close" && candidate.number === action.number);
-      if (!closing && previous?.pendingReviewers?.length) await finishReviewRequests(client, repo, action.number, action.group, action.reviewers);
+      if (!closing && !previous?.draft && previous?.pendingReviewers?.length) await finishReviewRequests(client, repo, action.number, action.group, action.reviewers);
       applied.push({ action, number: action.number });
       continue;
     }
@@ -183,6 +188,8 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
       continue;
     }
     const { change } = action;
+    if (change.branch === options.baseBranch) throw new Error("A fix branch cannot be the repository's base branch.");
+    let replaceExistingBranch = false;
     if (action.type === "create") {
       const response = await client.request("GET /repos/{owner}/{repo}/pulls", {
         ...repo, state: "open", head: `${repo.owner}:${change.branch}`, per_page: 100,
@@ -191,9 +198,16 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
         pull.head.repo?.full_name.toLowerCase() === `${repo.owner}/${repo.repo}`.toLowerCase())) {
         throw new Error(`An open PR already uses ${change.branch}; reconcile it before creating another. Its branch was not changed.`);
       }
+      try {
+        const currentSha = await branchSha(client, repo, change.branch);
+        replaceExistingBranch = options.existing.some((pr) => pr.state === "closed" && pr.group === change.group && pr.commitSha === currentSha);
+        if (!replaceExistingBranch) throw new Error(`Refusing to overwrite unrecognized or modified branch ${change.branch}; reconcile it before retrying.`);
+      } catch (error) {
+        if (httpStatus(error) !== 404) throw error;
+      }
     }
     const commitSha = await commitFiles(client, repo, options.baseSha, change.files, commitMessage(change));
-    await pushBranch(client, repo, change.branch, commitSha);
+    await pushBranch(client, repo, change.branch, commitSha, action.type === "update" || replaceExistingBranch);
     const previous = action.type === "update" ? options.existing.find((pr) => pr.number === action.number) : undefined;
     const ignoredRules = previous?.ignoredRules ?? [];
     let body = options.render?.body ? options.render.body(change, { commitSha, ignoredRules }) : fixBody(change, { rules: options.rules, commitSha, ignoredRules });

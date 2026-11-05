@@ -7,6 +7,7 @@ export interface FakePull {
   title: string;
   body: string;
   state: string;
+  draft: boolean;
   labels: string[];
   head: { ref: string; sha: string; repo: { full_name: string } };
   base: { ref: string };
@@ -135,7 +136,7 @@ export function fakeApi(state: FakeApiState = {}) {
       case "POST /repos/{owner}/{repo}/pulls":
         if (state.pulls?.some((pull) => pull.head.ref === parameters.head && pull.base.ref === parameters.base && pull.state === "open")) throw httpError(422);
         state.pulls?.push({
-          number: 42, title: String(parameters.title), body: String(parameters.body), state: "open", labels: [],
+          number: 42, title: String(parameters.title), body: String(parameters.body), state: "open", draft: Boolean(parameters.draft), labels: [],
           head: { ref: String(parameters.head), sha: "new-commit", repo: { full_name: `${parameters.owner}/${parameters.repo}` } },
           base: { ref: String(parameters.base) }, requested_reviewers: [], requested_teams: [],
         });

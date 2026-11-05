@@ -196,13 +196,14 @@ describe("signed GitHub App HTTP delivery", () => {
   });
 
   it.each([
-    { fault: "label failure", route: "POST /repos/{owner}/{repo}/issues/{issue_number}/labels", before: true },
-    { fault: "lost create response", route: "POST /repos/{owner}/{repo}/pulls", before: false },
-    { fault: "reviewer failure", route: "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", before: true },
-    { fault: "lost reviewer response", route: "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", before: false },
+    { fault: "label failure", route: "POST /repos/{owner}/{repo}/issues/{issue_number}/labels", before: true, status: 500 },
+    { fault: "lost create response", route: "POST /repos/{owner}/{repo}/pulls", before: false, status: 500 },
+    { fault: "reviewer failure", route: "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", before: true, status: 500 },
+    { fault: "lost reviewer response", route: "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", before: false, status: 500 },
+    { fault: "invalid reviewer", route: "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", before: true, status: 422 },
   ].flatMap((fault) => [false, true].map((humanEdits) => ({ ...fault, humanEdits }))))(
     "recovers $fault without rewriting the branch (human edits: $humanEdits)",
-    async ({ route: failedRoute, before, humanEdits }) => {
+    async ({ route: failedRoute, before, humanEdits, status }) => {
       const state: FakeApiState = {
         config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n  branchPrefix: ci-bot/\n  labels: [ci]\n  reviewers: [alice, acme/platform]\n`,
         refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } }, pulls: [],
@@ -211,9 +212,9 @@ describe("signed GitHub App HTTP delivery", () => {
       const original = app.api.request.bind(app.api);
       let injected = false;
       vi.spyOn(app.api, "request").mockImplementation(async (route, parameters = {}) => {
-        if (!injected && route === failedRoute && before) { injected = true; throw httpError(500); }
+        if (!injected && route === failedRoute && before) { injected = true; throw httpError(status); }
         const response = await original(route, parameters);
-        if (!injected && route === failedRoute) { injected = true; throw httpError(500); }
+        if (!injected && route === failedRoute) { injected = true; throw httpError(status); }
         return response;
       });
       expect(await app.send("push", push)).toBe(500);
@@ -240,6 +241,25 @@ describe("signed GitHub App HTTP delivery", () => {
       }
     },
   );
+
+  it("defers draft reviewer setup until a scan after the PR becomes ready", async () => {
+    const state: FakeApiState = {
+      config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n  draft: true\n  reviewers: [alice]\n`,
+      refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } }, pulls: [],
+    };
+    const app = await harness(state);
+    expect(await app.send("push", push)).toBe(200);
+    expect(await app.send("push", push)).toBe(200);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers")).toHaveLength(0);
+    const pull = state.pulls?.[0];
+    if (!pull) throw new Error("Expected created draft");
+    expect(parseMarker(pull.body)?.attributes.pendingReviewers).toBe("alice");
+    pull.draft = false;
+    expect(await app.send("push", push)).toBe(200);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers")).toHaveLength(1);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toHaveLength(1);
+    expect(parseMarker(pull.body)?.attributes.pendingReviewers).toBeUndefined();
+  });
 
   it.each(["invalid", "missing"] as const)("rejects a %s signature without authenticating or writing", async (signature) => {
     const app = await harness();

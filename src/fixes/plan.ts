@@ -112,6 +112,7 @@ export interface ExistingFixPullRequest {
   commitSha?: string;
   /** Current head of the PR branch; differs from `commitSha` when someone else pushed. */
   headSha?: string;
+  draft?: boolean;
   labels?: readonly string[];
   pendingReviewers?: readonly string[];
 }
@@ -206,7 +207,7 @@ export function planFixPullRequests(changes: readonly FixChange[], existing: rea
     const currentLabels = new Set((pr.labels ?? []).map((label) => label.toLowerCase()));
     const labels = [...new Set(options.labels ?? [])].filter((label) => !currentLabels.has(label.toLowerCase()));
     const closing = actions.some((action) => action.type === "close" && action.number === pr.number);
-    const pending = closing ? [] : pr.pendingReviewers ?? [];
+    const pending = closing || pr.draft ? [] : pr.pendingReviewers ?? [];
     if (labels.length === 0 && pending.length === 0) continue;
     metadata.push({
       type: "metadata",
