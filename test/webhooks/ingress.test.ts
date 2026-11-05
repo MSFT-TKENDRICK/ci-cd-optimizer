@@ -28,11 +28,11 @@ async function probotFixture(path = "/api/github/webhooks") {
   return { probot, api };
 }
 
-async function harness(enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockResolvedValue(undefined), path = "/api/github/webhooks", maxPayloadBytes = 1024) {
+async function harness(enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockResolvedValue(undefined), path = "/api/github/webhooks", maxPayloadBytes = 1024, maxPending?: number) {
   const { probot, api } = await probotFixture(path);
   const error = vi.spyOn(probot.log, "error");
   const warn = vi.spyOn(probot.log, "warn");
-  const middleware = await createDurableMiddleware(probot, { enqueue }, { timeoutMs: 500, maxPayloadBytes });
+  const middleware = await createDurableMiddleware(probot, { enqueue }, { timeoutMs: 500, maxPayloadBytes, ...(maxPending ? { maxPending } : {}) });
   const server = createServer((req, res) => {
     void middleware(req, res).then((handled) => { if (!handled) res.writeHead(404).end(); });
   });
@@ -216,6 +216,20 @@ describe("bounded durable HTTP ingress", () => {
     const app = await harness(undefined, undefined, 32);
     expect(await app.send()).toBe(413);
     expect(app.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("refuses new deliveries while abandoned persistence work is at capacity", async () => {
+    const gate = latch();
+    const enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockImplementationOnce(async () => { await gate.promise; }).mockResolvedValue(undefined);
+    const app = await harness(enqueue, undefined, 1024, 1);
+    try {
+      expect(await app.send()).toBe(503);
+      expect(await app.send()).toBe(503);
+      expect(enqueue).toHaveBeenCalledOnce();
+      gate.release();
+      await vi.waitFor(() => expect(app.warn).toHaveBeenCalledWith(expect.anything(), expect.stringContaining("finished after")));
+      expect(await app.send()).toBe(200);
+    } finally { gate.release(); await setImmediate(); }
   });
 
   it("accepts exactly the byte limit, including multi-byte UTF-8", async () => {

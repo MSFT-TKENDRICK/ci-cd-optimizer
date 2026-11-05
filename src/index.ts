@@ -6,6 +6,8 @@ import { startDurableServer } from "./webhooks/ingress.js";
 import { PostgresWebhookQueue } from "./webhooks/postgres-queue.js";
 import { startWorkers } from "./webhooks/worker.js";
 
+const WORKER_DRAIN_MS = 20_000;
+
 let queue: PostgresWebhookQueue | undefined;
 let workers: ReturnType<typeof startWorkers> | undefined;
 try {
@@ -38,7 +40,11 @@ try {
     stopping = true;
     void (async () => {
       await server.stop();
-      await workers?.stop();
+      // A stuck handler must not block the queue's forced close, which aborts its SQL and lets workers settle.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const drained = workers?.stop();
+      await Promise.race([drained, new Promise<void>((resolve) => { timer = setTimeout(resolve, WORKER_DRAIN_MS); })]);
+      clearTimeout(timer);
       await queue?.close();
       process.exit(0);
     })().catch((error: unknown) => {

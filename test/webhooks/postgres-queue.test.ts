@@ -33,6 +33,7 @@ describe.skipIf(!databaseUrl)("durable Postgres webhook queue", () => {
   });
   afterEach(async () => {
     for (const item of queues.splice(0)) await item.close();
+    await db.sql`DELETE FROM webhook_claims`;
     await db.sql`DELETE FROM webhook_jobs`;
     await db.sql`DELETE FROM webhook_scopes`;
   });
@@ -229,7 +230,7 @@ describe.skipIf(!databaseUrl)("durable Postgres webhook queue", () => {
       child.kill("SIGKILL");
       await exited;
       const handler = vi.fn(async () => undefined);
-      expect(await worker.processNext(handler)).toMatchObject({ status: "completed", id: event.id, attempts: 1 });
+      expect(await worker.processNext(handler)).toMatchObject({ status: "completed", id: event.id, attempts: 2 });
       expect(handler).toHaveBeenCalledWith(event);
     } finally {
       if (child.exitCode === null && child.signalCode === null) {
@@ -239,6 +240,22 @@ describe.skipIf(!databaseUrl)("durable Postgres webhook queue", () => {
       }
     }
   }, 15_000);
+
+  it("dead-letters a job whose workers repeatedly crash before recording an outcome", async () => {
+    const worker = queue({ maxAttempts: 2 });
+    const event = push();
+    await worker.enqueue(event);
+    const [job] = await db.sql<{ sequence: string }[]>`SELECT sequence FROM webhook_jobs WHERE delivery_id = ${event.id}`;
+    // Two committed claims with no recorded outcome model two killed workers.
+    await db.sql`INSERT INTO webhook_claims (sequence, claims) VALUES (${job!.sequence}, 2)`;
+    const handler = vi.fn(async () => undefined);
+    expect(await worker.processNext(handler)).toMatchObject({ status: "failed", id: event.id, attempts: 2 });
+    expect(handler).not.toHaveBeenCalled();
+    expect(await worker.status(event.id)).toMatchObject([{ status: "failed", attempts: 2 }]);
+    await worker.enqueue(event);
+    expect(await worker.processNext(handler)).toMatchObject({ status: "completed", attempts: 1 });
+    expect(await db.sql`SELECT * FROM webhook_claims`).toHaveLength(0);
+  });
 
   it("splits installation repositories into independently recoverable jobs", async () => {
     const worker = queue({ maxAttempts: 1 });

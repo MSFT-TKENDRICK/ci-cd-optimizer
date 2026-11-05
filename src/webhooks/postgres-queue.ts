@@ -72,6 +72,8 @@ export class PostgresWebhookQueue implements DeliveryQueue {
         )
       `;
       await sql`CREATE INDEX IF NOT EXISTS webhook_jobs_pending ON webhook_jobs (scope, sequence) WHERE status = 'pending'`;
+      // Claims commit outside the job transaction so a crashed attempt still counts. No foreign key: its share lock would conflict with the claimed row.
+      await sql`CREATE TABLE IF NOT EXISTS webhook_claims (sequence BIGINT PRIMARY KEY, claims INTEGER NOT NULL)`;
     });
   }
 
@@ -85,15 +87,20 @@ export class PostgresWebhookQueue implements DeliveryQueue {
           AND has_table_privilege('webhook_scopes', 'UPDATE')
           AND has_table_privilege('webhook_jobs', 'SELECT')
           AND has_table_privilege('webhook_jobs', 'INSERT')
-          AND has_table_privilege('webhook_jobs', 'UPDATE') AS ready
+          AND has_table_privilege('webhook_jobs', 'UPDATE')
+          AND has_table_privilege('webhook_claims', 'SELECT')
+          AND has_table_privilege('webhook_claims', 'INSERT')
+          AND has_table_privilege('webhook_claims', 'UPDATE')
+          AND has_table_privilege('webhook_claims', 'DELETE') AS ready
       `;
-      if (!access?.ready) throw new Error("Webhook queue requires a writable database and SELECT/INSERT/UPDATE table access");
+      if (!access?.ready) throw new Error("Webhook queue requires a writable database and SELECT/INSERT/UPDATE/DELETE table access");
       // Check the expected schema without reading payloads, locking jobs, or creating probe deliveries.
       await sql`
         SELECT j.sequence, j.delivery_id, j.scope, j.delivery, j.status, j.attempts,
           j.received_at, j.available_at, j.completed_at, j.last_error, s.scope
         FROM webhook_jobs j CROSS JOIN webhook_scopes s LIMIT 0
       `;
+      await sql`SELECT sequence, claims FROM webhook_claims LIMIT 0`;
     });
   }
 
@@ -114,6 +121,12 @@ export class PostgresWebhookQueue implements DeliveryQueue {
         ORDER BY scope ON CONFLICT (delivery_id, scope) DO NOTHING
       `;
       // A duplicate of a running job must not wait for that job's row lock.
+      await sql`
+        DELETE FROM webhook_claims WHERE sequence IN (
+          SELECT sequence FROM webhook_jobs WHERE delivery_id = ${delivery.id} AND status = 'failed'
+            AND scope IN (SELECT scope FROM jsonb_to_recordset(${sql.json(records)}) AS job(scope TEXT))
+        )
+      `;
       await sql`
         UPDATE webhook_jobs SET status = 'pending', attempts = 0, available_at = clock_timestamp(), last_error = NULL
         WHERE delivery_id = ${delivery.id} AND status = 'failed'
@@ -144,8 +157,20 @@ export class PostgresWebhookQueue implements DeliveryQueue {
       `;
       const job = rows[0];
       if (!job) throw new Error("Locked webhook scope has no pending job");
-      const attempts = job.attempts + 1;
+      // Autocommit on another pooled connection: survives a worker crash that rolls back this transaction.
+      const [claim] = await this.sql<{ claims: number }[]>`
+        INSERT INTO webhook_claims (sequence, claims) VALUES (${job.sequence}, ${job.attempts + 1})
+        ON CONFLICT (sequence) DO UPDATE SET claims = GREATEST(webhook_claims.claims, ${job.attempts}) + 1
+        RETURNING claims
+      `;
+      const attempts = claim?.claims ?? job.attempts + 1;
       const result = { id: job.delivery_id, scope: key, attempts };
+      if (attempts > this.maxAttempts) {
+        const message = "Worker stopped before finishing earlier attempts; redeliver after resolving the cause";
+        await sql`UPDATE webhook_jobs SET status = 'failed', attempts = ${attempts - 1}, last_error = ${message} WHERE sequence = ${job.sequence}`;
+        await sql`DELETE FROM webhook_claims WHERE sequence = ${job.sequence}`;
+        return { ...result, attempts: attempts - 1, status: "failed", error: message };
+      }
       try {
         await handler(job.delivery);
       } catch (error) {
@@ -157,6 +182,7 @@ export class PostgresWebhookQueue implements DeliveryQueue {
             available_at = clock_timestamp() + ${delayMs} * interval '1 millisecond'
           WHERE sequence = ${job.sequence}
         `;
+        if (status === "failed") await sql`DELETE FROM webhook_claims WHERE sequence = ${job.sequence}`;
         return { ...result, status: status === "failed" ? "failed" : "retrying", error: message };
       }
       await sql`
@@ -164,6 +190,7 @@ export class PostgresWebhookQueue implements DeliveryQueue {
           completed_at = clock_timestamp(), delivery = NULL, last_error = NULL
         WHERE sequence = ${job.sequence}
       `;
+      await sql`DELETE FROM webhook_claims WHERE sequence = ${job.sequence}`;
       return { ...result, status: "completed" };
     });
   }

@@ -106,6 +106,16 @@ describe("job definitions", () => {
     }
   });
 
+  it("does not let a catch-all name template shadow exact matches", () => {
+    const definitions = new Map([["lint", { name: "Lint", needs: [] }], ["test", { name: "${{ matrix.name }}", needs: [] }]]);
+    for (const order of [definitions, new Map([...definitions].reverse())]) {
+      expect(matchJobKey("Lint", order)).toBe("lint");
+      expect(matchJobKey("Node 22", order)).toBe("test");
+    }
+    const two = new Map([["a", { name: "${{ matrix.a }}", needs: [] }], ["b", { name: "${{ matrix.b }}", needs: [] }]]);
+    expect(matchJobKey("anything", two)).toBeUndefined();
+  });
+
   it("matches templates literally without regex backtracking or treating partial names as a match", () => {
     const definitions = new Map([["build", { name: "Test [literal] ${{ matrix.os }} - ${{ matrix.node }} done", needs: [] }]]);
     for (const suffix of ["", " (2)", " / child"]) {

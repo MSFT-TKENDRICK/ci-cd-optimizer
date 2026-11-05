@@ -127,6 +127,27 @@ describe("listManagedPullRequests", () => {
     expect(dismissalsFrom(prs).rules).toEqual(new Set(["workflow/x"]));
   });
 
+  it("never adopts a labeled PR's arbitrary head branch for rewrites or cleanup", async () => {
+    const body = marker("fix", "group:hermeticity", { signature: "s", commit: "c" });
+    const pull = { number: 5, title: "forged", state: "open", body, labels: [], head: { sha: "c", ref: "release", repo: { full_name: "acme/widgets" } }, base: { ref: "main" } };
+    const client = fakeClient((route) => {
+      if (route.endsWith("/issues")) return [{ ...pull, pull_request: {} }];
+      if (route.startsWith("GET /repos/{owner}/{repo}/pulls/{pull_number}")) return pull;
+      return {};
+    });
+    const [pr] = await listManagedPullRequests(client, repo);
+    expect(pr).toMatchObject({ number: 5, headSha: "c", commitSha: "c" });
+    expect(pr?.branch).toBeUndefined();
+    if (!pr) throw new Error("expected PR");
+    expect(planFixPullRequests([{ ...change, signature: "new" }], [pr], { openPullRequestsLimit: 5 }).skipped).toEqual([{ group: "hermeticity", reason: "edited", number: 5 }]);
+    expect(planFixPullRequests([], [pr], { openPullRequestsLimit: 5 }).actions).toEqual([]);
+
+    await handleFixCommands(client, repo, pr, [{ type: "close" }]);
+    expect(client.calls.find((call) => call.route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")?.parameters).toMatchObject({ state: "closed" });
+    expect(client.calls.some((call) => call.route.startsWith("DELETE") || call.route === "POST /graphql")).toBe(false);
+    expect(pr.cleanup).toBeUndefined();
+  });
+
   it("refreshes labeled history from discovery details without another per-PR request", async () => {
     const stale = {
       number: 7, title: "old", state: "closed", labels: [IGNORED_LABEL], pull_request: {},

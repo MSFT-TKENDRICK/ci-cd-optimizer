@@ -237,7 +237,7 @@ probe; it does not verify credentials, installation access, database availabilit
 
 With `WEBHOOK_QUEUE=postgres`, use `GET /ready` for a separate **durable-ingress readiness** probe. It returns
 `200 READY` when the queue database is reachable, not read-only, and exposes the expected queue schema with
-SELECT/INSERT/UPDATE table access; otherwise it returns `503 NOT READY`. It reads no delivery payloads and inserts
+SELECT/INSERT/UPDATE (and DELETE on `webhook_claims`) table access; otherwise it returns `503 NOT READY`. It reads no delivery payloads and inserts
 no probe jobs. Responses contain no database details and disable HTTP caching. `/ping` stays responsive during a
 database outage, so use it for liveness rather than restarting healthy processes because a shared database is down.
 
@@ -323,7 +323,9 @@ Durable mode uses a dedicated HTTP transport while retaining Probot's signature 
 It returns HTTP 503 if body receipt, verification and persistence do not finish within five seconds, leaving margin
 before GitHub's ten-second deadline. It never uses the default Probot transport's early HTTP 202 response.
 Payloads are bounded to 25 MiB, including chunked requests; invalid signatures and malformed requests are rejected
-before enqueue. `WEBHOOK_PATH`, `HOST`, `PORT`, `/ping`, and SIGTERM/SIGINT shutdown remain supported.
+before enqueue. At most 32 persistence operations may be outstanding per process, including ones that outlived their
+response deadline; further deliveries get HTTP 503 before their body is read, so a stalled database cannot accumulate
+unbounded in-flight work. `WEBHOOK_PATH`, `HOST`, `PORT`, `/ping`, and SIGTERM/SIGINT shutdown remain supported.
 Direct mode retains Probot's existing transport and setup flow. Probot's development `WEBHOOK_PROXY_URL` is supported
 only in direct mode; durable mode rejects it explicitly and requires an endpoint reachable by the webhook sender.
 
@@ -343,11 +345,13 @@ jobs become `failed` and produce an error log. After resolving the cause, redeli
 **Advanced > Recent deliveries** to reset only its failed jobs; completed jobs stay completed.
 
 Worker transactions roll back when a worker process dies, leaving the job available for another worker. SIGTERM stops
-HTTP ingress and drains active workers before closing the database. Configure the host's termination grace period for
-the expected job duration; a forced exit instead relies on transactional recovery. Do not set a database
+HTTP ingress and waits up to 20 seconds for active workers before closing the database; a job still running then is
+rolled back and retried. Configure the host's termination grace period above that drain; a forced exit instead relies
+on transactional recovery. Do not set a database
 `idle_in_transaction_session_timeout` shorter than a job: workers hold a transaction while calling GitHub.
-Attempt counts commit with the handler's result; a process crash rolls back that attempt, so the five-attempt
-failure limit does not bound repeated process crashes. Monitor restarts as well as failed-job logs.
+Each claim is counted in `webhook_claims` by a separate autocommitted statement before the handler runs, so an attempt
+whose worker crashes still counts. A job that keeps killing its worker is marked `failed` without running again once
+claims exceed the five-attempt limit; redelivery resets its count. Monitor restarts as well as failed-job logs.
 
 This is **at-least-once**, not exactly-once, processing. A crash or lost database connection after a GitHub write but
 before committing completion can replay that write. GitHub writes cannot be rolled back with the database transaction,

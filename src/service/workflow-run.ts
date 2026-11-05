@@ -115,8 +115,13 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
   if (contextKey && !knowledgeComparison?.alertHistoryUncertain && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run, config.alerts.branches, branch)) {
     const series = buildSeries([...prior, snapshot]);
     const existing = await listManagedIssues(client, repo, "alert");
+    const branchRuns = history.filter((item) => item.workflowId === snapshot.workflowId && item.branch === snapshot.branch).slice(-historyLimit(config));
+    const activeContexts = branchRuns.length >= historyLimit(config)
+      ? new Set(branchRuns.map(comparisonKey).filter((key): key is string => key !== undefined))
+      : undefined;
     const plan = planAlertSync({
       contextKey,
+      ...(activeContexts ? { activeContexts } : {}),
       owner: repo.owner,
       repo: repo.repo,
       branch: run.head_branch,

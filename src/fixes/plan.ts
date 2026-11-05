@@ -164,7 +164,8 @@ export interface FixPlanOptions {
 }
 
 function edited(pr: ExistingFixPullRequest): boolean {
-  return !pr.commitSha || !pr.headSha || pr.commitSha !== pr.headSha;
+  // Without an owned branch (see listManagedPullRequests) the PR is never rewritten or closed automatically.
+  return !pr.branch || !pr.commitSha || !pr.headSha || pr.commitSha !== pr.headSha;
 }
 
 /**

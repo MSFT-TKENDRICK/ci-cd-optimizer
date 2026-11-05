@@ -189,16 +189,33 @@ function jobSnapshot(job: ApiJob, definitions: JobDefinitions, key: string | und
  * reusable-workflow callers (`key / inner`), and `name:` templates with `${{ }}` expressions.
  */
 export function matchJobKey(jobName: string, definitions: JobDefinitions): string | undefined {
-  const matches = new Set<string>();
-  for (const [key, definition] of definitions) {
-    for (const candidate of [key, definition.name]) {
-      if (!candidate) continue;
-      if (jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `) ||
-          (candidate.includes("${{") && matchesNameTemplate(candidate, jobName))) matches.add(key);
-      if (matches.size > 1) return undefined;
+  // Templates without literal text (e.g. `${{ matrix.name }}`) match anything, so they are only a fallback.
+  const tiers: Array<(candidate: string) => boolean> = [
+    (candidate) => jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `) ||
+      (candidate.includes("${{") && hasTemplateLiteral(candidate) && matchesNameTemplate(candidate, jobName)),
+    (candidate) => candidate.includes("${{") && !hasTemplateLiteral(candidate) && matchesNameTemplate(candidate, jobName),
+  ];
+  for (const matchesTier of tiers) {
+    const matches = new Set<string>();
+    for (const [key, definition] of definitions) {
+      if ([key, definition.name].some((candidate) => candidate && matchesTier(candidate))) matches.add(key);
     }
+    if (matches.size > 1) return undefined;
+    if (matches.size === 1) return [...matches][0];
   }
-  return [...matches][0];
+  return undefined;
+}
+
+function hasTemplateLiteral(template: string): boolean {
+  for (let cursor = 0; cursor < template.length;) {
+    const opening = template.indexOf("${{", cursor);
+    if (opening === -1) return template.slice(cursor).trim().length > 0;
+    if (template.slice(cursor, opening).trim()) return true;
+    const closing = template.indexOf("}}", opening + 3);
+    if (closing === -1) return true;
+    cursor = closing + 2;
+  }
+  return false;
 }
 
 function matchesNameTemplate(template: string, name: string): boolean {

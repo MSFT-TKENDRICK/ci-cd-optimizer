@@ -60,6 +60,28 @@ describe("planAlertSync", () => {
     expect(planAlertSync(input({ contextKey: "context-a", series: matching, existing: [existing] })).actions).toMatchObject([{ type: "close", number: 41 }]);
   });
 
+  it("supersedes legacy and abandoned same-branch contexts while keeping their dismissals", () => {
+    const b = regressed.map((series) => ({ ...series, contextKey: "context-b" }));
+    const legacy: ExistingAlertIssue = { number: 30, title: "old", state: "open", fingerprint: "duration:7", attributes: {} };
+    const first = planAlertSync(input({ contextKey: "context-a", series: regressed.map((series) => ({ ...series, contextKey: "context-a" })) })).actions[0];
+    if (first?.type !== "create") throw new Error("expected create");
+    const contextA = existingFrom(first.desired.body);
+    const otherBranch = existingFrom(first.desired.body.replace("branch=main", "branch=release"), { number: 42 });
+
+    const unknownWindow = planAlertSync(input({ contextKey: "context-b", series: b, existing: [legacy, contextA, otherBranch] }));
+    expect(unknownWindow.actions.map((action) => [action.type, "number" in action ? action.number : undefined])).toEqual([["close", 30], ["create", undefined]]);
+
+    const abandoned = planAlertSync(input({ contextKey: "context-b", series: b, existing: [legacy, contextA, otherBranch], activeContexts: new Set(["context-b"]) }));
+    expect(abandoned.actions.map((action) => [action.type, "number" in action ? action.number : undefined])).toEqual([["close", 30], ["close", 41], ["create", undefined]]);
+    const alternating = planAlertSync(input({ contextKey: "context-b", series: b, existing: [contextA], activeContexts: new Set(["context-a", "context-b"]) }));
+    expect(alternating.actions.map((action) => action.type)).toEqual(["create"]);
+
+    const dismissed = { ...legacy, state: "closed" as const, stateReason: "not_planned", closedAt: "2026-10-30T00:00:00Z" };
+    const snoozed = planAlertSync(input({ contextKey: "context-b", series: b, existing: [dismissed] }));
+    expect(snoozed.actions).toEqual([]);
+    expect(snoozed.skipped).toEqual([{ fingerprint: "duration:7/context-b", reason: "dismissed", number: 30 }]);
+  });
+
   it("opens one issue per workflow listing every anomalous series", () => {
     const plan = planAlertSync(input({ series: regressed }));
     expect(plan.alerts).toHaveLength(2);

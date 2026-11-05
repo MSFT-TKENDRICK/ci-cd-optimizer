@@ -7,6 +7,7 @@ import { registerDurableIngress } from "./worker.js";
 
 const MAX_PAYLOAD_BYTES = 25 * 1024 * 1024;
 export const INGRESS_TIMEOUT_MS = 5000;
+export const MAX_PENDING_PERSISTENCE = 32;
 
 class IngressError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
@@ -54,10 +55,14 @@ function reply(response: ServerResponse, status: number): void {
 export async function createDurableMiddleware(
   probot: Probot,
   queue: Pick<DeliveryQueue, "enqueue">,
-  { timeoutMs = INGRESS_TIMEOUT_MS, maxPayloadBytes = MAX_PAYLOAD_BYTES }: { timeoutMs?: number; maxPayloadBytes?: number } = {},
+  { timeoutMs = INGRESS_TIMEOUT_MS, maxPayloadBytes = MAX_PAYLOAD_BYTES, maxPending = MAX_PENDING_PERSISTENCE }:
+    { timeoutMs?: number; maxPayloadBytes?: number; maxPending?: number } = {},
 ): Promise<(request: IncomingMessage, response: ServerResponse) => Promise<boolean>> {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 8000) throw new Error("Ingress timeout must be from 1 to 8000 milliseconds");
   if (!Number.isInteger(maxPayloadBytes) || maxPayloadBytes < 1 || maxPayloadBytes > MAX_PAYLOAD_BYTES) throw new Error("Invalid webhook payload limit");
+  if (!Number.isInteger(maxPending) || maxPending < 1 || maxPending > 1000) throw new Error("Pending webhook limit must be from 1 to 1000");
+  // Deadlines abandon acknowledgements, not the underlying work; bound what an outage can leave in memory.
+  let pending = 0;
   await probot.ready();
   registerDurableIngress(probot, queue);
   const path = probot.webhookPath.replace(/\/+$/, "") || "/";
@@ -83,16 +88,22 @@ export async function createDurableMiddleware(
       }
       const length = request.headers["content-length"];
       if (length !== undefined && Number(length) > maxPayloadBytes) throw new IngressError(413, "Webhook payload exceeds the size limit");
+      if (pending >= maxPending) throw new IngressError(503, "Too many webhook deliveries are awaiting persistence");
       response.once("close", disconnected);
       const cancelled = new Promise<never>((_resolve, reject) => {
         abortListener = () => reject(stop.signal.reason);
         stop.signal.addEventListener("abort", abortListener, { once: true });
       });
       timer = setTimeout(() => stop.abort(new IngressError(503, "Webhook persistence deadline exceeded; commit outcome may be unknown")), timeoutMs);
+      pending += 1;
       const work = (async () => {
-        const body = await payload(request, stop.signal, maxPayloadBytes);
-        stop.signal.throwIfAborted();
-        await probot.webhooks.verifyAndReceive({ id, name, signature, payload: body });
+        try {
+          const body = await payload(request, stop.signal, maxPayloadBytes);
+          stop.signal.throwIfAborted();
+          await probot.webhooks.verifyAndReceive({ id, name, signature, payload: body });
+        } finally {
+          pending -= 1;
+        }
       })().then(
         () => { if (stop.signal.aborted) probot.log.warn({ id, name }, "Webhook finished after acknowledgement was abandoned; redelivery is deduplicated"); },
         (error: unknown) => {

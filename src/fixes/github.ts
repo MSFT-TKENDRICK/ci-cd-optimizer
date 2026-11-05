@@ -98,6 +98,16 @@ function pendingUpdate(parsed: Marker, number: number): PendingFixUpdate | undef
   return { fromSha: attrs.pendingFrom, commitSha: attrs.pendingCommit, signature: attrs.pendingSignature, baseSha: attrs.pendingBase, rules: list(attrs.pendingRules) };
 }
 
+/**
+ * Labels and markers are editable by collaborators, so a PR's head is only ours to rewrite or delete when it has the
+ * deterministic shape of its group's branch (any prefix, so PRs survive `branchPrefix` changes).
+ */
+function ownedBranch(ref: string | undefined, group: string, baseRef: string | undefined, discovery?: FixDiscovery): string | undefined {
+  const slug = branchFor(group, { branchPrefix: "" });
+  if (!ref || !slug || ref === baseRef) return undefined;
+  return ref === slug || ref.endsWith(`/${slug}`) || (discovery !== undefined && ref === branchFor(group, discovery)) ? ref : undefined;
+}
+
 /** Labels retain historical PRs; deterministic head/base lookups recover PRs whose initial labeling failed. */
 export async function listManagedPullRequests(client: GitHubClient, repo: RepoRef, discovery?: FixDiscovery): Promise<ManagedPullRequest[]> {
   const raw = await paginate<RawIssue>(client, "GET /repos/{owner}/{repo}/issues", { ...repo, state: "all", labels: "cicd-optimizer" });
@@ -143,11 +153,13 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
     if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
     const pending = pendingUpdate(parsed, issue.number);
     const currentCleanup = branchCleanup(parsed, issue.number);
+    const group = parsed.fingerprint.slice("group:".length);
+    const branch = ownedBranch(head?.ref, group, pull.base?.ref, discovery);
     const pr: ManagedPullRequest = {
       number: issue.number,
       state: issue.state,
       merged: Boolean(issue.pull_request?.merged_at),
-      group: parsed.fingerprint.slice("group:".length),
+      group,
       title: issue.title,
       body: issue.body ?? "",
       labels: (issue.labels ?? []).map((label) => (typeof label === "string" ? label : label.name ?? "")),
@@ -161,7 +173,7 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
       ...(pending ? { pendingUpdate: pending } : {}),
       ...(currentCleanup ? { cleanup: currentCleanup } : {}),
       ...(head?.sha ? { headSha: head.sha } : {}),
-      ...(head?.ref ? { branch: head.ref } : {}),
+      ...(branch ? { branch } : {}),
     };
     if (pending && head?.sha === pending.commitSha) pr.rules = pending.rules;
     result.push(pr);
@@ -209,8 +221,8 @@ async function currentFix(client: GitHubClient, repo: RepoRef, previous: Managed
   const expected = parseMarker(previous.body);
   if (!parsed || parsed.kind !== "fix" || parsed.fingerprint !== `group:${previous.group}` || !expected ||
     [...new Set([...Object.keys(parsed.attributes), ...Object.keys(expected.attributes)])].some((key) => parsed.attributes[key] !== expected.attributes[key]) ||
-    pull.state !== previous.state || !pull.head?.sha || pull.head.sha !== previous.headSha || !previous.branch ||
-    pull.head.ref !== previous.branch || pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
+    pull.state !== previous.state || !pull.head?.sha || pull.head.sha !== previous.headSha ||
+    (previous.branch !== undefined && pull.head.ref !== previous.branch) || pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
     throw new Error(`PR #${previous.number} changed since planning; retry without overwriting its branch or marker.`);
   }
   return { pull, parsed };
@@ -262,12 +274,13 @@ async function prepareClose(
     return { ...previous, body };
   }
   const { pull } = await currentFix(client, repo, previous);
-  if (!previous.branch || !previous.headSha || previous.branch === pull.base?.ref) throw new Error("Refusing cleanup of an unknown or base branch.");
-  const cleanup: BranchCleanup = { branch: previous.branch, headSha: previous.headSha, status: "pending" };
-  const body = cleanupBody(updateMarker(pull.body ?? "", "fix", `group:${previous.group}`, attributes), previous.group, cleanup);
+  if (!previous.headSha || previous.branch === pull.base?.ref) throw new Error("Refusing cleanup of an unknown or base branch.");
+  const cleanup: BranchCleanup | undefined = previous.branch ? { branch: previous.branch, headSha: previous.headSha, status: "pending" } : undefined;
+  const marked = updateMarker(pull.body ?? "", "fix", `group:${previous.group}`, attributes);
+  const body = cleanup ? cleanupBody(marked, previous.group, cleanup) : marked;
   if (comment) await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: previous.number, body: comment });
   await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number, state: "closed", body });
-  return { ...previous, state: "closed", body, cleanup };
+  return { ...previous, state: "closed", body, ...(cleanup ? { cleanup } : {}) };
 }
 
 async function finishBranchCleanup(client: GitHubClient, repo: RepoRef, previous: ManagedPullRequest): Promise<ManagedPullRequest> {
