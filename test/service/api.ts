@@ -17,6 +17,7 @@ export interface FakeApiState {
   /** Workflow runs by id (GET /actions/runs/{run_id}). */
   runs?: Record<number, unknown>;
   sarifStatus?: number;
+  collaboratorPermission?: string;
   failOn?: (route: string) => boolean;
 }
 
@@ -32,6 +33,8 @@ export function fakeApi(state: FakeApiState = {}) {
     switch (route) {
       case "GET /repos/{owner}/{repo}":
         return { default_branch: branch };
+      case "GET /repos/{owner}/{repo}/collaborators/{username}/permission":
+        return { permission: state.collaboratorPermission ?? "write" };
       case "GET /repos/{owner}/{repo}/contents/{path}": {
         const path = String(parameters.path);
         const ref = String(parameters.ref ?? branch);

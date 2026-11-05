@@ -6,6 +6,7 @@ import { createNodeMiddleware, Probot, ProbotOctokit } from "probot";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app.js";
 import { httpStatus } from "../../src/github/client.js";
+import { marker } from "../../src/issues/markers.js";
 import { callsTo, CLEAN, fakeApi, MISSING_TIMEOUT, TIMEOUT_ONLY, WORKFLOW, type FakeApiState } from "./api.js";
 
 // Ephemeral test credentials only; the transport never calls a real GitHub endpoint.
@@ -36,6 +37,7 @@ const endpoints = [
   "GET /repos/{owner}/{repo}/pulls/{pull_number}",
   "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
   "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs",
+  "GET /repos/{owner}/{repo}/collaborators/{username}/permission",
   "POST /repos/{owner}/{repo}/issues",
   "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
   "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
@@ -323,6 +325,26 @@ describe("signed GitHub App HTTP delivery", () => {
       release.release();
       expect(await scan).toBe(200);
     }
+  });
+
+  it("denies a signed command from a read-only organization member", async () => {
+    const app = await harness({
+      collaboratorPermission: "read",
+      issues: [{
+        number: 42, title: "Workflow fixes", state: "open", labels: [{ name: "cicd-optimizer" }],
+        body: marker("fix", "group:workflow", { signature: "s", commit: "c", rules: "workflow/job-timeout" }),
+        pull_request: { merged_at: null },
+      }],
+    });
+    expect(await app.send("issue_comment", {
+      repository, installation: { id: 123 }, action: "created",
+      issue: { number: 42, pull_request: {} },
+      comment: { body: "@cicd-optimizer close", author_association: "MEMBER", user: { login: "reader", type: "User" } },
+    })).toBe(200);
+    expect(callsTo(app.api, "GET /repos/{owner}/{repo}/collaborators/{username}/permission")[0]?.parameters.username).toBe("reader");
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues/{issue_number}/comments")[0]?.parameters.body).toContain("only users with push access");
+    expect(callsTo(app.api, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")).toHaveLength(0);
+    expect(callsTo(app.api, "DELETE /repos/{owner}/{repo}/git/refs/{ref}")).toHaveLength(0);
   });
 
   it.each(["installation", "installation_repositories"])("attempts all %s scans and returns failure if any fail", async (event) => {

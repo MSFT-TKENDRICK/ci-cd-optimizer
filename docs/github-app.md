@@ -14,7 +14,7 @@ workflows to every repository.
 | `push` to the default branch that touches CI/CD files, or has 20+ commits | **Repository scan:** uploads SARIF to code scanning and syncs [finding issues and fix pull requests](issues-and-alerts.md). |
 | `installation` created, `installation_repositories` added | Initial scan of each newly covered repository. |
 | `workflow_run` completed | Records a telemetry snapshot. Posts the **CI/CD Telemetry (\<workflow\>)** check with the Gantt chart and bottlenecks, and syncs [duration alerts](issues-and-alerts.md#duration-alerts). |
-| `issue_comment` created | `@cicd-optimizer` [commands](configuration.md#fix-pull-requests-fixes) on the App's fix and recipe pull requests, from repository owners, organization members, and collaborators. |
+| `issue_comment` created | `@cicd-optimizer` [commands](configuration.md#fix-pull-requests-fixes) on the App's fix and recipe pull requests, from users with current repository write, maintain, or admin permission. |
 
 GitHub delivers installation events to every App, so they aren't listed in `default_events`.
 
@@ -29,7 +29,7 @@ with the minimum permissions:
 | Checks | write | Pull request check and telemetry reports. |
 | Contents | write | Read workflows and manifests; push fix pull request branches. |
 | Issues | write | Finding and duration-alert issues. |
-| Metadata | read | Required. |
+| Metadata | read | Required; also reads current repository permissions before accepting comment commands. |
 | Pull requests | write | Fix and recipe pull requests and their commands. |
 | Security events | write | SARIF upload to code scanning. |
 | Workflows | write | Fix pull requests that edit `.github/workflows/**`. |

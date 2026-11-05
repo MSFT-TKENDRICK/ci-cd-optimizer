@@ -116,6 +116,10 @@ fixes:
 
 Comment on a fix pull request to control it:
 
+Commands require current repository **write**, **maintain**, or **admin** permission, checked through GitHub's API when
+the command executes. Organization membership or collaborator association alone does not grant permission. If the
+permission lookup is unavailable, no command is executed; transient API failures fail the webhook for later redelivery.
+
 - `@cicd-optimizer rebase` rebuilds the change on the latest base, unless someone else has pushed to the branch.
 - `@cicd-optimizer recreate` rebuilds the change and overwrites manual edits.
 - `@cicd-optimizer close` closes the pull request, and it won't reopen for the same change.
