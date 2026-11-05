@@ -81,6 +81,12 @@ function defaultStore(log: Probot["log"]): () => Promise<TelemetryStore | undefi
 
 export function createApp(options: AppOptions = {}): (probot: Probot) => void {
   return (probot) => {
+    if (process.env.NODE_ENV === "production") {
+      const secret = process.env.WEBHOOK_SECRET?.trim();
+      if (!secret || secret === "development" || secret === "replace-me") {
+        throw new Error("Production requires a non-placeholder WEBHOOK_SECRET matching the GitHub App's webhook settings.");
+      }
+    }
     const store = options.store ?? defaultStore(probot.log);
     const copilotToken = process.env.COPILOT_ASSIGN_TOKEN;
     const copilotClient = options.copilotClient ?? (copilotToken ? restClient({ token: copilotToken }) : undefined);
@@ -116,13 +122,16 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
       const payload = context.payload;
       const repositories = "repositories_added" in payload ? payload.repositories_added : payload.repositories;
       const client = fromOctokit(context.octokit);
+      const errors: unknown[] = [];
       for (const repo of installationRepos(repositories)) {
         try {
           await scan(client, repo, context.log);
         } catch (error) {
           context.log.error({ error, repo: `${repo.owner}/${repo.repo}` }, "Initial scan failed");
+          errors.push(new Error(`Initial scan failed for ${repo.owner}/${repo.repo}`, { cause: error }));
         }
       }
+      if (errors.length > 0) throw new AggregateError(errors, "One or more initial repository scans failed");
     });
 
     probot.on("workflow_run.completed", async (context) => {

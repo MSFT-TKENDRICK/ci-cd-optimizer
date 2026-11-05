@@ -49,10 +49,13 @@ events above. The webhook path is `/api/github/webhooks`. For Actions-only use w
 | Variable | Required | Purpose |
 |---|---|---|
 | `APP_ID`, `PRIVATE_KEY`, `WEBHOOK_SECRET` | yes | App credentials ([.env.example](../.env.example)). |
-| `PORT`, `LOG_LEVEL` | no | HTTP port (default 3000) and log level. |
+| `HOST`, `PORT`, `LOG_LEVEL` | no | Bind address, HTTP port (default 3000), and log level. Probot defaults to `localhost`; the container sets `HOST=0.0.0.0` so published ports and ingress can reach it. |
 | `DATABASE_URL` | no | Postgres store for telemetry snapshots used as alert baselines and trend history. Without it, history is rebuilt from the Actions API on each run. The schema is created on first use. |
 | `COPILOT_ASSIGN_TOKEN` | no | Token for a Copilot-licensed user, used to [assign issues to the Copilot coding agent](issues-and-alerts.md#assigning-issues-to-the-copilot-coding-agent). App installation tokens can't assign Copilot. Without this token, issues get the `copilot:ready` label instead. |
 | `CICD_OPTIMIZER_UPLOAD_SARIF` | no | Set to `false` to skip code scanning uploads. Uploads fail softly when code scanning is unavailable, for example on private repositories without GitHub Advanced Security. |
+
+With `NODE_ENV=production`, startup rejects missing or blank webhook secrets and the placeholders `development` and
+`replace-me`. Use a unique secret matching the App's webhook settings. Never expose a development-mode server publicly.
 
 ## Deploy
 
@@ -67,7 +70,26 @@ docker run -p 3000:3000 --env-file .env ghcr.io/my-org/ci-cd-optimizer:<sha>
 ```
 
 Run it on any container host with a public HTTPS endpoint, such as Azure Container Apps, Kubernetes, or Cloud Run. The
-process is stateless apart from the optional Postgres database, so it scales horizontally.
+process is stateless apart from the optional Postgres database. `GET /ping` returns `200 PONG` for an HTTP liveness
+probe; it does not verify credentials, installation access, database availability, or GitHub connectivity.
+
+### Delivery failures and verification
+
+Installation scans attempt every repository in the delivery. If any scan throws, the delivery fails instead of returning
+success after merely logging the error. Inspect the App's **Advanced > Recent deliveries** and redeliver failed events
+after fixing the cause; GitHub does not automatically redeliver failed webhooks. There is no durable work queue in this
+release. Long-running scans can exceed GitHub's delivery timeout even while the process continues working. Do not
+assume a successful container build proves delivery durability or safe concurrent processing.
+
+CI exercises signed HTTP delivery through Probot, installation-token authentication against a simulated GitHub API,
+finding issue and fix PR creation, PR checks, invalid signatures, and failed scans. A separate `app` job builds the
+production image and verifies non-root startup, published-port `/ping` access, and signed/unsigned webhook handling.
+These checks use ephemeral test credentials and do **not** register or install an App.
+
+Before declaring a deployment production-ready, verify a real installation-token exchange, webhook delivery to the
+HTTPS endpoint, a controlled finding issue and workflow fix PR, the PR's CI run, and telemetry on the intended repository.
+Also test restart/redelivery behavior on the chosen host. A published GHCR image or a zero-findings scan is not evidence
+that these write paths work with the live App's permissions.
 
 ## App, Action, or both?
 

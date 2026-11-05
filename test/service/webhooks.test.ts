@@ -1,0 +1,200 @@
+import { createHmac, generateKeyPairSync, randomUUID, verify } from "node:crypto";
+import { createServer } from "node:http";
+import { once } from "node:events";
+import { createNodeMiddleware, Probot, ProbotOctokit } from "probot";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createApp } from "../../src/app.js";
+import { httpStatus } from "../../src/github/client.js";
+import { callsTo, CLEAN, fakeApi, MISSING_TIMEOUT, TIMEOUT_ONLY, WORKFLOW, type FakeApiState } from "./api.js";
+
+// Ephemeral test credentials only; the transport never calls a real GitHub endpoint.
+const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const secret = randomUUID();
+const installationToken = "test-installation-token";
+const repository = { name: "widgets", full_name: "acme/widgets", owner: { login: "acme" }, default_branch: "main" };
+const push = { repository, installation: { id: 123 }, ref: "refs/heads/main", commits: [{ modified: [WORKFLOW] }] };
+const cleanups: Array<() => Promise<void>> = [];
+
+// Resolve concrete HTTP requests back to the service fake's route templates. Unknown routes fail closed.
+const endpoints = [
+  "GET /repos/{owner}/{repo}",
+  "GET /repos/{owner}/{repo}/contents/{path}",
+  "GET /repos/{owner}/{repo}/commits/{ref}",
+  "GET /repos/{owner}/{repo}/git/trees/{tree_sha}",
+  "GET /repos/{owner}/{repo}/git/blobs/{file_sha}",
+  "GET /repos/{owner}/{repo}/issues",
+  "GET /repos/{owner}/{repo}/labels",
+  "GET /repos/{owner}/{repo}/git/ref/{ref}",
+  "GET /repos/{owner}/{repo}/git/commits/{commit_sha}",
+  "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
+  "POST /repos/{owner}/{repo}/issues",
+  "POST /repos/{owner}/{repo}/labels",
+  "POST /repos/{owner}/{repo}/git/trees",
+  "POST /repos/{owner}/{repo}/git/commits",
+  "POST /repos/{owner}/{repo}/git/refs",
+  "POST /repos/{owner}/{repo}/pulls",
+  "POST /repos/{owner}/{repo}/check-runs",
+  "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}",
+].map((route) => {
+  const names: string[] = [];
+  const pattern = route.replace(/\{([^}]+)\}/g, (_match, name: string) => {
+    names.push(name);
+    return name === "path" || name === "ref" ? "(.+)" : "([^/]+)";
+  });
+  return { route, names, pattern: new RegExp(`^${pattern}$`) };
+});
+
+async function harness(state: FakeApiState = {}) {
+  const api = fakeApi(state);
+  let tokenRequests = 0;
+  const unexpected: string[] = [];
+  const githubFetch: typeof fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    expect(url.origin).toBe("https://api.github.com");
+    if (request.method === "POST" && url.pathname === "/app/installations/123/access_tokens") {
+      const jwt = request.headers.get("authorization")?.replace(/^bearer /i, "") ?? "";
+      const [header, claims, signature] = jwt.split(".");
+      expect(verify("RSA-SHA256", Buffer.from(`${header}.${claims}`), publicKey, Buffer.from(signature ?? "", "base64url"))).toBe(true);
+      expect(String(JSON.parse(Buffer.from(claims ?? "", "base64url").toString()).iss)).toBe("42");
+      tokenRequests += 1;
+      return Response.json({ token: installationToken, expires_at: new Date(Date.now() + 3600_000).toISOString(), permissions: {} }, { status: 201 });
+    }
+    expect(request.headers.get("authorization")).toBe(`token ${installationToken}`);
+    const key = `${request.method} ${url.pathname}`;
+    for (const endpoint of endpoints) {
+      const match = endpoint.pattern.exec(key);
+      if (!match) continue;
+      const parameters: Record<string, unknown> = Object.fromEntries(url.searchParams);
+      endpoint.names.forEach((name, index) => { parameters[name] = decodeURIComponent(match[index + 1] ?? ""); });
+      if (request.method !== "GET") Object.assign(parameters, JSON.parse(await request.text()));
+      try {
+        const response = await api.request(endpoint.route, parameters);
+        return Response.json(response.data, { status: request.method === "POST" ? 201 : 200 });
+      } catch (error) {
+        const status = httpStatus(error);
+        if (!status) throw error;
+        return Response.json({ message: `HTTP ${status}` }, { status });
+      }
+    }
+    unexpected.push(key);
+    throw new Error(`Unexpected GitHub request: ${key}`);
+  };
+  const probot = new Probot({
+    appId: 42,
+    privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    secret,
+    logLevel: "silent",
+    logFormat: "json",
+    Octokit: ProbotOctokit.defaults({ request: { fetch: githubFetch }, retry: { enabled: false }, throttle: { enabled: false } }),
+  });
+  const middleware = await createNodeMiddleware(createApp({ uploadSarif: false, store: async () => undefined }), { probot });
+  const server = createServer((req, res) => { void middleware(req, res, () => { res.writeHead(404).end(); }); });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  cleanups.push(async () => {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    expect(unexpected).toEqual([]);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Expected TCP listener");
+  return {
+    api,
+    probot,
+    tokenRequests: () => tokenRequests,
+    send: async (event: string, payload: unknown, signature: "valid" | "invalid" | "missing" = "valid") => {
+      const body = JSON.stringify(payload);
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/github/webhooks`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-github-event": event,
+          "x-github-delivery": randomUUID(),
+          ...(signature === "missing" ? {} : { "x-hub-signature-256": `sha256=${createHmac("sha256", signature === "valid" ? secret : "wrong-secret").update(body).digest("hex")}` }),
+        },
+        body,
+        signal: AbortSignal.timeout(5000),
+      });
+      await response.text();
+      return response.status;
+    },
+  };
+}
+
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  for (const cleanup of cleanups.splice(0)) await cleanup();
+});
+
+describe("signed GitHub App HTTP delivery", () => {
+  it("authenticates as the installation and creates a finding issue and a workflow fix PR", async () => {
+    const app = await harness({
+      config: `${TIMEOUT_ONLY}issues:\n  enabled: true\nfixes:\n  enabled: true\n`,
+      refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } },
+    });
+    expect(await app.send("push", push)).toBe(200);
+    expect(app.tokenRequests()).toBe(1);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")[0]?.parameters).toMatchObject({ owner: "acme", repo: "widgets", base: "main" });
+    expect(JSON.stringify(callsTo(app.api, "POST /repos/{owner}/{repo}/git/trees"))).toContain("timeout-minutes");
+  });
+
+  it.each(["invalid", "missing"] as const)("rejects a %s signature without authenticating or writing", async (signature) => {
+    const app = await harness();
+    expect(await app.send("push", push, signature)).toBe(400);
+    expect(app.tokenRequests()).toBe(0);
+    expect(app.api.calls).toHaveLength(0);
+  });
+
+  it("ignores irrelevant branch pushes without calling GitHub", async () => {
+    const app = await harness();
+    expect(await app.send("push", { ...push, ref: "refs/heads/feature" })).toBe(200);
+    expect(app.tokenRequests()).toBe(0);
+    expect(app.api.calls).toHaveLength(0);
+  });
+
+  it("routes PR delivery through base policy and publishes the introduced finding", async () => {
+    const app = await harness({
+      config: TIMEOUT_ONLY,
+      refs: { base: { [WORKFLOW]: CLEAN }, head: { [WORKFLOW]: MISSING_TIMEOUT } },
+      pullFiles: [{ filename: WORKFLOW }],
+    });
+    expect(await app.send("pull_request", {
+      repository, installation: { id: 123 }, action: "opened",
+      pull_request: { number: 7, head: { sha: "head" }, base: { sha: "base", ref: "main" } },
+    })).toBe(200);
+    expect(callsTo(app.api, "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}")[0]?.parameters).toMatchObject({
+      check_run_id: "99", conclusion: "failure", output: { title: "1 new finding" },
+    });
+  });
+
+  it("returns a failed delivery when a push scan cannot complete", async () => {
+    const app = await harness({ failOn: () => true });
+    expect(await app.send("push", push)).toBe(500);
+  });
+
+  it.each(["installation", "installation_repositories"])("attempts all %s scans and returns failure if any fail", async (event) => {
+    const app = await harness({ failOn: () => true });
+    const repositories = [{ full_name: "acme/one" }, { full_name: "acme/two" }];
+    expect(await app.send(event, {
+      installation: { id: 123 }, action: event === "installation" ? "created" : "added",
+      ...(event === "installation" ? { repositories } : { repositories_added: repositories }),
+    })).toBe(500);
+    expect(callsTo(app.api, "GET /repos/{owner}/{repo}").map((call) => call.parameters.repo)).toEqual(["one", "two"]);
+  });
+
+  it.each([undefined, "", "  ", "development", "replace-me"])("refuses production startup with placeholder secret %j", async (value) => {
+    const app = await harness();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("WEBHOOK_SECRET", value);
+    await expect(app.probot.load(createApp())).rejects.toThrow("Production requires a non-placeholder WEBHOOK_SECRET");
+  });
+
+  it("allows a configured production webhook secret", async () => {
+    const app = await harness();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("WEBHOOK_SECRET", secret);
+    await expect(app.probot.load(createApp())).resolves.toBeUndefined();
+  });
+});

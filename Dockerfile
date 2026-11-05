@@ -18,5 +18,6 @@ COPY --from=dependencies --chown=nonroot:nonroot /app/node_modules ./node_module
 COPY --from=build --chown=nonroot:nonroot /app/dist ./dist
 COPY --chown=nonroot:nonroot package.json ./
 ENV NODE_ENV=production
+ENV HOST=0.0.0.0
 EXPOSE 3000
 CMD ["dist/index.js"]
