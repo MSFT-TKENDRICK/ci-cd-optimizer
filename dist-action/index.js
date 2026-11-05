@@ -12224,6 +12224,37 @@ var allRules = [
 
 // src/lint/config.ts
 var import_yaml13 = __toESM(require_dist(), 1);
+
+// src/knowledge/duration-policy.ts
+function durationPolicyProblems(config) {
+  const problems = [];
+  if (!Number.isInteger(config.minSamples) || config.minSamples < 2 || config.minSamples > 99) {
+    problems.push({ path: "durations.minSamples", message: "Expected an integer between 2 and 99." });
+  }
+  if (config.objectives.length > 100) problems.push({ path: "durations.objectives", message: "At most 100 duration objectives are supported." });
+  const seen = /* @__PURE__ */ new Set();
+  config.objectives.forEach((objective, index) => {
+    const path = `durations.objectives[${index}]`;
+    if (!/^\.github\/workflows\/[^/\\]+\.ya?ml$/.test(objective.workflow) || [...objective.workflow].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
+      problems.push({ path: `${path}.workflow`, message: "Expected an exact .github/workflows/*.yml or *.yaml path, not a glob." });
+    }
+    if (objective.workflow.includes("*") || objective.workflow.includes("?")) {
+      problems.push({ path: `${path}.workflow`, message: "Workflow selectors cannot contain globs." });
+    }
+    if (objective.job !== void 0 && !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(objective.job)) {
+      problems.push({ path: `${path}.job`, message: "Expected a workflow job key." });
+    }
+    if (!Number.isSafeInteger(objective.maxDurationMs) || objective.maxDurationMs <= 0) {
+      problems.push({ path: `${path}.maxDurationMs`, message: "Expected a positive safe integer in milliseconds." });
+    }
+    const key = JSON.stringify([objective.workflow, objective.job ?? null]);
+    if (seen.has(key)) problems.push({ path, message: "Duplicate workflow/job duration objective." });
+    seen.add(key);
+  });
+  return problems;
+}
+
+// src/lint/config.ts
 var CONFIG_PATHS = [".github/ci-cd-optimizer.yml", ".github/ci-cd-optimizer.yaml"];
 var PRESETS = ["recommended", "strict", "agentic", "github", "insights", "all"];
 var SEVERITIES = ["off", "info", "warn", "error"];
@@ -12297,7 +12328,8 @@ var DEFAULT_CONFIG = {
     ignore: [],
     labels: [],
     assignCopilot: true
-  }
+  },
+  durations: { minSamples: 20, objectives: [] }
 };
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -12439,7 +12471,8 @@ function validateConfig(input2, rules9) {
     "issues",
     "fixes",
     "alerts",
-    "recipes"
+    "recipes",
+    "durations"
   ]);
   if (raw.schemaVersion !== void 0 && raw.schemaVersion !== 1) {
     v.problem("schemaVersion", `Unsupported schemaVersion ${String(raw.schemaVersion)}; expected 1.`);
@@ -12573,6 +12606,23 @@ function validateConfig(input2, rules9) {
     labels: v.strings("recipes.labels", recipes.labels, []),
     assignCopilot: v.boolean("recipes.assignCopilot", recipes.assignCopilot, recipeDefaults.assignCopilot)
   };
+  const durations = v.record("durations", raw.durations);
+  v.unknownKeys("durations", durations, ["minSamples", "objectives"]);
+  if (durations.objectives !== void 0 && !Array.isArray(durations.objectives)) v.problem("durations.objectives", "Expected a list of duration objectives.");
+  config.durations = {
+    minSamples: v.number("durations.minSamples", durations.minSamples, DEFAULT_CONFIG.durations.minSamples, 2),
+    objectives: (Array.isArray(durations.objectives) ? durations.objectives : []).map((entry, index) => {
+      const path = `durations.objectives[${index}]`;
+      const objective = v.record(path, entry);
+      v.unknownKeys(path, objective, ["workflow", "job", "maxDurationMs"]);
+      return {
+        workflow: v.string(`${path}.workflow`, objective.workflow, ""),
+        ...objective.job !== void 0 ? { job: v.string(`${path}.job`, objective.job, "") } : {},
+        maxDurationMs: v.number(`${path}.maxDurationMs`, objective.maxDurationMs, 0, 1)
+      };
+    })
+  };
+  v.problems.push(...durationPolicyProblems(config.durations));
   return { config, problems: v.problems, migrated: legacy !== void 0 };
 }
 function parseConfigText(text, rules9, path = CONFIG_PATHS[0] ?? "config") {
@@ -13390,10 +13440,10 @@ function exactUpperTail(m, n, u) {
     }
     previous = current;
   }
-  const distribution = previous[n];
-  const total = distribution.reduce((sum, count) => sum + count, 0);
+  const distribution2 = previous[n];
+  const total = distribution2.reduce((sum, count) => sum + count, 0);
   let tail2 = 0;
-  for (let k = Math.ceil(u); k <= maxU; k += 1) tail2 += distribution[k] ?? 0;
+  for (let k = Math.ceil(u); k <= maxU; k += 1) tail2 += distribution2[k] ?? 0;
   return tail2 / total;
 }
 function mannWhitneyGreater(sample, reference) {
@@ -17611,15 +17661,18 @@ function comparisonProblem(snapshot) {
   if (snapshot.jobs.some((job) => !job.labels?.length || job.labels.some((label) => !label.trim()))) return "Runner routing labels are unavailable.";
   return void 0;
 }
-function comparisonKey(snapshot) {
-  if (comparisonProblem(snapshot)) return void 0;
-  const jobs = snapshot.jobs.map((job) => JSON.stringify([
+function jobComparisonContext(job) {
+  return JSON.stringify([
     job.key,
     job.name,
     [...new Set(job.needs)].sort(),
     [...new Set(job.labels)].sort(),
     job.runnerGroupId ?? null
-  ])).sort();
+  ]);
+}
+function comparisonKey(snapshot) {
+  if (comparisonProblem(snapshot)) return void 0;
+  const jobs = snapshot.jobs.map(jobComparisonContext).sort();
   return createHash4("sha256").update(JSON.stringify([
     "workload-comparison-v1",
     snapshot.owner,
@@ -18247,7 +18300,8 @@ async function buildWorkflowSnapshot(client, repo, run3, options = {}) {
   return snapshotFromRun(repo, run3, jobs.jobs, definitions, jobs.complete);
 }
 function snapshotFromRun(repo, run3, apiJobs, definitions, jobsComplete = false) {
-  const jobs = apiJobs.filter((job) => job.started_at && job.completed_at).map((job) => jobSnapshot(job, definitions));
+  const mapped = apiJobs.filter((job) => job.started_at && job.completed_at).map((job) => ({ job, key: matchJobKey(job.name, definitions) }));
+  const jobs = mapped.map(({ job, key }) => jobSnapshot(job, definitions, key));
   const startedAt = run3.run_started_at ?? run3.created_at;
   const lastJob = jobs.map((job) => job.completedAt).sort().at(-1);
   const completedAt = lastJob && Date.parse(lastJob) > Date.parse(startedAt) ? lastJob : run3.updated_at;
@@ -18275,12 +18329,11 @@ function snapshotFromRun(repo, run3, apiJobs, definitions, jobsComplete = false)
       collector: "github-actions-rest",
       collectedAt: (/* @__PURE__ */ new Date()).toISOString(),
       jobsComplete,
-      definitionKnown: definitions.size > 0 && jobs.every((job) => definitions.has(job.key))
+      definitionKnown: definitions.size > 0 && mapped.every(({ key }) => key !== void 0)
     }
   };
 }
-function jobSnapshot(job, definitions) {
-  const key = matchJobKey(job.name, definitions);
+function jobSnapshot(job, definitions, key) {
   const startedAt = job.started_at;
   const completedAt = job.completed_at;
   const steps2 = (job.steps ?? []).filter((step) => step.started_at && step.completed_at).map(
@@ -18310,18 +18363,41 @@ function jobSnapshot(job, definitions) {
   };
 }
 function matchJobKey(jobName, definitions) {
+  const matches = /* @__PURE__ */ new Set();
   for (const [key, definition] of definitions) {
     for (const candidate of [key, definition.name]) {
       if (!candidate) continue;
-      if (jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `)) return key;
-      if (candidate.includes("${{") && templatePattern(candidate).test(jobName)) return key;
+      if (jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `) || candidate.includes("${{") && matchesNameTemplate(candidate, jobName)) matches.add(key);
+      if (matches.size > 1) return void 0;
     }
   }
-  return void 0;
+  return [...matches][0];
 }
-function templatePattern(template) {
-  const source = template.split(/\$\{\{[^}]*\}\}/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*");
-  return new RegExp(`^${source}(?: \\(.*\\)| / .*)?$`);
+function matchesNameTemplate(template, name) {
+  if (["\r", "\n", "\u2028", "\u2029"].some((character) => name.includes(character))) return false;
+  const parts = [];
+  let cursor;
+  let literal = 0;
+  let closing = -1;
+  for (let opening = template.indexOf("${{"); opening !== -1; opening = template.indexOf("${{", cursor)) {
+    if (closing < opening + 3) closing = template.indexOf("}", opening + 3);
+    if (closing === -1) break;
+    if (template[closing + 1] === "}") {
+      parts.push(template.slice(literal, opening));
+      cursor = closing + 2;
+      literal = cursor;
+    } else cursor = opening + 3;
+  }
+  parts.push(template.slice(literal));
+  if (parts.length < 2 || !name.startsWith(parts[0])) return false;
+  let position = parts[0].length;
+  for (const part of parts.slice(1, -1)) {
+    const found = name.indexOf(part, position);
+    if (found === -1) return false;
+    position = found + part.length;
+  }
+  const suffix = parts.at(-1);
+  return name.endsWith(suffix) && name.length - suffix.length >= position || name.indexOf(`${suffix} / `, position) !== -1 || name.endsWith(")") && name.indexOf(`${suffix} (`, position) !== -1;
 }
 async function loadRunHistory(client, repo, options) {
   const response = await client.request("GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs", {
@@ -18397,9 +18473,8 @@ function chunk(items2, size) {
 function provenanceFacts({ collectedAt: _collectedAt, ...facts }) {
   return facts;
 }
-function runObservationIdentity(observation) {
-  const run3 = { ...observation.run };
-  const facts = {
+function runtimeFacts(run3) {
+  return {
     ...run3,
     ...run3.provenance ? { provenance: provenanceFacts(run3.provenance) } : {},
     jobs: run3.jobs.map((job) => ({
@@ -18409,7 +18484,12 @@ function runObservationIdentity(observation) {
       ...job.steps ? { steps: [...job.steps].sort((a, b) => a.number - b.number) } : {}
     })).sort((a, b) => a.id - b.id)
   };
-  return identity(["knowledge-run-observation-v1", observation.version, observation.repository, observation.source, facts]);
+}
+function runtimeFactsIdentity(run3) {
+  return identity(["knowledge-runtime-facts-v1", runtimeFacts(run3)]);
+}
+function runObservationIdentity(observation) {
+  return identity(["knowledge-run-observation-v1", observation.version, observation.repository, observation.source, runtimeFacts(observation.run)]);
 }
 var positive = (value, field2) => {
   if (!Number.isSafeInteger(value) || value < 1) throw new Error(`${field2} must be a positive safe integer`);
@@ -18425,6 +18505,7 @@ function validateRunObservation(observation) {
   validateRevision(observation.run.headSha);
   if (observation.version !== 1 || observation.id !== runObservationIdentity(observation)) throw new Error("Run observation identity does not match its evidence");
   const run3 = observation.run;
+  if (run3.branch !== null && (typeof run3.branch !== "string" || !run3.branch)) throw new Error("Run evidence branch must be a nonempty string or null");
   positive(run3.runId, "Run ID");
   positive(run3.runAttempt, "Run attempt");
   positive(run3.workflowId, "Workflow ID");
@@ -18458,6 +18539,135 @@ function createRunObservation(repository, run3, source, now = /* @__PURE__ */ ne
   const observation = { ...value, id: runObservationIdentity(value) };
   validateRunObservation(observation);
   return observation;
+}
+
+// src/knowledge/durations.ts
+function distribution(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const quantile = (probability) => {
+    const index = (sorted.length - 1) * probability;
+    const lower = sorted[Math.floor(index)];
+    return lower + (sorted[Math.ceil(index)] - lower) * (index - Math.floor(index));
+  };
+  return { sampleCount: sorted.length, minMs: sorted[0], p50Ms: quantile(0.5), p90Ms: quantile(0.9), p95Ms: quantile(0.95), maxMs: sorted.at(-1) };
+}
+function groupProblem(group) {
+  if (!group.complete || group.observations.length === 0) return "incomplete-run-evidence";
+  if (group.observations.some(({ run: run4 }) => run4.runAttempt !== 1)) return "retry-observed";
+  if (new Set(group.observations.map(({ run: run4 }) => runtimeFactsIdentity(run4))).size !== 1) return "conflicting-runtime-observations";
+  const run3 = group.observations[0].run;
+  if (comparisonProblem(run3)) return "ineligible-workload";
+  if (new Set(run3.jobs.map(jobComparisonContext)).size !== run3.jobs.length) return "ambiguous-job-identity";
+  return void 0;
+}
+function analyzeDurations(reference, window, config) {
+  validateRunObservation(reference);
+  const problems = durationPolicyProblems(config);
+  if (problems.length) throw new Error(`Invalid duration policy: ${problems.map((problem2) => problem2.path).join(", ")}`);
+  if (new Set(window.groups.map((group) => group.runId)).size !== window.groups.length) throw new Error("Duplicate logical runs in duration evidence");
+  for (const group of window.groups) for (const observation of group.observations) {
+    validateRunObservation(observation);
+    if (observation.run.runId !== group.runId || observation.repository.host !== reference.repository.host || observation.repository.repositoryId !== reference.repository.repositoryId) throw new Error("Duration evidence crosses its repository or logical run scope");
+  }
+  const run3 = reference.run;
+  const report = {
+    version: 1,
+    policy: "immutable-duration-v1",
+    quantileMethod: "R7",
+    status: "reference-excluded",
+    minimumSamples: config.minSamples,
+    window: { complete: window.complete, runs: window.groups.length },
+    samples: [],
+    excluded: [],
+    jobs: [],
+    unmatchedObjectives: []
+  };
+  const analysis = {
+    report,
+    history: [],
+    alertHistoryUncertain: window.groups.some((group) => !group.complete),
+    newerRunObserved: window.groups.some((group) => group.observations.some(({ run: other }) => other.runId !== run3.runId && other.workflowId === run3.workflowId && other.branch === run3.branch && byCompletion(other, run3) > 0)),
+    newerAttemptObserved: window.groups.some((group) => group.runId === run3.runId && group.observations.some(({ run: other }) => other.runAttempt > run3.runAttempt))
+  };
+  const referenceGroup = window.groups.find((group) => group.runId === run3.runId);
+  const problem = referenceGroup ? groupProblem(referenceGroup) : "reference-not-recorded";
+  if (problem || !referenceGroup?.observations.some((observation) => observation.id === reference.id)) {
+    report.reason = problem ?? "reference-not-recorded";
+    return analysis;
+  }
+  report.contextKey = comparisonKey(run3);
+  for (const group of window.groups) {
+    if (group.runId === run3.runId) continue;
+    let reason = groupProblem(group);
+    const prior = group.observations[0]?.run;
+    if (!reason && prior) {
+      if (byCompletion(prior, run3) >= 0) reason = "not-prior";
+      else if (comparisonKey(prior) !== report.contextKey) reason = "different-workload-context";
+    }
+    if (reason || !prior) {
+      report.excluded.push({ runId: group.runId, reason: reason ?? "incomplete-run-evidence" });
+      continue;
+    }
+    report.samples.push({ runId: group.runId, observationIds: group.observations.map((observation) => observation.id).sort() });
+    analysis.history.push(prior);
+  }
+  analysis.history.sort(byCompletion);
+  report.samples.sort((a, b) => a.runId - b.runId);
+  report.status = analysis.history.length >= config.minSamples ? "ready" : "insufficient-history";
+  const metric = (currentMs, values, objective) => ({
+    currentMs,
+    ...values.length >= config.minSamples ? { distribution: distribution(values) } : {},
+    ...objective ? { objective: {
+      definitionId: identity(["duration-objective-v1", objective]),
+      maxDurationMs: objective.maxDurationMs,
+      currentStatus: currentMs > objective.maxDurationMs ? "over-budget" : "within-budget",
+      historicalOverBudget: values.filter((value) => value > objective.maxDurationMs).length,
+      historicalSamples: values.length
+    } } : {}
+  });
+  const objectives = config.objectives.filter((objective) => objective.workflow === run3.path);
+  report.workflow = metric(run3.durationMs, analysis.history.map((snapshot) => snapshot.durationMs), objectives.find((objective) => objective.job === void 0));
+  report.jobs = run3.jobs.map((job) => {
+    const context = jobComparisonContext(job);
+    const values = analysis.history.map((snapshot) => snapshot.jobs.find((other) => jobComparisonContext(other) === context).durationMs);
+    return {
+      contextKey: identity(["duration-job-v1", context]),
+      key: job.key,
+      name: job.name,
+      metric: metric(job.durationMs, values, objectives.find((objective) => objective.job === job.key))
+    };
+  }).sort((a, b) => a.contextKey.localeCompare(b.contextKey));
+  report.unmatchedObjectives = objectives.filter((objective) => objective.job !== void 0 && !run3.jobs.some((job) => job.key === objective.job));
+  return structuredClone(analysis);
+}
+function describeDurations(report) {
+  const lines = [
+    "\n\n### Immutable duration evidence\n",
+    `${report.samples.length} independent prior runs; ${report.excluded.length} excluded; minimum ${report.minimumSamples} for quantiles. The bounded window covers ${report.window.runs} most recently observed logical runs${report.window.complete ? " in the stored matching evidence" : "; additional stored runs were omitted"}.`
+  ];
+  if (report.status === "reference-excluded") lines.push(`
+Comparison and budget assessment withheld: ${report.reason}.`);
+  else {
+    lines.push(
+      "\n| Scope | This run | Historical p50 | Historical p95 | Configured budget |",
+      "|---|---:|---:|---:|---|"
+    );
+    const row = (name, metric) => `| ${escapeCell(name)} | ${formatDuration2(metric.currentMs)} | ${metric.distribution ? formatDuration2(metric.distribution.p50Ms) : "insufficient evidence"} | ${metric.distribution ? formatDuration2(metric.distribution.p95Ms) : "insufficient evidence"} | ${metric.objective ? `${formatDuration2(metric.objective.maxDurationMs)} (${metric.objective.currentStatus})` : "not configured"} |`;
+    if (report.workflow) lines.push(row("Workflow", report.workflow));
+    lines.push(...report.jobs.slice(0, 20).map((job) => row(`${job.key}: ${job.name}`, job.metric)));
+    if (report.jobs.length > 20) lines.push(`
+${report.jobs.length - 20} additional job distributions are available in JSON.`);
+  }
+  if (report.excluded.length) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const { reason } of report.excluded) counts.set(reason, (counts.get(reason) ?? 0) + 1);
+    lines.push(`
+Exclusions: ${[...counts].map(([reason, count]) => `${reason} (${count})`).join(", ")}.`);
+  }
+  if (report.unmatchedObjectives.length) lines.push(`
+${report.unmatchedObjectives.length} configured job budgets did not match an observed job; they were not assessed.`);
+  lines.push("\nR7 quantiles describe eligible successful runs, not prediction bounds or guarantees. Budgets are explicit current configuration, not learned targets or historical SLO compliance. Runner labels do not establish identical hardware/cache state; workflow/job durations do not identify executed projects or causal benefits.");
+  return lines.join("\n");
 }
 
 // src/service/run-knowledge.ts
@@ -18509,7 +18719,21 @@ async function collectRunKnowledge(client, repo, run3, config, options = {}) {
     options.now
   );
   if (options.store) await options.store.saveRunObservation(observation, project);
-  return { observation, ...project ? { project } : {}, persistence: options.store ? "saved" : "preview" };
+  const window = options.store ? await options.store.readRunWindow({
+    ...repository,
+    workflowId: run3.workflowId,
+    branch: run3.branch,
+    referenceRunId: run3.runId,
+    limit: 100
+  }) : { complete: false, groups: [{ runId: run3.runId, complete: true, observations: [observation] }] };
+  const { report: durations, ...comparison } = analyzeDurations(observation, window, config.durations);
+  return {
+    observation,
+    ...project ? { project } : {},
+    persistence: options.store ? "saved" : "preview",
+    durations,
+    ...options.store ? { comparison } : {}
+  };
 }
 function describeRunKnowledge(knowledge) {
   const evidence2 = knowledge.project;
@@ -18521,7 +18745,7 @@ function describeRunKnowledge(knowledge) {
 
 ${context}${coverage} This does not identify executed projects, installed tool versions, cache use, or a causal optimization benefit.
 
-Knowledge evidence: ${knowledge.persistence === "saved" ? "persisted" : "preview only (no knowledge database writes)"}.`;
+Knowledge evidence: ${knowledge.persistence === "saved" ? "persisted" : "preview only (no knowledge database writes; durable duration history was not queried)"}.` + (knowledge.durations ? describeDurations(knowledge.durations) : "");
 }
 
 // src/service/workflow-run.ts
@@ -18544,25 +18768,28 @@ async function processWorkflowRun(client, repo, run3, options = {}) {
   const snapshot = await buildWorkflowSnapshot(client, repo, run3, { definitions });
   const knowledgeSkipped = remote.problems.length > 0 && (options.knowledge || options.knowledgeStore) ? "invalid-config" : void 0;
   let knowledge;
+  let knowledgeComparison;
   if (remote.problems.length === 0) {
     const store = options.dryRun ? void 0 : await options.knowledgeStore?.();
     if (options.knowledge || store || options.dryRun && options.knowledgeStore) {
-      knowledge = await collectRunKnowledge(client, repo, snapshot, config, {
+      const { comparison, ...captured } = await collectRunKnowledge(client, repo, snapshot, config, {
         ...store ? { store } : {},
         ...options.expectedRepositoryId !== void 0 ? { expectedRepositoryId: options.expectedRepositoryId } : {},
         ...options.now ? { now: options.now } : {}
       });
+      knowledge = captured;
+      knowledgeComparison = comparison;
     }
   }
   if (snapshot.jobs.length === 0) {
     if (options.store && !options.dryRun) await options.store.save(snapshot);
     return { status: "skipped", reason: "The run has no completed jobs.", snapshot, ...knowledge ? { knowledge } : {}, ...knowledgeSkipped ? { knowledgeSkipped } : {} };
   }
-  const history = await loadHistory(client, repo, run3, snapshot, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
-  if (history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
+  const history = await loadHistory(client, repo, run3, snapshot, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options, knowledgeComparison !== void 0);
+  if (knowledgeComparison?.newerAttemptObserved || history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
     return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot, ...knowledge ? { knowledge } : {}, ...knowledgeSkipped ? { knowledgeSkipped } : {} };
   }
-  const prior = comparableHistory(history, snapshot).sort(byCompletion).slice(-historyLimit(config));
+  const prior = (knowledgeComparison?.history ?? comparableHistory(history, snapshot)).sort(byCompletion).slice(-historyLimit(config));
   const baseline = computeBaseline(prior, snapshot);
   const report = createTelemetryReport(snapshot, baseline) + (knowledge ? describeRunKnowledge(knowledge) : "") + (knowledgeSkipped ? "\n\nProject declaration collection was skipped because the repository configuration is invalid." : "");
   const result = {
@@ -18574,11 +18801,11 @@ async function processWorkflowRun(client, repo, run3, options = {}) {
     ...knowledge ? { knowledge } : {},
     ...knowledgeSkipped ? { knowledgeSkipped } : {}
   };
-  const contextKey = comparisonKey(snapshot);
-  const newerRunObserved = history.some(
+  const contextKey = knowledgeComparison && knowledge?.durations?.status === "reference-excluded" ? void 0 : comparisonKey(snapshot);
+  const newerRunObserved = knowledgeComparison?.newerRunObserved || history.some(
     (item) => item.workflowId === snapshot.workflowId && item.branch === snapshot.branch && item.runId !== snapshot.runId && byCompletion(item, snapshot) > 0
   );
-  if (contextKey && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run3, config.alerts.branches, branch)) {
+  if (contextKey && !knowledgeComparison?.alertHistoryUncertain && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run3, config.alerts.branches, branch)) {
     const series = buildSeries([...prior, snapshot]);
     const existing = await listManagedIssues(client, repo, "alert");
     const plan = planAlertSync({
@@ -18608,11 +18835,11 @@ async function processWorkflowRun(client, repo, run3, options = {}) {
   }
   return result;
 }
-async function loadHistory(client, repo, run3, snapshot, { limit, minSamples }, options) {
+async function loadHistory(client, repo, run3, snapshot, { limit, minSamples }, options, immutableHistory = false) {
   const query = { owner: repo.owner, repo: repo.repo, workflowId: snapshot.workflowId, branch: snapshot.branch, limit: Math.max(200, limit + 1) };
   const backfill = () => loadRunHistory(client, repo, { workflowId: snapshot.workflowId, branch: snapshot.branch, limit, excludeRunId: run3.id });
   const store = options.store;
-  if (!store) return comparisonKey(snapshot) ? merge2(await backfill(), [snapshot], limit + 1) : [snapshot];
+  if (!store) return !immutableHistory && comparisonKey(snapshot) ? merge2(await backfill(), [snapshot], limit + 1) : [snapshot];
   if (!options.dryRun) await store.save(snapshot);
   if (!comparisonKey(snapshot)) {
     return latestAttempts([...await store.history({ ...query, runId: snapshot.runId, limit: 1 }), snapshot]);
@@ -18622,7 +18849,7 @@ async function loadHistory(client, repo, run3, snapshot, { limit, minSamples }, 
     store.history(query)
   ]);
   let history = stored;
-  if (comparisonKey(snapshot) && comparableHistory(history, snapshot).length < minSamples) {
+  if (!immutableHistory && comparisonKey(snapshot) && comparableHistory(history, snapshot).length < minSamples) {
     const fetched = await backfill();
     if (!options.dryRun) for (const item of fetched) await store.save(item);
     history = merge2(history, fetched, query.limit);
@@ -18710,7 +18937,7 @@ Options:
       --summary <file>      Append the markdown report (default: $GITHUB_STEP_SUMMARY when set; "-" to disable)
       --check               Also publish the report as a neutral check run on the run's head commit
       --no-alerts           Do not open or update duration alert issues
-      --knowledge           Include source-linked project context (preview only; use JSON for complete evidence)
+      --knowledge           Include source context and configured duration budgets (preview only; no durable history)
       --dry-run             Analyze and report, but write nothing to GitHub or the store
   -f, --format markdown|json  Output format (default: markdown)
   -o, --output <file>       Write the output to a file
