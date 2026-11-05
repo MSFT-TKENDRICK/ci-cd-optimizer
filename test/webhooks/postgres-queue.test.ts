@@ -194,4 +194,16 @@ describe.skipIf(!databaseUrl)("durable Postgres webhook queue", () => {
     expect(await worker.status(event.id)).toEqual([]);
     expect(await db.sql`SELECT scope FROM webhook_scopes`).toHaveLength(0);
   });
+
+  it("persists and deduplicates a 500-repository installation in one batch", async () => {
+    const worker = queue();
+    const event = {
+      id: randomUUID(), name: "installation",
+      payload: { repositories: Array.from({ length: 500 }, (_, index) => ({ full_name: `acme/repo-${index}` })) },
+    } as Delivery;
+    await worker.enqueue(event);
+    await worker.enqueue(event);
+    expect(await worker.status(event.id)).toHaveLength(500);
+    expect((await db.sql`SELECT count(*)::int AS count FROM webhook_scopes`)[0]?.count).toBe(500);
+  });
 });

@@ -51,6 +51,16 @@ jobs:
     # Exercise the shipped image through its published port, not just service mocks.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -58,6 +68,12 @@ jobs:
           node-version-file: .nvmrc
       - run: docker build --tag ci-cd-optimizer:smoke .
       - run: node test/service/container-smoke.mjs
+      - name: Durable production image
+        run: node test/service/container-smoke.mjs
+        env:
+          SMOKE_DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+          SMOKE_DOCKER_NETWORK: ${{ job.services.postgres.network }}
+          SMOKE_DATABASE_CONTAINER: ${{ job.services.postgres.id }}
 
   lint:
     runs-on: ubuntu-24.04

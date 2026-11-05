@@ -3,10 +3,13 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import { setImmediate } from "node:timers/promises";
 import { createNodeMiddleware, Probot, ProbotOctokit } from "probot";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app.js";
 import { httpStatus } from "../../src/github/client.js";
 import { marker } from "../../src/issues/markers.js";
+import { PostgresWebhookQueue, type DeliveryQueue } from "../../src/webhooks/postgres-queue.js";
+import { registerDurableIngress } from "../../src/webhooks/worker.js";
+import { isolatedDatabase } from "../webhooks/database.js";
 import { callsTo, CLEAN, fakeApi, MISSING_TIMEOUT, TIMEOUT_ONLY, WORKFLOW, type FakeApiState } from "./api.js";
 
 // Ephemeral test credentials only; the transport never calls a real GitHub endpoint.
@@ -59,7 +62,7 @@ const endpoints = [
   return { route, names, pattern: new RegExp(`^${pattern}$`) };
 });
 
-async function harness(state: FakeApiState = {}) {
+async function harness(state: FakeApiState = {}, durable?: Pick<DeliveryQueue, "enqueue">) {
   const api = fakeApi(state);
   let tokenRequests = 0;
   const unexpected: string[] = [];
@@ -99,15 +102,20 @@ async function harness(state: FakeApiState = {}) {
     unexpected.push(key);
     throw new Error(`Unexpected GitHub request: ${key}`);
   };
-  const probot = new Probot({
+  const options = {
     appId: 42,
     privateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
     secret,
-    logLevel: "silent",
-    logFormat: "json",
+    logLevel: "silent" as const,
+    logFormat: "json" as const,
     Octokit: ProbotOctokit.defaults({ request: { fetch: githubFetch }, retry: { enabled: false }, throttle: { enabled: false } }),
-  });
-  const middleware = await createNodeMiddleware(createApp({ uploadSarif: false, store: async () => undefined }), { probot });
+  };
+  const probot = new Probot(options);
+  const app = createApp({ uploadSarif: false, store: async () => undefined });
+  if (durable) await probot.load(app);
+  const middleware = durable
+    ? await createNodeMiddleware((ingress) => registerDurableIngress(ingress, durable), { probot: new Probot(options) })
+    : await createNodeMiddleware(app, { probot });
   const server = createServer((req, res) => { void middleware(req, res, () => { res.writeHead(404).end(); }); });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -122,14 +130,14 @@ async function harness(state: FakeApiState = {}) {
     api,
     probot,
     tokenRequests: () => tokenRequests,
-    send: async (event: string, payload: unknown, signature: "valid" | "invalid" | "missing" = "valid") => {
+    send: async (event: string, payload: unknown, signature: "valid" | "invalid" | "missing" = "valid", deliveryId = randomUUID()) => {
       const body = JSON.stringify(payload);
       const response = await fetch(`http://127.0.0.1:${address.port}/api/github/webhooks`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
           "x-github-event": event,
-          "x-github-delivery": randomUUID(),
+          "x-github-delivery": deliveryId,
           ...(signature === "missing" ? {} : { "x-hub-signature-256": `sha256=${createHmac("sha256", signature === "valid" ? secret : "wrong-secret").update(body).digest("hex")}` }),
         },
         body,
@@ -147,10 +155,67 @@ afterEach(async () => {
 });
 
 describe("signed GitHub App HTTP delivery", () => {
+  it("acknowledges durable ingress without running the analysis in the request", async () => {
+    const enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockResolvedValue(undefined);
+    const app = await harness({}, { enqueue });
+    const id = randomUUID();
+    expect(await app.send("push", push, "valid", id)).toBe(200);
+    expect(enqueue).toHaveBeenCalledWith({ id, name: "push", payload: push });
+    expect(app.api.calls).toHaveLength(0);
+  });
+
+  it("never acknowledges a delivery whose durable insert failed", async () => {
+    const enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockRejectedValue(new Error("Database unavailable"));
+    const app = await harness({}, { enqueue });
+    expect(await app.send("push", push)).toBe(500);
+    expect(app.api.calls).toHaveLength(0);
+  });
+
+  it("rejects invalid signatures before persisting a delivery", async () => {
+    const enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockResolvedValue(undefined);
+    const app = await harness({}, { enqueue });
+    expect(await app.send("push", push, "invalid")).toBe(400);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
   it("authenticates as the installation and creates a finding issue and a workflow fix PR", async () => {
     const app = await harness({
       config: `${TIMEOUT_ONLY}issues:\n  enabled: true\nfixes:\n  enabled: true\n`,
       refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } },
+    });
+
+    describe.skipIf(!process.env.DATABASE_URL)("durable HTTP delivery through Postgres", () => {
+      let db: Awaited<ReturnType<typeof isolatedDatabase>>;
+      let ingress: PostgresWebhookQueue;
+      let worker: PostgresWebhookQueue;
+      beforeAll(async () => {
+        db = await isolatedDatabase(process.env.DATABASE_URL!);
+        ingress = new PostgresWebhookQueue(db.url);
+        await ingress.initialize();
+        worker = new PostgresWebhookQueue(db.url);
+      });
+      afterAll(async () => {
+        await ingress?.close();
+        await worker?.close();
+        await db?.close();
+      });
+
+      it("commits before acknowledgement, executes via another worker, and suppresses completed redelivery", async () => {
+        const app = await harness({
+          config: `${TIMEOUT_ONLY}issues:\n  enabled: true\nfixes:\n  enabled: true\n`,
+          refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } },
+        }, ingress);
+        const id = randomUUID();
+        expect(await app.send("push", push, "valid", id)).toBe(200);
+        expect(await ingress.status(id)).toMatchObject([{ status: "pending", attempts: 0 }]);
+        expect(app.api.calls).toHaveLength(0);
+        expect(await worker.processNext((delivery) => app.probot.receive(delivery))).toMatchObject({ status: "completed", id });
+        expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
+        expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
+        expect(await app.send("push", push, "valid", id)).toBe(200);
+        expect((await worker.processNext((delivery) => app.probot.receive(delivery))).status).toBe("idle");
+        expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
+      });
     });
     expect(await app.send("push", push)).toBe(200);
     expect(app.tokenRequests()).toBe(1);

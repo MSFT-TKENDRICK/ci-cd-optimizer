@@ -50,7 +50,8 @@ events above. The webhook path is `/api/github/webhooks`. For Actions-only use w
 |---|---|---|
 | `APP_ID`, `PRIVATE_KEY`, `WEBHOOK_SECRET` | yes | App credentials ([.env.example](../.env.example)). |
 | `HOST`, `PORT`, `LOG_LEVEL` | no | Bind address, HTTP port (default 3000), and log level. Probot defaults to `localhost`; the container sets `HOST=0.0.0.0` so published ports and ingress can reach it. |
-| `DATABASE_URL` | no | Postgres store for telemetry snapshots used as alert baselines and trend history. Without it, history is rebuilt from the Actions API on each run. The schema is created on first use. |
+| `DATABASE_URL` | when queue mode is `postgres` | Postgres connection for durable webhook jobs and telemetry history. In direct mode it remains optional; without it, telemetry history comes from the Actions API. Tables are created on first use. |
+| `WEBHOOK_QUEUE` | no | `direct` (compatibility default) runs handlers in the HTTP request. Set `postgres` for durable hosted processing; requires `DATABASE_URL`. Unknown values fail startup. |
 | `COPILOT_ASSIGN_TOKEN` | no | Token for a Copilot-licensed user, used to [assign issues to the Copilot coding agent](issues-and-alerts.md#assigning-issues-to-the-copilot-coding-agent). App installation tokens can't assign Copilot. Without this token, issues get the `copilot:ready` label instead. |
 | `CICD_OPTIMIZER_UPLOAD_SARIF` | no | Set to `false` to skip code scanning uploads. Uploads fail softly when code scanning is unavailable, for example on private repositories without GitHub Advanced Security. |
 
@@ -73,18 +74,50 @@ Run it on any container host with a public HTTPS endpoint, such as Azure Contain
 process is stateless apart from the optional Postgres database. `GET /ping` returns `200 PONG` for an HTTP liveness
 probe; it does not verify credentials, installation access, database availability, or GitHub connectivity.
 
-### Delivery failures and verification
+### Durable hosted processing
 
-Installation scans attempt every repository in the delivery. If any scan throws, the delivery fails instead of returning
-success after merely logging the error. Inspect the App's **Advanced > Recent deliveries** and redeliver failed events
-after fixing the cause; GitHub does not automatically redeliver failed webhooks. There is no durable work queue in this
-release. Long-running scans can exceed GitHub's delivery timeout even while the process continues working. Do not
-assume a successful container build proves delivery durability or safe concurrent processing.
+Set `WEBHOOK_QUEUE=postgres` and point every replica at the **same database and schema**. Probot verifies the webhook
+signature before the App stores the delivery, and the HTTP request succeeds only after that transaction commits.
+Analysis then runs in two background workers per process rather than consuming GitHub's webhook response deadline.
+If persistence fails, GitHub receives a failed delivery; it does not automatically redeliver it.
 
-CI exercises signed HTTP delivery through Probot, installation-token authentication against a simulated GitHub API,
-finding issue and fix PR creation, PR checks, invalid signatures, and failed scans. A separate `app` job builds the
-production image and verifies non-root startup, published-port `/ping` access, and signed/unsigned webhook handling.
-These checks use ephemeral test credentials and do **not** register or install an App.
+Postgres transaction locks serialize repository mutations across workers and replicas. PR checks use a separate scope
+so a long repository scan does not block them. Installation events are split into per-repository jobs and inserted
+atomically in a batch, so one failed repository does not force successful repositories to run again. Pending and
+completed redeliveries are deduplicated by delivery ID and scope.
+
+Failed jobs retry up to five attempts, with exponential delays starting at 30 seconds and capped at 15 minutes.
+A delayed retry blocks later jobs in its scope, but not other repositories or the separate check scope. Exhausted
+jobs become `failed` and produce an error log. After resolving the cause, redeliver the original event from the App's
+**Advanced > Recent deliveries** to reset only its failed jobs; completed jobs stay completed.
+
+Worker transactions roll back when a worker process dies, leaving the job available for another worker. SIGTERM stops
+HTTP ingress and drains active workers before closing the database. Configure the host's termination grace period for
+the expected job duration; a forced exit instead relies on transactional recovery. Do not set a database
+`idle_in_transaction_session_timeout` shorter than a job: workers hold a transaction while calling GitHub.
+
+This is **at-least-once**, not exactly-once, processing. A crash or lost database connection after a GitHub write but
+before committing completion can replay that write. GitHub writes cannot be rolled back with the database transaction,
+and a lost lock cannot fence an already-issued GitHub request. Comments or partially completed operations may need
+manual reconciliation. Coordinate all App replicas through the same database, and do not run independent write-enabled
+Action/CLI scans concurrently with them.
+
+Monitor queue age and failed jobs in addition to `/ping` and process health:
+
+```sql
+SELECT status, count(*), min(received_at) AS oldest_received
+FROM webhook_jobs GROUP BY status;
+
+SELECT delivery_id, scope, attempts, last_error
+FROM webhook_jobs WHERE status = 'failed' ORDER BY received_at;
+```
+
+Completed payloads are cleared, while delivery IDs remain for deduplication. Pending/failed payloads contain repository
+and comment data; protect the database with appropriate access controls, encryption, backups, and a retention policy.
+Deleting completed rows also ends their deduplication window. Database provisioning and monitoring are deployment
+responsibilities; selecting this mode does not create a hosted database.
+
+### Direct mode and verification
 
 Within one App instance, repository scans (push and installation events), telemetry updates, and fix/recipe commands
 share a case-insensitive, per-repository FIFO queue. The queue covers both reading current managed items and applying
@@ -92,10 +125,16 @@ the resulting changes, so overlapping deliveries cannot both reconcile against t
 operation still fails its delivery but releases the next operation. Different repositories and independent PR checks
 can run concurrently.
 
-This queue is in memory: it does not survive a restart, suppress repeated delivery IDs, or coordinate multiple
-replicas, Actions, or CLI processes. Waiting in the queue counts toward webhook response time. Until a durable
-delivery/worker system is deployed, use one App instance, avoid other concurrent write-enabled scanners, and monitor
-and redeliver failed or timed-out deliveries.
+In `WEBHOOK_QUEUE=direct`, that queue is in memory: it does not survive a restart or suppress repeated delivery IDs.
+Waiting and analysis both count toward webhook response time. Use direct mode for local development or limited
+single-instance deployments; use Postgres mode when restart recovery or multiple replicas are required. In direct mode,
+an installation delivery attempts every repository and fails if any scan throws.
+
+CI exercises signed HTTP delivery, simulated installation authentication and GitHub writes, concurrent handlers, and
+permission checks. Real-Postgres tests cover durable acknowledgement, deduplication, worker coordination, retry/dead-letter
+behavior, and recovery after killing a worker process. The `app` job builds the production image and exercises both
+direct and Postgres modes through a published port, including completion by the image's actual background worker.
+These checks use ephemeral credentials and do **not** register or install a real GitHub App.
 
 Before declaring a deployment production-ready, verify a real installation-token exchange, webhook delivery to the
 HTTPS endpoint, a controlled finding issue and workflow fix PR, the PR's CI run, and telemetry on the intended repository.
@@ -112,6 +151,6 @@ that these write paths work with the live App's permissions.
 
 The App and `command: scan` share identifiers: issues are matched by hidden fingerprints, fix pull requests by branch,
 and code scanning alerts by their fingerprints. Sequential scans therefore update existing items. This is not a
-distributed lock or an exactly-once delivery guarantee. The App's queue only coordinates its own handlers. Avoid
-overlapping write-enabled scans from the App, Actions, or multiple replicas until the deployment coordinates execution;
-simultaneous first scans in separate processes can still race to create items.
+distributed lock or an exactly-once delivery guarantee. Postgres mode coordinates participating App workers, but not
+independent Actions or CLI processes. Avoid overlapping write-enabled scans from those surfaces; simultaneous first
+scans that do not share coordination can still race to create items.

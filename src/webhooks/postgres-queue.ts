@@ -77,21 +77,26 @@ export class PostgresWebhookQueue implements DeliveryQueue {
 
   async enqueue(delivery: Delivery): Promise<void> {
     if (!delivery.id.trim()) throw new Error("Webhook delivery ID is required");
-    const jobs = deliveryJobs(delivery).sort((a, b) => a.scope.localeCompare(b.scope));
+    const jobs = deliveryJobs(delivery).map((job) => ({ delivery_id: delivery.id, ...job }));
+    const records = JSON.parse(JSON.stringify(jobs)) as postgres.JSONValue;
     await this.sql.begin(async (sql) => {
-      for (const job of jobs) {
-        await sql`INSERT INTO webhook_scopes (scope) VALUES (${job.scope}) ON CONFLICT DO NOTHING`;
-        await sql`
-          INSERT INTO webhook_jobs (delivery_id, scope, delivery)
-          VALUES (${delivery.id}, ${job.scope}, ${sql.json(JSON.parse(JSON.stringify(job.delivery)) as postgres.JSONValue)})
-          ON CONFLICT (delivery_id, scope) DO NOTHING
-        `;
-        // A duplicate of a running job must not wait for that job's row lock.
-        await sql`
-          UPDATE webhook_jobs SET status = 'pending', attempts = 0, available_at = clock_timestamp(), last_error = NULL
-          WHERE delivery_id = ${delivery.id} AND scope = ${job.scope} AND status = 'failed'
-        `;
-      }
+      await sql`
+        INSERT INTO webhook_scopes (scope)
+        SELECT DISTINCT scope FROM jsonb_to_recordset(${sql.json(records)}) AS job(scope TEXT)
+        ORDER BY scope ON CONFLICT DO NOTHING
+      `;
+      await sql`
+        INSERT INTO webhook_jobs (delivery_id, scope, delivery)
+        SELECT delivery_id, scope, delivery
+        FROM jsonb_to_recordset(${sql.json(records)}) AS job(delivery_id TEXT, scope TEXT, delivery JSONB)
+        ORDER BY scope ON CONFLICT (delivery_id, scope) DO NOTHING
+      `;
+      // A duplicate of a running job must not wait for that job's row lock.
+      await sql`
+        UPDATE webhook_jobs SET status = 'pending', attempts = 0, available_at = clock_timestamp(), last_error = NULL
+        WHERE delivery_id = ${delivery.id} AND status = 'failed'
+          AND scope IN (SELECT scope FROM jsonb_to_recordset(${sql.json(records)}) AS job(scope TEXT))
+      `;
     });
   }
 
