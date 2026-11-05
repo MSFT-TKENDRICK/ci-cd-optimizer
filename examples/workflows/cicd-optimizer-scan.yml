@@ -48,7 +48,7 @@ jobs:
           private-key: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
 
       # The scan reads the repository through the API, so no checkout is needed.
-      - uses: MSFT-TKENDRICK/ci-cd-optimizer@main # pin a commit SHA in production
+      - uses: MSFT-TKENDRICK/ci-cd-optimizer@v0 # or pin a release commit SHA
         env:
           COPILOT_ASSIGN_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
         with:

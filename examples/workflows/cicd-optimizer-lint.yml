@@ -25,7 +25,7 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
-      - uses: MSFT-TKENDRICK/ci-cd-optimizer@main # pin a commit SHA in production
+      - uses: MSFT-TKENDRICK/ci-cd-optimizer@v0 # or pin a release commit SHA
         with:
           args: >-
             --base ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}

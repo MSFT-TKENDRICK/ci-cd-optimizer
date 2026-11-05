@@ -38,7 +38,7 @@ npm run cli -- rules --format markdown       # rule catalog
   with:
     fetch-depth: 0       # --base needs the base commit
     filter: blob:none    # partial clone: history without old file contents
-- uses: MSFT-TKENDRICK/ci-cd-optimizer@main # pin a commit SHA in production
+- uses: MSFT-TKENDRICK/ci-cd-optimizer@v0 # or pin a release commit SHA
   with:
     command: lint
     args: --base origin/${{ github.base_ref }} -f github

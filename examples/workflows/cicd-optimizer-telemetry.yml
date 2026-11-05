@@ -32,7 +32,7 @@ jobs:
           key: cicd-telemetry-${{ github.run_id }}
           restore-keys: cicd-telemetry-
 
-      - uses: MSFT-TKENDRICK/ci-cd-optimizer@main # pin a commit SHA in production
+      - uses: MSFT-TKENDRICK/ci-cd-optimizer@v0 # or pin a release commit SHA
         with:
           command: telemetry
           args: --run-id ${{ github.event.workflow_run.id }} --store .cicd-telemetry/runs.jsonl --check
