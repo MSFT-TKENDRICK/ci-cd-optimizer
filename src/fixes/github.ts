@@ -101,8 +101,9 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
     if (!issue.pull_request) continue;
     let parsed = parseMarker(issue.body);
     if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
+    const initialAttributes = parsed.attributes;
     let head: RawPull["head"] | undefined;
-    if (issue.state === "open" || UPDATE_KEYS.some((key) => key in parsed.attributes)) {
+    if (issue.state === "open" || UPDATE_KEYS.some((key) => key in initialAttributes)) {
       let pull = details.get(issue.number);
       if (!pull) {
         const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: issue.number });
@@ -119,7 +120,7 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
     const pr: ManagedPullRequest = {
       number: issue.number,
       state: issue.state,
-      merged: Boolean(issue.pull_request.merged_at),
+      merged: Boolean(issue.pull_request?.merged_at),
       group: parsed.fingerprint.slice("group:".length),
       title: issue.title,
       body: issue.body ?? "",
