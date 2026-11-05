@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { GitHubClient } from "../../src/github/client.js";
 import { DEFAULT_CONFIG } from "../../src/lint/config.js";
 import { applyFixActions, dismissalsFrom, handleFixCommands, IGNORED_LABEL, listManagedPullRequests, type ManagedPullRequest } from "../../src/fixes/github.js";
-import type { FixChange } from "../../src/fixes/plan.js";
+import { planFixPullRequests, type FixChange } from "../../src/fixes/plan.js";
 import { marker, parseMarker } from "../../src/issues/markers.js";
 
 interface Call {
@@ -50,6 +50,39 @@ function managed(overrides: Partial<ManagedPullRequest> = {}): ManagedPullReques
 }
 
 describe("listManagedPullRequests", () => {
+  it("recovers only matching same-repository PRs, including declined changes and custom prefixes", async () => {
+    const base = {
+      number: 8, title: "recover", body: marker("fix", "group:hermeticity", { signature: "sig", commit: "bot-commit" }),
+      state: "open", labels: [], head: { ref: "custom/hermeticity", sha: "human-commit", repo: { full_name: "ACME/widgets" } }, base: { ref: "main" },
+    };
+    const client = fakeClient((route) => route.endsWith("/issues") ? [] : [
+      base,
+      { ...base, number: 9, state: "closed" },
+      { ...base, number: 10, head: { ...base.head, repo: { full_name: "fork/widgets" } } },
+      { ...base, number: 11, base: { ref: "release" } },
+      { ...base, number: 12, head: { ...base.head, ref: "someone-elses-branch" } },
+      { ...base, number: 13, body: marker("fix", "group:other", { signature: "sig", commit: "bot-commit" }) },
+      { ...base, number: 14, body: marker("fix", "group:hermeticity", { signature: "sig" }) },
+      { ...base, number: 15, body: "<!-- cicd-optimizer:fix fingerprint=%ZZ -->" },
+    ]);
+    const prs = await listManagedPullRequests(client, repo, { baseBranch: "main", branchPrefix: "custom/", groups: ["hermeticity"] });
+    expect(prs.map((pr) => pr.number)).toEqual([8, 9]);
+    expect(prs[0]).toMatchObject({ commitSha: "bot-commit", headSha: "human-commit", branch: "custom/hermeticity", labels: [] });
+    const plan = planFixPullRequests([change], prs, { openPullRequestsLimit: 5, labels: ["cicd-optimizer"] });
+    expect(plan.actions).toEqual([{ type: "metadata", group: "hermeticity", number: 8, labels: ["cicd-optimizer"], reviewers: [] }]);
+    expect(plan.skipped).toEqual([{ reason: "edited", group: "hermeticity", number: 8 }]);
+    expect(planFixPullRequests([change], prs.slice(1), { openPullRequestsLimit: 5 }).skipped[0]?.reason).toBe("declined");
+    expect(client.calls[1]?.parameters).toMatchObject({ head: "acme:custom/hermeticity", base: "main", state: "all" });
+  });
+
+  it("propagates discovery failures rather than treating them as an empty result", async () => {
+    const client = fakeClient((route) => {
+      if (route.endsWith("/issues")) return [];
+      throw httpError(403);
+    });
+    await expect(listManagedPullRequests(client, repo, { baseBranch: "main", branchPrefix: "ci/", groups: ["hermeticity"] })).rejects.toThrow("403");
+  });
+
   it("finds fix pull requests by marker and reads the head of open ones", async () => {
     const client = fakeClient((route) => {
       if (route.startsWith("GET /repos/{owner}/{repo}/issues"))
@@ -73,12 +106,16 @@ describe("listManagedPullRequests", () => {
 
 describe("applyFixActions", () => {
   it("commits through the Git Data API, pushes the branch, and opens a labeled pull request", async () => {
-    const client = fakeClient((route) => {
+    let body = "";
+    const client = fakeClient((route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}/pulls") return [];
+      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return { body };
+      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers") return { users: [], teams: [] };
       if (route.startsWith("GET /repos/{owner}/{repo}/labels")) return [];
       if (route.startsWith("GET /repos/{owner}/{repo}/git/commits")) return { tree: { sha: "base-tree" } };
       if (route.startsWith("POST /repos/{owner}/{repo}/git/trees")) return { sha: "new-tree" };
       if (route.startsWith("POST /repos/{owner}/{repo}/git/commits")) return { sha: "new-commit" };
-      if (route === "POST /repos/{owner}/{repo}/pulls") return { number: 42 };
+      if (route === "POST /repos/{owner}/{repo}/pulls") { body = String(parameters.body); return { number: 42 }; }
       return {};
     });
     const config = { ...DEFAULT_CONFIG.fixes, labels: ["ci"], reviewers: ["octocat", "acme/platform"] };
@@ -95,7 +132,19 @@ describe("applyFixActions", () => {
       "cicd-optimizer",
       "ci",
     ]);
-    expect(client.calls.find((call) => call.route.endsWith("requested_reviewers"))?.parameters).toMatchObject({ reviewers: ["octocat"], team_reviewers: ["platform"] });
+    expect(client.calls.find((call) => call.route.startsWith("POST") && call.route.endsWith("requested_reviewers"))?.parameters).toMatchObject({ reviewers: ["octocat"], team_reviewers: ["platform"] });
+    expect(parseMarker(body)?.attributes.pendingReviewers).toBe("octocat,acme/platform");
+    expect(parseMarker(client.calls.at(-1)?.parameters.body as string)?.attributes.pendingReviewers).toBeUndefined();
+  });
+
+  it("refuses to push a create over an existing PR even when its marker or base differs", async () => {
+    const client = fakeClient((route) => route.endsWith("/labels") ? [] : [{
+      number: 99, body: "unrelated", head: { ref: change.branch, repo: { full_name: "acme/widgets" } }, base: { ref: "release" },
+    }]);
+    await expect(applyFixActions(client, repo, [{ type: "create", change }], {
+      baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [], existing: [],
+    })).rejects.toThrow("Its branch was not changed");
+    expect(client.calls.some((call) => call.route.includes("/git/"))).toBe(false);
   });
 
   it("force-updates an existing branch and refreshes the pull request on update", async () => {

@@ -97,10 +97,20 @@ jobs:
           fi
       - uses: ./.github/actions/setup
       - run: npm run build
+      - name: Generate Action bundle
+        id: bundle
+        run: npm run bundle
       - name: Action bundle is up to date
+        id: bundle_check
         run: |
-          npm run bundle
           git diff --exit-code --stat -- dist-action || { echo "::error::dist-action is stale; run npm run bundle and commit it."; exit 1; }
+      - name: Upload generated bundle for reconciliation
+        if: failure() && steps.bundle.outcome == 'success' && steps.bundle_check.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: action-bundle-${{ github.sha }}
+          path: dist-action/index.js
+          retention-days: 1
       - name: Dogfood the linter on this repository
         uses: ./
         with:

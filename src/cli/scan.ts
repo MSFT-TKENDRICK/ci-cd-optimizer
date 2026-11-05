@@ -34,6 +34,7 @@ function issueAction(action: IssueAction) {
 }
 
 function fixAction(action: FixAction) {
+  if (action.type === "metadata") return action;
   if (action.type === "close") return { type: action.type, number: action.number, group: action.group };
   return { type: action.type, ...("number" in action ? { number: action.number } : {}), group: action.change.group, rules: action.change.rules };
 }

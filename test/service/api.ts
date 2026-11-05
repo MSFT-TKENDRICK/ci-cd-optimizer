@@ -2,6 +2,18 @@ import { fakeClient, httpError } from "../experiments/fixtures.js";
 
 const base64 = (text: string) => Buffer.from(text).toString("base64");
 
+export interface FakePull {
+  number: number;
+  title: string;
+  body: string;
+  state: string;
+  labels: string[];
+  head: { ref: string; sha: string; repo: { full_name: string } };
+  base: { ref: string };
+  requested_reviewers: Array<{ login: string }>;
+  requested_teams: Array<{ slug: string }>;
+}
+
 export interface FakeApiState {
   defaultBranch?: string;
   /** Repository files per ref (branch name or commit sha). */
@@ -9,6 +21,8 @@ export interface FakeApiState {
   /** `.github/ci-cd-optimizer.yml`, served on every ref. */
   config?: string;
   issues?: unknown[];
+  /** Supply an array to persist PR creation, labels and reviewer requests across scans. */
+  pulls?: FakePull[];
   pullHeads?: Record<number, { sha: string; ref: string }>;
   pullFiles?: Array<{ filename: string; previous_filename?: string }>;
   /** Jobs per workflow run id. */
@@ -61,9 +75,42 @@ export function fakeApi(state: FakeApiState = {}) {
       case "GET /repos/{owner}/{repo}/git/blobs/{file_sha}":
         return { content: base64(blobs.get(String(parameters.file_sha)) ?? ""), encoding: "base64" };
       case "GET /repos/{owner}/{repo}/issues":
-        return parameters.page && Number(parameters.page) > 1 ? [] : state.issues ?? [];
+        return parameters.page && Number(parameters.page) > 1 ? [] : [
+          ...state.issues ?? [],
+          ...(state.pulls ?? []).filter((pull) => pull.labels.includes("cicd-optimizer")).map((pull) => ({ ...pull, pull_request: {} })),
+        ];
+      case "GET /repos/{owner}/{repo}/pulls": {
+        const matching = (state.pulls ?? []).filter((pull) =>
+          (!parameters.head || parameters.head === `${parameters.owner}:${pull.head.ref}`) &&
+          (!parameters.base || parameters.base === pull.base.ref) &&
+          (parameters.state === "all" || parameters.state === pull.state));
+        const offset = (Number(parameters.page ?? 1) - 1) * Number(parameters.per_page ?? 100);
+        return matching.slice(offset, offset + Number(parameters.per_page ?? 100));
+      }
       case "GET /repos/{owner}/{repo}/pulls/{pull_number}":
-        return { head: state.pullHeads?.[Number(parameters.pull_number)] ?? { sha: "pr-head", ref: "cicd-optimizer/workflow" } };
+        return state.pulls?.find((pull) => pull.number === Number(parameters.pull_number)) ??
+          { head: state.pullHeads?.[Number(parameters.pull_number)] ?? { sha: "pr-head", ref: "cicd-optimizer/workflow" } };
+      case "GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers": {
+        const pull = state.pulls?.find((pull) => pull.number === Number(parameters.pull_number));
+        return { users: pull?.requested_reviewers ?? [], teams: pull?.requested_teams ?? [] };
+      }
+      case "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers": {
+        const pull = state.pulls?.find((pull) => pull.number === Number(parameters.pull_number));
+        pull?.requested_reviewers.push(...(parameters.reviewers as string[]).map((login) => ({ login })));
+        pull?.requested_teams.push(...(parameters.team_reviewers as string[]).map((slug) => ({ slug })));
+        return {};
+      }
+      case "POST /repos/{owner}/{repo}/issues/{issue_number}/labels": {
+        const pull = state.pulls?.find((pull) => pull.number === Number(parameters.issue_number));
+        if (pull) pull.labels = [...new Set([...pull.labels, ...parameters.labels as string[]])];
+        return {};
+      }
+      case "PATCH /repos/{owner}/{repo}/pulls/{pull_number}": {
+        const pull = state.pulls?.find((pull) => pull.number === Number(parameters.pull_number));
+        if (pull && typeof parameters.body === "string") pull.body = parameters.body;
+        if (pull && typeof parameters.state === "string") pull.state = parameters.state;
+        return {};
+      }
       case "GET /repos/{owner}/{repo}/pulls/{pull_number}/files":
         return parameters.page && Number(parameters.page) > 1 ? [] : state.pullFiles ?? [];
       case "GET /repos/{owner}/{repo}/labels":
@@ -86,6 +133,12 @@ export function fakeApi(state: FakeApiState = {}) {
       case "POST /repos/{owner}/{repo}/git/commits":
         return { sha: "new-commit" };
       case "POST /repos/{owner}/{repo}/pulls":
+        if (state.pulls?.some((pull) => pull.head.ref === parameters.head && pull.base.ref === parameters.base && pull.state === "open")) throw httpError(422);
+        state.pulls?.push({
+          number: 42, title: String(parameters.title), body: String(parameters.body), state: "open", labels: [],
+          head: { ref: String(parameters.head), sha: "new-commit", repo: { full_name: `${parameters.owner}/${parameters.repo}` } },
+          base: { ref: String(parameters.base) }, requested_reviewers: [], requested_teams: [],
+        });
         return { number: 42 };
       case "POST /repos/{owner}/{repo}/issues":
         return { number: (nextId += 1) };

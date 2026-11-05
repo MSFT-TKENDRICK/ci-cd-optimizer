@@ -93,9 +93,13 @@ export async function applyRecipe(client: GitHubClient, target: RepoRef, recipe:
   const compat = compatibility(options.compatibility ?? recipe.compatibility);
   const render = { compatibility: compat, ...(options.server ? { server: options.server } : {}) };
   const group = recipeGroup(recipe);
-  const existingPulls = (await listManagedPullRequests(client, target)).filter((pr) => pr.group === group);
+  const existingPulls = (await listManagedPullRequests(client, target, {
+    baseBranch: branch, branchPrefix: config.fixes.branchPrefix, groups: [group],
+  })).filter((pr) => pr.group === group);
   const fixes = { ...config.fixes, labels: [...new Set([...config.fixes.labels, `recipe:${recipe.id}`, ...config.recipes.labels])] };
-  const fixPlan = planFixPullRequests(plan.change ? [plan.change] : [], existingPulls, { openPullRequestsLimit: 1 });
+  const fixPlan = planFixPullRequests(plan.change ? [plan.change] : [], existingPulls, {
+    openPullRequestsLimit: 1, labels: ["cicd-optimizer", ...fixes.labels], reviewers: fixes.reviewers,
+  });
   const appliedPulls = await applyFixActions(client, target, fixPlan.actions, {
     baseBranch: branch,
     baseSha: snapshot.sha,

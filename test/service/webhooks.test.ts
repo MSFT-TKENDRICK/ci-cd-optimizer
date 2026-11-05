@@ -6,10 +6,11 @@ import { createNodeMiddleware, Probot, ProbotOctokit } from "probot";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app.js";
 import { httpStatus } from "../../src/github/client.js";
-import { marker } from "../../src/issues/markers.js";
+import { marker, parseMarker } from "../../src/issues/markers.js";
 import { PostgresWebhookQueue, type DeliveryQueue } from "../../src/webhooks/postgres-queue.js";
 import { registerDurableIngress } from "../../src/webhooks/worker.js";
 import { isolatedDatabase } from "../webhooks/database.js";
+import { httpError } from "../experiments/fixtures.js";
 import { callsTo, CLEAN, fakeApi, MISSING_TIMEOUT, TIMEOUT_ONLY, WORKFLOW, type FakeApiState } from "./api.js";
 
 // Ephemeral test credentials only; the transport never calls a real GitHub endpoint.
@@ -38,6 +39,8 @@ const endpoints = [
   "GET /repos/{owner}/{repo}/git/ref/{ref}",
   "GET /repos/{owner}/{repo}/git/commits/{commit_sha}",
   "GET /repos/{owner}/{repo}/pulls/{pull_number}",
+  "GET /repos/{owner}/{repo}/pulls",
+  "GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers",
   "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
   "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs",
   "GET /repos/{owner}/{repo}/collaborators/{username}/permission",
@@ -49,6 +52,7 @@ const endpoints = [
   "POST /repos/{owner}/{repo}/git/commits",
   "POST /repos/{owner}/{repo}/git/refs",
   "POST /repos/{owner}/{repo}/pulls",
+  "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers",
   "POST /repos/{owner}/{repo}/check-runs",
   "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}",
   "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
@@ -190,6 +194,52 @@ describe("signed GitHub App HTTP delivery", () => {
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")[0]?.parameters).toMatchObject({ owner: "acme", repo: "widgets", base: "main" });
     expect(JSON.stringify(callsTo(app.api, "POST /repos/{owner}/{repo}/git/trees"))).toContain("timeout-minutes");
   });
+
+  it.each([
+    { fault: "label failure", route: "POST /repos/{owner}/{repo}/issues/{issue_number}/labels", before: true },
+    { fault: "lost create response", route: "POST /repos/{owner}/{repo}/pulls", before: false },
+    { fault: "reviewer failure", route: "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", before: true },
+    { fault: "lost reviewer response", route: "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", before: false },
+  ].flatMap((fault) => [false, true].map((humanEdits) => ({ ...fault, humanEdits }))))(
+    "recovers $fault without rewriting the branch (human edits: $humanEdits)",
+    async ({ route: failedRoute, before, humanEdits }) => {
+      const state: FakeApiState = {
+        config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n  branchPrefix: ci-bot/\n  labels: [ci]\n  reviewers: [alice, acme/platform]\n`,
+        refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } }, pulls: [],
+      };
+      const app = await harness(state);
+      const original = app.api.request.bind(app.api);
+      let injected = false;
+      vi.spyOn(app.api, "request").mockImplementation(async (route, parameters = {}) => {
+        if (!injected && route === failedRoute && before) { injected = true; throw httpError(500); }
+        const response = await original(route, parameters);
+        if (!injected && route === failedRoute) { injected = true; throw httpError(500); }
+        return response;
+      });
+      expect(await app.send("push", push)).toBe(500);
+      const pull = state.pulls?.[0];
+      if (!pull) throw new Error("Expected a persisted PR before failure");
+      expect(pull.head.ref).toBe("ci-bot/workflow");
+      if (humanEdits) {
+        pull.head.sha = "maintainer-commit";
+        pull.body += "\nMaintainer review notes.";
+      }
+      expect(await app.send("push", push)).toBe(200);
+      expect(await app.send("push", push)).toBe(200);
+      expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
+      expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toHaveLength(1);
+      expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/refs")).toHaveLength(1);
+      expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers")).toHaveLength(1);
+      expect(pull.labels).toEqual(["cicd-optimizer", "ci"]);
+      expect(parseMarker(pull.body)?.attributes.pendingReviewers).toBeUndefined();
+      expect(pull.requested_reviewers).toEqual([{ login: "alice" }]);
+      expect(pull.requested_teams).toEqual([{ slug: "platform" }]);
+      if (humanEdits) {
+        expect(pull.head.sha).toBe("maintainer-commit");
+        expect(pull.body).toContain("Maintainer review notes.");
+      }
+    },
+  );
 
   it.each(["invalid", "missing"] as const)("rejects a %s signature without authenticating or writing", async (signature) => {
     const app = await harness();
@@ -423,7 +473,7 @@ describe.skipIf(!process.env.DATABASE_URL)("durable HTTP delivery through Postgr
     db = await isolatedDatabase(process.env.DATABASE_URL!);
     ingress = new PostgresWebhookQueue(db.url);
     await ingress.initialize();
-    worker = new PostgresWebhookQueue(db.url);
+    worker = new PostgresWebhookQueue(db.url, { retryDelayMs: 0 });
   });
   afterAll(async () => {
     await ingress?.close();
@@ -446,5 +496,31 @@ describe.skipIf(!process.env.DATABASE_URL)("durable HTTP delivery through Postgr
     expect(await app.send("push", push, "valid", id)).toBe(200);
     expect((await worker.processNext((delivery) => app.probot.receive(delivery))).status).toBe("idle");
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
+  });
+
+  it.each([false, true])("retries a partially created PR without another commit (human edits: %s)", async (humanEdits) => {
+    let failLabels = true;
+    const state: FakeApiState = {
+      config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n`,
+      refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } }, pulls: [],
+      failOn: (route) => failLabels && route === "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
+    };
+    const app = await harness(state, ingress);
+    const id = randomUUID();
+    expect(await app.send("push", push, "valid", id)).toBe(200);
+    expect(await worker.processNext((delivery) => app.probot.receive(delivery))).toMatchObject({ status: "retrying", id, attempts: 1 });
+    const pull = state.pulls?.[0];
+    if (!pull) throw new Error("Expected a persisted unlabeled PR");
+    expect(pull.labels).toEqual([]);
+    if (humanEdits) pull.head.sha = "maintainer-commit";
+    failLabels = false;
+    expect(await worker.processNext((delivery) => app.probot.receive(delivery))).toMatchObject({ status: "completed", id });
+    expect(await ingress.status(id)).toMatchObject([{ status: "completed", attempts: 2 }]);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toHaveLength(1);
+    expect(pull.labels).toEqual(["cicd-optimizer"]);
+    if (humanEdits) expect(pull.head.sha).toBe("maintainer-commit");
+    expect(await app.send("push", push, "valid", id)).toBe(200);
+    expect((await worker.processNext((delivery) => app.probot.receive(delivery))).status).toBe("idle");
   });
 });

@@ -30,7 +30,7 @@ export function isIgnored(diagnostic: Pick<Diagnostic, "ruleId" | "path">, confi
   );
 }
 
-export function branchFor(group: string, config: FixesConfig): string {
+export function branchFor(group: string, config: Pick<FixesConfig, "branchPrefix">): string {
   return `${config.branchPrefix}${group.toLowerCase().replace(/[^a-z0-9._/-]+/g, "-").replace(/^-+|-+$/g, "")}`;
 }
 
@@ -112,11 +112,14 @@ export interface ExistingFixPullRequest {
   commitSha?: string;
   /** Current head of the PR branch; differs from `commitSha` when someone else pushed. */
   headSha?: string;
+  labels?: readonly string[];
+  pendingReviewers?: readonly string[];
 }
 
 export type FixAction =
   | { type: "create"; change: FixChange }
   | { type: "update"; number: number; change: FixChange }
+  | { type: "metadata"; number: number; group: string; labels: string[]; reviewers: string[] }
   | { type: "close"; number: number; group: string; branch?: string; comment: string };
 
 export interface SkippedFix {
@@ -132,6 +135,8 @@ export interface FixPlan {
 
 export interface FixPlanOptions {
   openPullRequestsLimit: number;
+  labels?: readonly string[];
+  reviewers?: readonly string[];
   /** Groups to rebuild even when unchanged (`rebase`); refuses when someone else pushed to the branch. */
   rebase?: ReadonlySet<string>;
   /** Groups to rebuild unconditionally, overwriting edits (`recreate`). */
@@ -195,5 +200,21 @@ export function planFixPullRequests(changes: readonly FixChange[], existing: rea
     actions.push({ type: "create", change });
     open += 1;
   }
-  return { actions, skipped };
+  const metadata: FixAction[] = [];
+  for (const pr of newestFirst) {
+    if (pr.state !== "open") continue;
+    const currentLabels = new Set((pr.labels ?? []).map((label) => label.toLowerCase()));
+    const labels = [...new Set(options.labels ?? [])].filter((label) => !currentLabels.has(label.toLowerCase()));
+    const closing = actions.some((action) => action.type === "close" && action.number === pr.number);
+    const pending = closing ? [] : pr.pendingReviewers ?? [];
+    if (labels.length === 0 && pending.length === 0) continue;
+    metadata.push({
+      type: "metadata",
+      number: pr.number,
+      group: pr.group,
+      labels,
+      reviewers: pending.filter((reviewer) => options.reviewers?.includes(reviewer)),
+    });
+  }
+  return { actions: [...metadata, ...actions], skipped };
 }

@@ -102,6 +102,22 @@ and a lost lock cannot fence an already-issued GitHub request. Comments or parti
 manual reconciliation. Coordinate all App replicas through the same database, and do not run independent write-enabled
 Action/CLI scans concurrently with them.
 
+Fix and recipe scans also recover a PR created before its labeling request succeeded, including when the create
+response was lost. They query GitHub directly by the configured group branch and base, validate the same-repository
+head and fix marker, and then use the normal planner. An unchanged PR gets only missing metadata; human commits
+still prevent rebuilding, and closing an unlabeled PR still declines that change. A conflicting open PR is an explicit
+error before any branch write. Discovery fails closed at 1,000 PRs for one group branch rather than planning from
+an incomplete history. Keep the original group and branch prefix configured until a partial creation is reconciled.
+
+New PRs record pending reviewer setup in their fix marker. Retrying restores missing labels and finishes that setup
+without rebuilding the branch, skipping users/teams whose review requests are still pending. Removed configuration
+entries are not requested on retry. GitHub reviewer errors (including 422) now fail explicitly instead of being ignored;
+correct the reviewer configuration, or make a draft PR ready for review, before redelivery. A review completed between
+the original request and recovery can still be requested again: this is not an exactly-once notification guarantee.
+Older PRs created without the pending-reviewer marker cannot retroactively recover a lost reviewer request.
+Branch-only writes made before PR creation, comment replays, and other partial operations still require operator
+reconciliation; the queue is not a transaction across GitHub and Postgres.
+
 Monitor queue age and failed jobs in addition to `/ping` and process health:
 
 ```sql

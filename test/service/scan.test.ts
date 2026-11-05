@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { marker, parseMarker } from "../../src/issues/markers.js";
 import { describeScan, scanRepository } from "../../src/service/scan.js";
 import { repo } from "../experiments/fixtures.js";
-import { callsTo, CLEAN, fakeApi, MISSING_TIMEOUT, TIMEOUT_ONLY, WORKFLOW, writes } from "./api.js";
+import { callsTo, CLEAN, fakeApi, MISSING_TIMEOUT, TIMEOUT_ONLY, WORKFLOW, writes, type FakeApiState } from "./api.js";
 
 const enabled = `${TIMEOUT_ONLY}issues:\n  enabled: true\nfixes:\n  enabled: true\n`;
 const findingIssue = (number: number, fingerprint: string, state = "open") => ({
@@ -78,6 +78,39 @@ describe("scanRepository", () => {
     expect(scan.issues?.actions).toHaveLength(1);
     expect(scan.issues?.applied).toEqual([]);
     expect(scan.fixes?.actions).toHaveLength(1);
+    expect(writes(client)).toHaveLength(0);
+  });
+
+  it("reports metadata repair in dry-run mode without performing it", async () => {
+    let failLabels = true;
+    const state: FakeApiState = {
+      config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n`, refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } }, pulls: [],
+      failOn: (route) => failLabels && route === "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
+    };
+    const client = fakeApi(state);
+    await expect(scanRepository(client, repo)).rejects.toThrow("500");
+    failLabels = false;
+    client.calls.length = 0;
+    const scan = await scanRepository(client, repo, { dryRun: true });
+    expect(scan.fixes?.actions).toEqual([{ type: "metadata", number: 42, group: "workflow", labels: ["cicd-optimizer"], reviewers: [] }]);
+    expect(scan.fixes?.skipped[0]?.reason).toBe("up-to-date");
+    expect(describeScan(scan)).toContain("fix PRs: 1 metadata");
+    expect(writes(client)).toHaveLength(0);
+  });
+
+  it("respects a PR declined after creation but before successful labeling", async () => {
+    const state: FakeApiState = {
+      config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n`, refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } }, pulls: [],
+      failOn: (route) => route === "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
+    };
+    const client = fakeApi(state);
+    await expect(scanRepository(client, repo)).rejects.toThrow("500");
+    const pull = state.pulls?.[0];
+    if (!pull) throw new Error("Expected created PR");
+    pull.state = "closed";
+    client.calls.length = 0;
+    const scan = await scanRepository(client, repo);
+    expect(scan.fixes?.skipped).toEqual([{ group: "workflow", number: 42, reason: "declined" }]);
     expect(writes(client)).toHaveLength(0);
   });
 

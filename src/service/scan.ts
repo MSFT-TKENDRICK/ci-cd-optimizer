@@ -94,7 +94,11 @@ export async function scanRepository(client: GitHubClient, repo: RepoRef, option
 
   if (onDefaultBranch && options.fixes !== false && config.fixes.enabled) {
     // Recipe pull requests are owned by their rollout; leave them alone here.
-    const existing = (await listManagedPullRequests(client, repo)).filter((pr) => !isRecipeGroup(pr.group));
+    const existing = (await listManagedPullRequests(client, repo, {
+      baseBranch: branch,
+      branchPrefix: config.fixes.branchPrefix,
+      groups: [...Object.keys(config.fixes.groups), ...allRules.map((rule) => rule.meta.ruleset)],
+    })).filter((pr) => !isRecipeGroup(pr.group));
     const changes = computeFixChanges({
       input,
       // Fixing a file the inventory only partly read would truncate it.
@@ -107,6 +111,8 @@ export async function scanRepository(client: GitHubClient, repo: RepoRef, option
     });
     const plan = planFixPullRequests(changes, existing, {
       openPullRequestsLimit: config.fixes.openPullRequestsLimit,
+      labels: ["cicd-optimizer", ...config.fixes.labels],
+      reviewers: config.fixes.reviewers,
       ...(options.rebase ? { rebase: options.rebase } : {}),
       ...(options.recreate ? { recreate: options.recreate } : {}),
     });

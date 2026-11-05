@@ -1,10 +1,10 @@
 import type { FixesConfig } from "../lint/config.js";
 import type { AnyRule } from "../lint/types.js";
-import { ensureLabels, httpStatus, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
+import { ensureLabels, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
 import { commitFiles, deleteBranch, pushBranch } from "../github/git.js";
 import { parseMarker, updateMarker } from "../issues/markers.js";
 import type { FixCommand } from "./commands.js";
-import type { Dismissals, ExistingFixPullRequest, FixAction, FixChange } from "./plan.js";
+import { branchFor, type Dismissals, type ExistingFixPullRequest, type FixAction, type FixChange } from "./plan.js";
 import { commitMessage, fixBody, fixTitle } from "./render.js";
 
 export const IGNORED_LABEL = "cicd-optimizer:ignored";
@@ -27,11 +27,44 @@ interface RawIssue {
   pull_request?: { merged_at?: string | null };
 }
 
+interface RawPull extends RawIssue {
+  merged_at?: string | null;
+  head: { sha: string; ref: string; repo: { full_name: string } | null };
+  base: { ref: string };
+}
+
+interface FixDiscovery {
+  baseBranch: string;
+  branchPrefix: string;
+  groups: readonly string[];
+}
+
 const list = (value: string | undefined) => (value ? value.split(",").filter(Boolean) : []);
 
-/** Fix pull requests opened by this app, found via label + marker (cheaper than listing every PR). */
-export async function listManagedPullRequests(client: GitHubClient, repo: RepoRef): Promise<ManagedPullRequest[]> {
+/** Labels retain historical PRs; deterministic head/base lookups recover PRs whose initial labeling failed. */
+export async function listManagedPullRequests(client: GitHubClient, repo: RepoRef, discovery?: FixDiscovery): Promise<ManagedPullRequest[]> {
   const raw = await paginate<RawIssue>(client, "GET /repos/{owner}/{repo}/issues", { ...repo, state: "all", labels: "cicd-optimizer" });
+  const heads = new Map<number, RawPull["head"]>();
+  if (discovery) {
+    const known = new Set(raw.map((issue) => issue.number));
+    for (const group of new Set(discovery.groups)) {
+      if (raw.some((issue) => issue.pull_request && issue.state === "open" && parseMarker(issue.body)?.fingerprint === `group:${group}`)) continue;
+      const branch = branchFor(group, discovery);
+      const pulls = await paginate<RawPull>(client, "GET /repos/{owner}/{repo}/pulls", {
+        ...repo, state: "all", head: `${repo.owner}:${branch}`, base: discovery.baseBranch, sort: "created", direction: "desc",
+      });
+      if (pulls.length === 1000) throw new Error(`Fix PR discovery reached its 1000-result limit for ${branch}; refusing an incomplete reconciliation.`);
+      for (const pull of pulls) {
+        if (known.has(pull.number) || pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase() ||
+          pull.head.ref !== branch || pull.base.ref !== discovery.baseBranch) continue;
+        const parsed = parseMarker(pull.body);
+        if (parsed?.kind !== "fix" || parsed.fingerprint !== `group:${group}` || !parsed.attributes.signature || !parsed.attributes.commit) continue;
+        raw.push({ ...pull, pull_request: { merged_at: pull.merged_at ?? null } });
+        heads.set(pull.number, pull.head);
+        known.add(pull.number);
+      }
+    }
+  }
   const result: ManagedPullRequest[] = [];
   for (const issue of raw) {
     if (!issue.pull_request) continue;
@@ -48,12 +81,16 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
       rules: list(parsed.attributes.rules),
       ignoredRules: list(parsed.attributes.ignored),
       ignoredGroup: parsed.attributes.ignoredGroup === "true",
+      pendingReviewers: list(parsed.attributes.pendingReviewers),
       ...(parsed.attributes.signature ? { signature: parsed.attributes.signature } : {}),
       ...(parsed.attributes.commit ? { commitSha: parsed.attributes.commit } : {}),
     };
     if (pr.state === "open") {
-      const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr.number });
-      const head = (response.data as { head?: { sha?: string; ref?: string } }).head;
+      let head: { sha?: string; ref?: string } | undefined = heads.get(pr.number);
+      if (!head) {
+        const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr.number });
+        head = (response.data as { head?: { sha?: string; ref?: string } }).head;
+      }
       if (head?.sha) pr.headSha = head.sha;
       if (head?.ref) pr.branch = head.ref;
     }
@@ -95,11 +132,49 @@ export interface AppliedFixAction {
   commitSha?: string;
 }
 
+async function finishReviewRequests(client: GitHubClient, repo: RepoRef, number: number, group: string, reviewers: readonly string[]): Promise<void> {
+  const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number });
+  const body = (response.data as { body: string | null }).body;
+  const parsed = parseMarker(body);
+  if (!parsed || parsed.kind !== "fix" || parsed.fingerprint !== `group:${group}`) {
+    throw new Error(`Fix marker changed on PR #${number}; refusing to overwrite its body.`);
+  }
+  if (!parsed.attributes.pendingReviewers) return;
+  if (reviewers.length > 0) {
+    const requested = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", { ...repo, pull_number: number });
+    const current = requested.data as { users: Array<{ login: string }>; teams: Array<{ slug: string }> };
+    const users = new Set(current.users.map((user) => user.login.toLowerCase()));
+    const teams = new Set(current.teams.map((team) => team.slug.toLowerCase()));
+    const missingUsers = reviewers.filter((reviewer) => !reviewer.includes("/") && !users.has(reviewer.toLowerCase()));
+    const missingTeams = reviewers.filter((reviewer) => reviewer.includes("/")).map((team) => team.split("/")[1] as string)
+      .filter((team) => !teams.has(team.toLowerCase()));
+    if (missingUsers.length > 0 || missingTeams.length > 0) {
+      await client.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", {
+        ...repo, pull_number: number, reviewers: missingUsers, team_reviewers: missingTeams,
+      });
+    }
+  }
+  await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", {
+    ...repo, pull_number: number, body: updateMarker(body ?? "", "fix", parsed.fingerprint, { pendingReviewers: "" }),
+  });
+}
+
 export async function applyFixActions(client: GitHubClient, repo: RepoRef, actions: readonly FixAction[], options: ApplyFixOptions): Promise<AppliedFixAction[]> {
   const labels = ["cicd-optimizer", ...options.config.labels];
-  if (actions.some((action) => action.type === "create")) await ensureLabels(client, repo, labels);
+  const neededLabels = actions.flatMap((action) => action.type === "create" ? labels : action.type === "metadata" ? action.labels : []);
+  if (neededLabels.length > 0) await ensureLabels(client, repo, neededLabels);
   const applied: AppliedFixAction[] = [];
   for (const action of actions) {
+    if (action.type === "metadata") {
+      if (action.labels.length > 0) {
+        await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: action.number, labels: action.labels });
+      }
+      const previous = options.existing.find((pr) => pr.number === action.number);
+      const closing = actions.some((candidate) => candidate.type === "close" && candidate.number === action.number);
+      if (!closing && previous?.pendingReviewers?.length) await finishReviewRequests(client, repo, action.number, action.group, action.reviewers);
+      applied.push({ action, number: action.number });
+      continue;
+    }
     if (action.type === "close") {
       await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: action.number, body: action.comment });
       await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: action.number, state: "closed" });
@@ -108,16 +183,28 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
       continue;
     }
     const { change } = action;
+    if (action.type === "create") {
+      const response = await client.request("GET /repos/{owner}/{repo}/pulls", {
+        ...repo, state: "open", head: `${repo.owner}:${change.branch}`, per_page: 100,
+      });
+      if ((response.data as RawPull[]).some((pull) => pull.head.ref === change.branch &&
+        pull.head.repo?.full_name.toLowerCase() === `${repo.owner}/${repo.repo}`.toLowerCase())) {
+        throw new Error(`An open PR already uses ${change.branch}; reconcile it before creating another. Its branch was not changed.`);
+      }
+    }
     const commitSha = await commitFiles(client, repo, options.baseSha, change.files, commitMessage(change));
     await pushBranch(client, repo, change.branch, commitSha);
     const previous = action.type === "update" ? options.existing.find((pr) => pr.number === action.number) : undefined;
     const ignoredRules = previous?.ignoredRules ?? [];
-    const body = options.render?.body ? options.render.body(change, { commitSha, ignoredRules }) : fixBody(change, { rules: options.rules, commitSha, ignoredRules });
+    let body = options.render?.body ? options.render.body(change, { commitSha, ignoredRules }) : fixBody(change, { rules: options.rules, commitSha, ignoredRules });
     const title = options.render?.title ? options.render.title(change) : fixTitle(change);
     if (action.type === "update") {
       await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: action.number, title, body });
       applied.push({ action, number: action.number, commitSha });
       continue;
+    }
+    if (options.config.reviewers.length > 0) {
+      body = updateMarker(body, "fix", `group:${change.group}`, { pendingReviewers: options.config.reviewers.join(",") });
     }
     const created = await client.request("POST /repos/{owner}/{repo}/pulls", {
       ...repo,
@@ -131,18 +218,7 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
     const number = (created.data as { number: number }).number;
     await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: number, labels });
     if (options.config.reviewers.length > 0) {
-      const reviewers = options.config.reviewers.filter((reviewer) => !reviewer.includes("/"));
-      const teams = options.config.reviewers.filter((reviewer) => reviewer.includes("/")).map((team) => team.split("/")[1] as string);
-      try {
-        await client.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", {
-          ...repo,
-          pull_number: number,
-          reviewers,
-          team_reviewers: teams,
-        });
-      } catch (error) {
-        if (httpStatus(error) !== 422) throw error;
-      }
+      await finishReviewRequests(client, repo, number, change.group, options.config.reviewers);
     }
     applied.push({ action, number, commitSha });
   }

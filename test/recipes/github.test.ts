@@ -17,7 +17,7 @@ const recipePull = (overrides: Record<string, unknown> = {}, attributes: Record<
   title: "ci: recipe",
   state: "open",
   body: `${marker("fix", "group:recipe-job-timeouts", { signature: "old", commit: "head-sha", ...attributes })}\n${marker("recipe", "job-timeouts", { revision })}`,
-  labels: [{ name: "cicd-optimizer" }],
+  labels: [{ name: "cicd-optimizer" }, { name: "recipe:job-timeouts" }],
   pull_request: { merged_at: null },
   ...overrides,
 });
@@ -58,6 +58,25 @@ describe("applyRecipe", () => {
     const result = await applyRecipe(client, target, sampleRecipe());
     expect(result).toMatchObject({ pullRequest: 30, attempted: true });
     expect(routes(client).some((route) => route.startsWith("POST") || route.startsWith("PATCH"))).toBe(false);
+  });
+
+  it.each([false, true])("recovers an unlabeled recipe PR without rewriting its branch (human edits: %s)", async (humanEdits) => {
+    const plan = planRecipe({ recipe: sampleRecipe(), input: workflowInput(MISSING_TIMEOUT), config: defaultConfig() });
+    const pull = recipePull({
+      labels: [],
+      head: { ref: "custom/recipe-job-timeouts", sha: humanEdits ? "maintainer-commit" : "head-sha", repo: { full_name: "acme/web" } },
+      base: { ref: "main" },
+    }, { signature: plan.change?.signature as string });
+    const client = server({
+      files: workflow(MISSING_TIMEOUT), config: "fixes:\n  branchPrefix: custom/\n", pulls: [pull],
+    });
+    const result = await applyRecipe(client, target, sampleRecipe());
+    expect(result).toMatchObject({ pullRequest: 30, attempted: true });
+    expect(routes(client)).not.toContain("POST /repos/{owner}/{repo}/pulls");
+    expect(routes(client)).not.toContain("POST /repos/{owner}/{repo}/git/commits");
+    expect(routes(client)).not.toContain("PATCH /repos/{owner}/{repo}/pulls/{pull_number}");
+    expect(client.calls.find((call) => call.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/labels")?.parameters)
+      .toMatchObject({ issue_number: 30, labels: ["cicd-optimizer", "recipe:job-timeouts"] });
   });
 
   it("opens an adaptation issue labeled for the coding agent when no autofix applies", async () => {

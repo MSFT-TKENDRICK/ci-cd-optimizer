@@ -146,6 +146,23 @@ function pr(overrides: Partial<ExistingFixPullRequest> & Pick<ExistingFixPullReq
 }
 
 describe("planFixPullRequests", () => {
+  it("repairs pending metadata independently of changed or human-edited branch contents", () => {
+    const existing = [pr({ number: 1, group: "a", headSha: "human", labels: ["CI"], pendingReviewers: ["alice", "removed"] })];
+    const plan = planFixPullRequests([change("a", "s1")], existing, {
+      openPullRequestsLimit: 0, labels: ["cicd-optimizer", "ci"], reviewers: ["alice"],
+    });
+    expect(plan.actions).toEqual([{ type: "metadata", number: 1, group: "a", labels: ["cicd-optimizer"], reviewers: ["alice"] }]);
+    expect(plan.skipped).toEqual([{ group: "a", reason: "edited", number: 1 }]);
+  });
+
+  it("does not request reviews for a PR that is being closed", () => {
+    const plan = planFixPullRequests([], [pr({ number: 1, group: "a", labels: [], pendingReviewers: ["alice"] })], {
+      openPullRequestsLimit: 5, labels: ["cicd-optimizer"], reviewers: ["alice"],
+    });
+    expect(plan.actions.map((action) => action.type)).toEqual(["metadata", "close"]);
+    expect(plan.actions[0]).toMatchObject({ reviewers: [] });
+  });
+
   it("creates new pull requests within the open limit (0 disables)", () => {
     const plan = planFixPullRequests([change("a", "s1"), change("b", "s1"), change("c", "s1")], [], { openPullRequestsLimit: 2 });
     expect(plan.actions.map((action) => action.type)).toEqual(["create", "create"]);
