@@ -1,5 +1,5 @@
 import { httpStatus, type GitHubClient, type RepoRef } from "../github/client.js";
-import { loadRepositorySnapshot, type RepositorySnapshot } from "../github/repository.js";
+import { loadRepositorySnapshot, resolveRepositoryRevision, type RepositoryRevision, type RepositorySnapshot } from "../github/repository.js";
 import { extractKnowledge, isKnowledgePath } from "../knowledge/extract.js";
 import { inventoryPolicyDigest, validateRevision } from "../knowledge/identity.js";
 import { loadKnowledgeIdentity } from "../knowledge/repository.js";
@@ -26,7 +26,13 @@ export async function collectRunKnowledge(
     coverage.inventoryPolicyDigest === policy && coverage.inventoryComplete && coverage.declarationsComplete &&
     coverage.truncated.length === 0 && coverage.problems.length === 0;
   let project: KnowledgeSnapshot | undefined;
-  if (options.store) {
+  let resolvedRevision: RepositoryRevision | undefined;
+  try { resolvedRevision = await resolveRepositoryRevision(client, repo, run.headSha); }
+  catch (error) {
+    if (httpStatus(error) !== 404) throw error;
+  }
+  if (resolvedRevision && resolvedRevision.sha !== run.headSha) throw new Error("Run source revision changed during collection");
+  if (resolvedRevision && options.store) {
     const candidates = await options.store.list({ ...repository, revision: run.headSha, limit: 100 });
     const reusable = candidates.find(reusableCoverage);
     if (reusable) {
@@ -38,9 +44,9 @@ export async function collectRunKnowledge(
       }
     }
   }
-  if (!project) {
+  if (resolvedRevision && !project) {
     let source: RepositorySnapshot | undefined;
-    try { source = await loadRepositorySnapshot(client, repo, { ref: run.headSha, config, pathFilter: isKnowledgePath }); }
+    try { source = await loadRepositorySnapshot(client, repo, { ref: run.headSha, config, pathFilter: isKnowledgePath, resolvedRevision }); }
     catch (error) {
       if (httpStatus(error) !== 404) throw error;
       // A deleted/inaccessible revision is explicit missing context, not an empty successful inventory.

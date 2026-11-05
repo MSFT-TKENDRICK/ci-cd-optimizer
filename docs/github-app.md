@@ -80,7 +80,8 @@ delivery. Invalid configuration skips knowledge explicitly without initializing 
 
 Use `ci-cd-optimizer telemetry --run-id <id> --knowledge --dry-run --format json` for a non-persisting runtime/source
 preview (requires Contents read as well as Actions read). Repeated runs at one revision reuse only complete source
-evidence collected under the same ignore/limit policy, after rechecking repository identity. Reports distinguish source
+evidence collected under the same ignore/limit policy, after rechecking repository identity and current commit-read
+access. Metadata access alone never unlocks cached source evidence. Reports distinguish source
 declarations from actual project execution. Runtime source backfill, project/task attribution, installed tool/cache
 telemetry and learned mitigation evaluation are not inferred from these links.
 

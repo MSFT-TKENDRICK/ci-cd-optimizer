@@ -49,9 +49,10 @@ describe("run source context collection", () => {
     const second = await collectRunKnowledge(client, repository, { ...runtime(), runId: 101 }, DEFAULT_CONFIG, { store, now });
     expect(second.project?.id).toBe(first.project?.id);
     expect(callsTo(client, "GET /repos/{owner}/{repo}")).toHaveLength(1);
-    expect(callsTo(client, "GET /repos/{owner}/{repo}/commits/{ref}")).toHaveLength(0);
-    await collectRunKnowledge(client, repository, runtime(), { ...DEFAULT_CONFIG, limits: { ...DEFAULT_CONFIG.limits, maxFiles: 1 } }, { store, now });
     expect(callsTo(client, "GET /repos/{owner}/{repo}/commits/{ref}")).toHaveLength(1);
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/git/trees/{tree_sha}")).toHaveLength(0);
+    await collectRunKnowledge(client, repository, runtime(), { ...DEFAULT_CONFIG, limits: { ...DEFAULT_CONFIG.limits, maxFiles: 1 } }, { store, now });
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/commits/{ref}")).toHaveLength(2);
   });
 
   it("retains a 404 as explicit unknown source but surfaces forbidden and transient failures", async () => {
@@ -122,5 +123,25 @@ describe("run source context collection", () => {
     await expect(processWorkflowRun(client, repository, payload(), { expectedRepositoryId: 43 })).rejects.toThrow("identity changed");
     expect(client.calls).toHaveLength(1);
     expect(writes(client)).toEqual([]);
+  });
+
+  it.each([403, 404])("never uses cached source after the current commit read returns %s", async (status) => {
+    const store = new MemoryKnowledgeStore();
+    const client = api();
+    await collectRunKnowledge(client, repository, runtime(), DEFAULT_CONFIG, { store, now });
+    const list = vi.spyOn(store, "list");
+    const original = client.request.bind(client);
+    vi.spyOn(client, "request").mockImplementation(async (route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}/commits/{ref}") throw httpError(status);
+      return original(route, parameters);
+    });
+    const result = collectRunKnowledge(client, repository, { ...runtime(), runId: 101 }, DEFAULT_CONFIG, { store, now });
+    if (status === 403) await expect(result).rejects.toThrow();
+    else {
+      const unknown = await result;
+      expect(unknown.project).toBeUndefined();
+      expect(unknown.observation.source.status).toBe("unavailable");
+    }
+    expect(list).not.toHaveBeenCalled();
   });
 });

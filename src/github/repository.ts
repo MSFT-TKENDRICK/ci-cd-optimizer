@@ -49,6 +49,20 @@ interface TreeEntry {
   size?: number;
 }
 
+export interface RepositoryRevision {
+  sha: string;
+  treeSha: string;
+}
+
+export async function resolveRepositoryRevision(client: GitHubClient, repo: RepoRef, ref: string): Promise<RepositoryRevision> {
+  const response = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { ...repo, ref });
+  const data = response.data as { sha?: unknown; commit?: { tree?: { sha?: unknown } } } | null | undefined;
+  if (!data || typeof data.sha !== "string" || !data.sha || typeof data.commit?.tree?.sha !== "string" || !data.commit.tree.sha) {
+    throw new Error("Repository commit response lacks an immutable revision and tree");
+  }
+  return { sha: data.sha, treeSha: data.commit.tree.sha };
+}
+
 /**
  * Loads the analysis input for a repository through the REST API (one recursive tree call plus one blob call per
  * selected file), so remote repositories can be linted without a checkout.
@@ -60,11 +74,13 @@ export async function loadRepositorySnapshot(
     ref: string; config: Pick<LintConfig, "ignorePaths" | "limits">; change?: ChangeContext; concurrency?: number;
     /** Optional narrower inventory, applied before selection limits and blob reads. */
     pathFilter?: (path: string) => boolean;
+    /** A revision already resolved with this authenticated client and repository during the current operation. */
+    resolvedRevision?: RepositoryRevision;
   },
 ): Promise<RepositorySnapshot> {
-  const commit = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { ...repo, ref: options.ref });
-  const commitData = commit.data as { sha: string; commit: { tree: { sha: string } } };
-  const tree = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { ...repo, tree_sha: commitData.commit.tree.sha, recursive: "1" });
+  const commit = options.resolvedRevision ?? await resolveRepositoryRevision(client, repo, options.ref);
+  if (options.resolvedRevision && options.ref !== commit.sha) throw new Error("Resolved repository revision does not match the requested immutable ref");
+  const tree = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { ...repo, tree_sha: commit.treeSha, recursive: "1" });
   const treeData = tree.data as { tree: TreeEntry[]; truncated?: boolean };
   const blobs = new Map(treeData.tree.filter((entry) => entry.type === "blob" && (!options.pathFilter || options.pathFilter(entry.path))).map((entry) => [entry.path, entry]));
   const selection = selectInventory(
@@ -81,7 +97,7 @@ export async function loadRepositorySnapshot(
   });
   return {
     ref: options.ref,
-    sha: commitData.sha,
+    sha: commit.sha,
     input: {
       files,
       mode: "repository",

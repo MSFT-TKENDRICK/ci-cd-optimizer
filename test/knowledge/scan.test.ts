@@ -50,6 +50,13 @@ describe("knowledge scan integration", () => {
     expect(writes(client)).toEqual([]);
   });
 
+  it("rejects event repository-ID mismatch before scanning or writing, even without knowledge enabled", async () => {
+    const client = fakeApi(state());
+    await expect(scanRepository(client, repository, { expectedRepositoryId: 43, uploadSarif: true })).rejects.toThrow("identity changed");
+    expect(client.calls).toHaveLength(1);
+    expect(writes(client)).toEqual([]);
+  });
+
   it.each([
     {}, { ...metadata, id: 0 }, { ...metadata, id: 1.5 }, { ...metadata, id: Number.MAX_SAFE_INTEGER + 1 },
     { ...metadata, html_url: "http://github.com/acme/widgets" },

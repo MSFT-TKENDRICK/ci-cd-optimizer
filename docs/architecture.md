@@ -137,7 +137,8 @@ Inputs are copied at the persistence boundary, and loaded evidence is checked ag
 `KnowledgeStore.list` requires host and repository ID, a limit of 0-100, and optional revision/project/technology filters.
 Combined project/technology filters must match the same project. Reads never silently cross repositories or hosts;
 this scoping is not an authorization layer for exposing arbitrary user-supplied IDs. Any future user-facing retrieval
-must first establish repository access. These records also supply the run-source context below, but do not implement
+must first establish repository access and authorize source reads before returning declaration payloads. These records
+also supply the run-source context below, but do not implement
 mitigation applications/evaluations. No causal recommendation, cross-organization learning, vector index or
 natural-language SQL interface is inferred from this foundation.
 
@@ -158,8 +159,10 @@ No correction automatically erases or overrules its predecessor.
 Source reuse requires a complete declaration snapshot at the same revision with the same versioned inventory-policy
 digest (including ignore patterns and collection limits). Partial, malformed or legacy unkeyed observations cannot
 satisfy reuse. Runtime collection reads only supported manifest/tool-config blobs, not unrelated workflow or lockfile
-contents; normal ignores/limits and whole-tree truncation still apply. Repository access/identity is rechecked before reuse, and webhook repository IDs protect against names
-being reassigned. A source-content 404 produces explicit unknown context; identity/authentication/transient failures
+contents; normal ignores/limits and whole-tree truncation still apply. Repository identity and a fresh authenticated
+[read of the exact source commit](https://docs.github.com/en/rest/commits/commits#get-a-commit) are required before reuse:
+metadata access alone cannot authorize historical source contents. Webhook repository IDs protect against names
+being reassigned. A source-content 404 produces explicit unknown context without reading cached source; identity/authentication/transient failures
 fail processing. Runtime backfill for baseline analytics does not implicitly perform expensive source-tree backfill.
 
 `listRunObservations` is a bounded, scoped **raw evidence** query (0-100 records), optionally narrowed to a run, its
