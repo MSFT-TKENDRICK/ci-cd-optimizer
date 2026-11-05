@@ -201,11 +201,18 @@ async function cleanupBranch(client: GitHubClient, repo: RepoRef, pull: Experime
   if (status === "changed") notes.push(`Branch ${pull.head} retained because its head changed after grading.`);
 }
 
+async function closeVerifiedPull(client: GitHubClient, repo: RepoRef, pull: ExperimentPullRequest, notes: string[]): Promise<void> {
+  await currentExperimentPull(client, repo, pull);
+  await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pull.number, state: "closed" });
+  await currentExperimentPull(client, repo, { ...pull, state: "closed" });
+  await cleanupBranch(client, repo, pull, notes);
+}
+
 async function closePull(client: GitHubClient, repo: RepoRef, pull: ExperimentPullRequest, comment: string, notes: string[]): Promise<void> {
   if (pull.state !== "open") return;
+  await currentExperimentPull(client, repo, pull);
   await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: pull.number, body: comment });
-  await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pull.number, state: "closed" });
-  await cleanupBranch(client, repo, pull, notes);
+  await closeVerifiedPull(client, repo, pull, notes);
 }
 
 export interface AppliedDecision {
@@ -216,7 +223,7 @@ export interface AppliedDecision {
   notes: string[];
 }
 
-function requirePromotionEvidence(manifest: ExperimentManifest, state: ExperimentState, measurements?: ExperimentMeasurements): void {
+function requireDecisionEvidence(manifest: ExperimentManifest, state: ExperimentState, measurements?: ExperimentMeasurements): void {
   const trunk = state.trunk;
   const name = trunkBranch(manifest.name);
   const matches = (pull: ExperimentPullRequest, measurement: BranchMeasurement | undefined) =>
@@ -225,27 +232,29 @@ function requirePromotionEvidence(manifest: ExperimentManifest, state: Experimen
     trunk.experiment !== manifest.name || trunk.arm !== TRUNK || trunk.head !== name || trunk.base === name ||
     measurements?.experiment !== manifest.name || measurements.control?.arm !== TRUNK ||
     !matches(trunk, measurements.control) || !Array.isArray(measurements.arms)) {
-    throw new Error("Promotion control evidence is missing or stale. Recollect and re-evaluate the experiment before applying a decision.");
+    throw new Error("Experiment control evidence is missing or stale. Recollect and re-evaluate the experiment before applying a decision.");
   }
   for (const arm of state.arms.filter((pull) => pull.state === "open")) {
     const measured = measurements.arms.filter((item) => item?.arm === arm.arm);
     if (arm.experiment !== manifest.name || !manifest.arms.some((spec) => spec.name === arm.arm) ||
       arm.head !== armBranch(manifest.name, arm.arm) || arm.base !== name ||
       measured.length !== 1 || !matches(arm, measured[0])) {
-      throw new Error(`Promotion evidence for ${arm.arm} is missing or stale. Recollect and re-evaluate before applying a decision.`);
+      throw new Error(`Experiment evidence for ${arm.arm} is missing or stale. Recollect and re-evaluate before applying a decision.`);
     }
   }
 }
 
-async function currentPromotionPull(client: GitHubClient, repo: RepoRef, expected: ExperimentPullRequest): Promise<RawPull> {
+async function currentExperimentPull(client: GitHubClient, repo: RepoRef, expected: ExperimentPullRequest): Promise<RawPull> {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: expected.number });
   const pull = response.data as RawPull | undefined;
   const repository = `${repo.owner}/${repo.repo}`.toLowerCase();
   if (!pull || pull.number !== expected.number || !expected.nodeId || pull.node_id !== expected.nodeId ||
-    pull.state !== "open" || Boolean(pull.merged_at) || typeof pull.draft !== "boolean" || !expected.headSha ||
+    pull.state !== expected.state || expected.merged || pull.merged_at !== null || typeof pull.draft !== "boolean" || !expected.headSha ||
     expected.headRepository?.toLowerCase() !== repository || pull.head?.repo?.full_name.toLowerCase() !== repository ||
     pull.head.ref !== expected.head || pull.head.sha !== expected.headSha || pull.base?.ref !== expected.base) {
-    throw new Error(`Experiment PR #${expected.number} changed or its ownership cannot be verified; recollect before promotion.`);
+    const reason = expected.state === "closed" ? "closure was not confirmed; reconcile before cleanup."
+      : "changed or its ownership cannot be verified; recollect before applying the decision.";
+    throw new Error(`Experiment PR #${expected.number} ${reason}`);
   }
   return pull;
 }
@@ -274,10 +283,10 @@ export async function applyDecision(
   if (decision.action === "promote") {
     const winner = state.arms.find((arm) => arm.arm === decision.winner && arm.state === "open");
     if (!winner || !trunk) throw new Error("Promotion requires an open winner and trunk PR. Recollect the experiment before retrying.");
-    requirePromotionEvidence(manifest, state, options.measurements);
-    await currentPromotionPull(client, repo, trunk);
+    requireDecisionEvidence(manifest, state, options.measurements);
+    await currentExperimentPull(client, repo, trunk);
     for (const arm of state.arms.filter((pull) => pull.state === "open")) {
-      const current = await currentPromotionPull(client, repo, arm);
+      const current = await currentExperimentPull(client, repo, arm);
       if (arm.number === winner.number && current.draft) throw new Error("The winning arm is still a draft; recollect after it is ready.");
     }
     const measured = decision.scores.find((score) => score.arm === decision.winner);
@@ -295,7 +304,7 @@ export async function applyDecision(
     }
     const mergeSha = merge.sha;
     result.merged = winner.number;
-    await currentPromotionPull(client, repo, { ...trunk, headSha: mergeSha });
+    await currentExperimentPull(client, repo, { ...trunk, headSha: mergeSha });
     const mergedCommit = await client.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", { ...repo, commit_sha: mergeSha });
     const parents = (mergedCommit.data as { parents?: Array<{ sha?: string }> } | undefined)?.parents;
     if (!Array.isArray(parents) || parents.length !== 1 || parents[0]?.sha !== trunk.headSha) {
@@ -319,7 +328,7 @@ export async function applyDecision(
     const trunkName = trunkBranch(manifest.name);
     const sha = await commitFiles(client, repo, mergeSha, [{ path: manifestPath(manifest.name), content: serializeManifest(promoted) }], `experiment(${manifest.name}): promote ${decision.winner}`);
     await updateBranch(client, repo, trunkName, sha, mergeSha);
-    const current = await currentPromotionPull(client, repo, { ...trunk, headSha: sha });
+    const current = await currentExperimentPull(client, repo, { ...trunk, headSha: sha });
     await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: trunk.number, body: experimentBody(promoted, config, report) });
     const labels = [PROMOTE_LABEL, ...config.promotion.labels];
     await ensureLabels(client, repo, labels);
@@ -338,7 +347,7 @@ export async function applyDecision(
         result.notes.push("could not request reviewers");
       }
     }
-    const confirmed = await currentPromotionPull(client, repo, { ...trunk, headSha: sha });
+    const confirmed = await currentExperimentPull(client, repo, { ...trunk, headSha: sha });
     const recorded = parseMarker(confirmed.body);
     if (confirmed.draft || recorded?.kind !== "experiment" || recorded.fingerprint !== manifest.name ||
       recorded.attributes.status !== "promoted" || recorded.attributes.winner !== decision.winner) {
@@ -355,7 +364,6 @@ export async function applyDecision(
     await upsertComment(client, repo, trunk.number, manifest.name, report);
     await cleanupBranch(client, repo, winner, result.notes);
     for (const loser of state.arms.filter((arm) => arm.arm !== decision.winner && arm.state === "open")) {
-      await currentPromotionPull(client, repo, loser);
       await closePull(client, repo, loser, `Not selected: \`${decision.winner}\` won experiment \`${manifest.name}\`.\n\n${report}`, result.notes);
       result.closed.push(loser.number);
     }
@@ -363,20 +371,21 @@ export async function applyDecision(
   }
 
   // reject / expire: close everything but keep the pull requests (and their grading comments) as the learning record.
+  requireDecisionEvidence(manifest, state, options.measurements);
+  if (trunk) await currentExperimentPull(client, repo, trunk);
+  for (const arm of state.arms.filter((pull) => pull.state === "open")) await currentExperimentPull(client, repo, arm);
   for (const arm of state.arms) {
     await closePull(client, repo, arm, `Experiment \`${manifest.name}\` ${decision.action === "reject" ? "was rejected" : "expired"}.`, result.notes);
     if (arm.state === "open") result.closed.push(arm.number);
   }
   if (trunk) {
+    await currentExperimentPull(client, repo, trunk);
     await upsertComment(client, repo, trunk.number, manifest.name, report);
     const label = OUTCOME_LABELS[decision.action];
     await ensureLabels(client, repo, [label]);
     await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: trunk.number, labels: [label] });
-    if (trunk.state === "open") {
-      await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: trunk.number, state: "closed" });
-      result.closed.push(trunk.number);
-    }
-    await cleanupBranch(client, repo, trunk, result.notes);
+    await closeVerifiedPull(client, repo, trunk, result.notes);
+    result.closed.push(trunk.number);
   }
   return result;
 }

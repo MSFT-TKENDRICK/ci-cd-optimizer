@@ -181,8 +181,10 @@ Open-PR checks are preflight checks, not locks against later reopening or reuse.
 at the identical recorded SHA before its terminal cleanup outcome is stored, GitHub cannot distinguish the new
 ref from the original; pending cleanup can delete it. Finish or manually reconcile pending cleanup before reusing
 that branch name, even if the replacement points to the same commit.
-Experiment promotion also binds collected evidence to PR identities and commit SHAs, confirms the winner merge,
-and defers arm cleanup until the promotion ref and PR metadata are verified; see [promotion safeguards](experiments.md#3-grader-daily-experiment-gradermd).
+Experiment promotion, rejection and expiry bind collected evidence to PR identities and commit SHAs. Promotion
+confirms the winner merge and defers arm cleanup until its ref and PR metadata are verified. All experiment
+closures verify fresh ownership and identity before writing, then read back the closed state before cleanup or
+success reporting; see [experiment safeguards](experiments.md#3-grader-daily-experiment-gradermd).
 
 Monitor queue age and failed jobs in addition to `/ping` and process health:
 

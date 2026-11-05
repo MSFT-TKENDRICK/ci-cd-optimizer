@@ -77,8 +77,9 @@ Changes to protected files require review.
 Merging a promoted trunk into `main` publishes a [recipe](recipes.md) so the winning change can be applied to other
 repositories.
 
-Applied promotion requires collected commit SHAs and PR numbers for the control and every currently open arm.
-The CLI reads the manifest at the observed trunk commit and rejects missing or stale evidence before merging.
+Applied promotion, rejection and expiry require collected commit SHAs and PR numbers for the control and every
+currently open arm. The CLI reads the manifest at the observed trunk commit and rejects missing or stale evidence
+before applying these decisions.
 Older measurement files without the control PR number must be recollected (and corpus experiments re-evaluated).
 Dry-run grading remains available without applying these writes.
 
@@ -89,10 +90,20 @@ expected-head `updateRefs` write refuses a changed trunk. Arm cleanup is deferre
 until the manifest write and the promotion PR's marker/readiness are confirmed. Missing ready-for-review
 acknowledgements fail the operation; an unavailable optional auto-merge request is reported in the grading notes.
 
+Rejection and expiry verify every open target before starting the outcome batch. Each closure (including a
+promotion's losing arms) rereads PR identity before the outcome comment and again immediately before closing.
+After the close request, the executor must observe the same unmerged PR, head, base and repository in the closed
+state before cleanup or reporting that PR as closed. Failed or unpersisted closures, retargeting, changed heads and
+reopening stop that operation. Unknown or fork ownership is refused before posting outcome comments, not merely
+used to retain the branch afterward.
+
 This is not a transaction across GitHub operations. PR-state/base checks cannot lock out retargeting or other
 metadata changes after preflight; require protected default branches and coordinate all writers. A merge or manifest
 write can succeed before a later step fails. Such partial promotions require operator reconciliation, not a blind
 retry or an assumption that the merge was rolled back. Cleanup retains a branch observed in use by another open PR.
+Closures are also non-transactional: earlier verified targets may already be closed and cleaned when a later target
+fails. A lost close response may leave a closed PR with its branch retained; no durable experiment cleanup intent is
+recorded, so reconcile such retained branches manually rather than replaying cleanup from old closed-PR history.
 
 ## Scoring
 

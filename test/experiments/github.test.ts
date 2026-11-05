@@ -40,6 +40,18 @@ const state = (): ExperimentState => ({
   arms: [pull("lockfile", { number: 11 }), pull("packagemanager", { number: 12 })],
 });
 
+const evidence = (planned: ExperimentState) => ({
+  experiment: planned.name, collectedAt: "2026-11-05T00:00:00Z",
+  control: { arm: "trunk", headSha: planned.trunk!.headSha, pullRequest: planned.trunk!.number, changedPaths: [] },
+  arms: planned.arms.filter((pull) => pull.state === "open").map((pull) => ({ arm: pull.arm, headSha: pull.headSha, pullRequest: pull.number, changedPaths: [] })),
+});
+
+const rawPull = (pull: ExperimentPullRequest) => ({
+  ...pull, node_id: pull.nodeId, merged_at: pull.merged ? "2026-11-05T00:00:00Z" : null,
+  head: { ref: pull.head, sha: pull.headSha, repo: pull.headRepository ? { full_name: pull.headRepository } : null },
+  base: { ref: pull.base }, labels: pull.labels.map((name) => ({ name })),
+});
+
 const routes = (client: ReturnType<typeof fakeClient>) => client.calls.map((call) => call.route);
 
 describe("experiment pull requests", () => {
@@ -165,19 +177,22 @@ describe("applyDecision", () => {
     let trunkHead = "sha-trunk";
     let body = "";
     let draft = true;
+    const closed = new Set<number>();
     const client = fakeClient((route, parameters) => {
       if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
       if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") {
         const pull = [planned.trunk!, ...planned.arms].find((pull) => pull.number === parameters.pull_number);
         if (!pull) throw httpError(404);
         return {
-          ...pull, node_id: pull.nodeId, merged_at: null, draft: pull.arm === "trunk" ? draft : false,
+          ...pull, node_id: pull.nodeId, merged_at: null, state: closed.has(pull.number) ? "closed" : pull.state,
+          draft: pull.arm === "trunk" ? draft : false,
           body: pull.arm === "trunk" ? body : pull.body,
           head: { ref: pull.head, sha: pull.arm === "trunk" ? trunkHead : pull.headSha, repo: { full_name: "acme/widgets" } }, base: { ref: pull.base },
         };
       }
       if (route === "PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge") { trunkHead = "merged-trunk"; return { merged: true, sha: trunkHead }; }
       if (route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" && typeof parameters.body === "string") body = parameters.body;
+      if (route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" && parameters.state === "closed") closed.add(Number(parameters.pull_number));
       if (route === "POST /graphql") {
         if (String(parameters.query).includes("markPullRequestReadyForReview")) { draft = false; return { data: { markPullRequestReadyForReview: {} } }; }
         if (String(parameters.query).includes("enablePullRequestAutoMerge")) return { data: { enablePullRequestAutoMerge: {} } };
@@ -197,11 +212,7 @@ describe("applyDecision", () => {
     });
     const decision: Decision = { action: "promote", winner: "lockfile", losers: ["packagemanager"], reason: "lockfile improved", scores: [] };
     const custom = { ...config, promotion: { ...config.promotion, reviewers: ["octocat", "acme/platform"], autoMerge: true } };
-    const measurements = {
-      experiment: manifest.name, collectedAt: manifest.createdAt,
-      control: { arm: "trunk", headSha: "sha-trunk", pullRequest: 10, changedPaths: [] },
-      arms: planned.arms.map((pull) => ({ arm: pull.arm, headSha: pull.headSha, pullRequest: pull.number, changedPaths: [] })),
-    };
+    const measurements = evidence(planned);
     const result = await applyDecision(client, repo, { manifest, decision, state: planned, config: custom, measurements });
     expect(result).toMatchObject({ action: "promote", merged: 11, closed: [12] });
 
@@ -232,27 +243,43 @@ describe("applyDecision", () => {
     expect(client.calls).toHaveLength(0);
   });
 
-  it.each(["human", "fork", "unknown"])("retains an experiment branch with %s ownership/head evidence", async (evidence) => {
-    const arm = pull("lockfile", { number: 11 });
-    if (evidence === "fork") arm.headRepository = "fork/widgets";
-    if (evidence === "unknown") delete arm.headRepository;
-    const client = fakeClient((route) => route.includes("/git/ref/") ? { object: { sha: "human" } } : route.startsWith("GET") ? [] : {});
-    const result = await applyDecision(client, repo, { manifest, decision: { action: "reject", reason: "stop", scores: [] }, state: { name: manifest.name, arms: [arm] }, config });
-    expect(result.notes.join(" ")).toContain("retained");
+  it.each(["human", "fork", "unknown"])("refuses to close an experiment with %s ownership/head evidence", async (changed) => {
+    const planned = state();
+    const arm = planned.arms[0]!;
+    if (changed === "fork") arm.headRepository = "fork/widgets";
+    if (changed === "unknown") delete arm.headRepository;
+    const client = fakeClient((route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") {
+        const pr = [planned.trunk!, ...planned.arms].find((pull) => pull.number === parameters.pull_number)!;
+        return rawPull({ ...pr, headSha: changed === "human" && pr.number === arm.number ? "human" : pr.headSha });
+      }
+      return route.startsWith("GET") ? [] : {};
+    });
+    await expect(applyDecision(client, repo, {
+      manifest, decision: { action: "reject", reason: "stop", scores: [] }, state: planned, config, measurements: evidence(planned),
+    })).rejects.toThrow(/[Rr]ecollect/);
+    expect(client.calls.every((call) => call.route.startsWith("GET"))).toBe(true);
     expect(routes(client)).not.toContain("POST /graphql");
     expect(routes(client).some((route) => route.startsWith("DELETE"))).toBe(false);
   });
 
   it("closes arms and the trunk, labels the outcome, and deletes the trunk on reject", async () => {
+    const closedArm = pull("packagemanager", { number: 12, state: "closed" });
+    const planned = { ...state(), arms: [pull("lockfile", { number: 11 }), closedArm] };
+    const closed = new Set<number>([closedArm.number]);
     const client = fakeClient((route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") {
+        const pr = [planned.trunk!, ...planned.arms].find((pull) => pull.number === parameters.pull_number)!;
+        return rawPull({ ...pr, state: closed.has(pr.number) ? "closed" : pr.state });
+      }
+      if (route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" && parameters.state === "closed") closed.add(Number(parameters.pull_number));
       if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
       if (route === "POST /graphql") return { data: { updateRefs: {} } };
       if (route.startsWith("GET /repos/{owner}/{repo}/git/ref/")) return { object: { sha: `sha-${String(parameters.ref).split("/").at(-1)}` } };
       return route.startsWith("GET") ? [] : {};
     });
     const decision: Decision = { action: "reject", reason: "no arm qualified", scores: [] };
-    const closedArm = pull("packagemanager", { number: 12, state: "closed" });
-    const result = await applyDecision(client, repo, { manifest, decision, state: { ...state(), arms: [pull("lockfile", { number: 11 }), closedArm] }, config });
+    const result = await applyDecision(client, repo, { manifest, decision, state: planned, config, measurements: evidence(planned) });
     expect(result.closed).toEqual([11, 10]);
     expect(client.calls.find((call) => call.route === "POST /repos/{owner}/{repo}/labels")?.parameters).toMatchObject({ name: "experiment:rejected" });
     const deleted = client.calls.filter((call) => call.route === "POST /graphql");

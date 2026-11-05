@@ -121,7 +121,7 @@ describe("verified experiment promotion", () => {
 
   describe("verified experiment closure", () => {
     const outcome = (f: ReturnType<typeof fixture>, action: "reject" | "expire" = "reject") => ({
-      ...f.options, decision: { action, scores: [], reason: "experiment ended" } as Decision,
+      ...f.options, decision: { action, scores: [], reason: "experiment ended" } satisfies Decision,
     });
 
     it.each(["reject", "expire"] as const)("does not report an unpersisted %s closure as success", async (action) => {
@@ -164,6 +164,94 @@ describe("verified experiment promotion", () => {
       expect(injected).toBe(true);
       expect(f.client.calls.some((call) => call.route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")).toBe(false);
       expectArmsRetained(f);
+    });
+
+    it.each(["reject", "expire"] as const)("closes verified %s targets and cleans their exact heads", async (action) => {
+      const f = fixture();
+      const result = await applyDecision(f.client, repo, outcome(f, action));
+      expect(result).toMatchObject({ action, closed: [11, 12, 10], notes: [] });
+      expect([...f.live.values()].every((pull) => pull.state === "closed")).toBe(true);
+      expect(f.heads).toEqual({});
+      expect(f.client.calls.filter((call) => call.route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")).toHaveLength(3);
+    });
+
+    it.each(["control", "winner", "loser", "missing"] as const)("refuses %s measurement gaps before closing", async (changed) => {
+      const f = fixture();
+      const options: Parameters<typeof applyDecision>[2] = outcome(f);
+      if (changed === "control") f.options.measurements.control.headSha = "old-control";
+      if (changed === "winner") f.options.measurements.arms[0]!.headSha = "old-winner";
+      if (changed === "loser") f.options.measurements.arms[1]!.pullRequest = 99;
+      if (changed === "missing") delete options.measurements;
+      await expect(applyDecision(f.client, repo, options)).rejects.toThrow(/[Rr]ecollect/);
+      expect(f.client.calls).toEqual([]);
+      expectArmsRetained(f);
+    });
+
+    it.each(["trunk base", "loser head", "closed loser", "merged trunk", "node ID", "unknown owner"])(
+      "verifies every outcome target before starting the batch (%s)",
+      async (changed) => {
+        const f = fixture();
+        if (changed === "trunk base") f.current(f.trunk.number).base = "release";
+        if (changed === "loser head") f.current(f.loser.number).headSha = "human";
+        if (changed === "closed loser") f.current(f.loser.number).state = "closed";
+        if (changed === "merged trunk") f.current(f.trunk.number).merged = true;
+        if (changed === "node ID") f.current(f.loser.number).nodeId = "another-pr";
+        if (changed === "unknown owner") delete f.current(f.trunk.number).headRepository;
+        await expect(applyDecision(f.client, repo, outcome(f))).rejects.toThrow(/[Rr]ecollect/);
+        expect(f.client.calls.every((call) => call.route.startsWith("GET"))).toBe(true);
+        expect(f.heads[f.winner.head]).toBe(f.winner.headSha);
+      },
+    );
+
+    it.each(["reopened", "head changed", "retargeted", "merged", "lost response"])("does not clean up an unverified closed target (%s)", async (fault) => {
+      const f = fixture();
+      const original = f.client.request.bind(f.client);
+      let injected = false;
+      f.client.request = async (route, parameters = {}) => {
+        const response = await original(route, parameters);
+        if (!injected && route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" && parameters.state === "closed") {
+          injected = true;
+          if (fault === "reopened") f.current(f.winner.number).state = "open";
+          if (fault === "head changed") {
+            f.current(f.winner.number).headSha = "human";
+            f.heads[f.winner.head] = "human";
+          }
+          if (fault === "retargeted") f.current(f.winner.number).base = "main";
+          if (fault === "merged") f.current(f.winner.number).merged = true;
+          if (fault === "lost response") throw httpError(500);
+        }
+        return response;
+      };
+      await expect(applyDecision(f.client, repo, outcome(f))).rejects.toThrow();
+      expect(injected).toBe(true);
+      expect(f.heads[f.winner.head]).toBe(fault === "head changed" ? "human" : f.winner.headSha);
+      expect(f.heads[f.loser.head]).toBe(f.loser.headSha);
+      expect(f.current(f.loser.number).state).toBe("open");
+      expect(f.client.calls.some((call) => call.route === refMutation)).toBe(false);
+    });
+
+    it.each(["trunk closure", "trunk labels", "promotion loser"])("applies closure verification to %s", async (fault) => {
+      const f = fixture();
+      const target = fault === "promotion loser" ? f.loser : f.trunk;
+      const original = f.client.request.bind(f.client);
+      let injected = false;
+      f.client.request = async (route, parameters = {}) => {
+        if (fault !== "trunk labels" && route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" &&
+          parameters.pull_number === target.number && parameters.state === "closed") {
+          injected = true;
+          return { status: 200, data: {} };
+        }
+        const response = await original(route, parameters);
+        if (fault === "trunk labels" && route === "POST /repos/{owner}/{repo}/issues/{issue_number}/labels") {
+          injected = true;
+          f.current(f.trunk.number).base = "release";
+        }
+        return response;
+      };
+      await expect(applyDecision(f.client, repo, fault === "promotion loser" ? f.options : outcome(f))).rejects.toThrow();
+      expect(injected).toBe(true);
+      expect(f.current(target.number).state).toBe("open");
+      expect(f.heads[target.head]).toBe(target.headSha);
     });
   });
 
