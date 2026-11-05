@@ -3113,7 +3113,7 @@ var require_timestamp = __commonJS({
       resolve: (str) => parseSexagesimal(str, false),
       stringify: stringifySexagesimal
     };
-    var timestamp = {
+    var timestamp2 = {
       identify: (value) => value instanceof Date,
       default: true,
       tag: "tag:yaml.org,2002:timestamp",
@@ -3122,7 +3122,7 @@ var require_timestamp = __commonJS({
       // assumed to be 00:00:00Z (start of day, UTC).
       test: RegExp("^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})(?:(?:t|T|[ \\t]+)([0-9]{1,2}):([0-9]{1,2}):([0-9]{1,2}(\\.[0-9]+)?)(?:[ \\t]*(Z|[-+][012]?[0-9](?::[0-9]{2})?))?)?$"),
       resolve(str) {
-        const match2 = str.match(timestamp.test);
+        const match2 = str.match(timestamp2.test);
         if (!match2)
           throw new Error("!!timestamp expects a date, starting with yyyy-mm-dd");
         const [, year, month, day, hour, minute, second] = match2.map(Number);
@@ -3141,7 +3141,7 @@ var require_timestamp = __commonJS({
     };
     exports.floatTime = floatTime;
     exports.intTime = intTime;
-    exports.timestamp = timestamp;
+    exports.timestamp = timestamp2;
   }
 });
 
@@ -3161,7 +3161,7 @@ var require_schema3 = __commonJS({
     var omap = require_omap();
     var pairs = require_pairs();
     var set = require_set();
-    var timestamp = require_timestamp();
+    var timestamp2 = require_timestamp();
     var schema = [
       map.map,
       seq.seq,
@@ -3181,9 +3181,9 @@ var require_schema3 = __commonJS({
       omap.omap,
       pairs.pairs,
       set.set,
-      timestamp.intTime,
-      timestamp.floatTime,
-      timestamp.timestamp
+      timestamp2.intTime,
+      timestamp2.floatTime,
+      timestamp2.timestamp
     ];
     exports.schema = schema;
   }
@@ -3208,7 +3208,7 @@ var require_tags = __commonJS({
     var pairs = require_pairs();
     var schema$2 = require_schema3();
     var set = require_set();
-    var timestamp = require_timestamp();
+    var timestamp2 = require_timestamp();
     var schemas = /* @__PURE__ */ new Map([
       ["core", schema.schema],
       ["failsafe", [map.map, seq.seq, string.string]],
@@ -3222,11 +3222,11 @@ var require_tags = __commonJS({
       float: float.float,
       floatExp: float.floatExp,
       floatNaN: float.floatNaN,
-      floatTime: timestamp.floatTime,
+      floatTime: timestamp2.floatTime,
       int: int.int,
       intHex: int.intHex,
       intOct: int.intOct,
-      intTime: timestamp.intTime,
+      intTime: timestamp2.intTime,
       map: map.map,
       merge: merge3.merge,
       null: _null.nullTag,
@@ -3234,7 +3234,7 @@ var require_tags = __commonJS({
       pairs: pairs.pairs,
       seq: seq.seq,
       set: set.set,
-      timestamp: timestamp.timestamp
+      timestamp: timestamp2.timestamp
     };
     var coreKnownTags = {
       "tag:yaml.org,2002:binary": binary.binary,
@@ -3242,7 +3242,7 @@ var require_tags = __commonJS({
       "tag:yaml.org,2002:omap": omap.omap,
       "tag:yaml.org,2002:pairs": pairs.pairs,
       "tag:yaml.org,2002:set": set.set,
-      "tag:yaml.org,2002:timestamp": timestamp.timestamp
+      "tag:yaml.org,2002:timestamp": timestamp2.timestamp
     };
     function getTags(customTags, schemaName, addMergeTag) {
       const schemaTags = schemas.get(schemaName);
@@ -15271,9 +15271,13 @@ import { readFile as readFile5 } from "node:fs/promises";
 import { parseArgs as parseArgs3 } from "node:util";
 
 // src/github/repository.ts
-async function defaultBranch(client, repo) {
+async function defaultBranch(client, repo, expectedRepositoryId) {
   const response = await client.request("GET /repos/{owner}/{repo}", { ...repo });
-  return response.data.default_branch;
+  const metadata = response.data;
+  if (expectedRepositoryId !== void 0 && (!Number.isSafeInteger(expectedRepositoryId) || expectedRepositoryId <= 0 || metadata.id !== expectedRepositoryId)) {
+    throw new Error("Repository identity changed since the event was recorded");
+  }
+  return metadata.default_branch;
 }
 async function loadRemoteConfig(client, repo, ref) {
   for (const path of CONFIG_PATHS) {
@@ -15285,12 +15289,20 @@ async function loadRemoteConfig(client, repo, ref) {
   const parsed = parseConfigText("", allRules);
   return { config: parsed.config, problems: [] };
 }
+async function resolveRepositoryRevision(client, repo, ref) {
+  const response = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { ...repo, ref });
+  const data = response.data;
+  if (!data || typeof data.sha !== "string" || !data.sha || typeof data.commit?.tree?.sha !== "string" || !data.commit.tree.sha) {
+    throw new Error("Repository commit response lacks an immutable revision and tree");
+  }
+  return { sha: data.sha, treeSha: data.commit.tree.sha };
+}
 async function loadRepositorySnapshot(client, repo, options) {
-  const commit = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { ...repo, ref: options.ref });
-  const commitData = commit.data;
-  const tree = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { ...repo, tree_sha: commitData.commit.tree.sha, recursive: "1" });
+  const commit = options.resolvedRevision ?? await resolveRepositoryRevision(client, repo, options.ref);
+  if (options.resolvedRevision && options.ref !== commit.sha) throw new Error("Resolved repository revision does not match the requested immutable ref");
+  const tree = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { ...repo, tree_sha: commit.treeSha, recursive: "1" });
   const treeData = tree.data;
-  const blobs = new Map(treeData.tree.filter((entry) => entry.type === "blob").map((entry) => [entry.path, entry]));
+  const blobs = new Map(treeData.tree.filter((entry) => entry.type === "blob" && (!options.pathFilter || options.pathFilter(entry.path))).map((entry) => [entry.path, entry]));
   const selection = selectInventory(
     [...blobs.values()].map((entry) => ({ path: entry.path, ...entry.size !== void 0 ? { size: entry.size } : {} })),
     options.config
@@ -15305,7 +15317,7 @@ async function loadRepositorySnapshot(client, repo, options) {
   });
   return {
     ref: options.ref,
-    sha: commitData.sha,
+    sha: commit.sha,
     input: {
       files,
       mode: "repository",
@@ -17071,6 +17083,7 @@ function canonical(value) {
   return value;
 }
 var identity = (value) => hash2(JSON.stringify(canonical(value)));
+var inventoryPolicyDigest = (config) => identity(["knowledge-inventory-v1", [...new Set(config.ignorePaths)].sort(), config.limits]);
 function validateScope(scope2) {
   const host = new URL(scope2.host);
   if (host.protocol !== "https:" || host.origin !== scope2.host || !/^[1-9]\d*$/.test(scope2.repositoryId)) {
@@ -17111,6 +17124,11 @@ var toolFiles = {
 var scopes = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"];
 var pointer = (part) => part.replaceAll("~", "~0").replaceAll("/", "~1");
 var record2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+function isKnowledgePath(path) {
+  if (/(^|\/)node_modules\//.test(path)) return false;
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  return name === "package.json" || path === "pnpm-workspace.yaml" || Object.hasOwn(toolFiles, name);
+}
 function spec(value) {
   const simple = /^(?:[~^]?\d+(?:\.(?:\d+|x|\*)){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|[x*])$/;
   if (value.length <= 256 && simple.test(value)) return { kind: "version-expression", value, digest: hash2(value) };
@@ -17315,6 +17333,7 @@ function extractKnowledge(repository, revision, input2, options = {}) {
     coverage: {
       scope: "configured-node-manifests-and-tool-configs",
       inventoryComplete: input2.mode === "repository" && input2.inventoryComplete,
+      ...options.inventoryPolicyDigest ? { inventoryPolicyDigest: options.inventoryPolicyDigest } : {},
       declarationsComplete: problems.length === 0 && truncated.size === 0,
       ignorePaths: [...new Set(options.ignorePaths ?? [])].sort(),
       truncated: [...truncated].sort(),
@@ -17328,7 +17347,10 @@ function extractKnowledge(repository, revision, input2, options = {}) {
 }
 
 // src/knowledge/repository.ts
-async function loadKnowledgeIdentity(client, repo) {
+async function loadKnowledgeIdentity(client, repo, expectedRepositoryId) {
+  if (expectedRepositoryId !== void 0 && (!Number.isSafeInteger(expectedRepositoryId) || expectedRepositoryId <= 0)) {
+    throw new Error("Expected repository identity must be a positive safe integer");
+  }
   const response = await client.request("GET /repos/{owner}/{repo}", { ...repo });
   const data = response.data;
   if (!Number.isSafeInteger(data?.id) || Number(data?.id) <= 0 || typeof data?.html_url !== "string" || typeof data.name !== "string" || typeof data.owner?.login !== "string") {
@@ -17337,6 +17359,9 @@ async function loadKnowledgeIdentity(client, repo) {
   const url = new URL(data.html_url);
   const identity2 = { host: url.origin, repositoryId: String(data.id), owner: data.owner.login, repo: data.name };
   validateScope(identity2);
+  if (expectedRepositoryId !== void 0 && identity2.repositoryId !== String(expectedRepositoryId)) {
+    throw new Error("Repository identity changed since the event was recorded");
+  }
   if (url.username || url.password || url.search || url.hash || url.pathname.replace(/\/$/, "") !== `/${identity2.owner}/${identity2.repo}`) {
     throw new Error("Repository identity URL does not match its metadata");
   }
@@ -17347,7 +17372,7 @@ async function loadKnowledgeIdentity(client, repo) {
 var isRecipeGroup = (group) => group.startsWith("recipe-");
 async function scanRepository(client, repo, options = {}) {
   const name = `${repo.owner}/${repo.repo}`;
-  const branch = await defaultBranch(client, repo);
+  const branch = await defaultBranch(client, repo, options.expectedRepositoryId);
   const ref = options.ref ?? branch;
   const remote = await loadRemoteConfig(client, repo, branch);
   if (remote.problems.length > 0) {
@@ -17361,9 +17386,10 @@ async function scanRepository(client, repo, options = {}) {
   const knowledgeStore = options.dryRun ? void 0 : await options.knowledgeStore?.();
   let knowledge;
   if (options.knowledge || knowledgeStore || options.dryRun && options.knowledgeStore) {
-    const evidence2 = extractKnowledge(await loadKnowledgeIdentity(client, repo), snapshot.sha, input2, {
+    const evidence2 = extractKnowledge(await loadKnowledgeIdentity(client, repo, options.expectedRepositoryId), snapshot.sha, input2, {
       ignorePaths: config.ignorePaths,
-      truncated: input2.truncated
+      truncated: input2.truncated,
+      inventoryPolicyDigest: inventoryPolicyDigest(config)
     });
     if (knowledgeStore) await knowledgeStore.save(evidence2);
     knowledge = { snapshot: evidence2, persistence: options.dryRun ? "dry-run" : knowledgeStore ? "saved" : "not-requested" };
@@ -18367,6 +18393,137 @@ function chunk(items2, size) {
   return batches;
 }
 
+// src/knowledge/run-observation.ts
+function provenanceFacts({ collectedAt: _collectedAt, ...facts }) {
+  return facts;
+}
+function runObservationIdentity(observation) {
+  const run3 = { ...observation.run };
+  const facts = {
+    ...run3,
+    ...run3.provenance ? { provenance: provenanceFacts(run3.provenance) } : {},
+    jobs: run3.jobs.map((job) => ({
+      ...job,
+      needs: [...new Set(job.needs)].sort(),
+      ...job.labels ? { labels: [...new Set(job.labels)].sort() } : {},
+      ...job.steps ? { steps: [...job.steps].sort((a, b) => a.number - b.number) } : {}
+    })).sort((a, b) => a.id - b.id)
+  };
+  return identity(["knowledge-run-observation-v1", observation.version, observation.repository, observation.source, facts]);
+}
+var positive = (value, field2) => {
+  if (!Number.isSafeInteger(value) || value < 1) throw new Error(`${field2} must be a positive safe integer`);
+};
+var timestamp = (value) => {
+  if (!Number.isFinite(Date.parse(value))) throw new Error("Run evidence timestamp is invalid");
+};
+var duration = (value) => {
+  if (!Number.isFinite(value) || value < 0) throw new Error("Run evidence duration must be finite and nonnegative");
+};
+function validateRunObservation(observation) {
+  validateScope(observation.repository);
+  validateRevision(observation.run.headSha);
+  if (observation.version !== 1 || observation.id !== runObservationIdentity(observation)) throw new Error("Run observation identity does not match its evidence");
+  const run3 = observation.run;
+  positive(run3.runId, "Run ID");
+  positive(run3.runAttempt, "Run attempt");
+  positive(run3.workflowId, "Workflow ID");
+  [observation.observedAt, run3.createdAt, run3.startedAt, run3.completedAt].forEach(timestamp);
+  duration(run3.durationMs);
+  if (run3.queueMs !== null) duration(run3.queueMs);
+  if (run3.provenance) timestamp(run3.provenance.collectedAt);
+  if (new Set(run3.jobs.map((job) => job.id)).size !== run3.jobs.length) throw new Error("Run evidence contains duplicate job IDs");
+  for (const job of run3.jobs) {
+    positive(job.id, "Job ID");
+    timestamp(job.startedAt);
+    timestamp(job.completedAt);
+    duration(job.durationMs);
+    if (job.queuedAt !== void 0) timestamp(job.queuedAt);
+    if (job.queueMs !== void 0) duration(job.queueMs);
+    for (const step of job.steps ?? []) {
+      positive(step.number, "Step number");
+      timestamp(step.startedAt);
+      timestamp(step.completedAt);
+      duration(step.durationMs);
+    }
+  }
+  if (observation.source.status === "linked") {
+    if (!/^[a-f0-9]{64}$/.test(observation.source.snapshotId)) throw new Error("Invalid project context identity");
+  } else if (observation.source.status !== "unavailable" || observation.source.reason !== "revision-unavailable") {
+    throw new Error("Unsupported project context status");
+  }
+}
+function createRunObservation(repository, run3, source, now = /* @__PURE__ */ new Date()) {
+  const value = structuredClone({ version: 1, repository, run: run3, source, observedAt: now.toISOString() });
+  const observation = { ...value, id: runObservationIdentity(value) };
+  validateRunObservation(observation);
+  return observation;
+}
+
+// src/service/run-knowledge.ts
+async function collectRunKnowledge(client, repo, run3, config, options = {}) {
+  validateRevision(run3.headSha);
+  const repository = await loadKnowledgeIdentity(client, repo, options.expectedRepositoryId);
+  const policy2 = inventoryPolicyDigest(config);
+  const reusableCoverage = ({ coverage }) => coverage.inventoryPolicyDigest === policy2 && coverage.inventoryComplete && coverage.declarationsComplete && coverage.truncated.length === 0 && coverage.problems.length === 0;
+  let project;
+  let resolvedRevision;
+  try {
+    resolvedRevision = await resolveRepositoryRevision(client, repo, run3.headSha);
+  } catch (error) {
+    if (httpStatus(error) !== 404) throw error;
+  }
+  if (resolvedRevision && resolvedRevision.sha !== run3.headSha) throw new Error("Run source revision changed during collection");
+  if (resolvedRevision && options.store) {
+    const candidates = await options.store.list({ ...repository, revision: run3.headSha, limit: 100 });
+    const reusable = candidates.find(reusableCoverage);
+    if (reusable) {
+      project = await options.store.load(repository, reusable.id);
+      if (!project) throw new Error("Previously listed source evidence is unavailable");
+      if (project.id !== reusable.id || project.revision !== run3.headSha || project.repository.host !== repository.host || project.repository.repositoryId !== repository.repositoryId || !reusableCoverage(project)) {
+        throw new Error("Stored source evidence does not match the requested run context");
+      }
+    }
+  }
+  if (resolvedRevision && !project) {
+    let source;
+    try {
+      source = await loadRepositorySnapshot(client, repo, { ref: run3.headSha, config, pathFilter: isKnowledgePath, resolvedRevision });
+    } catch (error) {
+      if (httpStatus(error) !== 404) throw error;
+    }
+    if (source) {
+      if (source.sha !== run3.headSha) throw new Error("Run source revision changed during collection");
+      project = extractKnowledge(repository, source.sha, source.input, {
+        ignorePaths: config.ignorePaths,
+        truncated: source.input.truncated,
+        inventoryPolicyDigest: policy2,
+        ...options.now ? { now: options.now } : {}
+      });
+    }
+  }
+  const observation = createRunObservation(
+    repository,
+    run3,
+    project ? { status: "linked", snapshotId: project.id } : { status: "unavailable", reason: "revision-unavailable" },
+    options.now
+  );
+  if (options.store) await options.store.saveRunObservation(observation, project);
+  return { observation, ...project ? { project } : {}, persistence: options.store ? "saved" : "preview" };
+}
+function describeRunKnowledge(knowledge) {
+  const evidence2 = knowledge.project;
+  const context = evidence2 ? `At the run-recorded source revision \`${evidence2.revision}\`: ${evidence2.projects.length} project nodes and ${evidence2.technologies.length} technology declarations.` : "Source content could not be read at the run-recorded revision; project and technology context is unknown.";
+  const coverage = !evidence2 ? "" : evidence2.coverage.inventoryComplete && evidence2.coverage.declarationsComplete ? " Collection is complete within the supported, configured inventory; configured ignores still apply." : " Collection is partial or uncertain; missing declarations do not establish absence.";
+  return `
+
+### Project declaration context
+
+${context}${coverage} This does not identify executed projects, installed tool versions, cache use, or a causal optimization benefit.
+
+Knowledge evidence: ${knowledge.persistence === "saved" ? "persisted" : "preview only (no knowledge database writes)"}.`;
+}
+
 // src/service/workflow-run.ts
 var PULL_REQUEST_EVENTS = /* @__PURE__ */ new Set(["pull_request", "pull_request_target"]);
 function alertsApply(run3, branches, defaultBranchName) {
@@ -18379,24 +18536,44 @@ function historyLimit(config) {
 }
 async function processWorkflowRun(client, repo, run3, options = {}) {
   if (run3.status && run3.status !== "completed") return { status: "skipped", reason: `Run is ${run3.status}.` };
-  const branch = await defaultBranch(client, repo);
+  const branch = await defaultBranch(client, repo, options.expectedRepositoryId);
   const remote = await loadRemoteConfig(client, repo, branch);
   const config = remote.config;
   if (!config.enabled) return { status: "disabled" };
   const definitions = await loadJobDefinitions(client, repo, run3.path, run3.head_sha);
   const snapshot = await buildWorkflowSnapshot(client, repo, run3, { definitions });
+  const knowledgeSkipped = remote.problems.length > 0 && (options.knowledge || options.knowledgeStore) ? "invalid-config" : void 0;
+  let knowledge;
+  if (remote.problems.length === 0) {
+    const store = options.dryRun ? void 0 : await options.knowledgeStore?.();
+    if (options.knowledge || store || options.dryRun && options.knowledgeStore) {
+      knowledge = await collectRunKnowledge(client, repo, snapshot, config, {
+        ...store ? { store } : {},
+        ...options.expectedRepositoryId !== void 0 ? { expectedRepositoryId: options.expectedRepositoryId } : {},
+        ...options.now ? { now: options.now } : {}
+      });
+    }
+  }
   if (snapshot.jobs.length === 0) {
     if (options.store && !options.dryRun) await options.store.save(snapshot);
-    return { status: "skipped", reason: "The run has no completed jobs.", snapshot };
+    return { status: "skipped", reason: "The run has no completed jobs.", snapshot, ...knowledge ? { knowledge } : {}, ...knowledgeSkipped ? { knowledgeSkipped } : {} };
   }
   const history = await loadHistory(client, repo, run3, snapshot, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
   if (history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
-    return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot };
+    return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot, ...knowledge ? { knowledge } : {}, ...knowledgeSkipped ? { knowledgeSkipped } : {} };
   }
   const prior = comparableHistory(history, snapshot).sort(byCompletion).slice(-historyLimit(config));
   const baseline = computeBaseline(prior, snapshot);
-  const report = createTelemetryReport(snapshot, baseline);
-  const result = { status: "processed", snapshot, samples: prior.length, report, ...baseline ? { baseline } : {} };
+  const report = createTelemetryReport(snapshot, baseline) + (knowledge ? describeRunKnowledge(knowledge) : "") + (knowledgeSkipped ? "\n\nProject declaration collection was skipped because the repository configuration is invalid." : "");
+  const result = {
+    status: "processed",
+    snapshot,
+    samples: prior.length,
+    report,
+    ...baseline ? { baseline } : {},
+    ...knowledge ? { knowledge } : {},
+    ...knowledgeSkipped ? { knowledgeSkipped } : {}
+  };
   const contextKey = comparisonKey(snapshot);
   const newerRunObserved = history.some(
     (item) => item.workflowId === snapshot.workflowId && item.branch === snapshot.branch && item.runId !== snapshot.runId && byCompletion(item, snapshot) > 0
@@ -18533,11 +18710,12 @@ Options:
       --summary <file>      Append the markdown report (default: $GITHUB_STEP_SUMMARY when set; "-" to disable)
       --check               Also publish the report as a neutral check run on the run's head commit
       --no-alerts           Do not open or update duration alert issues
+      --knowledge           Include source-linked project context (preview only; use JSON for complete evidence)
       --dry-run             Analyze and report, but write nothing to GitHub or the store
   -f, --format markdown|json  Output format (default: markdown)
   -o, --output <file>       Write the output to a file
 
-Needs actions: read, and issues: write for alerts (checks: write with --check).
+Needs actions: read, and issues: write for alerts (checks: write with --check; contents: read with --knowledge).
 `;
 function runSummary(result, repo) {
   return {
@@ -18547,6 +18725,8 @@ function runSummary(result, repo) {
     ...result.snapshot ? { snapshot: result.snapshot } : {},
     ...result.baseline ? { baseline: result.baseline } : {},
     ...result.samples !== void 0 ? { samples: result.samples } : {},
+    ...result.knowledge ? { knowledge: result.knowledge } : {},
+    ...result.knowledgeSkipped ? { knowledgeSkipped: result.knowledgeSkipped } : {},
     ...result.alerts ? {
       alerts: {
         detected: result.alerts.detected,
@@ -18568,6 +18748,7 @@ async function telemetryCommand(args, io) {
       summary: { type: "string" },
       check: { type: "boolean", default: false },
       "no-alerts": { type: "boolean", default: false },
+      knowledge: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       format: { type: "string", short: "f", default: "markdown" },
       output: { type: "string", short: "o" },
@@ -18597,12 +18778,13 @@ async function telemetryCommand(args, io) {
     dryRun: values["dry-run"],
     check: values.check,
     alerts: !values["no-alerts"],
+    knowledge: values.knowledge,
     ...store ? { store } : {},
     ...copilot ? { copilotClient: copilot } : {},
     ...io.now ? { now: io.now() } : {}
   });
   const name = `${repo.owner}/${repo.repo}`;
-  const markdown2 = result.report ?? `Telemetry ${result.status} for run ${runId}${result.reason ? `: ${result.reason}` : "."}`;
+  const markdown2 = result.report ?? `Telemetry ${result.status} for run ${runId}${result.reason ? `: ${result.reason}` : "."}` + (result.knowledge ? describeRunKnowledge(result.knowledge) : "");
   const summaryPath = values.summary ?? io.env.GITHUB_STEP_SUMMARY;
   if (summaryPath && summaryPath !== "-" && result.report) {
     const target = resolvePath(io, summaryPath);
