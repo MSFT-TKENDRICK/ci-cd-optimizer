@@ -129,6 +129,28 @@ when the configured prefix changes. Missing ownership/head evidence protects the
 and labeled fork PRs are not treated as writable local branches. GitHub Enterprise deployments must support
 `updateRefs`; the App adapter uses the Enterprise `/api/graphql` endpoint.
 
+Existing PR updates first persist their intended commit, signature, base, rules and rendered description in the PR,
+with a visible **Update pending** notice. The old committed marker stays in place until the expected-head ref write
+finishes. A retry recognizes the exact intended head and finalizes only the marker, preserving the staged recipe
+revision and subsequent body edits; it does not create another commit. A completed intent also satisfies a retried
+rebase/recreate on the same base and signature. Closed PRs with pending intents are reconciled too, so a decline
+after a successful write is not mistaken for a different change.
+
+If the intended head was never applied, recovery discards that intent and the normal planner rebuilds from current
+policy and base contents, not stale saved files. A different human head remains protected and gets an **Update
+interrupted** notice rather than a branch write. Recovery is a `metadata` action with `recoverUpdate: true`, including
+in scan dry-run output. An incomplete intent or changed state/marker fails explicitly for reconciliation/retry.
+PR body and head are read together; preparation is rechecked before writing the ref. Normal rebuilds replace the
+bot-authored section between hidden `fix-body-start`/`fix-body-end` boundaries, retaining notes outside it. For older
+bodies without those boundaries, notes after the unchanged Commands block are carried forward. Keep inline review
+discussion in review comments or outside the generated section. A retry that only finalizes a marker preserves the
+whole current body, including edits inside the generated section.
+
+PR metadata and refs are still separate GitHub operations, not a transaction: the pending description can precede
+the branch write, and simultaneous body edits between a read and PATCH cannot be conditionally locked. Keep all
+writers coordinated as above. Pre-existing interrupted updates without intent markers still need operator
+reconciliation, and replayed comments/commands after their completion is fully recorded are not exactly-once.
+
 Monitor queue age and failed jobs in addition to `/ping` and process health:
 
 ```sql

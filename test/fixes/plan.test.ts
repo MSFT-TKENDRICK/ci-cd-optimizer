@@ -146,6 +146,21 @@ function pr(overrides: Partial<ExistingFixPullRequest> & Pick<ExistingFixPullReq
 }
 
 describe("planFixPullRequests", () => {
+  it.each(["base-1", "base-2"])("reconciles a completed rebase against the current base (%s)", (baseSha) => {
+    const pendingUpdate = { fromSha: "c1", commitSha: "c2", signature: "s2", baseSha: "base-1", rules: ["a/rule"] };
+    const plan = planFixPullRequests([change("a", "s2")], [pr({ number: 1, group: "a", headSha: "c2", pendingUpdate })], {
+      openPullRequestsLimit: 5, baseSha, rebase: new Set(["a"]),
+    });
+    expect(plan.actions.map((action) => action.type)).toEqual(baseSha === "base-1" ? ["metadata"] : ["metadata", "update"]);
+    expect(plan.actions[0]).toMatchObject({ recoverUpdate: true });
+  });
+
+  it("does not skip an uncommitted rebase intent merely because the old signature still matches", () => {
+    const pendingUpdate = { fromSha: "c1", commitSha: "c2", signature: "s1", baseSha: "base-1", rules: ["a/rule"] };
+    const plan = planFixPullRequests([change("a", "s1")], [pr({ number: 1, group: "a", pendingUpdate })], { openPullRequestsLimit: 5 });
+    expect(plan.actions.map((action) => action.type)).toEqual(["metadata", "update"]);
+  });
+
   it("repairs pending metadata independently of changed or human-edited branch contents", () => {
     const existing = [pr({ number: 1, group: "a", headSha: "human", labels: ["CI"], pendingReviewers: ["alice", "removed"] })];
     const plan = planFixPullRequests([change("a", "s1")], existing, {

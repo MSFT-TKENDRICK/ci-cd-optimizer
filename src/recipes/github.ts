@@ -98,7 +98,7 @@ export async function applyRecipe(client: GitHubClient, target: RepoRef, recipe:
   })).filter((pr) => pr.group === group);
   const fixes = { ...config.fixes, labels: [...new Set([...config.fixes.labels, `recipe:${recipe.id}`, ...config.recipes.labels])] };
   const fixPlan = planFixPullRequests(plan.change ? [plan.change] : [], existingPulls, {
-    openPullRequestsLimit: 1, labels: ["cicd-optimizer", ...fixes.labels], reviewers: fixes.reviewers,
+    openPullRequestsLimit: 1, baseSha: snapshot.sha, labels: ["cicd-optimizer", ...fixes.labels], reviewers: fixes.reviewers,
   });
   const appliedPulls = await applyFixActions(client, target, fixPlan.actions, {
     baseBranch: branch,

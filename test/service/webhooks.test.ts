@@ -274,13 +274,16 @@ describe("signed GitHub App HTTP delivery", () => {
     const pull = state.pulls?.[0];
     if (!pull) throw new Error("Expected created fix PR");
     heads[pull.head.ref] = pull.head.sha;
-    const oldBody = pull.body;
     files[WORKFLOW] = MISSING_TIMEOUT.replace("echo hi", "echo changed");
     const original = app.api.request.bind(app.api);
     vi.spyOn(app.api, "request").mockImplementation(async (route, parameters = {}) => {
+      if (route === "POST /graphql" && humanPush) {
+        heads[pull.head.ref] = "human-commit";
+        pull.head.sha = "human-commit";
+        pull.body += "\nMaintainer notes during branch update.";
+      }
       const response = await original(route, parameters);
       if (route === "POST /repos/{owner}/{repo}/git/commits") {
-        if (humanPush) { heads[pull.head.ref] = "human-commit"; pull.head.sha = "human-commit"; }
         return { status: 200, data: { sha: "next-bot-commit" } };
       }
       return response;
@@ -292,14 +295,57 @@ describe("signed GitHub App HTTP delivery", () => {
       input: { refUpdates: [{ beforeOid: "new-commit", afterOid: "next-bot-commit", force: true }] },
     });
     if (humanPush) {
-      expect(pull.body).toBe(oldBody);
-      expect(callsTo(app.api, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")).toHaveLength(0);
+      expect(parseMarker(pull.body)?.attributes).toMatchObject({ commit: "new-commit", pendingCommit: "next-bot-commit" });
+      expect(pull.body).toContain("Update pending");
+      expect(callsTo(app.api, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")).toHaveLength(1);
     } else {
       expect(parseMarker(pull.body)?.attributes.commit).toBe("next-bot-commit");
     }
     expect(await app.send("push", push)).toBe(200);
+    expect(parseMarker(pull.body)?.attributes.pendingCommit).toBeUndefined();
+    if (humanPush) {
+      expect(pull.body).toContain("Maintainer notes during branch update.");
+      expect(pull.body).toContain("Update interrupted");
+    }
     expect(callsTo(app.api, "POST /graphql")).toHaveLength(1);
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/refs")).toHaveLength(1);
+  });
+
+  it.each(["lost ref response", "failed finalization"])("recovers %s through signed HTTP without a second branch update", async (fault) => {
+    const files = { [WORKFLOW]: MISSING_TIMEOUT };
+    const heads: Record<string, string> = {};
+    const state: FakeApiState = { config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n`, refs: { main: files }, pulls: [], branchHeads: heads };
+    const app = await harness(state);
+    expect(await app.send("push", push)).toBe(200);
+    const pull = state.pulls?.[0];
+    if (!pull) throw new Error("Expected created fix PR");
+    heads[pull.head.ref] = pull.head.sha;
+    files[WORKFLOW] += "# new base contents\n";
+    const original = app.api.request.bind(app.api);
+    let injected = false;
+    vi.spyOn(app.api, "request").mockImplementation(async (route, parameters = {}) => {
+      if (!injected && fault === "failed finalization" && route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" &&
+        typeof parameters.body === "string" && !parseMarker(parameters.body)?.attributes.pendingCommit) {
+        injected = true;
+        throw httpError(500);
+      }
+      const response = await original(route, parameters);
+      if (!injected && fault === "lost ref response" && route === "POST /graphql") { injected = true; throw httpError(500); }
+      if (route === "POST /repos/{owner}/{repo}/git/commits") return { status: 200, data: { sha: "next-bot-commit" } };
+      return response;
+    });
+    expect(await app.send("push", push)).toBe(500);
+    expect(pull.head.sha).toBe("next-bot-commit");
+    expect(parseMarker(pull.body)?.attributes).toMatchObject({ commit: "new-commit", pendingCommit: "next-bot-commit" });
+    pull.body += "\nReview notes added after the failure.";
+    expect(await app.send("push", push)).toBe(200);
+    expect(await app.send("push", push)).toBe(200);
+    expect(pull.body).toContain("Review notes added after the failure.");
+    expect(parseMarker(pull.body)?.attributes.commit).toBe("next-bot-commit");
+    expect(parseMarker(pull.body)?.attributes.pendingCommit).toBeUndefined();
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toHaveLength(2);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
+    expect(callsTo(app.api, "POST /graphql")).toHaveLength(1);
   });
 
   it.each(["invalid", "missing"] as const)("rejects a %s signature without authenticating or writing", async (signature) => {
@@ -583,5 +629,39 @@ describe.skipIf(!process.env.DATABASE_URL)("durable HTTP delivery through Postgr
     if (humanEdits) expect(pull.head.sha).toBe("maintainer-commit");
     expect(await app.send("push", push, "valid", id)).toBe(200);
     expect((await worker.processNext((delivery) => app.probot.receive(delivery))).status).toBe("idle");
+  });
+
+  it("retries an applied branch update until its PR marker is finalized, without another commit", async () => {
+    const files = { [WORKFLOW]: MISSING_TIMEOUT };
+    const heads: Record<string, string> = {};
+    const state: FakeApiState = { config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n`, refs: { main: files }, pulls: [], branchHeads: heads };
+    const app = await harness(state, ingress);
+    expect(await app.send("push", push)).toBe(200);
+    expect((await worker.processNext((delivery) => app.probot.receive(delivery))).status).toBe("completed");
+    const pull = state.pulls?.[0];
+    if (!pull) throw new Error("Expected created fix PR");
+    heads[pull.head.ref] = pull.head.sha;
+    files[WORKFLOW] += "# new base contents\n";
+    const original = app.api.request.bind(app.api);
+    let failFinalization = true;
+    vi.spyOn(app.api, "request").mockImplementation(async (route, parameters = {}) => {
+      if (failFinalization && route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" &&
+        typeof parameters.body === "string" && !parseMarker(parameters.body)?.attributes.pendingCommit) throw httpError(500);
+      const response = await original(route, parameters);
+      if (route === "POST /repos/{owner}/{repo}/git/commits") return { status: 200, data: { sha: "next-bot-commit" } };
+      return response;
+    });
+    const id = randomUUID();
+    expect(await app.send("push", push, "valid", id)).toBe(200);
+    expect(await worker.processNext((delivery) => app.probot.receive(delivery))).toMatchObject({ status: "retrying", id, attempts: 1 });
+    expect(parseMarker(pull.body)?.attributes).toMatchObject({ commit: "new-commit", pendingCommit: "next-bot-commit" });
+    expect(pull.head.sha).toBe("next-bot-commit");
+    failFinalization = false;
+    expect(await worker.processNext((delivery) => app.probot.receive(delivery))).toMatchObject({ status: "completed", id });
+    expect(await ingress.status(id)).toMatchObject([{ status: "completed", attempts: 2 }]);
+    expect(parseMarker(pull.body)?.attributes.commit).toBe("next-bot-commit");
+    expect(parseMarker(pull.body)?.attributes.pendingCommit).toBeUndefined();
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toHaveLength(2);
+    expect(callsTo(app.api, "POST /graphql")).toHaveLength(1);
   });
 });

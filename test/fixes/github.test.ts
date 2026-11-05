@@ -217,14 +217,19 @@ describe("applyFixActions", () => {
   });
 
   it("atomically updates the PR's existing branch even when the configured prefix changes", async () => {
-    const client = fakeClient((route) => {
+    const previous = managed({ ignoredRules: ["hermeticity/pin-actions"], headSha: "c2" });
+    let body = previous.body;
+    let sha = "c2";
+    const client = fakeClient((route, parameters) => {
       if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
-      if (route === "POST /graphql") return { data: { updateRefs: {} } };
+      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return { body, state: "open", head: { sha, ref: change.branch, repo: { full_name: "acme/widgets" } } };
+      if (route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}") body = String(parameters.body);
+      if (route === "POST /graphql") { sha = "c3"; return { data: { updateRefs: {} } }; }
       if (route.startsWith("GET /repos/{owner}/{repo}/git/commits")) return { tree: { sha: "t" } };
       if (route.startsWith("POST /repos/{owner}/{repo}/git")) return { sha: "c3" };
       return {};
     });
-    const existing = [managed({ ignoredRules: ["hermeticity/pin-actions"], headSha: "c2" })];
+    const existing = [previous];
     await applyFixActions(client, repo, [{ type: "update", number: 7, change: { ...change, branch: "new-prefix/hermeticity" } }], { baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [], existing });
     expect(client.calls.find((call) => call.route === "POST /graphql")?.parameters.variables).toMatchObject({
       input: { refUpdates: [{ name: "refs/heads/cicd-optimizer/hermeticity", beforeOid: "c2", afterOid: "c3", force: true }] },

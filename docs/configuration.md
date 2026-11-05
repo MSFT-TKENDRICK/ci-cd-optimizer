@@ -116,7 +116,11 @@ fixes:
 
 Scans reconcile missing configured labels and unfinished reviewer setup as `metadata` actions, also visible in dry-run
 output. These do not rebuild the branch, including when someone has pushed human commits. Draft PRs retain pending
-reviewer setup until a scan after they become ready. Removing a management/configured label alone does not opt out:
+reviewer setup until a scan after they become ready. Interrupted PR updates are also reconciled as `metadata` actions
+(`recoverUpdate: true`): an already-applied target needs only marker finalization, while an unapplied intent is
+discarded before the normal planner considers current policy and base contents. Keep review notes outside the
+generated body's hidden boundaries; marker-only recovery preserves all current body text.
+Removing a management/configured label alone does not opt out:
 use the ignore controls below. See [partial-write recovery](github-app.md#durable-hosted-processing) for limits.
 
 Comment on a fix pull request to control it:

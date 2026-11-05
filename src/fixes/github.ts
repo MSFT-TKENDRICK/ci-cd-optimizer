@@ -2,9 +2,9 @@ import type { FixesConfig } from "../lint/config.js";
 import type { AnyRule } from "../lint/types.js";
 import { ensureLabels, httpStatus, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
 import { branchSha, commitFiles, deleteBranch, pushBranch, updateBranch } from "../github/git.js";
-import { parseMarker, updateMarker } from "../issues/markers.js";
-import type { FixCommand } from "./commands.js";
-import { branchFor, type Dismissals, type ExistingFixPullRequest, type FixAction, type FixChange } from "./plan.js";
+import { parseMarker, updateMarker, type Marker } from "../issues/markers.js";
+import { COMMAND_HELP, type FixCommand } from "./commands.js";
+import { branchFor, type Dismissals, type ExistingFixPullRequest, type FixAction, type FixChange, type PendingFixUpdate } from "./plan.js";
 import { commitMessage, fixBody, fixTitle } from "./render.js";
 
 export const IGNORED_LABEL = "cicd-optimizer:ignored";
@@ -41,11 +41,41 @@ interface FixDiscovery {
 }
 
 const list = (value: string | undefined) => (value ? value.split(",").filter(Boolean) : []);
+const PENDING_NOTICE = "\n\n> **Update pending:** The generated description below describes an intended update. Its branch write has not yet been confirmed.\n\n";
+const INTERRUPTED_NOTICE = "\n\n> **Update interrupted:** The intended commit is not the current branch head. The description below may not match the branch; changed heads are protected from automatic replacement.\n\n";
+const UPDATE_KEYS = ["pendingFrom", "pendingCommit", "pendingSignature", "pendingBase", "pendingRules"] as const;
+const BODY_START = "<!-- cicd-optimizer:fix-body-start -->";
+const BODY_END = "<!-- cicd-optimizer:fix-body-end -->";
+
+function managedBody(generated: string, previous = ""): string {
+  if (generated.includes(BODY_START) || generated.includes(BODY_END)) throw new Error("Rendered fix content contains reserved body boundaries.");
+  const start = previous.indexOf(BODY_START);
+  const end = previous.indexOf(BODY_END);
+  const wrapped = `${BODY_START}\n${generated}\n${BODY_END}`;
+  if (start < 0 && end < 0) {
+    // Older generated bodies ended with Commands. Preserve notes appended after that known block.
+    const commands = previous.indexOf(COMMAND_HELP);
+    return wrapped + (commands >= 0 ? previous.slice(commands + COMMAND_HELP.length) : "");
+  }
+  if (start < 0 || end < start || start !== previous.lastIndexOf(BODY_START) || end !== previous.lastIndexOf(BODY_END)) {
+    throw new Error("Fix body boundaries changed; reconcile the generated section before retrying.");
+  }
+  return previous.slice(0, start) + wrapped + previous.slice(end + BODY_END.length);
+}
+
+function pendingUpdate(parsed: Marker, number: number): PendingFixUpdate | undefined {
+  const attrs = parsed.attributes;
+  if (!UPDATE_KEYS.some((key) => key in attrs)) return undefined;
+  if (!attrs.pendingFrom || !attrs.pendingCommit || !attrs.pendingSignature || !attrs.pendingBase) {
+    throw new Error(`Incomplete pending update on PR #${number}; reconcile its fix marker before retrying.`);
+  }
+  return { fromSha: attrs.pendingFrom, commitSha: attrs.pendingCommit, signature: attrs.pendingSignature, baseSha: attrs.pendingBase, rules: list(attrs.pendingRules) };
+}
 
 /** Labels retain historical PRs; deterministic head/base lookups recover PRs whose initial labeling failed. */
 export async function listManagedPullRequests(client: GitHubClient, repo: RepoRef, discovery?: FixDiscovery): Promise<ManagedPullRequest[]> {
   const raw = await paginate<RawIssue>(client, "GET /repos/{owner}/{repo}/issues", { ...repo, state: "all", labels: "cicd-optimizer" });
-  const heads = new Map<number, RawPull["head"]>();
+  const details = new Map<number, RawPull>();
   if (discovery) {
     const known = new Set(raw.map((issue) => issue.number));
     for (const group of new Set(discovery.groups)) {
@@ -61,16 +91,31 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
         const parsed = parseMarker(pull.body);
         if (parsed?.kind !== "fix" || parsed.fingerprint !== `group:${group}` || !parsed.attributes.signature || !parsed.attributes.commit) continue;
         raw.push({ ...pull, pull_request: { merged_at: pull.merged_at ?? null } });
-        heads.set(pull.number, pull.head);
+        details.set(pull.number, pull);
         known.add(pull.number);
       }
     }
   }
   const result: ManagedPullRequest[] = [];
-  for (const issue of raw) {
+  for (let issue of raw) {
     if (!issue.pull_request) continue;
-    const parsed = parseMarker(issue.body);
+    let parsed = parseMarker(issue.body);
     if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
+    let head: RawPull["head"] | undefined;
+    if (issue.state === "open" || UPDATE_KEYS.some((key) => key in parsed.attributes)) {
+      let pull = details.get(issue.number);
+      if (!pull) {
+        const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: issue.number });
+        pull = response.data as RawPull;
+      }
+      head = pull.head;
+      if (head?.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) continue;
+      // Read body and head together; the issues listing may predate a partially completed update.
+      issue = { ...issue, ...pull, pull_request: { ...issue.pull_request, ...(pull.merged_at !== undefined ? { merged_at: pull.merged_at } : {}) } };
+      parsed = parseMarker(issue.body);
+      if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
+    }
+    const pending = pendingUpdate(parsed, issue.number);
     const pr: ManagedPullRequest = {
       number: issue.number,
       state: issue.state,
@@ -86,19 +131,11 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
       ...(issue.draft !== undefined ? { draft: issue.draft } : {}),
       ...(parsed.attributes.signature ? { signature: parsed.attributes.signature } : {}),
       ...(parsed.attributes.commit ? { commitSha: parsed.attributes.commit } : {}),
+      ...(pending ? { pendingUpdate: pending } : {}),
+      ...(head?.sha ? { headSha: head.sha } : {}),
+      ...(head?.ref ? { branch: head.ref } : {}),
     };
-    if (pr.state === "open") {
-      let head: { sha?: string; ref?: string; repo?: { full_name: string } | null } | undefined = heads.get(pr.number);
-      if (!head) {
-        const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr.number });
-        const pull = response.data as { head?: typeof head; draft?: boolean };
-        head = pull.head;
-        if (pull.draft !== undefined) pr.draft = pull.draft;
-      }
-      if (head?.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) continue;
-      if (head?.sha) pr.headSha = head.sha;
-      if (head?.ref) pr.branch = head.ref;
-    }
+    if (pending && head?.sha === pending.commitSha) pr.rules = pending.rules;
     result.push(pr);
   }
   return result;
@@ -137,6 +174,36 @@ export interface AppliedFixAction {
   commitSha?: string;
 }
 
+async function currentFix(client: GitHubClient, repo: RepoRef, previous: ManagedPullRequest): Promise<{ pull: RawPull; parsed: Marker }> {
+  const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number });
+  const pull = response.data as RawPull;
+  const parsed = parseMarker(pull.body);
+  const expected = parseMarker(previous.body);
+  if (!parsed || parsed.kind !== "fix" || parsed.fingerprint !== `group:${previous.group}` || !expected ||
+    [...new Set([...Object.keys(parsed.attributes), ...Object.keys(expected.attributes)])].some((key) => parsed.attributes[key] !== expected.attributes[key]) ||
+    pull.state !== previous.state || !pull.head?.sha || pull.head.sha !== previous.headSha || !previous.branch ||
+    pull.head.ref !== previous.branch || pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
+    throw new Error(`PR #${previous.number} changed since planning; retry without overwriting its branch or marker.`);
+  }
+  return { pull, parsed };
+}
+
+/** Finish or discard a write-ahead intent without writing a ref or regenerating the current body. */
+async function finishPendingUpdate(client: GitHubClient, repo: RepoRef, previous: ManagedPullRequest): Promise<ManagedPullRequest> {
+  const { pull, parsed } = await currentFix(client, repo, previous);
+  const pending = pendingUpdate(parsed, previous.number);
+  if (!pending) throw new Error(`Missing pending update on PR #${previous.number}; replan before retrying.`);
+  const completed = pull.head.sha === pending.commitSha;
+  const attributes: Record<string, string> = Object.fromEntries(UPDATE_KEYS.map((key) => [key, ""]));
+  if (completed) Object.assign(attributes, { commit: pending.commitSha, signature: pending.signature, rules: pending.rules.join(",") });
+  const body = updateMarker((pull.body ?? "").replace(PENDING_NOTICE, completed ? "\n\n" : INTERRUPTED_NOTICE), "fix", parsed.fingerprint, attributes);
+  await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number, body });
+  const recovered = { ...previous, body };
+  delete recovered.pendingUpdate;
+  if (completed) Object.assign(recovered, { commitSha: pending.commitSha, signature: pending.signature, rules: pending.rules });
+  return recovered;
+}
+
 async function finishReviewRequests(client: GitHubClient, repo: RepoRef, number: number, group: string, reviewers: readonly string[]): Promise<void> {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number });
   const { body, draft } = response.data as { body: string | null; draft?: boolean };
@@ -170,14 +237,24 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
   const neededLabels = actions.flatMap((action) => action.type === "create" ? labels : action.type === "metadata" ? action.labels : []);
   if (neededLabels.length > 0) await ensureLabels(client, repo, neededLabels);
   const applied: AppliedFixAction[] = [];
+  const existing = new Map(options.existing.map((pr) => [pr.number, pr]));
   for (const action of actions) {
     if (action.type === "metadata") {
+      let previous = existing.get(action.number);
+      if (action.recoverUpdate) {
+        if (!previous) throw new Error(`Missing PR #${action.number} for pending-update recovery.`);
+        previous = await finishPendingUpdate(client, repo, previous);
+        existing.set(action.number, previous);
+      }
       if (action.labels.length > 0) {
         await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: action.number, labels: action.labels });
       }
-      const previous = options.existing.find((pr) => pr.number === action.number);
       const closing = actions.some((candidate) => candidate.type === "close" && candidate.number === action.number);
-      if (!closing && !previous?.draft && previous?.pendingReviewers?.length) await finishReviewRequests(client, repo, action.number, action.group, action.reviewers);
+      if (!closing && previous?.state === "open" && !previous.draft && previous.pendingReviewers?.length) {
+        await finishReviewRequests(client, repo, action.number, action.group, action.reviewers);
+        // Reviewer finalization changes the marker that the following content action will check.
+        existing.set(action.number, { ...previous, body: updateMarker(previous.body, "fix", `group:${previous.group}`, { pendingReviewers: "" }), pendingReviewers: [] });
+      }
       applied.push({ action, number: action.number });
       continue;
     }
@@ -189,7 +266,7 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
       continue;
     }
     const { change } = action;
-    const previous = action.type === "update" ? options.existing.find((pr) => pr.number === action.number) : undefined;
+    const previous = action.type === "update" ? existing.get(action.number) : undefined;
     const branch = action.type === "update" ? previous?.branch : change.branch;
     if (!branch || branch === options.baseBranch) throw new Error("A fix requires a known branch distinct from the repository's base branch.");
     let expectedHead = previous?.headSha;
@@ -213,19 +290,36 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
       }
     }
     const commitSha = await commitFiles(client, repo, options.baseSha, change.files, commitMessage(change));
-    if (expectedHead) await updateBranch(client, repo, branch, commitSha, expectedHead);
-    else await pushBranch(client, repo, branch, commitSha);
     const ignoredRules = previous?.ignoredRules ?? [];
     let body = options.render?.body ? options.render.body(change, { commitSha, ignoredRules }) : fixBody(change, { rules: options.rules, commitSha, ignoredRules });
     const title = options.render?.title ? options.render.title(change) : fixTitle(change);
     if (action.type === "update") {
+      if (!previous || !expectedHead) throw new Error(`Missing planned state for PR #${action.number}.`);
+      const { pull, parsed } = await currentFix(client, repo, previous);
+      if (pendingUpdate(parsed, action.number)) throw new Error(`PR #${action.number} has an unfinished update; reconcile it before rebuilding.`);
+      const rendered = parseMarker(body);
+      if (rendered?.kind !== "fix" || rendered.fingerprint !== `group:${change.group}`) throw new Error("An updated fix body must retain its group marker.");
+      body = updateMarker(body, "fix", parsed.fingerprint, {
+        ...parsed.attributes,
+        commit: parsed.attributes.commit ?? "", signature: parsed.attributes.signature ?? "", rules: parsed.attributes.rules ?? "",
+        pendingFrom: expectedHead, pendingCommit: commitSha, pendingSignature: change.signature, pendingBase: options.baseSha, pendingRules: change.rules.join(","),
+      });
+      // Persist the intended rendered body (including recipe markers) before the atomic branch write.
+      body = managedBody(`${PENDING_NOTICE}${body}`, pull.body ?? "");
       await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: action.number, title, body });
+      const prepared = { ...previous, body, title };
+      await currentFix(client, repo, prepared);
+      await updateBranch(client, repo, branch, commitSha, expectedHead);
+      await finishPendingUpdate(client, repo, { ...prepared, headSha: commitSha });
       applied.push({ action, number: action.number, commitSha });
       continue;
     }
     if (options.config.reviewers.length > 0) {
       body = updateMarker(body, "fix", `group:${change.group}`, { pendingReviewers: options.config.reviewers.join(",") });
     }
+    body = managedBody(body);
+    if (expectedHead) await updateBranch(client, repo, branch, commitSha, expectedHead);
+    else await pushBranch(client, repo, branch, commitSha);
     const created = await client.request("POST /repos/{owner}/{repo}/pulls", {
       ...repo,
       title,

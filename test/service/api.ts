@@ -123,6 +123,7 @@ export function fakeApi(state: FakeApiState = {}) {
       case "PATCH /repos/{owner}/{repo}/pulls/{pull_number}": {
         const pull = state.pulls?.find((pull) => pull.number === Number(parameters.pull_number));
         if (pull && typeof parameters.body === "string") pull.body = parameters.body;
+        if (pull && typeof parameters.title === "string") pull.title = parameters.title;
         if (pull && typeof parameters.state === "string") pull.state = parameters.state;
         return {};
       }

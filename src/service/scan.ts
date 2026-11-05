@@ -111,6 +111,7 @@ export async function scanRepository(client: GitHubClient, repo: RepoRef, option
     });
     const plan = planFixPullRequests(changes, existing, {
       openPullRequestsLimit: config.fixes.openPullRequestsLimit,
+      baseSha: snapshot.sha,
       labels: ["cicd-optimizer", ...config.fixes.labels],
       reviewers: config.fixes.reviewers,
       ...(options.rebase ? { rebase: options.rebase } : {}),
