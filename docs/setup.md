@@ -27,6 +27,15 @@ npm ci && npm run bundle
 git commit -am "Rebuild dist-action" && git push
 ```
 
+`package-lock.json` must resolve from `https://registry.npmjs.org/`. Dependabot can't authenticate to a private mirror,
+so npm updates fail when the lockfile points at one, and CI checks for this. If you install through a mirror, rewrite
+its `resolved` URL prefix to `https://registry.npmjs.org/` before committing. Because npm's default
+`replace-registry-host=npmjs` still routes your own installs through your configured registry, local installs keep
+working.
+
+Dependabot bumps the `node` base image only within the current major, because it can't update the distroless
+`nodejs22` runtime stage. Move both Dockerfile stages and `.nvmrc` to a new Node major together.
+
 Under **Settings → Actions → General**, keep **Workflow permissions** at *Read repository contents and packages
 permissions*. Workflows request the write scopes they need.
 

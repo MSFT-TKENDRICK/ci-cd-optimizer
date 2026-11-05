@@ -38,6 +38,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Lockfile resolves from the public npm registry
+        # A lockfile written through a private mirror breaks Dependabot, which can't authenticate to it.
+        run: |
+          if grep -nE '"resolved": "https?://' package-lock.json | grep -v '"https://registry.npmjs.org/'; then
+            echo "::error file=package-lock.json::Rewrite these resolved URLs to https://registry.npmjs.org/ (docs/setup.md)."
+            exit 1
+          fi
       - uses: ./.github/actions/setup
       - run: npm run build
       - name: Action bundle is up to date
