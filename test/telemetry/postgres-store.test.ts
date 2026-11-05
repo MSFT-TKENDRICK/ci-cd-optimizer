@@ -118,13 +118,31 @@ describe.skipIf(!databaseUrl)("workflow snapshot schema migration", () => {
       await Promise.all(stores.map((store) => store.initialize()));
       await Promise.all(stores.map((store) => store.initialize()));
       expect(await stores[0]!.history(query)).toEqual([db.saved]);
-      const next = { ...db.saved, runAttempt: 4, conclusion: "failure" };
+      const next = { ...db.saved, runAttempt: 4, conclusion: "failure", queueMs: null };
       await stores[0]!.save(next);
       await stores[1]!.save(db.saved);
       expect(await stores[1]!.history(query)).toEqual([db.saved, next]);
       expect(await stores[0]!.history({ ...query, attempts: "latest" })).toEqual([next]);
     } finally {
       await Promise.all(stores.map((store) => store.close()));
+      await db.close();
+    }
+  });
+
+  it("upgrades an attempt-keyed table to preserve unknown queue time without rewriting existing observations", async () => {
+    const db = await legacy();
+    const store = new PostgresTelemetryStore(db.url);
+    try {
+      await db.sql`ALTER TABLE workflow_run_snapshots DROP CONSTRAINT legacy_run_identity, ADD PRIMARY KEY (owner, repo, run_id, run_attempt)`;
+      await store.initialize();
+      const retry = { ...db.saved, runAttempt: 4, queueMs: null };
+      await store.save(retry);
+      expect(await store.history(query)).toEqual([db.saved, retry]);
+      const rows = await db.sql`SELECT run_attempt, queue_ms FROM workflow_run_snapshots ORDER BY run_attempt`;
+      expect(rows.map((row) => [row.run_attempt, row.queue_ms === null ? null : Number(row.queue_ms)])).toEqual([[3, 1000], [4, null]]);
+      await store.initialize();
+    } finally {
+      await store.close();
       await db.close();
     }
   });

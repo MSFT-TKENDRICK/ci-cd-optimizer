@@ -30,8 +30,8 @@ const run = (overrides: Partial<WorkflowRunPayload> = {}): WorkflowRunPayload =>
 const at = (time: string) => `2026-11-01T00:${time}Z`;
 /** build 00:10 -> 02:10, test 02:15 -> 10:05: about 600 s end to end. */
 const jobs = [
-  { id: 1, name: "build", conclusion: "success", created_at: at("00:05"), started_at: at("00:10"), completed_at: at("02:10"), steps: [] },
-  { id: 2, name: "test", conclusion: "success", created_at: at("02:10"), started_at: at("02:15"), completed_at: at("10:05"), steps: [] },
+  { id: 1, name: "build", conclusion: "success", labels: ["ubuntu-24.04"], created_at: at("00:05"), started_at: at("00:10"), completed_at: at("02:10"), steps: [] },
+  { id: 2, name: "test", conclusion: "success", labels: ["ubuntu-24.04"], created_at: at("02:10"), started_at: at("02:15"), completed_at: at("10:05"), steps: [] },
 ];
 
 /** Twelve stable ~300 s runs of the same workflow on main. */
@@ -61,6 +61,26 @@ describe("alertsApply", () => {
 });
 
 describe("processWorkflowRun", () => {
+  it("reports retries without a baseline, backfill or alert mutations", async () => {
+    const store = seeded();
+    const client = api();
+    const result = await processWorkflowRun(client, repo, run({ run_attempt: 2 }), { store });
+    expect(result).toMatchObject({ status: "processed", samples: 0, snapshot: { queueMs: null } });
+    expect(result.baseline).toBeUndefined();
+    expect(result.alerts).toBeUndefined();
+    expect(result.report).toContain("Performance comparison withheld: Reruns");
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs")).toEqual([]);
+    expect(callsTo(client, "POST /repos/{owner}/{repo}/issues")).toEqual([]);
+  });
+
+  it("does not compare different runner labels or advance their alert lifecycle", async () => {
+    const client = api({ jobs: { 2000: jobs.map((job) => ({ ...job, labels: ["self-hosted"] })) } });
+    const result = await processWorkflowRun(client, repo, run(), { store: seeded() });
+    expect(result.samples).toBe(0);
+    expect(result.baseline).toBeUndefined();
+    expect(result.alerts?.actions).toEqual([]);
+  });
+
   it("preserves a delayed attempt without republishing stale reports or alerts", async () => {
     const store = seeded();
     const latest = { ...snapshot(2000, 300, [["build", 300]]), runAttempt: 2 };
@@ -158,7 +178,7 @@ describe("processWorkflowRun", () => {
   it("backfills a cold store from the Actions API and persists it", async () => {
     const prior = (id: number, day: string) => run({ id, created_at: `2026-10-${day}T00:00:00Z`, run_started_at: `2026-10-${day}T00:00:00Z`, updated_at: `2026-10-${day}T00:05:00Z` });
     const store = new MemoryTelemetryStore();
-    const client = api({ workflowRuns: [prior(1998, "30"), prior(1999, "31")] });
+    const client = api({ workflowRuns: [prior(1998, "30"), prior(1999, "31")], jobs: { 1998: jobs, 1999: jobs, 2000: jobs } });
     const result = await processWorkflowRun(client, repo, run(), { store, alerts: false });
     expect(result.samples).toBe(2);
     expect(store.snapshots.map((item) => item.runId).sort()).toEqual([1998, 1999, 2000]);
@@ -166,7 +186,7 @@ describe("processWorkflowRun", () => {
   });
 
   it("rebuilds history from the API when there is no store", async () => {
-    const client = api({ workflowRuns: [run({ id: 1999, created_at: "2026-10-31T00:00:00Z", run_started_at: "2026-10-31T00:00:00Z", updated_at: "2026-10-31T00:05:00Z" })] });
+    const client = api({ workflowRuns: [run({ id: 1999, created_at: "2026-10-31T00:00:00Z", run_started_at: "2026-10-31T00:00:00Z", updated_at: "2026-10-31T00:05:00Z" })], jobs: { 1999: jobs, 2000: jobs } });
     const result = await processWorkflowRun(client, repo, run(), { alerts: false });
     expect(result.samples).toBe(1);
     expect(result.baseline?.sampleCount).toBe(1);

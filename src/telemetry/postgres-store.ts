@@ -35,7 +35,7 @@ export class PostgresTelemetryStore implements TelemetryStore {
           created_at TIMESTAMPTZ NOT NULL,
           started_at TIMESTAMPTZ NOT NULL,
           completed_at TIMESTAMPTZ NOT NULL,
-          queue_ms BIGINT NOT NULL,
+          queue_ms BIGINT,
           duration_ms BIGINT NOT NULL,
           snapshot JSONB NOT NULL,
           PRIMARY KEY (owner, repo, run_id, run_attempt)
@@ -55,6 +55,11 @@ export class PostgresTelemetryStore implements TelemetryStore {
       } else if (key?.definition !== "PRIMARY KEY (owner, repo, run_id, run_attempt)") {
         throw new Error(`Unsupported workflow snapshot primary key: ${key?.definition ?? "missing"}`);
       }
+      const [queue] = await sql<{ attnotnull: boolean }[]>`
+        SELECT attnotnull FROM pg_attribute
+        WHERE attrelid = 'workflow_run_snapshots'::regclass AND attname = 'queue_ms'
+      `;
+      if (queue?.attnotnull) await sql`ALTER TABLE workflow_run_snapshots ALTER COLUMN queue_ms DROP NOT NULL`;
       await sql`
         CREATE INDEX IF NOT EXISTS workflow_run_snapshots_history
         ON workflow_run_snapshots (owner, repo, workflow_id, branch, completed_at DESC)

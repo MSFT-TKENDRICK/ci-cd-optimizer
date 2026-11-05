@@ -85,7 +85,7 @@ cache that stopped hitting or a new slow test, that are too small for any single
 
 ### Lifecycle
 
-The tool keeps one alert issue per workflow, listing every anomalous series. Each one shows its baseline, the observed
+The tool keeps one alert issue per workflow and observed workload context, listing every anomalous series. Each one shows its baseline, the observed
 duration, the statistic behind it, a duration chart, and links to the runs involved.
 
 - **New anomaly:** the issue is opened, labeled `cicd-optimizer`, `alert:duration`, and `severity:*`, and assigned per
@@ -95,7 +95,14 @@ duration, the statistic behind it, a duration chart, and links to the runs invol
 - **Recovery:** the issue closes once every alerted series has `recoveryRuns` (3) consecutive runs back within the
   baseline it had when the alert opened. Comparing against the original baseline matters. Otherwise a lasting
   slowdown would become the new normal and look like a recovery.
-- **Snooze:** closing an alert as **not planned** silences that workflow for `snoozeDays` (14).
+  Missing jobs/series or a different context do not prove recovery.
+- **Snooze:** closing an alert as **not planned** silences that workflow/context for `snoozeDays` (14).
+
+Contexts distinguish branches, trigger events, executed job/matrix sets, dependencies and observed runner labels/groups.
+Only successful first attempts with complete, versioned collection provenance are eligible. Partial/warmed retries,
+legacy or incomplete collection, missing runner information and failed jobs cannot open, refresh or close these alerts.
+Changed contexts have separate issue identities; existing legacy workflow-only alerts are left for human review, not
+automatically closed or repurposed. See the [comparison contract](architecture.md#workload-comparison-contract).
 
 ### Reports
 
@@ -103,10 +110,11 @@ The telemetry report includes:
 
 - A Mermaid Gantt chart of jobs, with critical-path jobs in red and a lane for time spent waiting for a runner.
 - The job dependency graph with the critical path highlighted.
-- Queue time.
+- Queue time, explicitly unavailable for retries.
 - The longest jobs and slowest steps.
 - Recommendations based on the critical path and queue time.
 - Jobs slower than their baseline.
+- Why comparison is withheld or why no comparable baseline was found in the bounded evidence window.
 
 It's written to the step summary and, with `--check`, posted as a neutral check run on the commit. The App always
 posts the check.

@@ -21,6 +21,7 @@ export interface JobSnapshot {
   queuedAt?: string;
   queueMs?: number;
   runnerName?: string;
+  runnerGroupId?: number;
   labels?: string[];
   steps?: StepSnapshot[];
 }
@@ -41,16 +42,24 @@ export interface WorkflowSnapshot {
   createdAt: string;
   startedAt: string;
   completedAt: string;
-  queueMs: number;
+  /** Unknown for retries: run creation is not an attempt's queue-entry time. */
+  queueMs: number | null;
   durationMs: number;
   htmlUrl?: string;
   jobs: JobSnapshot[];
+  provenance?: {
+    version: 1;
+    collector: "github-actions-rest";
+    collectedAt: string;
+    jobsComplete: boolean;
+    definitionKnown: boolean;
+  };
 }
 
 export interface WorkflowBaseline {
   sampleCount: number;
   medianDurationMs: number;
-  medianQueueMs: number;
+  medianQueueMs: number | null;
   /** Median duration per job key over the same runs. */
   jobs?: Record<string, number>;
 }

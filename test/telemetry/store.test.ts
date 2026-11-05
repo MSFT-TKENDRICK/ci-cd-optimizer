@@ -104,7 +104,7 @@ it("does not overweight retries or resurrect successes in baselines and alert se
   const latestFailure = { ...snapshot(1002, 999, [["build", 999]]), runAttempt: 2, conclusion: "failure" };
   const ordinary = snapshot(1003, 100, [["build", 90]]);
   const history = [retry, oldSuccess, latestFailure, snapshot(1002, 1, [["build", 1]]), ordinary, retry];
-  const current = snapshot(2000, 200, []);
-  expect(computeBaseline(history, current)).toMatchObject({ sampleCount: 2, medianDurationMs: 80_000, jobs: { build: 70_000 } });
-  expect(buildSeries(history).find((series) => !series.jobKey)?.points.map((point) => point.runId)).toEqual([1001, 1003]);
+  const current = snapshot(2000, 200, [["build", 180]]);
+  expect(computeBaseline(history, current)).toMatchObject({ sampleCount: 1, medianDurationMs: 100_000, jobs: { build: 90_000 } });
+  expect(buildSeries(history).find((series) => !series.jobKey)?.points.map((point) => point.runId)).toEqual([1003]);
 });

@@ -38,6 +38,28 @@ function existingFrom(body: string, overrides: Partial<ExistingAlertIssue> = {})
 }
 
 describe("planAlertSync", () => {
+  it("does not treat a missing tracked series as recovery", () => {
+    const first = planAlertSync(input({ series: regressed })).actions[0];
+    if (first?.type !== "create") throw new Error("expected create");
+    const onlyWorkflow = seriesOf([...stable(30, 300), ...stable(3, 300)]);
+    const plan = planAlertSync(input({ series: [onlyWorkflow], existing: [existingFrom(first.desired.body)] }));
+    expect(plan.alerts).toEqual([]);
+    expect(plan.actions).toEqual([]);
+  });
+
+  it("scopes detection, recovery and issue identity to a workload context", () => {
+    const a = regressed.map((series) => ({ ...series, contextKey: "context-a" }));
+    const first = planAlertSync(input({ contextKey: "context-a", series: a })).actions[0];
+    if (first?.type !== "create") throw new Error("expected create");
+    expect(parseMarker(first.desired.body)).toMatchObject({ fingerprint: "duration:7/context-a", attributes: { context: "context-a" } });
+    const existing = existingFrom(first.desired.body);
+    const other = { ...seriesOf([...stable(30, 300), ...stable(3, 300)]), contextKey: "context-b" };
+    expect(planAlertSync(input({ contextKey: "context-a", series: [other], existing: [existing] })).actions).toEqual([]);
+    expect(planAlertSync(input({ contextKey: "context-b", series: [other], existing: [existing] })).actions).toEqual([]);
+    const matching = a.map((series) => ({ ...series, points: seriesOf(stable(40, 100)).points }));
+    expect(planAlertSync(input({ contextKey: "context-a", series: matching, existing: [existing] })).actions).toMatchObject([{ type: "close", number: 41 }]);
+  });
+
   it("opens one issue per workflow listing every anomalous series", () => {
     const plan = planAlertSync(input({ series: regressed }));
     expect(plan.alerts).toHaveLength(2);

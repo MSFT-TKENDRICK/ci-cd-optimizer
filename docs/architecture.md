@@ -63,7 +63,7 @@ instead of duplicating them.
   ignore commands.
 - **`alerts/`**: robust statistics on workflow durations: median/MAD z-scores for spikes, and a one-sided Mann-Whitney U
   test for sustained regressions.
-  One alert issue per workflow, closed on recovery.
+  One alert issue per workflow/comparison context, closed only on observed recovery in that context.
 - **`telemetry/`**: run snapshots (jobs, steps, queue time, `needs` graph), critical path, and Mermaid Gantt reports.
   Snapshots are stored in memory, in a file (an Actions-cached `.cicd-telemetry` directory), or in Postgres.
 
@@ -88,10 +88,39 @@ single-writer; use Postgres for coordinated hosted replicas. Postgres retention,
 operator responsibilities. Migration details are in [GitHub App deployment](github-app.md#telemetry-schema-upgrades).
 
 This foundation does not yet implement project/task/version topology, technology detection, context-conditioned
-duration models, mitigation applications/evaluations, semantic retrieval or cross-organization learning. Those should
+duration models beyond the conservative cohorts below, mitigation applications/evaluations, semantic retrieval or cross-organization learning. Those should
 build on relational evidence and typed relationships, not natural-language summaries treated as facts. Latest-attempt
 deduplication prevents retry sample inflation; it does not prove that different workloads, partial reruns or runner
 environments are comparable, or that an observed improvement was caused by a mitigation.
+
+### Workload comparison contract
+
+Collection records versioned provenance: collector, capture time, whether every job page was collected, and whether
+the jobs could be mapped to workflow definitions at that run's source revision. Backfill retrieves each historical
+definition at its own `headSha`; it never rewrites historical dependencies using the current workflow. Missing job
+arrays fail explicitly; truncated, inconsistent or duplicate pagination is not certified complete.
+
+The comparison policy in `telemetry/context.ts` admits only successful **first attempts**, with complete collection,
+known job definitions, successful observed jobs and nonempty runner labels. Legacy snapshots remain available as
+evidence but cannot establish a new comparison until recollected with provenance. Retries can be partial or warmed;
+even successful retries are excluded, after latest-attempt selection, rather than resurrecting their older successes.
+
+A versioned deterministic key groups repository/workflow/branch/trigger, executed job keys and display names
+(including matrix legs), dependency relationships, runner label sets and observed runner-group IDs. Job/label
+ordering, ephemeral runner names and job IDs do not change it. Source SHAs remain provenance, **not** a grouping
+criterion: otherwise every commit would erase the history needed to detect regressions. Exact label equality is
+only an observed-context guard, not proof of identical hardware, tool versions, cache state or work volume.
+
+Reports and alert series use these groups. Hosted history scans at least the latest 200 logical runs (more if the
+configured comparison window requires it), filters comparable evidence, then limits samples. A cold eligible group
+can backfill up to the requested history window, subject to the Actions API's 100-run page limit. This is bounded
+retrieval, not a claim that no comparable evidence exists anywhere. Ineligible observations do not synchronize alert
+issues. Missing tracked series never count as recovery.
+
+Workflow queue time for newly collected retries is `null`, not zero or the elapsed time since the original run was
+created. Known queue measurements alone contribute to the queue median; an entirely unknown median is also `null`.
+Postgres initialization relaxes the old `queue_ms NOT NULL` constraint transactionally without rewriting existing
+observations. Reports suppress legacy retry queue values that may include inter-attempt waiting.
 
 ## Hill climbing (`src/experiments`)
 

@@ -117,8 +117,8 @@ const workflowRun = {
   html_url: "https://github.com/acme/widgets/actions/runs/2000",
 };
 const jobs = [
-  { id: 1, name: "build", conclusion: "success", created_at: at("00:05"), started_at: at("00:10"), completed_at: at("02:10"), steps: [] },
-  { id: 2, name: "test", conclusion: "success", created_at: at("02:10"), started_at: at("02:15"), completed_at: at("10:05"), steps: [] },
+  { id: 1, name: "build", conclusion: "success", labels: ["ubuntu-24.04"], created_at: at("00:05"), started_at: at("00:10"), completed_at: at("02:10"), steps: [] },
+  { id: 2, name: "test", conclusion: "success", labels: ["ubuntu-24.04"], created_at: at("02:10"), started_at: at("02:15"), completed_at: at("10:05"), steps: [] },
 ];
 const telemetryApi = (overrides: Parameters<typeof fakeApi>[0] = {}) =>
   fakeApi({ refs: { abc: { ".github/workflows/ci.yml": workflowFile } }, jobs: { 2000: jobs }, runs: { 2000: workflowRun }, ...overrides });

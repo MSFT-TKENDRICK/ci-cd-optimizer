@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildWorkflowSnapshot,
   loadRunHistory,
+  listRunJobs,
   matchJobKey,
   parseJobDefinitions,
   snapshotFromRun,
@@ -215,7 +216,7 @@ describe("API loading", () => {
       }
       return { jobs: [] };
     });
-    const history = await loadRunHistory(client, repo, { workflowId: 7, branch: "main", limit: 2, definitions: new Map(), excludeRunId: 500 });
+    const history = await loadRunHistory(client, repo, { workflowId: 7, branch: "main", limit: 2, excludeRunId: 500 });
     expect(history.map((item) => item.runId)).toEqual([502, 503]);
     expect(client.calls.filter((call) => call.route.includes("/jobs"))).toHaveLength(2);
     expect(client.calls.find((call) => call.parameters.run_id === 503)).toMatchObject({
@@ -224,3 +225,34 @@ describe("API loading", () => {
     });
   });
 });
+  it("marks capped, duplicate or inconsistent job pages as incomplete, not complete evidence", async () => {
+    const hundred = Array.from({ length: 100 }, (_, index) => ({ ...jobs[0]!, id: index }));
+    const capped = fakeClient(() => ({ jobs: hundred, total_count: 101 }));
+    expect(await listRunJobs(capped, repo, 500, 1, 1)).toMatchObject({ complete: false, jobs: hundred });
+    const exact = fakeClient(() => ({ jobs: hundred, total_count: 100 }));
+    expect((await listRunJobs(exact, repo, 500, 1, 1)).complete).toBe(true);
+    const duplicate = fakeClient(() => ({ jobs: [jobs[0], jobs[0]], total_count: 2 }));
+    expect(await listRunJobs(duplicate, repo, 500)).toMatchObject({ complete: false, jobs: [jobs[0]] });
+    const missing = fakeClient(() => ({}));
+    await expect(listRunJobs(missing, repo, 500)).rejects.toThrow("did not contain a jobs array");
+  });
+
+  it("records collection provenance and keeps retry queue time unknown", async () => {
+    const client = fakeClient(() => ({ jobs: [jobs[0]], total_count: 1 }));
+    const result = await buildWorkflowSnapshot(client, repo, run({ run_attempt: 2 }), { definitions: parseJobDefinitions(workflow) });
+    expect(result).toMatchObject({ queueMs: null, provenance: { version: 1, collector: "github-actions-rest", jobsComplete: true, definitionKnown: true } });
+    expect(Number.isFinite(Date.parse(result.provenance!.collectedAt))).toBe(true);
+  });
+
+  it("backfills job definitions from each historical source revision, not the current graph", async () => {
+    const historical = run({ id: 501, head_sha: "historical-sha" });
+    const oldWorkflow = "jobs:\n  prepare:\n    runs-on: ubuntu-24.04\n  legacy:\n    name: Old Build\n    needs: prepare\n    runs-on: ubuntu-24.04\n";
+    const client = fakeClient((route, parameters) => {
+      if (route.endsWith("/runs")) return { workflow_runs: [historical] };
+      if (route.endsWith("/jobs")) return { jobs: [{ ...jobs[0], name: "Old Build" }], total_count: 1 };
+      expect(parameters.ref).toBe("historical-sha");
+      return { content: Buffer.from(oldWorkflow).toString("base64"), encoding: "base64" };
+    });
+    const result = await loadRunHistory(client, repo, { workflowId: 7, branch: "main", limit: 10 });
+    expect(result[0]).toMatchObject({ headSha: "historical-sha", jobs: [{ key: "legacy", needs: ["prepare"] }], provenance: { definitionKnown: true } });
+  });

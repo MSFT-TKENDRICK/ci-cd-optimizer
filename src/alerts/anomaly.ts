@@ -1,6 +1,7 @@
 import type { AlertsConfig } from "../lint/config.js";
 import type { JobSnapshot, WorkflowSnapshot } from "../telemetry/types.js";
 import { latestAttempts } from "../telemetry/history.js";
+import { comparisonKey } from "../telemetry/context.js";
 import { mad, mannWhitneyGreater, median, robustZ } from "./stats.js";
 
 export interface DurationPoint {
@@ -12,6 +13,7 @@ export interface DurationPoint {
 
 /** A duration time series for a whole workflow (jobKey undefined) or one job, oldest first. */
 export interface DurationSeries {
+  contextKey?: string;
   workflowId: number;
   workflowName: string;
   jobKey?: string;
@@ -22,6 +24,7 @@ export interface DurationSeries {
 export type AlertKind = "spike" | "regression";
 
 export interface DurationAlert {
+  contextKey?: string;
   kind: AlertKind;
   fingerprint: string;
   severity: "warning" | "critical";
@@ -47,8 +50,8 @@ export type AlertSettings = Pick<
   "minSamples" | "window" | "zThreshold" | "minIncreasePercent" | "minIncreaseSeconds" | "regressionWindow" | "pValue" | "recoveryRuns"
 >;
 
-export function seriesFingerprint(series: Pick<DurationSeries, "workflowId" | "jobKey">): string {
-  return `duration:${series.workflowId}/${series.jobKey ?? "*"}`;
+export function seriesFingerprint(series: Pick<DurationSeries, "workflowId" | "jobKey" | "contextKey">): string {
+  return `duration:${series.workflowId}${series.contextKey ? `/${series.contextKey}` : ""}/${series.jobKey ?? "*"}`;
 }
 
 /**
@@ -77,12 +80,14 @@ export function buildSeries(snapshots: readonly WorkflowSnapshot[]): DurationSer
     byKey.set(key, series);
   };
   for (const snapshot of ordered) {
+    const contextKey = comparisonKey(snapshot);
+    if (!contextKey) continue;
     const point = { runId: snapshot.runId, completedAt: snapshot.completedAt, headSha: snapshot.headSha };
-    push(`${snapshot.workflowId}/*`, { workflowId: snapshot.workflowId, workflowName: snapshot.workflowName }, { ...point, durationMs: snapshot.durationMs });
+    push(`${contextKey}/*`, { contextKey, workflowId: snapshot.workflowId, workflowName: snapshot.workflowName }, { ...point, durationMs: snapshot.durationMs });
     for (const job of slowestPerKey(snapshot.jobs)) {
       push(
-        `${snapshot.workflowId}/${job.key}`,
-        { workflowId: snapshot.workflowId, workflowName: snapshot.workflowName, jobKey: job.key, jobName: job.name },
+        `${contextKey}/${job.key}`,
+        { contextKey, workflowId: snapshot.workflowId, workflowName: snapshot.workflowName, jobKey: job.key, jobName: job.name },
         { ...point, durationMs: job.durationMs },
       );
     }
@@ -99,6 +104,7 @@ function magnitude(observed: number, baseline: number, settings: AlertSettings) 
 
 function base(series: DurationSeries, kind: AlertKind) {
   return {
+    ...(series.contextKey ? { contextKey: series.contextKey } : {}),
     kind,
     fingerprint: seriesFingerprint(series),
     workflowId: series.workflowId,

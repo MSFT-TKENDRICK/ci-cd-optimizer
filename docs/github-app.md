@@ -126,6 +126,9 @@ retries. Keep all writers in one database/schema for one GitHub host; owner/repo
 permanent identities across renames/transfers.
 
 The same-attempt save operation can correct its snapshot and indexed metadata, but does not record correction history.
+Initialization also makes `queue_ms` nullable for unknown retry queue measurements, including databases already using
+the attempt-level key. Old observations are not rewritten. Newly collected snapshots carry comparison provenance;
+older snapshots remain stored but are ineligible for context-scoped performance comparisons until recollected.
 Retaining attempts does not establish an immutable knowledge ledger or causal proof of an optimization. See the
 [evidence model boundary](architecture.md#evidence-foundation).
 

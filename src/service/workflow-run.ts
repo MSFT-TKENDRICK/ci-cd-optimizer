@@ -7,6 +7,7 @@ import type { IssueAction, SkippedIssue } from "../issues/plan.js";
 import type { LintConfig } from "../lint/config.js";
 import { computeBaseline } from "../telemetry/baseline.js";
 import { byCompletion, latestAttempts } from "../telemetry/history.js";
+import { comparableHistory, comparisonKey } from "../telemetry/context.js";
 import { createTelemetryReport } from "../telemetry/report.js";
 import { buildWorkflowSnapshot, loadJobDefinitions, loadRunHistory, type WorkflowRunPayload } from "../telemetry/snapshot.js";
 import type { TelemetryStore } from "../telemetry/store.js";
@@ -72,19 +73,21 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
     return { status: "skipped", reason: "The run has no completed jobs.", snapshot };
   }
 
-  const history = await loadHistory(client, repo, run, snapshot, definitions, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
+  const history = await loadHistory(client, repo, run, snapshot, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
   if (history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
     return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot };
   }
-  const prior = history.filter((item) => item.runId !== snapshot.runId);
+  const prior = comparableHistory(history, snapshot);
   const baseline = computeBaseline(prior, snapshot);
   const report = createTelemetryReport(snapshot, baseline);
   const result: WorkflowRunResult = { status: "processed", snapshot, samples: prior.length, report, ...(baseline ? { baseline } : {}) };
 
-  if (options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run, config.alerts.branches, branch)) {
+  const contextKey = comparisonKey(snapshot);
+  if (contextKey && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run, config.alerts.branches, branch)) {
     const series = buildSeries([...prior, snapshot]);
     const existing = await listManagedIssues(client, repo, "alert");
     const plan = planAlertSync({
+      contextKey,
       owner: repo.owner,
       repo: repo.repo,
       branch: run.head_branch,
@@ -123,27 +126,29 @@ async function loadHistory(
   repo: RepoRef,
   run: WorkflowRunPayload,
   snapshot: WorkflowSnapshot,
-  definitions: Awaited<ReturnType<typeof loadJobDefinitions>>,
   { limit, minSamples }: { limit: number; minSamples: number },
   options: WorkflowRunOptions,
 ): Promise<WorkflowSnapshot[]> {
-  const query = { owner: repo.owner, repo: repo.repo, workflowId: snapshot.workflowId, branch: snapshot.branch, limit: limit + 1 };
-  const backfill = () => loadRunHistory(client, repo, { workflowId: snapshot.workflowId, branch: snapshot.branch, limit, definitions, excludeRunId: run.id });
+  const query = { owner: repo.owner, repo: repo.repo, workflowId: snapshot.workflowId, branch: snapshot.branch, limit: Math.max(200, limit + 1) };
+  const backfill = () => loadRunHistory(client, repo, { workflowId: snapshot.workflowId, branch: snapshot.branch, limit, excludeRunId: run.id });
   const store = options.store;
-  if (!store) return merge(await backfill(), [snapshot], limit + 1);
+  if (!store) return comparisonKey(snapshot) ? merge(await backfill(), [snapshot], limit + 1) : [snapshot];
   if (!options.dryRun) await store.save(snapshot);
+  if (!comparisonKey(snapshot)) {
+    return latestAttempts([...(await store.history({ ...query, runId: snapshot.runId, limit: 1 })), snapshot]);
+  }
   const [current, stored] = await Promise.all([
     store.history({ ...query, runId: snapshot.runId, limit: 1 }),
     store.history(query),
   ]);
   let history = stored;
-  if (history.filter((item) => item.runId !== snapshot.runId).length < minSamples) {
+  if (comparisonKey(snapshot) && comparableHistory(history, snapshot).length < minSamples) {
     const fetched = await backfill();
     if (!options.dryRun) for (const item of fetched) await store.save(item);
-    history = merge(history, fetched, limit + 1);
+    history = merge(history, fetched, query.limit);
   }
   return [
-    ...merge(history.filter((item) => item.runId !== snapshot.runId), [], limit),
+    ...comparableHistory(history, snapshot).sort(byCompletion).slice(-limit),
     ...latestAttempts([...current, snapshot]),
   ].sort(byCompletion);
 }
