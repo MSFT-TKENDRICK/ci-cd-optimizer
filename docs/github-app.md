@@ -170,6 +170,10 @@ in grading notes when evidence differs. Its broader promotion/closure sequence i
 cleanup marker protocol; interrupted grading may still need manual reconciliation. All cleanup refuses base/default
 branch deletion. Ref deletion, PR state and other PR creation are not a single GitHub transaction; keep writers
 coordinated, and treat cleanup as reference management, not a guarantee that Git objects have been erased.
+Open-PR checks are preflight checks, not locks against later reopening or reuse. If a ref is deleted and recreated
+at the identical recorded SHA before its terminal cleanup outcome is stored, GitHub cannot distinguish the new
+ref from the original; pending cleanup can delete it. Finish or manually reconcile pending cleanup before reusing
+that branch name, even if the replacement points to the same commit.
 
 Monitor queue age and failed jobs in addition to `/ping` and process health:
 

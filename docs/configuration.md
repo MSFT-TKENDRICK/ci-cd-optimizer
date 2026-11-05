@@ -121,7 +121,7 @@ reviewer setup until a scan after they become ready. Interrupted PR updates are 
 discarded before the normal planner considers current policy and base contents. Keep review notes outside the
 generated body's hidden boundaries; marker-only recovery preserves all current body text.
 Pending branch cleanup is also a `metadata` action (`cleanup: true`), including for closed PRs. It retains the original
-observed head across retries; changed or reused branches are preserved. A manually reopened PR with cleanup history
+observed head across retries; changed heads and observed open-PR reuse are preserved. A manually reopened PR with cleanup history
 is held rather than immediately closed again. Normal fix PRs can resume with an explicit rebase/recreate command.
 Removing a management/configured label alone does not opt out:
 use the ignore controls below. See [partial-write recovery](github-app.md#durable-hosted-processing) for limits.
