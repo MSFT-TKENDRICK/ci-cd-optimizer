@@ -29,7 +29,7 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@types/node": "^26.6.6",
     "esbuild": "^0.28.2",
     "eslint": "^9.17.0",
     "tsx": "^4.19.2",
