@@ -152,6 +152,7 @@ export function fakeApi(state: FakeApiState = {}) {
       case "GET /repos/{owner}/{repo}/labels":
         return [];
       case "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs":
+      case "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs":
         return { jobs: state.jobs?.[Number(parameters.run_id)] ?? [] };
       case "GET /repos/{owner}/{repo}/actions/runs/{run_id}": {
         const found = state.runs?.[Number(parameters.run_id)];

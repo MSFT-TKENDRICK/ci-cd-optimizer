@@ -108,6 +108,27 @@ and local API are cleaned up after each run; CI owns disposal of the test databa
 These checks use synthetic credentials and API responses. They do not establish a real GitHub App installation,
 granted permissions, public HTTPS/TLS, or live delivery and write access; validate those against the deployed App.
 
+### Telemetry schema upgrades
+
+The attempt-preserving store migrates `workflow_run_snapshots` from a run-only primary key to
+`(owner, repo, run_id, run_attempt)`. Existing rows and their recorded attempt numbers are preserved. Previously
+overwritten attempts cannot be recovered by this migration; ordinary Actions history backfill observes the attempts
+returned by GitHub, not every historical retry.
+
+**Stop all old App replicas and independent telemetry writers before upgrading.** Back up the database, deploy the new
+version to every writer, and then resume processing. Old binaries use a run-only conflict target and are incompatible
+with the new key; this is not a mixed-version rolling upgrade or an automatically reversible downgrade.
+Initialization serializes migrations with a transaction-scoped advisory lock, validates the existing key, and changes
+it atomically. Repeated/concurrent initialization by the new version is supported. Unexpected keys or external
+dependencies fail explicitly without dropping data. DDL has a ten-second lock timeout and a sixty-second statement
+timeout; a large or busy database may require a separately planned maintenance migration rather than repeated startup
+retries. Keep all writers in one database/schema for one GitHub host; owner/repository names are not cross-host IDs or
+permanent identities across renames/transfers.
+
+The same-attempt save operation can correct its snapshot and indexed metadata, but does not record correction history.
+Retaining attempts does not establish an immutable knowledge ledger or causal proof of an optimization. See the
+[evidence model boundary](architecture.md#evidence-foundation).
+
 ### Durable hosted processing
 
 Set `WEBHOOK_QUEUE=postgres` and point every replica at the **same database and schema**. Probot verifies the webhook

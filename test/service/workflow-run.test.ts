@@ -61,6 +61,38 @@ describe("alertsApply", () => {
 });
 
 describe("processWorkflowRun", () => {
+  it("preserves a delayed attempt without republishing stale reports or alerts", async () => {
+    const store = seeded();
+    const latest = { ...snapshot(2000, 300, [["build", 300]]), runAttempt: 2 };
+    await store.save(latest);
+    const client = api();
+    const result = await processWorkflowRun(client, repo, run(), { store });
+    expect(result).toMatchObject({ status: "skipped", reason: "A newer attempt is already recorded.", snapshot: { runAttempt: 1 } });
+    expect(store.snapshots.filter((item) => item.runId === 2000)).toHaveLength(2);
+    expect(writes(client)).toEqual([]);
+  });
+
+  it("recognizes a superseding attempt outside the recent history window", async () => {
+    const store = seeded();
+    await store.save({ ...snapshot(2000, 100, []), runAttempt: 2 });
+    for (let id = 3001; id <= 3100; id += 1) {
+      await store.save({ ...snapshot(id, 100, []), completedAt: "2027-01-01T00:00:00Z" });
+    }
+    const client = api();
+    const result = await processWorkflowRun(client, repo, run(), { store });
+    expect(result).toMatchObject({ status: "skipped", reason: "A newer attempt is already recorded." });
+    expect(writes(client)).toEqual([]);
+  });
+
+  it("persists newer backfilled attempts of runs already known to a cold store", async () => {
+    const store = new MemoryTelemetryStore();
+    await store.save(snapshot(1999, 300, []));
+    const client = api({ workflowRuns: [run({ id: 1999, run_attempt: 2, conclusion: "failure" })] });
+    const result = await processWorkflowRun(client, repo, run(), { store, alerts: false });
+    expect(result.baseline).toBeUndefined();
+    expect(store.snapshots.filter((item) => item.runId === 1999).map((item) => item.runAttempt)).toEqual([1, 2]);
+  });
+
   it("skips runs that are not completed", async () => {
     const client = api();
     expect(await processWorkflowRun(client, repo, run({ status: "in_progress" }))).toEqual({ status: "skipped", reason: "Run is in_progress." });
@@ -74,6 +106,20 @@ describe("processWorkflowRun", () => {
   it("skips runs without completed jobs", async () => {
     const result = await processWorkflowRun(api({ jobs: {} }), repo, run());
     expect(result).toMatchObject({ status: "skipped", reason: "The run has no completed jobs." });
+  });
+
+  it("retains cancellation evidence even without completed jobs, but not during dry runs", async () => {
+    const store = new MemoryTelemetryStore();
+    await store.save(snapshot(2000, 300, [["build", 300]]));
+    const cancelled = run({ run_attempt: 2, conclusion: "cancelled" });
+    const client = api({ jobs: {} });
+    await processWorkflowRun(client, repo, cancelled, { store, dryRun: true });
+    expect(store.snapshots).toHaveLength(1);
+    const result = await processWorkflowRun(client, repo, cancelled, { store });
+    expect(result.status).toBe("skipped");
+    expect(store.snapshots).toHaveLength(2);
+    expect(await store.history({ ...repo, workflowId: 7, limit: 10 })).toMatchObject([{ runAttempt: 2, conclusion: "cancelled", jobs: [] }]);
+    expect(writes(client)).toEqual([]);
   });
 
   it("publishes a telemetry report with a Gantt chart against the stored baseline", async () => {

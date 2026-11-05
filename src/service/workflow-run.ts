@@ -6,6 +6,7 @@ import { applyIssueActions, listManagedIssues, type AppliedIssueAction } from ".
 import type { IssueAction, SkippedIssue } from "../issues/plan.js";
 import type { LintConfig } from "../lint/config.js";
 import { computeBaseline } from "../telemetry/baseline.js";
+import { byCompletion, latestAttempts } from "../telemetry/history.js";
 import { createTelemetryReport } from "../telemetry/report.js";
 import { buildWorkflowSnapshot, loadJobDefinitions, loadRunHistory, type WorkflowRunPayload } from "../telemetry/snapshot.js";
 import type { TelemetryStore } from "../telemetry/store.js";
@@ -66,9 +67,15 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
 
   const definitions = await loadJobDefinitions(client, repo, run.path, run.head_sha);
   const snapshot = await buildWorkflowSnapshot(client, repo, run, { definitions });
-  if (snapshot.jobs.length === 0) return { status: "skipped", reason: "The run has no completed jobs.", snapshot };
+  if (snapshot.jobs.length === 0) {
+    if (options.store && !options.dryRun) await options.store.save(snapshot);
+    return { status: "skipped", reason: "The run has no completed jobs.", snapshot };
+  }
 
   const history = await loadHistory(client, repo, run, snapshot, definitions, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
+  if (history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
+    return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot };
+  }
   const prior = history.filter((item) => item.runId !== snapshot.runId);
   const baseline = computeBaseline(prior, snapshot);
   const report = createTelemetryReport(snapshot, baseline);
@@ -125,20 +132,24 @@ async function loadHistory(
   const store = options.store;
   if (!store) return merge(await backfill(), [snapshot], limit + 1);
   if (!options.dryRun) await store.save(snapshot);
-  let history = await store.history(query);
+  const [current, stored] = await Promise.all([
+    store.history({ ...query, runId: snapshot.runId, limit: 1 }),
+    store.history(query),
+  ]);
+  let history = stored;
   if (history.filter((item) => item.runId !== snapshot.runId).length < minSamples) {
     const fetched = await backfill();
-    const known = new Set(history.map((item) => item.runId));
-    if (!options.dryRun) for (const item of fetched) if (!known.has(item.runId)) await store.save(item);
+    if (!options.dryRun) for (const item of fetched) await store.save(item);
     history = merge(history, fetched, limit + 1);
   }
-  return merge(history, [snapshot], limit + 1);
+  return [
+    ...merge(history.filter((item) => item.runId !== snapshot.runId), [], limit),
+    ...latestAttempts([...current, snapshot]),
+  ].sort(byCompletion);
 }
 
 function merge(left: readonly WorkflowSnapshot[], right: readonly WorkflowSnapshot[], limit: number): WorkflowSnapshot[] {
-  const byRun = new Map<number, WorkflowSnapshot>();
-  for (const item of [...left, ...right]) byRun.set(item.runId, item);
-  return [...byRun.values()].sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId).slice(-limit);
+  return latestAttempts([...left, ...right]).sort(byCompletion).slice(-limit);
 }
 
 function headline(snapshot: WorkflowSnapshot, baseline?: WorkflowBaseline): string {

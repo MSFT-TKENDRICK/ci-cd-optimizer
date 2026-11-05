@@ -3,6 +3,7 @@ import { readFileAt } from "../github/git.js";
 import type { GitHubClient, RepoRef } from "../github/client.js";
 import { mapLimit } from "../utils.js";
 import type { JobSnapshot, StepSnapshot, WorkflowSnapshot } from "./types.js";
+import { validateRunAttempt } from "./history.js";
 
 /** The subset of a `workflow_run` webhook payload / REST object the snapshot needs. */
 export interface WorkflowRunPayload {
@@ -79,13 +80,14 @@ export async function loadJobDefinitions(client: GitHubClient, repo: RepoRef, pa
   }
 }
 
-export async function listRunJobs(client: GitHubClient, repo: RepoRef, runId: number, maxPages = 5): Promise<ApiJob[]> {
+export async function listRunJobs(client: GitHubClient, repo: RepoRef, runId: number, runAttempt = 1, maxPages = 5): Promise<ApiJob[]> {
+  validateRunAttempt(runAttempt);
   const jobs: ApiJob[] = [];
   for (let page = 1; page <= maxPages; page += 1) {
-    const response = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs", {
+    const response = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs", {
       ...repo,
       run_id: runId,
-      filter: "latest",
+      attempt_number: runAttempt,
       per_page: 100,
       page,
     });
@@ -103,7 +105,7 @@ export async function buildWorkflowSnapshot(
   options: { definitions?: JobDefinitions } = {},
 ): Promise<WorkflowSnapshot> {
   const [jobs, definitions] = await Promise.all([
-    listRunJobs(client, repo, run.id),
+    listRunJobs(client, repo, run.id, run.run_attempt ?? 1),
     options.definitions ? Promise.resolve(options.definitions) : loadJobDefinitions(client, repo, run.path, run.head_sha),
   ]);
   return snapshotFromRun(repo, run, jobs, definitions);
@@ -215,7 +217,7 @@ export async function loadRunHistory(client: GitHubClient, repo: RepoRef, option
     .filter((run) => run.id !== options.excludeRunId)
     .slice(0, options.limit);
   const snapshots = await mapLimit(runs, options.concurrency ?? 4, async (run) =>
-    snapshotFromRun(repo, run, await listRunJobs(client, repo, run.id, 1), options.definitions),
+    snapshotFromRun(repo, run, await listRunJobs(client, repo, run.id, run.run_attempt ?? 1, 1), options.definitions),
   );
   return snapshots.sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId);
 }

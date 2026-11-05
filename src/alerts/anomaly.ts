@@ -1,5 +1,6 @@
 import type { AlertsConfig } from "../lint/config.js";
 import type { JobSnapshot, WorkflowSnapshot } from "../telemetry/types.js";
+import { latestAttempts } from "../telemetry/history.js";
 import { mad, mannWhitneyGreater, median, robustZ } from "./stats.js";
 
 export interface DurationPoint {
@@ -66,7 +67,7 @@ export function slowestPerKey<T extends Pick<JobSnapshot, "key" | "conclusion" |
 }
 
 export function buildSeries(snapshots: readonly WorkflowSnapshot[]): DurationSeries[] {
-  const ordered = [...snapshots]
+  const ordered = latestAttempts(snapshots)
     .filter((snapshot) => snapshot.conclusion === "success")
     .sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId);
   const byKey = new Map<string, DurationSeries>();

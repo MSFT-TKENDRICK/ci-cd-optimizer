@@ -42,7 +42,7 @@ const endpoints = [
   "GET /repos/{owner}/{repo}/pulls",
   "GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers",
   "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
-  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs",
+  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
   "GET /repos/{owner}/{repo}/collaborators/{username}/permission",
   "POST /repos/{owner}/{repo}/issues",
   "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
@@ -525,7 +525,7 @@ describe("signed GitHub App HTTP delivery", () => {
       });
     }
     if (event === "workflow_run") {
-      expect(callsTo(app.api, "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs")).toHaveLength(1);
+      expect(callsTo(app.api, "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs")).toHaveLength(1);
     }
   });
 

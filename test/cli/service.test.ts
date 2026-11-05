@@ -194,7 +194,7 @@ describe("telemetry command", () => {
 });
 
 describe("FileTelemetryStore", () => {
-  it("round-trips snapshots, replaces reruns, prunes per workflow and branch, and ignores corrupt lines", async () => {
+  it("round-trips attempts, prunes whole runs per workflow and branch, and ignores corrupt lines", async () => {
     const path = join(root, "store.jsonl");
     await writeFile(path, "not json\n", "utf8");
     const store = new FileTelemetryStore(path, 3);
@@ -208,6 +208,6 @@ describe("FileTelemetryStore", () => {
     expect(main.map((item) => item.runId)).toEqual([1002, 1003, 1004]);
     expect(main.at(-1)).toMatchObject({ runAttempt: 2, durationMs: 400_000 });
     expect((await reopened.history({ owner: "acme", repo: "widgets", workflowId: 7, limit: 10 })).map((item) => item.runId)).toEqual([1002, 1003, 1004, 1005]);
-    expect(await lines(path)).toHaveLength(4);
+    expect(await lines(path)).toHaveLength(5);
   });
 });

@@ -67,6 +67,32 @@ instead of duplicating them.
 - **`telemetry/`**: run snapshots (jobs, steps, queue time, `needs` graph), critical path, and Mermaid Gantt reports.
   Snapshots are stored in memory, in a file (an Actions-cached `.cicd-telemetry` directory), or in Postgres.
 
+### Evidence foundation
+
+Telemetry identity is `(owner, repo, runId, runAttempt)` within one configured GitHub host. Each observed attempt is
+retained separately, including failures and cancellations with no completed jobs; saving the same attempt replaces that attempt's current snapshot, not the
+other attempts. This is an attempt-preserving store, **not an immutable revision/audit ledger**.
+Collectors use the attempt-specific jobs endpoint rather than attaching the latest rerun's jobs to a delayed event.
+
+`TelemetryStore.history({ owner, repo, workflowId, branch, limit })` returns the latest attempt of each run, oldest
+first. Latest means greatest attempt number, independent of delivery order or completion timestamp. Selection happens
+before workflow/branch/success filtering, so a failed latest attempt does not resurrect an earlier success.
+`attempts: "all"` exposes retained attempt evidence; its limit counts attempts, while the default limit counts runs.
+An optional `runId` narrows retrieval to one logical run independently of the recent history window.
+Baselines and alert series defensively deduplicate retries before selecting successes. An observed event older than a
+stored attempt is retained but does not republish a stale performance check or synchronize duration-alert issues.
+
+The file store retains all observed attempts of the newest 200 logical runs per workflow/branch (configurable in its
+constructor), using each run's latest attempt to assign its retention group. Eviction removes a whole run. It is still
+single-writer; use Postgres for coordinated hosted replicas. Postgres retention, backups and access control remain
+operator responsibilities. Migration details are in [GitHub App deployment](github-app.md#telemetry-schema-upgrades).
+
+This foundation does not yet implement project/task/version topology, technology detection, context-conditioned
+duration models, mitigation applications/evaluations, semantic retrieval or cross-organization learning. Those should
+build on relational evidence and typed relationships, not natural-language summaries treated as facts. Latest-attempt
+deduplication prevents retry sample inflation; it does not prove that different workloads, partial reruns or runner
+environments are comparable, or that an observed improvement was caused by a mitigation.
+
 ## Hill climbing (`src/experiments`)
 
 Deterministic machinery for the [gh-aw experiment loop](experiments.md). It covers the manifest and rubric validation

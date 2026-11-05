@@ -149,6 +149,21 @@ describe("snapshotFromRun", () => {
 describe("API loading", () => {
   const content = Buffer.from(workflow).toString("base64");
 
+  it("collects the requested attempt even when latest jobs belong to a rerun", async () => {
+    const client = fakeClient((route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs") {
+        return { jobs: [jobs[parameters.attempt_number === 1 ? 0 : 1]] };
+      }
+      if (route.endsWith("/jobs")) return { jobs: [jobs[1]] };
+      throw new Error(route);
+    });
+    const old = await buildWorkflowSnapshot(client, repo, run(), { definitions: new Map() });
+    const latest = await buildWorkflowSnapshot(client, repo, run({ run_attempt: 2 }), { definitions: new Map() });
+    expect(old.jobs.map((item) => item.id)).toEqual([1]);
+    expect(latest.jobs.map((item) => item.id)).toEqual([2]);
+    expect([old.runAttempt, latest.runAttempt]).toEqual([1, 2]);
+  });
+
   it("builds a snapshot from the jobs API and the workflow file at the head SHA", async () => {
     const client = fakeClient((route, parameters) => {
       if (route.includes("/jobs")) return { total_count: jobs.length, jobs };
@@ -160,7 +175,10 @@ describe("API loading", () => {
     });
     const snapshot = await buildWorkflowSnapshot(client, repo, run({ path: ".github/workflows/ci.yml@refs/heads/main" }));
     expect(snapshot.jobs.map((item) => item.key)).toEqual(["build", "test", "test", "deploy"]);
-    expect(client.calls.find((call) => call.route.includes("/jobs"))?.parameters).toMatchObject({ run_id: 500, filter: "latest" });
+    expect(client.calls.find((call) => call.route.includes("/jobs"))).toMatchObject({
+      route: "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+      parameters: { run_id: 500, attempt_number: 1 },
+    });
   });
 
   it("degrades to display names when the workflow file is unreadable", async () => {
@@ -184,7 +202,7 @@ describe("API loading", () => {
   });
 
   it("backfills completed run history oldest first, excluding the current run", async () => {
-    const runs = [run({ id: 503, updated_at: "2026-01-03T00:00:00Z" }), run({ id: 500 }), run({ id: 502 }), run({ id: 501 })].map((item, index) => ({
+    const runs = [run({ id: 503, run_attempt: 3, updated_at: "2026-01-03T00:00:00Z" }), run({ id: 500 }), run({ id: 502 }), run({ id: 501 })].map((item, index) => ({
       ...item,
       created_at: `2026-01-0${4 - index}T00:00:00Z`,
       run_started_at: `2026-01-0${4 - index}T00:00:00Z`,
@@ -200,5 +218,9 @@ describe("API loading", () => {
     const history = await loadRunHistory(client, repo, { workflowId: 7, branch: "main", limit: 2, definitions: new Map(), excludeRunId: 500 });
     expect(history.map((item) => item.runId)).toEqual([502, 503]);
     expect(client.calls.filter((call) => call.route.includes("/jobs"))).toHaveLength(2);
+    expect(client.calls.find((call) => call.parameters.run_id === 503)).toMatchObject({
+      route: "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+      parameters: { attempt_number: 3 },
+    });
   });
 });
