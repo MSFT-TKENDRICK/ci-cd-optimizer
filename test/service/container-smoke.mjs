@@ -26,6 +26,7 @@ const docker = (...args) => execFileSync("docker", args, { env, encoding: "utf8"
 let containerCreated = false;
 let networkCreated = false;
 let databaseAttached = false;
+let databasePaused = false;
 const failures = [];
 
 async function waitFor(predicate, message) {
@@ -211,6 +212,22 @@ try {
     }
     assert.equal(github.requests.length, recoveredRequests, "Completed redelivery after replacement must not access the API");
     assert.equal(github.checks.length, 6, "Crash recovery or completed redelivery duplicated a pre-write check");
+
+    docker("pause", process.env.SMOKE_DATABASE_CONTAINER);
+    databasePaused = true;
+    assert.equal(docker("inspect", "--format", "{{.State.Paused}}", process.env.SMOKE_DATABASE_CONTAINER), "true");
+    const unavailable = await send("pull_request", pullRequestPayload());
+    assert.equal(unavailable.status, 503, "Unavailable persistence must not be acknowledged as HTTP 200/202");
+    assert.equal(github.requests.length, recoveredRequests, "No analysis may run while persistence is unavailable");
+    docker("unpause", process.env.SMOKE_DATABASE_CONTAINER);
+    databasePaused = false;
+    await waitFor(() => job(unavailable.id) === "completed:1", "Late persistence did not recover after the database resumed");
+    verifyChecks("acme", 5);
+    const lateRequests = github.requests.length;
+    assert.equal((await send("pull_request", pullRequestPayload(), "valid", unavailable.id)).status, 200);
+    assert.equal(job(unavailable.id), "completed:1");
+    assert.equal(github.requests.length, lateRequests, "Redelivery duplicated a late-committed delivery");
+    assert.equal(github.checks.length, 7);
   }
   github.assertClean();
   docker("stop", "--time", "10", name);
@@ -226,6 +243,7 @@ try {
   }
 } finally {
   for (const args of [
+    ...(databasePaused ? [["unpause", process.env.SMOKE_DATABASE_CONTAINER]] : []),
     ...(containerCreated ? [["rm", "--force", name]] : []),
     ...(databaseAttached ? [["network", "disconnect", network, process.env.SMOKE_DATABASE_CONTAINER]] : []),
     ...(networkCreated ? [["network", "rm", network]] : []),
@@ -235,4 +253,4 @@ try {
   try { await github?.close(); } catch (error) { failures.push(error); }
 }
 if (failures.length) throw new AggregateError(failures, "Container smoke or cleanup failed");
-console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, isolated signed/unsigned webhooks, JWT and installation-token HTTP exchange, scoped token reuse, PR analysis and check publication, denied-token recovery${durable ? ", durable worker retry, pre-write SIGKILL recovery in a fresh container, same-scope FIFO, independent-scope progress, reauthentication and completed-delivery deduplication" : ""}, graceful SIGTERM and cleanup.`);
+console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, isolated signed/unsigned webhooks, JWT and installation-token HTTP exchange, scoped token reuse, PR analysis and check publication, denied-token recovery${durable ? ", durable worker retry, pre-write SIGKILL recovery in a fresh container, same-scope FIFO, independent-scope progress, reauthentication, completed-delivery deduplication, database-outage HTTP 503 and late-commit recovery" : ""}, graceful SIGTERM and cleanup.`);

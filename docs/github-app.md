@@ -96,6 +96,9 @@ The test kills the App process with SIGKILL, verifies that both pending jobs sur
 against the same database on the internal-only network. The fresh process must authenticate again, finish both jobs in
 FIFO order, clear their stored payloads, and deduplicate completed redeliveries. This crash boundary is **before the
 remote write**, not a claim of exactly-once effects when a crash occurs after GitHub has already accepted a write.
+The real test database is also paused beyond the persistence deadline. Ingress must fail with HTTP 503, not
+acknowledge unstored work with HTTP 200/202. After the database resumes, the pending operation may commit late;
+its analysis must complete and subsequent redelivery must be deduplicated.
 
 The durable smoke test requires `SMOKE_DATABASE_URL` and `SMOKE_DATABASE_CONTAINER` for a disposable test Postgres
 container, as supplied by CI. It temporarily attaches that container to its isolated network and changes test-job
@@ -111,6 +114,19 @@ Set `WEBHOOK_QUEUE=postgres` and point every replica at the **same database and 
 signature before the App stores the delivery, and the HTTP request succeeds only after that transaction commits.
 Analysis then runs in two background workers per process rather than consuming GitHub's webhook response deadline.
 If persistence fails, GitHub receives a failed delivery; it does not automatically redeliver it.
+
+Durable mode uses a dedicated HTTP transport while retaining Probot's signature verification and event dispatch.
+It returns HTTP 503 if body receipt, verification and persistence do not finish within five seconds, leaving margin
+before GitHub's ten-second deadline. It never uses the default Probot transport's early HTTP 202 response.
+Payloads are bounded to 25 MiB, including chunked requests; invalid signatures and malformed requests are rejected
+before enqueue. `WEBHOOK_PATH`, `HOST`, `PORT`, `/ping`, and SIGTERM/SIGINT shutdown remain supported.
+Direct mode retains Probot's existing transport and setup flow. Probot's development `WEBHOOK_PROXY_URL` is supported
+only in direct mode; durable mode rejects it explicitly and requires an endpoint reachable by the webhook sender.
+
+A failed response or disconnected client does not cancel a database operation already in progress: the commit outcome
+can be unknown, and the operation may finish after the deadline. Late success/failure is logged. Redeliver using the
+original delivery ID after resolving the outage; pending/completed delivery deduplication covers a late commit.
+Do not treat HTTP 503 as proof that no job exists, or create a new delivery ID merely to retry it.
 
 Postgres transaction locks serialize repository mutations across workers and replicas. PR checks use a separate scope
 so a long repository scan does not block them. Installation events are split into per-repository jobs and inserted

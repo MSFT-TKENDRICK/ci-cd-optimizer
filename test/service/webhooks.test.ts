@@ -5,10 +5,10 @@ import { setImmediate } from "node:timers/promises";
 import { createNodeMiddleware, Probot, ProbotOctokit } from "probot";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app.js";
+import { createDurableMiddleware } from "../../src/webhooks/ingress.js";
 import { httpStatus } from "../../src/github/client.js";
 import { marker, parseMarker } from "../../src/issues/markers.js";
 import { PostgresWebhookQueue, type DeliveryQueue } from "../../src/webhooks/postgres-queue.js";
-import { registerDurableIngress } from "../../src/webhooks/worker.js";
 import { isolatedDatabase } from "../webhooks/database.js";
 import { httpError } from "../experiments/fixtures.js";
 import { callsTo, CLEAN, fakeApi, MISSING_TIMEOUT, TIMEOUT_ONLY, WORKFLOW, type FakeApiState } from "./api.js";
@@ -118,9 +118,9 @@ async function harness(state: FakeApiState = {}, durable?: Pick<DeliveryQueue, "
   const app = createApp({ uploadSarif: false, store: async () => undefined });
   if (durable) await probot.load(app);
   const middleware = durable
-    ? await createNodeMiddleware((ingress) => registerDurableIngress(ingress, durable), { probot: new Probot(options) })
+    ? await createDurableMiddleware(new Probot(options), durable)
     : await createNodeMiddleware(app, { probot });
-  const server = createServer((req, res) => { void middleware(req, res, () => { res.writeHead(404).end(); }); });
+  const server = createServer((req, res) => { void Promise.resolve(middleware(req, res)).then((handled) => { if (!handled) res.writeHead(404).end(); }); });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   cleanups.push(async () => {
