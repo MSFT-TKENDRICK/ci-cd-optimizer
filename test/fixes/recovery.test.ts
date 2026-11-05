@@ -208,19 +208,26 @@ describe("interrupted fix updates", () => {
     expect(callsTo(f.client, "POST /graphql")).toHaveLength(0);
   });
 
-  it("fails recovery without dropping the intent if the marker changes after discovery", async () => {
+  it("fails recovery without dropping the intent if the marker changes after cached discovery", async () => {
     const f = await fixture();
     f.fail({ phase: "finalize", after: false });
     await expect(f.scan()).rejects.toThrow();
     const original = f.client.request.bind(f.client);
-    let reads = 0;
-    vi.spyOn(f.client, "request").mockImplementation((route, parameters) => {
-      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}" && ++reads === 2) {
+    let discovered = false;
+    let injected = false;
+    vi.spyOn(f.client, "request").mockImplementation(async (route, parameters = {}) => {
+      if (discovered && !injected && route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") {
+        injected = true;
         f.pull.body = updateMarker(f.pull.body, "fix", "group:workflow", { pendingCommit: "different-intent" });
       }
-      return original(route, parameters);
+      const response = await original(route, parameters);
+      if (route === "GET /repos/{owner}/{repo}/pulls" && parameters.state === "all" && parameters.head === `${repo.owner}:${f.pull.head.ref}`) {
+        discovered = true;
+      }
+      return response;
     });
     await expect(f.scan()).rejects.toThrow("changed since planning");
+    expect(injected).toBe(true);
     expect(parseMarker(f.pull.body)?.attributes.pendingCommit).toBe("different-intent");
     expect(callsTo(f.client, "POST /graphql")).toHaveLength(1);
   });

@@ -15499,7 +15499,6 @@ async function listManagedPullRequests(client, repo, discovery) {
   if (discovery) {
     const known2 = new Set(raw.map((issue) => issue.number));
     for (const group of new Set(discovery.groups)) {
-      if (raw.some((issue) => issue.pull_request && issue.state === "open" && parseMarker(issue.body)?.fingerprint === `group:${group}`)) continue;
       const branch = branchFor(group, discovery);
       const pulls = await paginate(client, "GET /repos/{owner}/{repo}/pulls", {
         ...repo,
@@ -15511,7 +15510,11 @@ async function listManagedPullRequests(client, repo, discovery) {
       });
       if (pulls.length === 1e3) throw new Error(`Fix PR discovery reached its 1000-result limit for ${branch}; refusing an incomplete reconciliation.`);
       for (const pull of pulls) {
-        if (known2.has(pull.number) || pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase() || pull.head.ref !== branch || pull.base.ref !== discovery.baseBranch) continue;
+        if (known2.has(pull.number)) {
+          details.set(pull.number, pull);
+          continue;
+        }
+        if (pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase() || pull.head.ref !== branch || pull.base.ref !== discovery.baseBranch) continue;
         const parsed = parseMarker(pull.body);
         if (parsed?.kind !== "fix" || parsed.fingerprint !== `group:${group}` || !parsed.attributes.signature || !parsed.attributes.commit) continue;
         raw.push({ ...pull, pull_request: { merged_at: pull.merged_at ?? null } });
@@ -15525,21 +15528,16 @@ async function listManagedPullRequests(client, repo, discovery) {
     if (!issue.pull_request) continue;
     let parsed = parseMarker(issue.body);
     if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
-    const initialAttributes = parsed.attributes;
-    const cleanup = branchCleanup(parsed, issue.number);
-    let head;
-    if (issue.state === "open" || cleanup?.status === "pending" || UPDATE_KEYS.some((key) => key in initialAttributes)) {
-      let pull = details.get(issue.number);
-      if (!pull) {
-        const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: issue.number });
-        pull = response.data;
-      }
-      head = pull.head;
-      if (head?.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) continue;
-      issue = { ...issue, ...pull, pull_request: { ...issue.pull_request, ...pull.merged_at !== void 0 ? { merged_at: pull.merged_at } : {} } };
-      parsed = parseMarker(issue.body);
-      if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
+    let pull = details.get(issue.number);
+    if (!pull) {
+      const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: issue.number });
+      pull = response.data;
     }
+    const head = pull.head;
+    if (head?.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) continue;
+    issue = { ...issue, ...pull, pull_request: { ...issue.pull_request, ...pull.merged_at !== void 0 ? { merged_at: pull.merged_at } : {} } };
+    parsed = parseMarker(issue.body);
+    if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
     const pending = pendingUpdate(parsed, issue.number);
     const currentCleanup = branchCleanup(parsed, issue.number);
     const pr = {
@@ -15586,6 +15584,24 @@ async function currentFix(client, repo, previous) {
     throw new Error(`PR #${previous.number} changed since planning; retry without overwriting its branch or marker.`);
   }
   return { pull, parsed };
+}
+async function verifyBranchReuse(client, repo, previous, baseBranch) {
+  const { pull, parsed } = await currentFix(client, repo, previous);
+  if (pull.state !== "closed" || pull.base?.ref !== baseBranch || parsed.attributes.commit !== pull.head.sha || pendingUpdate(parsed, previous.number) || branchCleanup(parsed, previous.number)?.status === "pending") {
+    throw new Error(`PR #${previous.number} does not authorize reuse of this branch and base; reconcile it before retrying.`);
+  }
+}
+async function requireUnusedBranch(client, repo, branch) {
+  const response = await client.request("GET /repos/{owner}/{repo}/pulls", {
+    ...repo,
+    state: "open",
+    head: `${repo.owner}:${branch}`,
+    per_page: 100
+  });
+  if (!Array.isArray(response.data)) throw new Error("GitHub did not return the open PRs required for branch reuse.");
+  if (response.data.some((pull) => pull.head.ref === branch && pull.head.repo?.full_name.toLowerCase() === `${repo.owner}/${repo.repo}`.toLowerCase())) {
+    throw new Error(`An open PR already uses ${branch}; reconcile it before creating another. Its branch was not changed.`);
+  }
 }
 async function finishPendingUpdate(client, repo, previous) {
   const { pull, parsed } = await currentFix(client, repo, previous);
@@ -15721,25 +15737,22 @@ async function applyFixActions(client, repo, actions, options) {
     const branch = action.type === "update" ? previous?.branch : change.branch;
     if (!branch || branch === options.baseBranch) throw new Error("A fix requires a known branch distinct from the repository's base branch.");
     let expectedHead = previous?.headSha;
+    let reused;
     if (action.type === "update" && !expectedHead) throw new Error(`Missing current head for PR #${action.number}; refusing an unconditional update.`);
     if (action.type === "create") {
-      const response = await client.request("GET /repos/{owner}/{repo}/pulls", {
-        ...repo,
-        state: "open",
-        head: `${repo.owner}:${change.branch}`,
-        per_page: 100
-      });
-      if (response.data.some((pull) => pull.head.ref === change.branch && pull.head.repo?.full_name.toLowerCase() === `${repo.owner}/${repo.repo}`.toLowerCase())) {
-        throw new Error(`An open PR already uses ${change.branch}; reconcile it before creating another. Its branch was not changed.`);
-      }
+      await requireUnusedBranch(client, repo, branch);
+      let currentSha;
       try {
-        const currentSha = await branchSha(client, repo, change.branch);
-        if (!options.existing.some((pr) => pr.state === "closed" && pr.group === change.group && pr.commitSha === currentSha)) {
-          throw new Error(`Refusing to overwrite unrecognized or modified branch ${change.branch}; reconcile it before retrying.`);
-        }
-        expectedHead = currentSha;
+        currentSha = await branchSha(client, repo, branch);
+        if (!currentSha) throw new Error(`GitHub did not return the current head of ${branch}.`);
       } catch (error) {
         if (httpStatus(error) !== 404) throw error;
+      }
+      if (currentSha) {
+        reused = [...existing.values()].find((pr) => pr.state === "closed" && pr.group === change.group && pr.branch === branch && pr.commitSha === currentSha && pr.headSha === currentSha);
+        if (!reused) throw new Error(`Refusing to overwrite unrecognized or modified branch ${branch}; reconcile it before retrying.`);
+        await verifyBranchReuse(client, repo, reused, options.baseBranch);
+        expectedHead = currentSha;
       }
     }
     const commitSha = await commitFiles(client, repo, options.baseSha, change.files, commitMessage(change));
@@ -15779,6 +15792,10 @@ async function applyFixActions(client, repo, actions, options) {
       body = updateMarker(body, "fix", `group:${change.group}`, { pendingReviewers: options.config.reviewers.join(",") });
     }
     body = managedBody(body);
+    if (reused) {
+      await verifyBranchReuse(client, repo, reused, options.baseBranch);
+      await requireUnusedBranch(client, repo, branch);
+    }
     if (expectedHead) await updateBranch(client, repo, branch, commitSha, expectedHead);
     else await pushBranch(client, repo, branch, commitSha);
     const created = await client.request("POST /repos/{owner}/{repo}/pulls", {
