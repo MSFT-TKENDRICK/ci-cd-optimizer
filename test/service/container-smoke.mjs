@@ -88,7 +88,9 @@ try {
     }
     assert.equal(status, "completed", "The production worker did not process the persisted webhook");
   }
-  console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, signed webhook, unsigned rejection${durable ? ", durable worker completion" : ""}.`);
+  docker("stop", "--time", "10", name);
+  assert.equal(docker("inspect", "--format", "{{.State.ExitCode}}", name), "0", "SIGTERM did not shut down cleanly");
+  console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, signed webhook, unsigned rejection${durable ? ", durable worker completion" : ""}, graceful SIGTERM.`);
 } catch (error) {
   if (started) console.error(docker("logs", name));
   throw error;
