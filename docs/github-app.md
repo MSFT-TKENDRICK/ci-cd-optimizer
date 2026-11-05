@@ -77,8 +77,10 @@ probe; it does not verify credentials, installation access, database availabilit
 ### Production-image verification
 
 CI runs `test/service/container-smoke.mjs` against the actual image in both direct and Postgres modes. Each run
-creates an internal Docker network with no outbound internet, uses ephemeral test keys, and binds a synthetic
-GitHub HTTP API only to that network's host gateway. The normal Probot transport verifies JWT signing and
+creates an internal Docker network, uses ephemeral test keys, and binds a synthetic
+GitHub HTTP API only to that network's host gateway. Startup health is first checked through a published loopback
+port; the external bridge is then disconnected and internal-only attachment is asserted before any webhook or
+authentication scenarios. Those scenarios have no outbound internet. The normal Probot transport verifies JWT signing and
 installation-token exchange, token reuse and installation isolation, base-commit policy reads, PR analysis, and
 authenticated publication of the expected job-timeout finding. Invalid or missing webhook signatures must trigger
 neither API calls nor durable inserts.

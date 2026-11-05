@@ -23,10 +23,10 @@ const env = {
   ...(durable ? { DATABASE_URL: process.env.SMOKE_DATABASE_URL, WEBHOOK_QUEUE: "postgres" } : {}),
 };
 const docker = (...args) => execFileSync("docker", args, { env, encoding: "utf8", timeout: 30_000 }).trim();
-let started = false;
+let containerCreated = false;
 let networkCreated = false;
 let databaseAttached = false;
-let failure;
+const failures = [];
 
 async function waitFor(predicate, message) {
   for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -55,7 +55,7 @@ function verifyChecks(owner, count) {
 }
 
 try {
-  // No outbound internet: the image can reach only this synthetic API and its optional test database.
+  // Authenticated scenarios run on this internal-only network after the published-port health check.
   docker("network", "create", "--internal", network);
   networkCreated = true;
   const gateway = docker("network", "inspect", "--format", "{{(index .IPAM.Config 0).Gateway}}", network);
@@ -67,19 +67,21 @@ try {
     docker("network", "connect", "--alias", new URL(process.env.SMOKE_DATABASE_URL).hostname, network, process.env.SMOKE_DATABASE_CONTAINER);
     databaseAttached = true;
   }
-  docker("run", "--detach", "--name", name, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
+  docker("create", "--name", name, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
     "--publish", "127.0.0.1::3000", "--env", "APP_ID", "--env", "PRIVATE_KEY", "--env", "WEBHOOK_SECRET",
-    "--network", network, "--add-host", `github-smoke:${gateway}`, "--env", "GHE_HOST", "--env", "GHE_PROTOCOL",
+    "--network", "bridge", "--add-host", `github-smoke:${gateway}`, "--env", "GHE_HOST", "--env", "GHE_PROTOCOL",
     ...(durable ? ["--env", "DATABASE_URL", "--env", "WEBHOOK_QUEUE"] : []),
     "--env", "LOG_FORMAT=json", "--env", "LOG_LEVEL=warn", "ci-cd-optimizer:smoke");
-  started = true;
+  containerCreated = true;
+  docker("network", "connect", network, name);
+  docker("start", name);
   const port = docker("port", name, "3000/tcp").split(":").at(-1);
-  const origin = `http://127.0.0.1:${port}`;
+  const publishedOrigin = `http://127.0.0.1:${port}`;
   let ready = false;
   let lastError;
   for (let attempt = 0; attempt < 30; attempt += 1) {
     try {
-      const health = await fetch(`${origin}/ping`, { signal: AbortSignal.timeout(1000) });
+      const health = await fetch(`${publishedOrigin}/ping`, { signal: AbortSignal.timeout(1000) });
       assert.equal(health.status, 200);
       assert.equal(await health.text(), "PONG");
       ready = true;
@@ -93,6 +95,11 @@ try {
   assert.ok(ready, `Container did not become reachable through its published port: ${lastError}`);
   const user = docker("inspect", "--format", "{{.Config.User}}", name);
   assert.ok(user === "nonroot" || user === "65532", `Expected non-root runtime, got ${user}`);
+  docker("network", "disconnect", "bridge", name);
+  const networks = JSON.parse(docker("inspect", "--format", "{{json .NetworkSettings.Networks}}", name));
+  assert.deepEqual(Object.keys(networks), [network], "Authenticated scenarios must have no external network");
+  assert.ok(networks[network].IPAddress, "The isolated container has no address");
+  const origin = `http://${networks[network].IPAddress}:3000`;
   const send = async (event, payload, signature = "valid", id = randomUUID()) => {
     const body = JSON.stringify(payload);
     const response = await fetch(`${origin}/api/github/webhooks`, {
@@ -153,20 +160,20 @@ try {
   github.assertClean();
   docker("stop", "--time", "10", name);
   assert.equal(docker("inspect", "--format", "{{.State.ExitCode}}", name), "0", "SIGTERM did not shut down cleanly");
-  console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, signed/unsigned webhooks, JWT and installation-token HTTP exchange, scoped token reuse, PR analysis and check publication, denied-token recovery${durable ? ", durable worker retry and completed-delivery deduplication" : ""}, graceful SIGTERM.`);
 } catch (error) {
-  failure = error;
-  if (started) console.error(docker("logs", name));
-  throw error;
+  failures.push(error);
+  if (containerCreated) {
+    try { console.error(docker("logs", name)); } catch (logError) { failures.push(logError); }
+  }
 } finally {
-  const errors = [];
   for (const args of [
-    ...(started ? [["rm", "--force", name]] : []),
+    ...(containerCreated ? [["rm", "--force", name]] : []),
     ...(databaseAttached ? [["network", "disconnect", network, process.env.SMOKE_DATABASE_CONTAINER]] : []),
     ...(networkCreated ? [["network", "rm", network]] : []),
   ]) {
-    try { docker(...args); } catch (error) { errors.push(error); }
+    try { docker(...args); } catch (error) { failures.push(error); }
   }
-  try { await github?.close(); } catch (error) { errors.push(error); }
-  if (errors.length) throw new AggregateError([...(failure ? [failure] : []), ...errors], "Container smoke cleanup failed");
+  try { await github?.close(); } catch (error) { failures.push(error); }
 }
+if (failures.length) throw new AggregateError(failures, "Container smoke or cleanup failed");
+console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, isolated signed/unsigned webhooks, JWT and installation-token HTTP exchange, scoped token reuse, PR analysis and check publication, denied-token recovery${durable ? ", durable worker retry and completed-delivery deduplication" : ""}, graceful SIGTERM and cleanup.`);
