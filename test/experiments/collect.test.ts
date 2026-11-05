@@ -83,11 +83,11 @@ describe("collectMeasurements", () => {
       now: new Date("2026-11-03T00:00:00Z"),
     });
     expect(measurements.collectedAt).toBe("2026-11-03T00:00:00.000Z");
-    expect(measurements.control).toMatchObject({ arm: "trunk", headSha: "sha-trunk", ci: { ci: [60] }, testsPassed: true, changedPaths: [] });
+    expect(measurements.control).toMatchObject({ arm: "trunk", headSha: "sha-trunk", pullRequest: 1, ci: { ci: [60] }, testsPassed: true, changedPaths: [] });
     expect(measurements.arms[0]).toMatchObject({ arm: "lockfile", pullRequest: 2, ci: { ci: [60] }, testsPassed: true, changedPaths: ["a.yml", "b.yml", "old.yml"] });
     expect(measurements.arms[1]).toMatchObject({ arm: "packagemanager", error: "boom" });
     const compare = client.calls.find((call) => call.route.startsWith("GET /repos/{owner}/{repo}/compare/"));
-    expect(compare?.parameters.basehead).toBe("experiments/setup-cache-yarn/trunk...sha-lockfile");
+    expect(compare?.parameters.basehead).toBe("sha-trunk...sha-lockfile");
   });
 });
 

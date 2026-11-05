@@ -104,7 +104,7 @@ export async function collectMeasurements(
         }
       }
       if (arm !== "trunk" && headSha) {
-        measurement.changedPaths = await changedPaths(client, repo, trunk, headSha);
+        measurement.changedPaths = await changedPaths(client, repo, state.trunk?.headSha ?? trunk, headSha);
         const passed = await checksPassed(client, repo, headSha);
         if (passed !== undefined) measurement.testsPassed = passed;
       } else {
@@ -115,7 +115,7 @@ export async function collectMeasurements(
     }
     return measurement;
   };
-  const control = await measure(trunk, "trunk", state.trunk?.headSha);
+  const control = await measure(trunk, "trunk", state.trunk?.headSha, state.trunk?.number);
   const arms: BranchMeasurement[] = [];
   for (const spec of manifest.arms) {
     const pull = state.arms.find((candidate) => candidate.arm === spec.name && candidate.state === "open");

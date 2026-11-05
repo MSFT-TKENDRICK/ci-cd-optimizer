@@ -83,7 +83,7 @@ function fixture(mergeResponse: unknown = { merged: true, sha: "merged-trunk" })
       if (query.includes("enablePullRequestAutoMerge")) return { data: { enablePullRequestAutoMerge: {} } };
       throw new Error(`Unexpected mutation: ${query}`);
     }
-    if (route === "GET /repos/{owner}/{repo}/git/commits/{commit_sha}") return { tree: { sha: "tree" } };
+    if (route === "GET /repos/{owner}/{repo}/git/commits/{commit_sha}") return { tree: { sha: "tree" }, parents: [{ sha: trunk.headSha }] };
     if (route === "POST /repos/{owner}/{repo}/git/trees") return { sha: "promoted-tree" };
     if (route === "POST /repos/{owner}/{repo}/git/commits") return { sha: "promoted" };
     if (route === "PATCH /repos/{owner}/{repo}/git/refs/{ref}") {
@@ -100,6 +100,14 @@ function fixture(mergeResponse: unknown = { merged: true, sha: "merged-trunk" })
     return {};
   });
   return { client, options, heads, live, current, trunk, winner, loser };
+}
+
+function expectArmsRetained(f: ReturnType<typeof fixture>): void {
+  expect(f.heads[f.winner.head]).toBe(f.winner.headSha);
+  expect(f.heads[f.loser.head]).toBe(f.loser.headSha);
+  expect(f.current(f.loser.number).state).toBe("open");
+  expect(f.client.calls.some((call) => call.route === refMutation &&
+    (call.parameters.variables as { input?: { refUpdates?: Array<{ afterOid: string }> } })?.input?.refUpdates?.some((update) => update.afterOid === zero))).toBe(false);
 }
 
 describe("verified experiment promotion", () => {
@@ -119,5 +127,165 @@ describe("verified experiment promotion", () => {
     expect(f.client.calls.filter((call) => !call.route.startsWith("GET"))).toEqual([]);
     expect(f.heads[f.winner.head]).toBe(f.winner.headSha);
     expect(f.heads[f.trunk.head]).toBe(f.trunk.headSha);
+  });
+
+  it.each([null, {}, { merged: true }, { merged: true, sha: "" }, { merged: true, sha: " " }, { merged: "true", sha: "merged-trunk" }])(
+    "rejects a malformed merge acknowledgement (%j)",
+    async (response) => {
+      const f = fixture(response);
+      await expect(applyDecision(f.client, repo, f.options)).rejects.toThrow("did not confirm");
+      expectArmsRetained(f);
+    },
+  );
+
+  it.each(["control PR", "winner PR", "loser head", "missing head", "duplicate arm"])("requires complete evidence binding (%s)", async (missing) => {
+    const f = fixture();
+    if (missing === "control PR") delete f.options.measurements.control.pullRequest;
+    if (missing === "winner PR") f.options.measurements.arms[0]!.pullRequest = 99;
+    if (missing === "loser head") f.options.measurements.arms[1]!.headSha = "old-loser";
+    if (missing === "missing head") delete f.options.measurements.arms[0]!.headSha;
+    if (missing === "duplicate arm") f.options.measurements.arms.push(structuredClone(f.options.measurements.arms[0]!));
+    await expect(applyDecision(f.client, repo, f.options)).rejects.toThrow(/[Rr]ecollect/);
+    expect(f.client.calls).toEqual([]);
+  });
+
+  it("requires measurements for applied promotion rather than trusting a decision alone", async () => {
+    const f = fixture();
+    const { manifest, state, decision, config } = f.options;
+    await expect(applyDecision(f.client, repo, { manifest, state, decision, config })).rejects.toThrow(/[Rr]ecollect/);
+    expect(f.client.calls).toEqual([]);
+  });
+
+  it.each(["winner head", "trunk head", "loser head", "fork", "unknown owner", "winner base", "trunk base", "closed trunk", "draft winner", "node ID"])(
+    "rereads promotion PR identity before merging (%s)",
+    async (changed) => {
+      const f = fixture();
+      if (changed === "winner head") f.current(f.winner.number).headSha = "human";
+      if (changed === "trunk head") f.current(f.trunk.number).headSha = "human";
+      if (changed === "loser head") f.current(f.loser.number).headSha = "human";
+      if (changed === "fork") f.current(f.winner.number).headRepository = "fork/widgets";
+      if (changed === "unknown owner") delete f.current(f.trunk.number).headRepository;
+      if (changed === "winner base") f.current(f.winner.number).base = "main";
+      if (changed === "trunk base") f.current(f.trunk.number).base = "release";
+      if (changed === "closed trunk") f.current(f.trunk.number).state = "closed";
+      if (changed === "draft winner") f.current(f.winner.number).draft = true;
+      if (changed === "node ID") f.current(f.trunk.number).nodeId = "another-pr";
+      await expect(applyDecision(f.client, repo, f.options)).rejects.toThrow(/[Rr]ecollect/);
+      expect(f.client.calls.filter((call) => !call.route.startsWith("GET"))).toEqual([]);
+      expectArmsRetained(f);
+    },
+  );
+
+  it.each(["after merge", "before ref write", "after ref write", "lost ref response"])("retains arms after interrupted promotion (%s)", async (fault) => {
+    const f = fixture();
+    const original = f.client.request.bind(f.client);
+    let injected = false;
+    f.client.request = async (route, parameters = {}) => {
+      const response = await original(route, parameters);
+      const writingRef = route === refMutation && String(parameters.query).includes("updateRefs");
+      if (!injected && ((fault === "after merge" && route === mergeRoute) ||
+        (fault === "before ref write" && route === "POST /repos/{owner}/{repo}/git/commits") ||
+        ((fault === "after ref write" || fault === "lost ref response") && writingRef))) {
+        injected = true;
+        if (fault === "lost ref response") throw httpError(500);
+        f.heads[f.trunk.head] = "human";
+        f.current(f.trunk.number).headSha = "human";
+      }
+      return response;
+    };
+    await expect(applyDecision(f.client, repo, f.options)).rejects.toThrow();
+    expect(injected).toBe(true);
+    expect(f.heads[f.trunk.head]).toBe(fault === "lost ref response" ? "promoted" : "human");
+    expectArmsRetained(f);
+    expect(f.current(f.trunk.number).body).toBe("");
+  });
+
+  it.each([
+    { parents: undefined },
+    { parents: [] },
+    { parents: [{ sha: "newer-control" }] },
+    { parents: [{ sha: "sha-trunk" }, { sha: "another-parent" }] },
+  ])(
+    "refuses a squash merge with an unverified control parent (%j)",
+    async ({ parents }) => {
+      const f = fixture();
+      const original = f.client.request.bind(f.client);
+      f.client.request = async (route, parameters) => route === "GET /repos/{owner}/{repo}/git/commits/{commit_sha}"
+        ? { status: 200, data: { tree: { sha: "tree" }, parents } } : original(route, parameters);
+      await expect(applyDecision(f.client, repo, f.options)).rejects.toThrow("not based on the measured control");
+      expectArmsRetained(f);
+      expect(f.client.calls.some((call) => call.route === "POST /repos/{owner}/{repo}/git/commits")).toBe(false);
+    },
+  );
+
+  it.each(["ready null", "ready not persisted", "body not persisted", "ref null"])("does not clean up on an unconfirmed acknowledgement (%s)", async (fault) => {
+    const f = fixture();
+    const original = f.client.request.bind(f.client);
+    let injected = false;
+    f.client.request = async (route, parameters = {}) => {
+      const ready = route === refMutation && String(parameters.query).includes("markPullRequestReadyForReview");
+      if (fault === "ready not persisted" && ready) {
+        injected = true;
+        return { status: 200, data: { data: { markPullRequestReadyForReview: {} } } };
+      }
+      if (fault === "body not persisted" && route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" && typeof parameters.body === "string") {
+        injected = true;
+        return { status: 200, data: {} };
+      }
+      const response = await original(route, parameters);
+      if (fault === "ready null" && ready) {
+        injected = true;
+        return { status: 200, data: { data: { markPullRequestReadyForReview: null } } };
+      }
+      if (fault === "ref null" && route === refMutation && String(parameters.query).includes("updateRefs")) {
+        injected = true;
+        return { status: 200, data: { data: { updateRefs: null } } };
+      }
+      return response;
+    };
+    await expect(applyDecision(f.client, repo, f.options)).rejects.toThrow(/not acknowledge|not confirmed/);
+    expect(injected).toBe(true);
+    expectArmsRetained(f);
+  });
+
+  it.each([null, undefined, true, "ok", []].map((payload) => ({ payload })))("reports an unacknowledged optional auto-merge (%j)", async ({ payload }) => {
+    const f = fixture();
+    const original = f.client.request.bind(f.client);
+    f.client.request = async (route, parameters = {}) =>
+      route === refMutation && String(parameters.query).includes("enablePullRequestAutoMerge")
+        ? { status: 200, data: { data: { enablePullRequestAutoMerge: payload } } } : original(route, parameters);
+    const config = { ...f.options.config, promotion: { ...f.options.config.promotion, autoMerge: true } };
+    const result = await applyDecision(f.client, repo, { ...f.options, config });
+    expect(result.notes.join(" ")).toContain("auto-merge unavailable: GitHub did not acknowledge");
+    expect(result).toMatchObject({ merged: 11, closed: [12] });
+  });
+
+  it("does not treat an accepted-but-incomplete HTTP response as a completed merge", async () => {
+    const f = fixture();
+    const original = f.client.request.bind(f.client);
+    f.client.request = async (route, parameters) => {
+      const response = await original(route, parameters);
+      return route === mergeRoute ? { ...response, status: 202 } : response;
+    };
+    await expect(applyDecision(f.client, repo, f.options)).rejects.toThrow("did not confirm");
+    expectArmsRetained(f);
+  });
+
+  it("retains a winner branch reused by another open PR before cleanup", async () => {
+    const f = fixture();
+    const original = f.client.request.bind(f.client);
+    let injected = false;
+    f.client.request = async (route, parameters = {}) => {
+      const response = await original(route, parameters);
+      if (!injected && route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments") {
+        injected = true;
+        f.live.set(99, { ...f.winner, number: 99, nodeId: "PR_99", state: "open" });
+      }
+      return response;
+    };
+    const result = await applyDecision(f.client, repo, f.options);
+    expect(injected).toBe(true);
+    expect(result.notes.join(" ")).toContain("an open PR uses it");
+    expect(f.heads[f.winner.head]).toBe(f.winner.headSha);
   });
 });

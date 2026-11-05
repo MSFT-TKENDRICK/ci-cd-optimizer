@@ -77,6 +77,23 @@ Changes to protected files require review.
 Merging a promoted trunk into `main` publishes a [recipe](recipes.md) so the winning change can be applied to other
 repositories.
 
+Applied promotion requires collected commit SHAs and PR numbers for the control and every currently open arm.
+The CLI reads the manifest at the observed trunk commit and rejects missing or stale evidence before merging.
+Older measurement files without the control PR number must be recollected (and corpus experiments re-evaluated).
+Dry-run grading remains available without applying these writes.
+
+Before a merge, the executor rereads the trunk and arms to verify repository ownership, branch/base, PR identity,
+state and head. A merge must explicitly return `merged: true` and its commit SHA, and the squash commit's sole parent
+must be the measured control commit. The promoted manifest is committed on that exact merge commit, and an
+expected-head `updateRefs` write refuses a changed trunk. Arm cleanup is deferred
+until the manifest write and the promotion PR's marker/readiness are confirmed. Missing ready-for-review
+acknowledgements fail the operation; an unavailable optional auto-merge request is reported in the grading notes.
+
+This is not a transaction across GitHub operations. PR-state/base checks cannot lock out retargeting or other
+metadata changes after preflight; require protected default branches and coordinate all writers. A merge or manifest
+write can succeed before a later step fails. Such partial promotions require operator reconciliation, not a blind
+retry or an assumption that the merge was rolled back. Cleanup retains a branch observed in use by another open PR.
+
 ## Scoring
 
 For each metric, an arm's relative improvement over the control is computed and clamped to ±100%:
