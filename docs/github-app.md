@@ -74,6 +74,28 @@ Run it on any container host with a public HTTPS endpoint, such as Azure Contain
 process is stateless apart from the optional Postgres database. `GET /ping` returns `200 PONG` for an HTTP liveness
 probe; it does not verify credentials, installation access, database availability, or GitHub connectivity.
 
+### Production-image verification
+
+CI runs `test/service/container-smoke.mjs` against the actual image in both direct and Postgres modes. Each run
+creates an internal Docker network with no outbound internet, uses ephemeral test keys, and binds a synthetic
+GitHub HTTP API only to that network's host gateway. The normal Probot transport verifies JWT signing and
+installation-token exchange, token reuse and installation isolation, base-commit policy reads, PR analysis, and
+authenticated publication of the expected job-timeout finding. Invalid or missing webhook signatures must trigger
+neither API calls nor durable inserts.
+
+The smoke test also refuses one installation's token request, restores access, and verifies direct redelivery or
+durable worker retry. A completed durable redelivery must not duplicate its check. It advances only the synthetic
+failed job's availability to avoid waiting through backoff; retry timing is covered separately by queue tests.
+Non-root/read-only operation, published-port health and graceful shutdown remain checked.
+
+The durable smoke test requires `SMOKE_DATABASE_URL` and `SMOKE_DATABASE_CONTAINER` for a disposable test Postgres
+container, as supplied by CI. It temporarily attaches that container to its isolated network and changes test-job
+state. **Do not point it at a production database.** Test containers, network attachments and the local API are
+cleaned up after each run.
+
+These checks use synthetic credentials and API responses. They do not establish a real GitHub App installation,
+granted permissions, public HTTPS/TLS, or live delivery and write access; validate those against the deployed App.
+
 ### Durable hosted processing
 
 Set `WEBHOOK_QUEUE=postgres` and point every replica at the **same database and schema**. Probot verifies the webhook

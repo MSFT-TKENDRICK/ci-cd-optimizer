@@ -4,25 +4,73 @@ import { execFileSync } from "node:child_process";
 import console from "node:console";
 import process from "node:process";
 import { setTimeout } from "node:timers/promises";
+import { URL } from "node:url";
+import { HEAD, WORKFLOW, pullRequestPayload, startGitHubFixture } from "./container-github.mjs";
 
 const { fetch, AbortSignal } = globalThis;
 const name = `cicd-optimizer-smoke-${randomUUID()}`;
+const network = `${name}-network`;
 const secret = randomUUID();
 const durable = Boolean(process.env.SMOKE_DATABASE_URL);
-const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+let github;
 const env = {
   ...process.env,
   APP_ID: "42",
   PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
   WEBHOOK_SECRET: secret,
+  GHE_PROTOCOL: "http",
   ...(durable ? { DATABASE_URL: process.env.SMOKE_DATABASE_URL, WEBHOOK_QUEUE: "postgres" } : {}),
 };
 const docker = (...args) => execFileSync("docker", args, { env, encoding: "utf8", timeout: 30_000 }).trim();
 let started = false;
+let networkCreated = false;
+let databaseAttached = false;
+let failure;
+
+async function waitFor(predicate, message) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    github.assertClean();
+    if (predicate()) return;
+    await setTimeout(250);
+  }
+  assert.fail(message);
+}
+
+const sql = (query) => docker("exec", process.env.SMOKE_DATABASE_CONTAINER, "psql", "-U", "postgres", "-d", "postgres", "-Atc", query);
+const job = (id) => sql(`SELECT status || ':' || attempts FROM webhook_jobs WHERE delivery_id = '${id}'`);
+const completed = (owner) => github.checks.filter((check) => check.owner === owner && check.status === "completed");
+function verifyChecks(owner, count) {
+  const checks = completed(owner);
+  assert.equal(checks.length, count);
+  for (const check of checks) {
+    assert.equal(check.head_sha, HEAD);
+    assert.equal(check.conclusion, "failure");
+    assert.equal(check.output.title, "1 new finding");
+    assert.equal(check.output.annotations.length, 1);
+    assert.equal(check.output.annotations[0].path, WORKFLOW);
+    assert.equal(check.output.annotations[0].title, "workflow/job-timeout");
+    assert.equal(check.output.annotations[0].annotation_level, "failure");
+  }
+}
+
 try {
+  // No outbound internet: the image can reach only this synthetic API and its optional test database.
+  docker("network", "create", "--internal", network);
+  networkCreated = true;
+  const gateway = docker("network", "inspect", "--format", "{{(index .IPAM.Config 0).Gateway}}", network);
+  assert.ok(gateway, "The isolated test network has no gateway");
+  github = await startGitHubFixture(publicKey, gateway);
+  env.GHE_HOST = `github-smoke:${github.port}`;
+  if (durable) {
+    assert.ok(process.env.SMOKE_DATABASE_CONTAINER, "Durable smoke needs its test database container ID");
+    docker("network", "connect", "--alias", new URL(process.env.SMOKE_DATABASE_URL).hostname, network, process.env.SMOKE_DATABASE_CONTAINER);
+    databaseAttached = true;
+  }
   docker("run", "--detach", "--name", name, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
     "--publish", "127.0.0.1::3000", "--env", "APP_ID", "--env", "PRIVATE_KEY", "--env", "WEBHOOK_SECRET",
-    ...(durable ? ["--env", "DATABASE_URL", "--env", "WEBHOOK_QUEUE", "--network", process.env.SMOKE_DOCKER_NETWORK] : []),
+    "--network", network, "--add-host", `github-smoke:${gateway}`, "--env", "GHE_HOST", "--env", "GHE_PROTOCOL",
+    ...(durable ? ["--env", "DATABASE_URL", "--env", "WEBHOOK_QUEUE"] : []),
     "--env", "LOG_FORMAT=json", "--env", "LOG_LEVEL=warn", "ci-cd-optimizer:smoke");
   started = true;
   const port = docker("port", name, "3000/tcp").split(":").at(-1);
@@ -45,55 +93,80 @@ try {
   assert.ok(ready, `Container did not become reachable through its published port: ${lastError}`);
   const user = docker("inspect", "--format", "{{.Config.User}}", name);
   assert.ok(user === "nonroot" || user === "65532", `Expected non-root runtime, got ${user}`);
-  const body = JSON.stringify({ zen: "Local smoke test; no GitHub API access." });
-  const signature = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
-  for (const signed of [true, false]) {
+  const send = async (event, payload, signature = "valid", id = randomUUID()) => {
+    const body = JSON.stringify(payload);
     const response = await fetch(`${origin}/api/github/webhooks`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-github-event": "ping",
-        "x-github-delivery": randomUUID(),
-        ...(signed ? { "x-hub-signature-256": signature } : {}),
+        "x-github-event": event,
+        "x-github-delivery": id,
+        ...(signature === "missing" ? {} : { "x-hub-signature-256": `sha256=${createHmac("sha256", signature === "valid" ? secret : "wrong-secret").update(body).digest("hex")}` }),
       },
       body,
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(10_000),
     });
     await response.text();
-    assert.equal(response.status, signed ? 200 : 400);
-  }
-  if (durable) {
-    assert.ok(process.env.SMOKE_DATABASE_CONTAINER, "Durable smoke needs its test database container ID");
-    const id = randomUUID();
-    const payload = JSON.stringify({
-      installation: { id: 123 }, repository: { name: "smoke", full_name: "acme/smoke", owner: { login: "acme" }, default_branch: "main" },
-      ref: "refs/heads/feature", commits: [],
-    });
-    const response = await fetch(`${origin}/api/github/webhooks`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json", "x-github-event": "push", "x-github-delivery": id,
-        "x-hub-signature-256": `sha256=${createHmac("sha256", secret).update(payload).digest("hex")}`,
-      },
-      body: payload, signal: AbortSignal.timeout(5000),
-    });
+    return { id, status: response.status };
+  };
+  assert.equal((await send("ping", { zen: "Local image smoke test" })).status, 200);
+  assert.equal(github.requests.length, 0, "Ping must not access the API");
+
+  for (let count = 1; count <= 2; count += 1) {
+    const response = await send("pull_request", pullRequestPayload());
     assert.equal(response.status, 200);
-    await response.text();
-    let status;
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      status = docker("exec", process.env.SMOKE_DATABASE_CONTAINER, "psql", "-U", "postgres", "-d", "postgres", "-Atc",
-        `SELECT status FROM webhook_jobs WHERE delivery_id = '${id}'`);
-      if (status === "completed" || status === "failed") break;
-      await setTimeout(500);
-    }
-    assert.equal(status, "completed", "The production worker did not process the persisted webhook");
+    await waitFor(() => completed("acme").length === count, "The image did not publish its PR analysis");
+    if (durable) await waitFor(() => job(response.id) === "completed:1", "The worker did not complete the authenticated delivery");
+    verifyChecks("acme", count);
   }
+  assert.deepEqual(github.issued, [123], "The valid installation token should be reused");
+
+  const requestsBefore = github.requests.length;
+  for (const signature of ["missing", "invalid"]) {
+    const response = await send("pull_request", pullRequestPayload(), signature);
+    assert.equal(response.status, 400);
+    assert.equal(github.requests.length, requestsBefore, "Rejected signatures must not trigger authentication or API writes");
+    if (durable) assert.equal(job(response.id), "", "Rejected signatures must not be persisted");
+  }
+
+  const denied = await send("pull_request", pullRequestPayload(456));
+  assert.equal(denied.status, durable ? 200 : 500);
+  if (durable) await waitFor(() => job(denied.id) === "pending:1", "A denied installation must be retained for retry");
+  assert.deepEqual(github.denied, [456]);
+  assert.equal(github.checks.filter((check) => check.owner === "blocked").length, 0, "Token denial must not create a check");
+  github.restoreInstallation();
+  if (durable) {
+    // Advance only this synthetic job's availability; retry timing is covered by the queue tests.
+    assert.ok(sql(`UPDATE webhook_jobs SET available_at = clock_timestamp() WHERE delivery_id = '${denied.id}' AND status = 'pending' AND attempts = 1 RETURNING delivery_id`).includes(denied.id));
+    await waitFor(() => job(denied.id) === "completed:2", "The real worker did not retry after installation access returned");
+  } else {
+    assert.equal((await send("pull_request", pullRequestPayload(456), "valid", denied.id)).status, 200);
+  }
+  await waitFor(() => completed("blocked").length === 1, "Restored installation access did not complete analysis");
+  verifyChecks("blocked", 1);
+  assert.deepEqual(github.issued, [123, 456], "Installation tokens must remain isolated");
+  if (durable) {
+    assert.equal((await send("pull_request", pullRequestPayload(456), "valid", denied.id)).status, 200);
+    assert.equal(job(denied.id), "completed:2", "Completed redelivery must not reset the job");
+    assert.equal(github.checks.length, 3, "Completed redelivery must not duplicate the check");
+  }
+  github.assertClean();
   docker("stop", "--time", "10", name);
   assert.equal(docker("inspect", "--format", "{{.State.ExitCode}}", name), "0", "SIGTERM did not shut down cleanly");
-  console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, signed webhook, unsigned rejection${durable ? ", durable worker completion" : ""}, graceful SIGTERM.`);
+  console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, signed/unsigned webhooks, JWT and installation-token HTTP exchange, scoped token reuse, PR analysis and check publication, denied-token recovery${durable ? ", durable worker retry and completed-delivery deduplication" : ""}, graceful SIGTERM.`);
 } catch (error) {
+  failure = error;
   if (started) console.error(docker("logs", name));
   throw error;
 } finally {
-  if (started) docker("rm", "--force", name);
+  const errors = [];
+  for (const args of [
+    ...(started ? [["rm", "--force", name]] : []),
+    ...(databaseAttached ? [["network", "disconnect", network, process.env.SMOKE_DATABASE_CONTAINER]] : []),
+    ...(networkCreated ? [["network", "rm", network]] : []),
+  ]) {
+    try { docker(...args); } catch (error) { errors.push(error); }
+  }
+  try { await github?.close(); } catch (error) { errors.push(error); }
+  if (errors.length) throw new AggregateError([...(failure ? [failure] : []), ...errors], "Container smoke cleanup failed");
 }

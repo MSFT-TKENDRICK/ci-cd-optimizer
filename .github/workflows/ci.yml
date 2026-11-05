@@ -72,7 +72,6 @@ jobs:
         run: node test/service/container-smoke.mjs
         env:
           SMOKE_DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
-          SMOKE_DOCKER_NETWORK: ${{ job.services.postgres.network }}
           SMOKE_DATABASE_CONTAINER: ${{ job.services.postgres.id }}
 
   lint:
