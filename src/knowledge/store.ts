@@ -192,7 +192,7 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
     const application = this.mitigationApplications.get(evaluation.applicationId);
     if (!application || !sameScope(application.target, evaluation.target)) throw new Error("Mitigation evaluation references an unknown target application");
     const events = [...this.mitigationEvents.values()].filter((event) => event.applicationId === application.id && sameScope(event.target, evaluation.target));
-    const observations = [...this.observations.values()].filter((observation) => inScope(observation.repository, evaluation.target));
+    const observations = [...this.observations.values()].filter((observation) => inScope(observation, evaluation.target));
     verifyMitigationEvaluation(application, evaluation, events, observations);
     if (!this.mitigationEvaluations.has(evaluation.id)) this.mitigationEvaluations.set(evaluation.id, evaluation);
   }

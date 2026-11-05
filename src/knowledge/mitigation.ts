@@ -152,7 +152,9 @@ export function validateMitigationApplicationEvent(event: MitigationApplicationE
 }
 
 export function mitigationEvaluationIdentity(evaluation: Omit<MitigationEvaluation, "id"> | MitigationEvaluation): string {
-  const { evaluatedAt: _evaluatedAt, ...facts } = evaluation;
+  const facts = { ...evaluation };
+  Reflect.deleteProperty(facts, "id");
+  Reflect.deleteProperty(facts, "evaluatedAt");
   return identity(["mitigation-evaluation-v1", facts]);
 }
 
