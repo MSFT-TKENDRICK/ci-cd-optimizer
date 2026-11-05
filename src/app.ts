@@ -21,6 +21,23 @@ export interface AppOptions {
   uploadSarif?: boolean;
 }
 
+export const APP_EVENTS = {
+  pullRequest: ["pull_request.opened", "pull_request.synchronize", "pull_request.reopened", "pull_request.ready_for_review"],
+  checkRun: "check_run.rerequested",
+  push: "push",
+  installation: ["installation.created", "installation_repositories.added"],
+  workflowRun: "workflow_run.completed",
+  comment: "issue_comment.created",
+} as const;
+
+export function validateProductionConfiguration(): void {
+  if (process.env.NODE_ENV !== "production") return;
+  const secret = process.env.WEBHOOK_SECRET?.trim();
+  if (!secret || secret === "development" || secret === "replace-me") {
+    throw new Error("Production requires a non-placeholder WEBHOOK_SECRET matching the GitHub App's webhook settings.");
+  }
+}
+
 interface PushPayload {
   ref: string;
   deleted?: boolean;
@@ -82,12 +99,7 @@ function defaultStore(log: Probot["log"]): () => Promise<TelemetryStore | undefi
 
 export function createApp(options: AppOptions = {}): (probot: Probot) => void {
   return (probot) => {
-    if (process.env.NODE_ENV === "production") {
-      const secret = process.env.WEBHOOK_SECRET?.trim();
-      if (!secret || secret === "development" || secret === "replace-me") {
-        throw new Error("Production requires a non-placeholder WEBHOOK_SECRET matching the GitHub App's webhook settings.");
-      }
-    }
+    validateProductionConfiguration();
     const store = options.store ?? defaultStore(probot.log);
     const copilotToken = process.env.COPILOT_ASSIGN_TOKEN;
     const copilotClient = options.copilotClient ?? (copilotToken ? restClient({ token: copilotToken }) : undefined);
@@ -100,7 +112,7 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
       log.info({ repo: `${repo.owner}/${repo.repo}`, status: result.status }, describeScan(result));
     });
 
-    probot.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened", "pull_request.ready_for_review"], async (context) => {
+    probot.on([...APP_EVENTS.pullRequest], async (context) => {
       const pr = context.payload.pull_request;
       const result = await runPullRequestCheck(fromOctokit(context.octokit), context.repo(), {
         number: pr.number,
@@ -111,16 +123,16 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
       context.log.info({ pr: pr.number, conclusion: result.conclusion, introduced: result.introduced.length }, "Pull request check completed");
     });
 
-    probot.on("check_run.rerequested", async (context) => {
+    probot.on(APP_EVENTS.checkRun, async (context) => {
       const pr = rerequestedPullRequest(context.payload.check_run);
       if (pr) await runPullRequestCheck(fromOctokit(context.octokit), context.repo(), pr);
     });
 
-    probot.on("push", async (context) => {
+    probot.on(APP_EVENTS.push, async (context) => {
       if (pushNeedsScan(context.payload)) await scan(fromOctokit(context.octokit), context.repo(), context.log);
     });
 
-    probot.on(["installation.created", "installation_repositories.added"], async (context) => {
+    probot.on([...APP_EVENTS.installation], async (context) => {
       const payload = context.payload;
       const repositories = "repositories_added" in payload ? payload.repositories_added : payload.repositories;
       const client = fromOctokit(context.octokit);
@@ -136,7 +148,7 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
       if (errors.length > 0) throw new AggregateError(errors, "One or more initial repository scans failed");
     });
 
-    probot.on("workflow_run.completed", (context) => repositoryQueue.run(context.repo(), async () => {
+    probot.on(APP_EVENTS.workflowRun, (context) => repositoryQueue.run(context.repo(), async () => {
       const result = await processWorkflowRun(fromOctokit(context.octokit), context.repo(), context.payload.workflow_run as WorkflowRunPayload, {
         ...shared,
         ...(await store().then((value) => (value ? { store: value } : {}))),
@@ -147,7 +159,7 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
       );
     }));
 
-    probot.on("issue_comment.created", (context) => repositoryQueue.run(context.repo(), async () => {
+    probot.on(APP_EVENTS.comment, (context) => repositoryQueue.run(context.repo(), async () => {
       const result = await handleIssueComment(fromOctokit(context.octokit), context.repo(), { issue: context.payload.issue, comment: context.payload.comment });
       if (result.status !== "ignored") context.log.info({ issue: context.payload.issue.number, status: result.status }, "Handled comment command");
     }));
