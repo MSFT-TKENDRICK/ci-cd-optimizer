@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fromOctokit } from "../../src/github/client.js";
-import { updateBranch } from "../../src/github/git.js";
+import { deleteBranch, updateBranch } from "../../src/github/git.js";
 import { fakeClient, httpError, repo } from "../experiments/fixtures.js";
 
 describe("updateBranch", () => {
@@ -49,6 +49,58 @@ describe("updateBranch", () => {
     });
     await expect(updateBranch(client, repo, "ci/cache", "new", "old")).rejects.toThrow("403");
     expect(client.calls).toHaveLength(2);
+  });
+});
+
+describe("deleteBranch", () => {
+  it("uses a zero target with the original observed head, never REST deletion", async () => {
+    const client = fakeClient((route) => {
+      if (route === "GET /repos/{owner}/{repo}/git/ref/{ref}") return { object: { sha: "observed" } };
+      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
+      return { data: { updateRefs: {} } };
+    });
+    expect(await deleteBranch(client, repo, "ci/a", "observed")).toBe("deleted");
+    expect(client.calls.at(-1)?.parameters.variables).toMatchObject({
+      input: { refUpdates: [{ name: "refs/heads/ci/a", beforeOid: "observed", afterOid: "0".repeat(40), force: true }] },
+    });
+    expect(client.calls.some((call) => call.route.startsWith("DELETE"))).toBe(false);
+  });
+
+  it("preserves a changed head and treats a missing ref as already absent", async () => {
+    const changed = fakeClient(() => ({ object: { sha: "human" } }));
+    expect(await deleteBranch(changed, repo, "ci/a", "observed")).toBe("changed");
+    expect(changed.calls).toHaveLength(1);
+    const missing = fakeClient(() => { throw httpError(404); });
+    expect(await deleteBranch(missing, repo, "ci/a", "observed")).toBe("missing");
+  });
+
+  it.each([403, 422, 429, 500])("does not hide a ref lookup failure (%s)", async (status) => {
+    const client = fakeClient(() => { throw httpError(status); });
+    await expect(deleteBranch(client, repo, "ci/a", "observed")).rejects.toThrow(String(status));
+    expect(client.calls).toHaveLength(1);
+  });
+
+  it("propagates a racing-head failure; a retry preserves the changed ref", async () => {
+    let head = "observed";
+    const client = fakeClient((route) => {
+      if (route === "GET /repos/{owner}/{repo}/git/ref/{ref}") return { object: { sha: head } };
+      if (route === "GET /repos/{owner}/{repo}") { head = "human"; return { node_id: "repo-node" }; }
+      return { errors: [{ message: "Reference changed" }] };
+    });
+    await expect(deleteBranch(client, repo, "ci/a", "observed")).rejects.toThrow("Reference changed");
+    expect(await deleteBranch(client, repo, "ci/a", "observed")).toBe("changed");
+    expect(head).toBe("human");
+    expect(client.calls.filter((call) => call.route === "POST /graphql")).toHaveLength(1);
+  });
+
+  it("requires an observed head and refuses the default branch", async () => {
+    const client = fakeClient((route) => route.endsWith("/git/ref/{ref}") ? { object: { sha: "observed" } } : { node_id: "repo-node", default_branch: "main" });
+    await expect(deleteBranch(client, repo, undefined, "observed")).rejects.toThrow("requires");
+    await expect(deleteBranch(client, repo, "ci/a", undefined)).rejects.toThrow("requires");
+    await expect(deleteBranch(client, repo, "ci/a", "0".repeat(40))).rejects.toThrow("requires");
+    expect(client.calls).toEqual([]);
+    await expect(deleteBranch(client, repo, "main", "observed")).rejects.toThrow("default branch");
+    expect(client.calls.some((call) => call.route === "POST /graphql")).toBe(false);
   });
 });
 

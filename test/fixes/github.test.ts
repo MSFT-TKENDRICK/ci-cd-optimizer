@@ -4,6 +4,7 @@ import { DEFAULT_CONFIG } from "../../src/lint/config.js";
 import { applyFixActions, dismissalsFrom, handleFixCommands, IGNORED_LABEL, listManagedPullRequests, type ManagedPullRequest } from "../../src/fixes/github.js";
 import { planFixPullRequests, type FixChange } from "../../src/fixes/plan.js";
 import { marker, parseMarker } from "../../src/issues/markers.js";
+import { fakeApi } from "../service/api.js";
 
 interface Call {
   route: string;
@@ -247,22 +248,22 @@ describe("applyFixActions", () => {
   });
 
   it("closes stale pull requests with a comment and deletes the branch", async () => {
-    const client = fakeClient((route) => {
-      if (route.startsWith("DELETE")) throw httpError(422);
-      return {};
-    });
-    await applyFixActions(client, repo, [{ type: "close", number: 7, group: "a", branch: "cicd-optimizer/a", comment: "bye" }], {
+    const pr = managed({ headSha: "observed" });
+    const client = fakeApi({ issues: [{ ...pr, pull_request: {} }], pullHeads: { 7: { ref: change.branch, sha: "observed" } } });
+    await applyFixActions(client, repo, [{ type: "close", number: 7, group: pr.group, branch: change.branch, comment: "bye" }], {
       baseBranch: "main",
       baseSha: "base",
       config: DEFAULT_CONFIG.fixes,
       rules: [],
-      existing: [],
+      existing: [pr],
     });
-    expect(client.calls.map((call) => call.route)).toEqual([
-      "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-      "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
-      "DELETE /repos/{owner}/{repo}/git/refs/{ref}",
-    ]);
+    expect(client.calls.find((call) => call.route === "POST /graphql")?.parameters.variables).toMatchObject({
+      input: { refUpdates: [{ beforeOid: "observed", afterOid: "0".repeat(40) }] },
+    });
+    expect(client.calls.some((call) => call.route.startsWith("DELETE"))).toBe(false);
+    const patches = client.calls.filter((call) => call.route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}");
+    expect(patches[0]?.parameters.state).toBe("closed");
+    expect(parseMarker(String(patches.at(-1)?.parameters.body))?.attributes.cleanupStatus).toBe("deleted");
   });
 });
 
@@ -284,12 +285,13 @@ describe("handleFixCommands", () => {
     const pr = managed();
     await handleFixCommands(client, repo, pr, [{ type: "ignore-rule" }]);
     expect(pr.ignoredRules).toEqual(["hermeticity/pin-runner", "hermeticity/pin-actions"]);
-    const group = managed();
-    const outcome = await handleFixCommands(client, repo, group, [{ type: "ignore-group" }]);
+    const group = managed({ headSha: "observed" });
+    const groupClient = fakeApi({ issues: [{ ...group, pull_request: {} }], pullHeads: { 7: { ref: change.branch, sha: "observed" } } });
+    const outcome = await handleFixCommands(groupClient, repo, group, [{ type: "ignore-group" }]);
     expect(outcome.recompute).toBe(false);
     expect(group.state).toBe("closed");
     expect(dismissalsFrom([group]).groups).toEqual(new Set(["hermeticity"]));
-    expect(client.calls.some((call) => call.route.startsWith("DELETE /repos/{owner}/{repo}/git/refs"))).toBe(true);
+    expect(groupClient.calls.some((call) => call.route === "POST /graphql")).toBe(true);
   });
 
   it("queues rebase and recreate for the follow-up fix run", async () => {

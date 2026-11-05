@@ -4,7 +4,7 @@ import { ensureLabels, httpStatus, paginate, type GitHubClient, type RepoRef } f
 import { branchSha, commitFiles, deleteBranch, pushBranch, updateBranch } from "../github/git.js";
 import { parseMarker, updateMarker, type Marker } from "../issues/markers.js";
 import { COMMAND_HELP, type FixCommand } from "./commands.js";
-import { branchFor, type Dismissals, type ExistingFixPullRequest, type FixAction, type FixChange, type PendingFixUpdate } from "./plan.js";
+import { branchFor, type BranchCleanup, type CleanupStatus, type Dismissals, type ExistingFixPullRequest, type FixAction, type FixChange, type PendingFixUpdate } from "./plan.js";
 import { commitMessage, fixBody, fixTitle } from "./render.js";
 
 export const IGNORED_LABEL = "cicd-optimizer:ignored";
@@ -46,6 +46,32 @@ const INTERRUPTED_NOTICE = "\n\n> **Update interrupted:** The intended commit is
 const UPDATE_KEYS = ["pendingFrom", "pendingCommit", "pendingSignature", "pendingBase", "pendingRules"] as const;
 const BODY_START = "<!-- cicd-optimizer:fix-body-start -->";
 const BODY_END = "<!-- cicd-optimizer:fix-body-end -->";
+const CLEANUP_BLOCK = /<!-- cicd-optimizer:cleanup -->[\s\S]*?<!-- \/cicd-optimizer:cleanup -->/;
+
+function isCleanupStatus(value: string | undefined): value is CleanupStatus {
+  return value === "pending" || value === "deleted" || value === "missing" || value === "changed" || value === "in-use" || value === "reopened";
+}
+
+function branchCleanup(parsed: Marker, number: number): BranchCleanup | undefined {
+  const { cleanupBranch, cleanupHead, cleanupStatus } = parsed.attributes;
+  if (cleanupBranch === undefined && cleanupHead === undefined && cleanupStatus === undefined) return undefined;
+  if (!cleanupBranch || !cleanupHead || !isCleanupStatus(cleanupStatus)) throw new Error(`Incomplete branch cleanup on PR #${number}; reconcile its marker.`);
+  return { branch: cleanupBranch, headSha: cleanupHead, status: cleanupStatus };
+}
+
+function cleanupBody(body: string, group: string, cleanup: BranchCleanup): string {
+  const descriptions: Record<CleanupStatus, string> = {
+    pending: "Branch cleanup pending",
+    deleted: "Branch deleted at the recorded head",
+    missing: "Branch not found; no deletion was needed",
+    changed: "Branch retained because its target changed",
+    "in-use": "Branch retained because an open PR uses it",
+    reopened: "Branch retained because this PR was reopened",
+  };
+  const notice = `<!-- cicd-optimizer:cleanup -->\n> ${descriptions[cleanup.status]}: \`${cleanup.branch}\` (recorded head \`${cleanup.headSha}\`).\n<!-- /cicd-optimizer:cleanup -->`;
+  const marked = updateMarker(body, "fix", `group:${group}`, { cleanupBranch: cleanup.branch, cleanupHead: cleanup.headSha, cleanupStatus: cleanup.status });
+  return CLEANUP_BLOCK.test(marked) ? marked.replace(CLEANUP_BLOCK, () => notice) : `${marked}\n\n${notice}`;
+}
 
 function managedBody(generated: string, previous = ""): string {
   if (generated.includes(BODY_START) || generated.includes(BODY_END)) throw new Error("Rendered fix content contains reserved body boundaries.");
@@ -102,8 +128,9 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
     let parsed = parseMarker(issue.body);
     if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
     const initialAttributes = parsed.attributes;
+    const cleanup = branchCleanup(parsed, issue.number);
     let head: RawPull["head"] | undefined;
-    if (issue.state === "open" || UPDATE_KEYS.some((key) => key in initialAttributes)) {
+    if (issue.state === "open" || cleanup?.status === "pending" || UPDATE_KEYS.some((key) => key in initialAttributes)) {
       let pull = details.get(issue.number);
       if (!pull) {
         const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: issue.number });
@@ -117,6 +144,7 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
       if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
     }
     const pending = pendingUpdate(parsed, issue.number);
+    const currentCleanup = branchCleanup(parsed, issue.number);
     const pr: ManagedPullRequest = {
       number: issue.number,
       state: issue.state,
@@ -133,6 +161,7 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
       ...(parsed.attributes.signature ? { signature: parsed.attributes.signature } : {}),
       ...(parsed.attributes.commit ? { commitSha: parsed.attributes.commit } : {}),
       ...(pending ? { pendingUpdate: pending } : {}),
+      ...(currentCleanup ? { cleanup: currentCleanup } : {}),
       ...(head?.sha ? { headSha: head.sha } : {}),
       ...(head?.ref ? { branch: head.ref } : {}),
     };
@@ -205,6 +234,60 @@ async function finishPendingUpdate(client: GitHubClient, repo: RepoRef, previous
   return recovered;
 }
 
+/** The PR-close request also persists the cleanup target, so a retry never adopts a newer branch head. */
+async function prepareClose(
+  client: GitHubClient, repo: RepoRef, previous: ManagedPullRequest, attributes: Record<string, string> = {}, comment?: string,
+): Promise<ManagedPullRequest> {
+  if (previous.state === "closed") {
+    if (Object.keys(attributes).length === 0) return previous;
+    const body = updateMarker(previous.body, "fix", `group:${previous.group}`, attributes);
+    await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number, body });
+    return { ...previous, body };
+  }
+  const { pull } = await currentFix(client, repo, previous);
+  if (!previous.branch || !previous.headSha || previous.branch === pull.base?.ref) throw new Error("Refusing cleanup of an unknown or base branch.");
+  const cleanup: BranchCleanup = { branch: previous.branch, headSha: previous.headSha, status: "pending" };
+  const body = cleanupBody(updateMarker(pull.body ?? "", "fix", `group:${previous.group}`, attributes), previous.group, cleanup);
+  if (comment) await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: previous.number, body: comment });
+  await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number, state: "closed", body });
+  return { ...previous, state: "closed", body, cleanup };
+}
+
+async function finishBranchCleanup(client: GitHubClient, repo: RepoRef, previous: ManagedPullRequest): Promise<ManagedPullRequest> {
+  const expected = previous.cleanup;
+  if (!expected || expected.status !== "pending") return previous;
+  const read = async () => {
+    const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number });
+    const pull = response.data as RawPull;
+    const parsed = parseMarker(pull.body);
+    const cleanup = parsed ? branchCleanup(parsed, previous.number) : undefined;
+    if (parsed?.kind !== "fix" || parsed.fingerprint !== `group:${previous.group}` || !cleanup ||
+      cleanup.branch !== expected.branch || cleanup.headSha !== expected.headSha) {
+      throw new Error(`Cleanup target changed on PR #${previous.number}; refusing to adopt a different branch or head.`);
+    }
+    return { pull, cleanup };
+  };
+  const { pull, cleanup } = await read();
+  if (cleanup.status !== "pending") return { ...previous, body: pull.body ?? "", cleanup };
+  let status: CleanupStatus;
+  if (pull.state !== "closed") status = "reopened";
+  else if (pull.head?.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
+    throw new Error(`Cannot verify branch ownership for PR #${previous.number}.`);
+  } else if (pull.head.ref !== cleanup.branch) status = "changed";
+  else {
+    if (cleanup.branch === pull.base?.ref) throw new Error("Refusing cleanup of a PR's base branch.");
+    const open = await client.request("GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open", head: `${repo.owner}:${cleanup.branch}`, per_page: 1 });
+    if (!Array.isArray(open.data)) throw new Error("GitHub did not return the open PRs required for branch cleanup.");
+    status = open.data.length > 0 ? "in-use" : await deleteBranch(client, repo, cleanup.branch, cleanup.headSha);
+  }
+  const latest = await read();
+  if (latest.cleanup.status !== "pending") return { ...previous, body: latest.pull.body ?? "", cleanup: latest.cleanup };
+  const finished = { ...cleanup, status };
+  const body = cleanupBody(latest.pull.body ?? "", previous.group, finished);
+  await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number, body });
+  return { ...previous, body, cleanup: finished };
+}
+
 async function finishReviewRequests(client: GitHubClient, repo: RepoRef, number: number, group: string, reviewers: readonly string[]): Promise<void> {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number });
   const { body, draft } = response.data as { body: string | null; draft?: boolean };
@@ -247,6 +330,11 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
         previous = await finishPendingUpdate(client, repo, previous);
         existing.set(action.number, previous);
       }
+      if (action.cleanup) {
+        if (!previous) throw new Error(`Missing PR #${action.number} for branch cleanup.`);
+        previous = await finishBranchCleanup(client, repo, previous);
+        existing.set(action.number, previous);
+      }
       if (action.labels.length > 0) {
         await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: action.number, labels: action.labels });
       }
@@ -260,9 +348,9 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
       continue;
     }
     if (action.type === "close") {
-      await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: action.number, body: action.comment });
-      await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: action.number, state: "closed" });
-      await deleteBranch(client, repo, action.branch);
+      const previous = existing.get(action.number);
+      if (!previous) throw new Error(`Missing planned PR #${action.number} for safe closure.`);
+      await finishBranchCleanup(client, repo, await prepareClose(client, repo, previous, {}, action.comment));
       applied.push({ action, number: action.number });
       continue;
     }
@@ -303,10 +391,11 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
       body = updateMarker(body, "fix", parsed.fingerprint, {
         ...parsed.attributes,
         commit: parsed.attributes.commit ?? "", signature: parsed.attributes.signature ?? "", rules: parsed.attributes.rules ?? "",
+        cleanupBranch: "", cleanupHead: "", cleanupStatus: "",
         pendingFrom: expectedHead, pendingCommit: commitSha, pendingSignature: change.signature, pendingBase: options.baseSha, pendingRules: change.rules.join(","),
       });
       // Persist the intended rendered body (including recipe markers) before the atomic branch write.
-      body = managedBody(`${PENDING_NOTICE}${body}`, pull.body ?? "");
+      body = managedBody(`${PENDING_NOTICE}${body}`, (pull.body ?? "").replace(CLEANUP_BLOCK, ""));
       await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: action.number, title, body });
       const prepared = { ...previous, body, title };
       await currentFix(client, repo, prepared);
@@ -365,33 +454,31 @@ export async function handleFixCommands(client: GitHubClient, repo: RepoRef, pr:
         outcome.replies.push("Recreating this pull request; edits made to it will be overwritten.");
         break;
       case "close":
-        await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr.number, state: "closed" });
-        await deleteBranch(client, repo, pr.branch);
+        Object.assign(pr, await finishBranchCleanup(client, repo, await prepareClose(client, repo, pr)));
         outcome.replies.push("Closed. This change will not be proposed again unless the fixes change.");
+        if (!pr.cleanup) outcome.replies.push("No recorded cleanup target; any remaining branch was retained.");
         break;
       case "ignore-group":
       case "ignore-rule": {
         const ignoredRules =
           command.type === "ignore-rule" ? [...new Set([...pr.ignoredRules, ...(command.rule ? [command.rule] : pr.rules)])] : pr.ignoredRules;
-        const body = updateMarker(pr.body, "fix", `group:${pr.group}`, {
+        const attributes = {
           ignored: ignoredRules.join(","),
           ...(command.type === "ignore-group" ? { ignoredGroup: "true" } : {}),
-        });
+        };
         await ensureLabels(client, repo, [IGNORED_LABEL]);
-        await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", {
-          ...repo,
-          pull_number: pr.number,
-          body,
-          ...(command.type === "ignore-group" ? { state: "closed" } : {}),
-        });
+        if (command.type === "ignore-group") Object.assign(pr, await prepareClose(client, repo, pr, attributes));
+        else {
+          const body = updateMarker(pr.body, "fix", `group:${pr.group}`, attributes);
+          await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr.number, body });
+          pr.body = body;
+        }
         await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: pr.number, labels: [IGNORED_LABEL] });
-        pr.body = body;
         pr.ignoredRules = ignoredRules;
         pr.labels = [...new Set([...pr.labels, IGNORED_LABEL])];
         if (command.type === "ignore-group") {
           pr.ignoredGroup = true;
-          pr.state = "closed";
-          await deleteBranch(client, repo, pr.branch);
+          Object.assign(pr, await finishBranchCleanup(client, repo, pr));
           outcome.replies.push(`OK, fixes for the \`${pr.group}\` group will no longer be proposed. Remove the \`${IGNORED_LABEL}\` label to undo.`);
         } else {
           outcome.recompute = true;

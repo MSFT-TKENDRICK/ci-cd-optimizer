@@ -27,6 +27,7 @@ const pull = (arm: string, overrides: Partial<ExperimentPullRequest> = {}): Expe
   labels: ["experiment"],
   head: `experiments/setup-cache-yarn/${arm}`,
   headSha: `sha-${arm}`,
+  headRepository: "acme/widgets",
   base: arm === "trunk" ? "main" : "experiments/setup-cache-yarn/trunk",
   experiment: "setup-cache-yarn",
   arm,
@@ -53,7 +54,7 @@ describe("experiment pull requests", () => {
       title: ref,
       body: null,
       labels: [{ name: "experiment" }],
-      head: { ref, sha: `s${number}` },
+      head: { ref, sha: `s${number}`, repo: { full_name: "acme/widgets" } },
       base: { ref: base },
     });
     const client = fakeClient(() => [
@@ -65,7 +66,7 @@ describe("experiment pull requests", () => {
     ]);
     const pulls = await listExperimentPullRequests(client, repo);
     expect(pulls.map((p) => p.number)).toEqual([1, 2, 3, 5]);
-    expect(pulls[1]).toMatchObject({ experiment: "alpha", arm: "fast", headSha: "s2", body: "" });
+    expect(pulls[1]).toMatchObject({ experiment: "alpha", arm: "fast", headSha: "s2", headRepository: "acme/widgets", body: "" });
     const grouped = groupExperiments(pulls);
     expect(grouped.map((g) => g.name)).toEqual(["alpha", "beta"]);
     expect(grouped[0]?.trunk?.number).toBe(1);
@@ -160,8 +161,13 @@ describe("applyDecision", () => {
   });
 
   it("merges the winner, closes losers, promotes the manifest, and readies the trunk PR", async () => {
-    const client = fakeClient((route) => {
-      if (route.startsWith("GET /repos/{owner}/{repo}/git/ref/")) return { object: { sha: "trunk-head" } };
+    const client = fakeClient((route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
+      if (route === "POST /graphql") return { data: { updateRefs: {} } };
+      if (route.startsWith("GET /repos/{owner}/{repo}/git/ref/")) {
+        const arm = String(parameters.ref).split("/").at(-1);
+        return { object: { sha: arm === "trunk" ? "trunk-head" : `sha-${arm}` } };
+      }
       if (route.startsWith("GET /repos/{owner}/{repo}/git/commits/")) return { tree: { sha: "t" } };
       if (route === "POST /repos/{owner}/{repo}/git/trees") return { sha: "t2" };
       if (route === "POST /repos/{owner}/{repo}/git/commits") return { sha: "promoted" };
@@ -175,8 +181,11 @@ describe("applyDecision", () => {
 
     const merge = client.calls.find((call) => call.route === "PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge");
     expect(merge?.parameters).toMatchObject({ pull_number: 11, merge_method: "squash", sha: "sha-lockfile" });
-    const deleted = client.calls.filter((call) => call.route === "DELETE /repos/{owner}/{repo}/git/refs/{ref}").map((call) => call.parameters.ref);
-    expect(deleted).toEqual(["heads/experiments/setup-cache-yarn/lockfile", "heads/experiments/setup-cache-yarn/packagemanager"]);
+    const deleted = client.calls.filter((call) => call.route === "POST /graphql" && String(call.parameters.query).includes("updateRefs"));
+    expect(deleted.map((call) => call.parameters.variables)).toEqual([
+      { input: { repositoryId: "repo-node", refUpdates: [{ name: "refs/heads/experiments/setup-cache-yarn/lockfile", beforeOid: "sha-lockfile", afterOid: "0".repeat(40), force: true }] } },
+      { input: { repositoryId: "repo-node", refUpdates: [{ name: "refs/heads/experiments/setup-cache-yarn/packagemanager", beforeOid: "sha-packagemanager", afterOid: "0".repeat(40), force: true }] } },
+    ]);
     const tree = client.calls.find((call) => call.route === "POST /repos/{owner}/{repo}/git/trees")?.parameters.tree as Array<{ content: string }>;
     expect(parseManifest(tree[0]?.content ?? "").manifest).toMatchObject({ status: "promoted", winner: "lockfile" });
     expect(client.calls.find((call) => call.route === "PATCH /repos/{owner}/{repo}/git/refs/{ref}")?.parameters).toMatchObject({ sha: "promoted", force: false });
@@ -195,15 +204,32 @@ describe("applyDecision", () => {
     expect(client.calls).toHaveLength(0);
   });
 
+  it.each(["human", "fork", "unknown"])("retains an experiment branch with %s ownership/head evidence", async (evidence) => {
+    const arm = pull("lockfile", { number: 11 });
+    if (evidence === "fork") arm.headRepository = "fork/widgets";
+    if (evidence === "unknown") delete arm.headRepository;
+    const client = fakeClient((route) => route.includes("/git/ref/") ? { object: { sha: "human" } } : route.startsWith("GET") ? [] : {});
+    const result = await applyDecision(client, repo, { manifest, decision: { action: "reject", reason: "stop", scores: [] }, state: { name: manifest.name, arms: [arm] }, config });
+    expect(result.notes.join(" ")).toContain("retained");
+    expect(routes(client)).not.toContain("POST /graphql");
+    expect(routes(client).some((route) => route.startsWith("DELETE"))).toBe(false);
+  });
+
   it("closes arms and the trunk, labels the outcome, and deletes the trunk on reject", async () => {
-    const client = fakeClient((route) => (route.startsWith("GET") ? [] : {}));
+    const client = fakeClient((route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
+      if (route === "POST /graphql") return { data: { updateRefs: {} } };
+      if (route.startsWith("GET /repos/{owner}/{repo}/git/ref/")) return { object: { sha: `sha-${String(parameters.ref).split("/").at(-1)}` } };
+      return route.startsWith("GET") ? [] : {};
+    });
     const decision: Decision = { action: "reject", reason: "no arm qualified", scores: [] };
     const closedArm = pull("packagemanager", { number: 12, state: "closed" });
     const result = await applyDecision(client, repo, { manifest, decision, state: { ...state(), arms: [pull("lockfile", { number: 11 }), closedArm] }, config });
     expect(result.closed).toEqual([11, 10]);
     expect(client.calls.find((call) => call.route === "POST /repos/{owner}/{repo}/labels")?.parameters).toMatchObject({ name: "experiment:rejected" });
-    const deleted = client.calls.filter((call) => call.route === "DELETE /repos/{owner}/{repo}/git/refs/{ref}").map((call) => call.parameters.ref);
-    expect(deleted).toEqual(["heads/experiments/setup-cache-yarn/lockfile", "heads/experiments/setup-cache-yarn/trunk"]);
+    const deleted = client.calls.filter((call) => call.route === "POST /graphql");
+    expect(deleted).toHaveLength(2);
+    expect(deleted[1]?.parameters.variables).toMatchObject({ input: { refUpdates: [{ name: "refs/heads/experiments/setup-cache-yarn/trunk", beforeOid: "sha-trunk", afterOid: "0".repeat(40) }] } });
   });
 });
 

@@ -150,7 +150,8 @@ describe("interrupted fix updates", () => {
     const result = await f.scan();
     expect(result.fixes?.actions.map((action) => action.type)).toEqual(["metadata", "close"]);
     expect(f.pull.state).toBe("closed");
-    expect(callsTo(f.client, "POST /graphql")).toHaveLength(1);
+    expect(callsTo(f.client, "POST /graphql")).toHaveLength(2);
+    expect(parseMarker(f.pull.body)?.attributes.cleanupStatus).toBe("deleted");
   });
 
   it("respects a decline after the branch write but before marker finalization", async () => {

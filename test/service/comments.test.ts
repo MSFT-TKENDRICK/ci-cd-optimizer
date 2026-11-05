@@ -90,7 +90,9 @@ describe("handleIssueComment", () => {
     expect(result.status).toBe("handled");
     expect(result.scan).toBeUndefined();
     expect(callsTo(client, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")[0]?.parameters).toMatchObject({ pull_number: 12, state: "closed" });
-    expect(callsTo(client, "DELETE /repos/{owner}/{repo}/git/refs/{ref}")[0]?.parameters.ref).toBe("heads/cicd-optimizer/workflow");
+    expect(callsTo(client, "POST /graphql")[0]?.parameters.variables).toMatchObject({
+      input: { refUpdates: [{ name: "refs/heads/cicd-optimizer/workflow", beforeOid: "pr-head", afterOid: "0".repeat(40) }] },
+    });
   });
 
   it("rebuilds via a fixes-only scan on rebase", async () => {

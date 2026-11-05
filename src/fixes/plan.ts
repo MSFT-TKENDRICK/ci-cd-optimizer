@@ -109,6 +109,14 @@ export interface PendingFixUpdate {
   rules: string[];
 }
 
+export type CleanupStatus = "pending" | "deleted" | "missing" | "changed" | "in-use" | "reopened";
+
+export interface BranchCleanup {
+  branch: string;
+  headSha: string;
+  status: CleanupStatus;
+}
+
 export interface ExistingFixPullRequest {
   number: number;
   state: "open" | "closed";
@@ -124,17 +132,18 @@ export interface ExistingFixPullRequest {
   labels?: readonly string[];
   pendingReviewers?: readonly string[];
   pendingUpdate?: PendingFixUpdate;
+  cleanup?: BranchCleanup;
 }
 
 export type FixAction =
   | { type: "create"; change: FixChange }
   | { type: "update"; number: number; change: FixChange }
-  | { type: "metadata"; number: number; group: string; labels: string[]; reviewers: string[]; recoverUpdate?: true }
+  | { type: "metadata"; number: number; group: string; labels: string[]; reviewers: string[]; recoverUpdate?: true; cleanup?: true }
   | { type: "close"; number: number; group: string; branch?: string; comment: string };
 
 export interface SkippedFix {
   group: string;
-  reason: "up-to-date" | "edited" | "declined" | "limit";
+  reason: "up-to-date" | "edited" | "declined" | "limit" | "reopened";
   number?: number;
 }
 
@@ -178,6 +187,10 @@ export function planFixPullRequests(changes: readonly FixChange[], existing: rea
 
   for (const pr of newestFirst) {
     if (pr.state !== "open" || wanted.has(pr.group)) continue;
+    if (pr.cleanup && !options.rebase?.has(pr.group) && !options.recreate?.has(pr.group)) {
+      skipped.push({ group: pr.group, reason: "reopened", number: pr.number });
+      continue;
+    }
     if (edited(pr) && !options.recreate?.has(pr.group)) {
       skipped.push({ group: pr.group, reason: "edited", number: pr.number });
       continue;
@@ -195,6 +208,10 @@ export function planFixPullRequests(changes: readonly FixChange[], existing: rea
   for (const change of changes) {
     const current = newestFirst.find((pr) => pr.group === change.group && pr.state === "open");
     if (current) {
+      if (current.cleanup && !options.rebase?.has(change.group) && !options.recreate?.has(change.group)) {
+        skipped.push({ group: change.group, reason: "reopened", number: current.number });
+        continue;
+      }
       const completed = current.pendingUpdate?.commitSha === current.headSha && current.pendingUpdate !== undefined;
       const satisfied = completed && current.signature === change.signature && current.pendingUpdate?.baseSha === options.baseSha;
       if (satisfied) skipped.push({ group: change.group, reason: "up-to-date", number: current.number });
@@ -219,12 +236,13 @@ export function planFixPullRequests(changes: readonly FixChange[], existing: rea
   }
   const metadata: FixAction[] = [];
   for (const pr of newestFirst) {
-    if (pr.state !== "open" && !pr.pendingUpdate) continue;
+    const cleanup = pr.cleanup?.status === "pending";
+    if (pr.state !== "open" && !pr.pendingUpdate && !cleanup) continue;
     const currentLabels = new Set((pr.labels ?? []).map((label) => label.toLowerCase()));
     const labels = pr.state === "open" ? [...new Set(options.labels ?? [])].filter((label) => !currentLabels.has(label.toLowerCase())) : [];
     const closing = actions.some((action) => action.type === "close" && action.number === pr.number);
     const pending = closing || pr.state !== "open" || pr.draft ? [] : pr.pendingReviewers ?? [];
-    if (labels.length === 0 && pending.length === 0 && !pr.pendingUpdate) continue;
+    if (labels.length === 0 && pending.length === 0 && !pr.pendingUpdate && !cleanup) continue;
     metadata.push({
       type: "metadata",
       number: pr.number,
@@ -232,6 +250,7 @@ export function planFixPullRequests(changes: readonly FixChange[], existing: rea
       labels,
       reviewers: pending.filter((reviewer) => options.reviewers?.includes(reviewer)),
       ...(pr.pendingUpdate ? { recoverUpdate: true as const } : {}),
+      ...(cleanup ? { cleanup: true as const } : {}),
     });
   }
   return { actions: [...metadata, ...actions], skipped };

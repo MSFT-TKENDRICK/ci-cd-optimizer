@@ -151,6 +151,26 @@ the branch write, and simultaneous body edits between a read and PATCH cannot be
 writers coordinated as above. Pre-existing interrupted updates without intent markers still need operator
 reconciliation, and replayed comments/commands after their completion is fully recorded are not exactly-once.
 
+Fix/recipe closure records the cleanup branch and observed head in the same PR update that closes it. Cleanup uses
+an atomic zero-OID `updateRefs` mutation with that original head, never unconditional REST deletion. Missing refs
+are reported as absent; changed heads, branches used by another open PR, and reopened PRs are retained with a visible
+outcome in the PR body. Permission, validation and transport errors propagate instead of being treated as deletion.
+A lost deletion response is reconciled by observing the ref on retry, without adopting a newer head.
+
+Pending cleanup is recovered even on closed PRs and appears as a `metadata` action with `cleanup: true` in scan
+dry-run output. Terminal outcomes are recorded so replaying an old close command cannot delete a later recreated
+branch. A closed legacy PR without a cleanup intent is not permission to delete its branch. A reopened PR with
+cleanup history is held (`reopened` skip reason), rather than immediately closed again by a retry. For normal fix
+PRs, an explicit rebase/recreate resumes updates, or a new close command records a new cleanup target. Reopened
+recipe PRs require manual reconciliation; rollout does not override that hold. Keep pending cleanup markers intact
+until recovery or manual reconciliation completes.
+
+Experiment cleanup also checks the originally observed head and same-repository ownership, recording preservation
+in grading notes when evidence differs. Its broader promotion/closure sequence is not covered by the fix/recipe
+cleanup marker protocol; interrupted grading may still need manual reconciliation. All cleanup refuses base/default
+branch deletion. Ref deletion, PR state and other PR creation are not a single GitHub transaction; keep writers
+coordinated, and treat cleanup as reference management, not a guarantee that Git objects have been erased.
+
 Monitor queue age and failed jobs in addition to `/ping` and process health:
 
 ```sql

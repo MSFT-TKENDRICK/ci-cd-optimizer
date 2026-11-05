@@ -21,6 +21,7 @@ export interface ExperimentPullRequest {
   labels: string[];
   head: string;
   headSha: string;
+  headRepository?: string;
   base: string;
   experiment: string;
   arm: string;
@@ -43,7 +44,7 @@ interface RawPull {
   title: string;
   body: string | null;
   labels: Array<{ name: string }>;
-  head: { ref: string; sha: string };
+  head: { ref: string; sha: string; repo?: { full_name: string } | null };
   base: { ref: string };
 }
 
@@ -64,6 +65,7 @@ export async function listExperimentPullRequests(client: GitHubClient, repo: Rep
         labels: pull.labels.map((label) => label.name),
         head: pull.head.ref,
         headSha: pull.head.sha,
+        ...(pull.head.repo?.full_name ? { headRepository: pull.head.repo.full_name } : {}),
         base: pull.base.ref,
         experiment: ref.experiment,
         arm: ref.arm,
@@ -180,11 +182,21 @@ async function upsertComment(client: GitHubClient, repo: RepoRef, issue: number,
   else await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: issue, body: text });
 }
 
-async function closePull(client: GitHubClient, repo: RepoRef, pull: ExperimentPullRequest, comment: string): Promise<void> {
+async function cleanupBranch(client: GitHubClient, repo: RepoRef, pull: ExperimentPullRequest, notes: string[]): Promise<void> {
+  if (pull.headRepository?.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
+    notes.push(`Branch ${pull.head} retained because same-repository ownership could not be verified.`);
+    return;
+  }
+  if (pull.head === pull.base) throw new Error("Refusing cleanup of an experiment's base branch.");
+  const status = await deleteBranch(client, repo, pull.head, pull.headSha);
+  if (status === "changed") notes.push(`Branch ${pull.head} retained because its head changed after grading.`);
+}
+
+async function closePull(client: GitHubClient, repo: RepoRef, pull: ExperimentPullRequest, comment: string, notes: string[]): Promise<void> {
   if (pull.state !== "open") return;
   await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: pull.number, body: comment });
   await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pull.number, state: "closed" });
-  await deleteBranch(client, repo, pull.head);
+  await cleanupBranch(client, repo, pull, notes);
 }
 
 export interface AppliedDecision {
@@ -195,7 +207,7 @@ export interface AppliedDecision {
   notes: string[];
 }
 
-/** Executes a grading decision. Every step is idempotent so a re-run after a partial failure converges. */
+/** Executes a grading decision; interrupted multi-write promotions may require operator reconciliation. */
 export async function applyDecision(
   client: GitHubClient,
   repo: RepoRef,
@@ -229,9 +241,9 @@ export async function applyDecision(
       commit_message: `${decision.reason}\n\nWeighted improvement: ${((measured?.deterministic ?? 0) * 100).toFixed(1)}%`,
     });
     result.merged = winner.number;
-    await deleteBranch(client, repo, winner.head);
+    await cleanupBranch(client, repo, winner, result.notes);
     for (const loser of state.arms.filter((arm) => arm.arm !== decision.winner)) {
-      await closePull(client, repo, loser, `Not selected: \`${decision.winner}\` won experiment \`${manifest.name}\`.\n\n${report}`);
+      await closePull(client, repo, loser, `Not selected: \`${decision.winner}\` won experiment \`${manifest.name}\`.\n\n${report}`, result.notes);
       if (loser.state === "open") result.closed.push(loser.number);
     }
     const promoted: ExperimentManifest = {
@@ -285,7 +297,7 @@ export async function applyDecision(
 
   // reject / expire: close everything but keep the pull requests (and their grading comments) as the learning record.
   for (const arm of state.arms) {
-    await closePull(client, repo, arm, `Experiment \`${manifest.name}\` ${decision.action === "reject" ? "was rejected" : "expired"}.`);
+    await closePull(client, repo, arm, `Experiment \`${manifest.name}\` ${decision.action === "reject" ? "was rejected" : "expired"}.`, result.notes);
     if (arm.state === "open") result.closed.push(arm.number);
   }
   if (trunk) {
@@ -297,7 +309,7 @@ export async function applyDecision(
       await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: trunk.number, state: "closed" });
       result.closed.push(trunk.number);
     }
-    await deleteBranch(client, repo, trunk.head);
+    await cleanupBranch(client, repo, trunk, result.notes);
   }
   return result;
 }

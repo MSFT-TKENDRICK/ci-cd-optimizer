@@ -1,6 +1,8 @@
 import type { SourceFile } from "../lint/types.js";
 import { graphql, httpStatus, type GitHubClient, type RepoRef } from "./client.js";
 
+const DELETED_REF = "0".repeat(40);
+
 /** Creates a commit on top of `baseSha` with the given full file contents (Git Data API, no checkout needed). */
 export async function commitFiles(client: GitHubClient, repo: RepoRef, baseSha: string, files: readonly SourceFile[], message: string): Promise<string> {
   const base = await client.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", { ...repo, commit_sha: baseSha });
@@ -28,7 +30,9 @@ export async function pushBranch(client: GitHubClient, repo: RepoRef, branch: st
 export async function updateBranch(client: GitHubClient, repo: RepoRef, branch: string, sha: string, expectedSha: string): Promise<void> {
   if (!expectedSha) throw new Error(`Missing expected head for ${branch}; refusing an unconditional update.`);
   const repository = await client.request("GET /repos/{owner}/{repo}", { ...repo });
-  const id = (repository.data as { node_id?: string }).node_id;
+  const metadata = repository.data as { node_id?: string; default_branch?: string };
+  if (sha === DELETED_REF && metadata.default_branch === branch) throw new Error("Refusing to delete the repository's default branch.");
+  const id = metadata.node_id;
   if (!id) throw new Error("GitHub did not return the repository node ID required for an atomic ref update.");
   const result = await graphql(client, `mutation UpdateOptimizerRef($input: UpdateRefsInput!) {
     updateRefs(input: $input) { clientMutationId }
@@ -38,13 +42,21 @@ export async function updateBranch(client: GitHubClient, repo: RepoRef, branch: 
   if (!result?.updateRefs) throw new Error(`GitHub did not acknowledge the atomic update of ${branch}.`);
 }
 
-export async function deleteBranch(client: GitHubClient, repo: RepoRef, branch: string | undefined): Promise<void> {
-  if (!branch) return;
+export async function deleteBranch(
+  client: GitHubClient, repo: RepoRef, branch: string | undefined, expectedSha: string | undefined,
+): Promise<"deleted" | "missing" | "changed"> {
+  if (!branch || !expectedSha || expectedSha === DELETED_REF) throw new Error("Branch cleanup requires a known branch and observed head.");
+  let current: string;
   try {
-    await client.request("DELETE /repos/{owner}/{repo}/git/refs/{ref}", { ...repo, ref: `heads/${branch}` });
+    current = await branchSha(client, repo, branch);
   } catch (error) {
-    if (![404, 422].includes(httpStatus(error) ?? 0)) throw error;
+    if (httpStatus(error) === 404) return "missing";
+    throw error;
   }
+  if (!current) throw new Error(`GitHub did not return the current head of ${branch}.`);
+  if (current !== expectedSha) return "changed";
+  await updateBranch(client, repo, branch, DELETED_REF, expectedSha);
+  return "deleted";
 }
 
 export async function branchSha(client: GitHubClient, repo: RepoRef, branch: string): Promise<string> {

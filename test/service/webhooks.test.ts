@@ -57,7 +57,6 @@ const endpoints = [
   "POST /repos/{owner}/{repo}/check-runs",
   "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}",
   "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
-  "DELETE /repos/{owner}/{repo}/git/refs/{ref}",
 ].map((route) => {
   const names: string[] = [];
   const pattern = route.replace(/\{([^}]+)\}/g, (_match, name: string) => {
@@ -348,6 +347,38 @@ describe("signed GitHub App HTTP delivery", () => {
     expect(callsTo(app.api, "POST /graphql")).toHaveLength(1);
   });
 
+  it.each([false, true])("recovers branch cleanup through signed HTTP (human push during deletion: %s)", async (humanPush) => {
+    const files = { [WORKFLOW]: MISSING_TIMEOUT };
+    const heads: Record<string, string> = {};
+    const state: FakeApiState = { config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n`, refs: { main: files }, pulls: [], branchHeads: heads };
+    const app = await harness(state);
+    expect(await app.send("push", push)).toBe(200);
+    const pull = state.pulls?.[0];
+    if (!pull) throw new Error("Expected created PR");
+    files[WORKFLOW] = CLEAN;
+    let injected = false;
+    const original = app.api.request.bind(app.api);
+    vi.spyOn(app.api, "request").mockImplementation(async (route, parameters = {}) => {
+      if (!injected && route === "POST /graphql" && humanPush) {
+        heads[pull.head.ref] = "human";
+        pull.head.sha = "human";
+      }
+      const response = await original(route, parameters);
+      if (!injected && route === "POST /graphql") {
+        injected = true;
+        if (!humanPush) throw httpError(500);
+      }
+      return response;
+    });
+    expect(await app.send("push", push)).toBe(500);
+    expect(pull.state).toBe("closed");
+    expect(parseMarker(pull.body)?.attributes).toMatchObject({ cleanupHead: "new-commit", cleanupStatus: "pending" });
+    expect(await app.send("push", push)).toBe(200);
+    expect(parseMarker(pull.body)?.attributes.cleanupStatus).toBe(humanPush ? "changed" : "missing");
+    expect(heads[pull.head.ref]).toBe(humanPush ? "human" : undefined);
+    expect(callsTo(app.api, "POST /graphql")).toHaveLength(1);
+  });
+
   it.each(["invalid", "missing"] as const)("rejects a %s signature without authenticating or writing", async (signature) => {
     const app = await harness();
     expect(await app.send("push", push, signature)).toBe(400);
@@ -448,7 +479,9 @@ describe("signed GitHub App HTTP delivery", () => {
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toHaveLength(1);
     if (event === "issue_comment") {
       expect(callsTo(app.api, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")[0]?.parameters).toMatchObject({ pull_number: "42", state: "closed" });
-      expect(callsTo(app.api, "DELETE /repos/{owner}/{repo}/git/refs/{ref}")).toHaveLength(1);
+      expect(callsTo(app.api, "POST /graphql")[0]?.parameters.variables).toMatchObject({
+        input: { refUpdates: [{ beforeOid: "new-commit", afterOid: "0".repeat(40) }] },
+      });
     }
     if (event === "workflow_run") {
       expect(callsTo(app.api, "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs")).toHaveLength(1);
@@ -662,6 +695,36 @@ describe.skipIf(!process.env.DATABASE_URL)("durable HTTP delivery through Postgr
     expect(parseMarker(pull.body)?.attributes.commit).toBe("next-bot-commit");
     expect(parseMarker(pull.body)?.attributes.pendingCommit).toBeUndefined();
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toHaveLength(2);
+    expect(callsTo(app.api, "POST /graphql")).toHaveLength(1);
+  });
+
+  it("recovers a lost deletion response after PR closure without adopting a recreated human branch", async () => {
+    const files = { [WORKFLOW]: MISSING_TIMEOUT };
+    const heads: Record<string, string> = {};
+    const state: FakeApiState = { config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n`, refs: { main: files }, pulls: [], branchHeads: heads };
+    const app = await harness(state, ingress);
+    expect(await app.send("push", push)).toBe(200);
+    expect((await worker.processNext((delivery) => app.probot.receive(delivery))).status).toBe("completed");
+    const pull = state.pulls?.[0];
+    if (!pull) throw new Error("Expected created PR");
+    files[WORKFLOW] = CLEAN;
+    const original = app.api.request.bind(app.api);
+    let injected = false;
+    vi.spyOn(app.api, "request").mockImplementation(async (route, parameters) => {
+      const response = await original(route, parameters);
+      if (!injected && route === "POST /graphql") { injected = true; throw httpError(500); }
+      return response;
+    });
+    const id = randomUUID();
+    expect(await app.send("push", push, "valid", id)).toBe(200);
+    expect(await worker.processNext((delivery) => app.probot.receive(delivery))).toMatchObject({ status: "retrying", id, attempts: 1 });
+    expect(pull.state).toBe("closed");
+    expect(heads[pull.head.ref]).toBeUndefined();
+    heads[pull.head.ref] = "recreated-human-head";
+    expect(await worker.processNext((delivery) => app.probot.receive(delivery))).toMatchObject({ status: "completed", id });
+    expect(await ingress.status(id)).toMatchObject([{ status: "completed", attempts: 2 }]);
+    expect(parseMarker(pull.body)?.attributes).toMatchObject({ cleanupHead: "new-commit", cleanupStatus: "changed" });
+    expect(heads[pull.head.ref]).toBe("recreated-human-head");
     expect(callsTo(app.api, "POST /graphql")).toHaveLength(1);
   });
 });

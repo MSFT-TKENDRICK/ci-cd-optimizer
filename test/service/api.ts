@@ -42,6 +42,16 @@ export function fakeApi(state: FakeApiState = {}) {
   const branch = state.defaultBranch ?? "main";
   const refs = state.refs ?? {};
   const blobs = new Map<string, string>();
+  const edits = new Map<number, Record<string, unknown>>();
+  const branchHeads = state.branchHeads ?? {};
+  if (!state.branchHeads) {
+    for (const issue of state.issues ?? []) {
+      if (typeof issue !== "object" || issue === null || !("pull_request" in issue) || !("number" in issue)) continue;
+      const head = state.pullHeads?.[Number(issue.number)] ?? { sha: "pr-head", ref: "cicd-optimizer/workflow" };
+      branchHeads[head.ref] = head.sha;
+    }
+    for (const pull of state.pulls ?? []) branchHeads[pull.head.ref] = pull.head.sha;
+  }
   const filesAt = (ref: string) => refs[ref] ?? refs[ref.replace(/-sha$/, "")] ?? {};
   let nextId = 100;
   return fakeClient((route, parameters) => {
@@ -78,7 +88,7 @@ export function fakeApi(state: FakeApiState = {}) {
         return { content: base64(blobs.get(String(parameters.file_sha)) ?? ""), encoding: "base64" };
       case "GET /repos/{owner}/{repo}/issues":
         return parameters.page && Number(parameters.page) > 1 ? [] : [
-          ...state.issues ?? [],
+          ...(state.issues ?? []).map((issue) => typeof issue === "object" && issue !== null && "number" in issue ? { ...issue, ...edits.get(Number(issue.number)) } : issue),
           ...(state.pulls ?? []).filter((pull) => pull.labels.includes("cicd-optimizer")).map((pull) => ({ ...pull, pull_request: {} })),
         ];
       case "GET /repos/{owner}/{repo}/pulls": {
@@ -89,19 +99,28 @@ export function fakeApi(state: FakeApiState = {}) {
         const offset = (Number(parameters.page ?? 1) - 1) * Number(parameters.per_page ?? 100);
         return matching.slice(offset, offset + Number(parameters.per_page ?? 100));
       }
-      case "GET /repos/{owner}/{repo}/pulls/{pull_number}":
-        return state.pulls?.find((pull) => pull.number === Number(parameters.pull_number)) ??
-          { head: { ...(state.pullHeads?.[Number(parameters.pull_number)] ?? { sha: "pr-head", ref: "cicd-optimizer/workflow" }), repo: { full_name: `${parameters.owner}/${parameters.repo}` } } };
+      case "GET /repos/{owner}/{repo}/pulls/{pull_number}": {
+        const number = Number(parameters.pull_number);
+        const issue = state.issues?.find((entry) => typeof entry === "object" && entry !== null && "number" in entry && entry.number === number);
+        return state.pulls?.find((pull) => pull.number === number) ?? {
+          state: "open", ...(typeof issue === "object" ? issue : {}), ...edits.get(number),
+          head: { ...(state.pullHeads?.[number] ?? { sha: "pr-head", ref: "cicd-optimizer/workflow" }), repo: { full_name: `${parameters.owner}/${parameters.repo}` } },
+          base: { ref: branch },
+        };
+      }
       case "POST /graphql": {
         const variables = parameters.variables as { input: { refUpdates: Array<{ name: string; beforeOid: string; afterOid: string }> } };
         const updates = variables.input.refUpdates;
-        if (state.branchHeads && updates.some((update) => state.branchHeads?.[update.name.slice("refs/heads/".length)] !== update.beforeOid)) {
+        if (updates.some((update) => branchHeads[update.name.slice("refs/heads/".length)] !== update.beforeOid)) {
           return { data: { updateRefs: null }, errors: [{ message: "Reference no longer points to the expected commit" }] };
         }
         for (const update of updates) {
           const ref = update.name.slice("refs/heads/".length);
-          if (state.branchHeads) state.branchHeads[ref] = update.afterOid;
-          for (const pull of state.pulls ?? []) if (pull.head.ref === ref) pull.head.sha = update.afterOid;
+          if (update.afterOid === "0".repeat(40)) delete branchHeads[ref];
+          else {
+            branchHeads[ref] = update.afterOid;
+            for (const pull of state.pulls ?? []) if (pull.head.ref === ref) pull.head.sha = update.afterOid;
+          }
         }
         return { data: { updateRefs: { clientMutationId: null } } };
       }
@@ -125,6 +144,7 @@ export function fakeApi(state: FakeApiState = {}) {
         if (pull && typeof parameters.body === "string") pull.body = parameters.body;
         if (pull && typeof parameters.title === "string") pull.title = parameters.title;
         if (pull && typeof parameters.state === "string") pull.state = parameters.state;
+        if (!pull) edits.set(Number(parameters.pull_number), { ...edits.get(Number(parameters.pull_number)), ...parameters });
         return {};
       }
       case "GET /repos/{owner}/{repo}/pulls/{pull_number}/files":
@@ -143,8 +163,14 @@ export function fakeApi(state: FakeApiState = {}) {
       case "GET /repos/{owner}/{repo}/git/commits/{commit_sha}":
         return { tree: { sha: "base-tree" } };
       case "GET /repos/{owner}/{repo}/git/ref/{ref}":
-        if (state.branchHeads?.[String(parameters.ref).slice("heads/".length)]) return { object: { sha: state.branchHeads[String(parameters.ref).slice("heads/".length)] } };
+        if (branchHeads[String(parameters.ref).slice("heads/".length)]) return { object: { sha: branchHeads[String(parameters.ref).slice("heads/".length)] } };
         throw httpError(404);
+      case "POST /repos/{owner}/{repo}/git/refs": {
+        const ref = String(parameters.ref).slice("refs/heads/".length);
+        if (branchHeads[ref]) throw httpError(422);
+        branchHeads[ref] = String(parameters.sha);
+        return {};
+      }
       case "POST /repos/{owner}/{repo}/git/trees":
         return { sha: "new-tree" };
       case "POST /repos/{owner}/{repo}/git/commits":
