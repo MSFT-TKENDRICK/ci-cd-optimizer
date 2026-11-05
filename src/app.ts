@@ -186,7 +186,10 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
         ...(await store().then((value) => (value ? { store: value } : {}))),
       });
       context.log.info(
-        { runId: context.payload.workflow_run.id, status: result.status, alerts: result.alerts?.detected.length ?? 0 },
+        {
+          runId: context.payload.workflow_run.id, status: result.status, alerts: result.alerts?.detected.length ?? 0,
+          knowledge: result.knowledge?.persistence, projectContext: result.knowledge?.observation.source.status, knowledgeSkipped: result.knowledgeSkipped,
+        },
         result.reason ?? "Workflow run telemetry processed",
       );
     }));

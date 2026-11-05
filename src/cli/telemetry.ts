@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { httpStatus } from "../github/client.js";
 import { processWorkflowRun, type WorkflowRunResult } from "../service/workflow-run.js";
+import { describeRunKnowledge } from "../service/run-knowledge.js";
 import type { WorkflowRunPayload } from "../telemetry/snapshot.js";
 import { FileTelemetryStore } from "../telemetry/store.js";
 import { copilotClient, githubClient, repoFrom, resolvePath, UsageError, writeText, type CliIO } from "./io.js";
@@ -103,7 +104,8 @@ export async function telemetryCommand(args: string[], io: CliIO): Promise<numbe
   });
 
   const name = `${repo.owner}/${repo.repo}`;
-  const markdown = result.report ?? `Telemetry ${result.status} for run ${runId}${result.reason ? `: ${result.reason}` : "."}`;
+  const markdown = result.report ?? `Telemetry ${result.status} for run ${runId}${result.reason ? `: ${result.reason}` : "."}` +
+    (result.knowledge ? describeRunKnowledge(result.knowledge) : "");
   const summaryPath = values.summary ?? io.env.GITHUB_STEP_SUMMARY;
   if (summaryPath && summaryPath !== "-" && result.report) {
     const target = resolvePath(io, summaryPath);

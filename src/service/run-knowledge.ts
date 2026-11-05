@@ -71,5 +71,8 @@ export function describeRunKnowledge(knowledge: RunKnowledge): string {
   const context = evidence
     ? `At the run-recorded source revision \`${evidence.revision}\`: ${evidence.projects.length} project nodes and ${evidence.technologies.length} technology declarations.`
     : "Source content could not be read at the run-recorded revision; project and technology context is unknown.";
-  return `\n\n### Project declaration context\n\n${context} This does not identify executed projects, installed tool versions, cache use, or a causal optimization benefit.\n\nKnowledge evidence: ${knowledge.persistence === "saved" ? "persisted" : "preview only (no knowledge database writes)"}.`;
+  const coverage = !evidence ? "" : evidence.coverage.inventoryComplete && evidence.coverage.declarationsComplete
+    ? " Collection is complete within the supported, configured inventory; configured ignores still apply."
+    : " Collection is partial or uncertain; missing declarations do not establish absence.";
+  return `\n\n### Project declaration context\n\n${context}${coverage} This does not identify executed projects, installed tool versions, cache use, or a causal optimization benefit.\n\nKnowledge evidence: ${knowledge.persistence === "saved" ? "persisted" : "preview only (no knowledge database writes)"}.`;
 }

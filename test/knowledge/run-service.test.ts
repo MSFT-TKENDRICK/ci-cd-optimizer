@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { MemoryKnowledgeStore } from "../../src/knowledge/store.js";
 import { DEFAULT_CONFIG } from "../../src/lint/config.js";
-import { collectRunKnowledge } from "../../src/service/run-knowledge.js";
+import { collectRunKnowledge, describeRunKnowledge } from "../../src/service/run-knowledge.js";
 import { processWorkflowRun } from "../../src/service/workflow-run.js";
 import { MemoryTelemetryStore } from "../../src/telemetry/store.js";
 import type { WorkflowRunPayload } from "../../src/telemetry/snapshot.js";
@@ -143,5 +143,16 @@ describe("run source context collection", () => {
       expect(unknown.observation.source.status).toBe("unavailable");
     }
     expect(list).not.toHaveBeenCalled();
+  });
+
+  it("keeps partial collection explicit in reports and never reuses it as complete source", async () => {
+    const client = api({ refs: { [revision]: { "package.json": "{}", "packages/a/package.json": "{}" } } });
+    const store = new MemoryKnowledgeStore();
+    const config = { ...DEFAULT_CONFIG, limits: { ...DEFAULT_CONFIG.limits, maxFiles: 1 } };
+    const first = await collectRunKnowledge(client, repository, runtime(), config, { store, now });
+    expect(first.project?.coverage.inventoryComplete).toBe(false);
+    expect(describeRunKnowledge(first)).toContain("partial or uncertain");
+    await collectRunKnowledge(client, repository, { ...runtime(), runId: 101 }, config, { store, now });
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/git/trees/{tree_sha}")).toHaveLength(2);
   });
 });

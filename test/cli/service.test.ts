@@ -151,6 +151,21 @@ async function seededStore(): Promise<string> {
 const lines = async (path: string) => (await readFile(path, "utf8")).split("\n").filter(Boolean);
 
 describe("telemetry command", () => {
+  it("prints requested source context even when a cancelled run has no completed jobs", async () => {
+    const sha = "a".repeat(40);
+    const client = telemetryApi({
+      repositoryMetadata: { id: 42, html_url: "https://github.com/acme/widgets", owner: { login: "acme" }, name: "widgets" },
+      refs: { [sha]: { "package.json": "{}" } }, jobs: { 2000: [] },
+      runs: { 2000: { ...workflowRun, head_sha: sha, conclusion: "cancelled" } },
+    });
+    const session = cli(client);
+    expect(await session.run("telemetry", "--run-id", "2000", "--knowledge", "--dry-run")).toBe(0);
+    expect(session.stdout).toContain("The run has no completed jobs");
+    expect(session.stdout).toContain("Project declaration context");
+    expect(session.stdout).toContain("preview only");
+    expect(writes(client)).toEqual([]);
+  });
+
   it("previews run-linked source context without knowledge database writes", async () => {
     const sha = "a".repeat(40);
     const client = telemetryApi({
