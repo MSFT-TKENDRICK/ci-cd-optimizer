@@ -119,6 +119,54 @@ describe("verified experiment promotion", () => {
     expect(f.current(f.loser.number).state).toBe("open");
   });
 
+  describe("verified experiment closure", () => {
+    const outcome = (f: ReturnType<typeof fixture>, action: "reject" | "expire" = "reject") => ({
+      ...f.options, decision: { action, scores: [], reason: "experiment ended" } as Decision,
+    });
+
+    it.each(["reject", "expire"] as const)("does not report an unpersisted %s closure as success", async (action) => {
+      const f = fixture();
+      const original = f.client.request.bind(f.client);
+      f.client.request = async (route, parameters = {}) =>
+        route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" && parameters.state === "closed"
+          ? { status: 200, data: {} } : original(route, parameters);
+      await expect(applyDecision(f.client, repo, outcome(f, action))).rejects.toThrow();
+      expectArmsRetained(f);
+      expect(f.current(f.trunk.number).state).toBe("open");
+    });
+
+    it.each(["head", "fork"])("refuses stale %s identity before posting or closing anything", async (changed) => {
+      const f = fixture();
+      if (changed === "head") {
+        f.current(f.winner.number).headSha = "human";
+        f.heads[f.winner.head] = "human";
+      } else {
+        f.current(f.winner.number).headRepository = "fork/widgets";
+      }
+      await expect(applyDecision(f.client, repo, outcome(f))).rejects.toThrow(/[Rr]ecollect/);
+      expect(f.client.calls.filter((call) => !call.route.startsWith("GET"))).toEqual([]);
+      expect(f.current(f.winner.number).state).toBe("open");
+    });
+
+    it("rereads identity after the comment and before closing the PR", async () => {
+      const f = fixture();
+      const original = f.client.request.bind(f.client);
+      let injected = false;
+      f.client.request = async (route, parameters = {}) => {
+        const response = await original(route, parameters);
+        if (!injected && route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments") {
+          injected = true;
+          f.current(f.winner.number).base = "main";
+        }
+        return response;
+      };
+      await expect(applyDecision(f.client, repo, outcome(f))).rejects.toThrow(/[Rr]ecollect/);
+      expect(injected).toBe(true);
+      expect(f.client.calls.some((call) => call.route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")).toBe(false);
+      expectArmsRetained(f);
+    });
+  });
+
   it.each(["winner", "control"])("does not promote a %s commit that differs from the collected evidence", async (changed) => {
     const f = fixture();
     if (changed === "winner") f.options.measurements.arms[0]!.headSha = "previous-winner";
