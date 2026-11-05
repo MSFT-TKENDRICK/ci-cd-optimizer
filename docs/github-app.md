@@ -99,5 +99,7 @@ that these write paths work with the live App's permissions.
 | A required status check with SARIF in workflows you control, or no hosting | The Action ([examples](../examples/workflows)). |
 | Hill-climbing experiments and recipe rollout | Workflows in this repository. The rollout uses the App's credentials to reach target repositories ([recipes](recipes.md#setup)). |
 
-Running both is safe. The App and `command: scan` share the same scan, so issues (matched by hidden fingerprints), fix
-pull requests (matched by branch), and code scanning alerts update the same items instead of creating duplicates.
+The App and `command: scan` share identifiers: issues are matched by hidden fingerprints, fix pull requests by branch,
+and code scanning alerts by their fingerprints. Sequential scans therefore update existing items. This is not a
+distributed lock or an exactly-once delivery guarantee. Avoid overlapping write-enabled scans from the App, Actions,
+or multiple replicas until the deployment coordinates execution; simultaneous first scans can race to create items.
