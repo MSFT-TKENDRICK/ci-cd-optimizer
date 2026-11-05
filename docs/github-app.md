@@ -95,9 +95,16 @@ deduplicates that observation. Each Postgres window read has a ten-second statem
 workflow/branch lookup index under the existing schema lock; no new table or permission is required for these derived
 reports. Telemetry-only installations and nonpersisting previews retain legacy backfill.
 
+Recipe application/rollout can populate the same database with authenticated published definitions and pinned
+target PR/issue proposals using `--record-knowledge`. The App refreshes their latest bounded lifecycle history on
+completed runs with readable source and enabled recipes. Merging a pinned PR is an application observation, not a
+performance success; completed adaptation issues remain unknown. The `knowledge` CLI provides authorized
+inspection, refresh and explicit exploratory evaluations ([usage and limits](recipes.md#evidence-backed-application-history)).
+These operations fail closed on missing source/Actions access and do not expose source-catalog payloads through a target query.
+
 The evidence tables are append-only observations, not a retention policy or audit-grade tamper-proof ledger. Operators
 must configure backups, database access, capacity, deletion/retention procedures and repository-removal policy before
-production rollout. No knowledge API, learned mitigation recommender, or automatic deletion on uninstall is enabled.
+production rollout. No unauthenticated knowledge HTTP API, learned mitigation recommender, or automatic deletion on uninstall is enabled.
 Default inventory ignores and extraction limits remain visible in every record; do not interpret missing evidence as
 proof that a project does not use a tool.
 

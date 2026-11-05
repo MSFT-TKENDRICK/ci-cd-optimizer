@@ -31,13 +31,18 @@ const uniqueStrings = (values: readonly string[], field: string, maximum: number
 function definitionContent(definition: Omit<MitigationDefinition, "id" | "contentDigest"> | MitigationDefinition) {
   const { version, source, key, revision, title, summary, instructions, risk, rules, files, technologies, contraindications, provenance } = definition;
   return {
-    version, source, key, revision, title, summary, instructions, risk, rules, files, technologies, contraindications,
+    version, source: version === 1 ? source : { host: source.host, repositoryId: source.repositoryId },
+    key, revision, title, summary, instructions, risk, rules, files, technologies, contraindications,
     provenance, patchDigest: definition.patchDigest,
   };
 }
 
 export function mitigationDefinitionDigest(definition: Omit<MitigationDefinition, "id" | "contentDigest"> | MitigationDefinition): string {
-  return identity(["mitigation-content-v1", definitionContent(definition)]);
+  return identity([`mitigation-content-v${definition.version}`, definitionContent(definition)]);
+}
+
+export function equivalentMitigationDefinitions(left: MitigationDefinition, right: MitigationDefinition): boolean {
+  return mitigationDefinitionDigest({ ...left, version: 2 }) === mitigationDefinitionDigest({ ...right, version: 2 });
 }
 
 /** Imports only explicit recipe selectors; prose and legacy compatibility counters never become success evidence. */
@@ -55,14 +60,14 @@ export function mitigationDefinitionFromRecipe(source: MitigationDefinition["sou
 }
 
 export function mitigationDefinitionIdentity(definition: Omit<MitigationDefinition, "id"> | MitigationDefinition): string {
-  return identity(["mitigation-definition-v1", definition.source.host, definition.source.repositoryId,
+  return identity([`mitigation-definition-v${definition.version}`, definition.source.host, definition.source.repositoryId,
     definition.key, definition.revision, definition.contentDigest]);
 }
 
 export function createMitigationDefinition(
   input: Omit<MitigationDefinition, "version" | "id" | "contentDigest">,
 ): MitigationDefinition {
-  const body = structuredClone({ version: 1 as const, ...input });
+  const body = structuredClone({ ...input, version: 2 as const });
   const contentDigest = mitigationDefinitionDigest(body);
   const definition = { ...body, contentDigest, id: mitigationDefinitionIdentity({ ...body, contentDigest }) };
   validateMitigationDefinition(definition);
@@ -71,7 +76,7 @@ export function createMitigationDefinition(
 
 export function validateMitigationDefinition(definition: MitigationDefinition): void {
   validateScope(definition.source);
-  if (definition.version !== 1 || !Number.isSafeInteger(definition.revision) || definition.revision < 1 ||
+  if (![1, 2].includes(definition.version) || !Number.isSafeInteger(definition.revision) || definition.revision < 1 ||
       !/^[a-z0-9][a-z0-9-]{0,62}$/.test(definition.key) || !/^[a-f0-9]{64}$/.test(definition.patchDigest)) {
     throw new Error("Mitigation definition identity is invalid");
   }
@@ -117,6 +122,8 @@ export function validateMitigationApplication(application: MitigationApplication
   }
   if (application.change.kind === "commit") {
     if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(application.change.sha)) throw new Error("Mitigation commit SHA is invalid");
+  } else if (application.change.kind === "issue") {
+    if (!Number.isSafeInteger(application.change.number) || application.change.number < 1) throw new Error("Mitigation issue reference is invalid");
   } else if (application.change.kind === "pull-request") {
     if (!Number.isSafeInteger(application.change.number) || application.change.number < 1 ||
         (application.change.headSha !== undefined && !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(application.change.headSha))) {
@@ -128,14 +135,18 @@ export function validateMitigationApplication(application: MitigationApplication
 }
 
 export function mitigationApplicationEventIdentity(event: Omit<MitigationApplicationEvent, "id"> | MitigationApplicationEvent): string {
-  return identity(["mitigation-application-event-v1", event.version, event.target, event.applicationId,
-    event.state, event.runObservationId ?? null, event.note ?? null]);
+  return identity([`mitigation-application-event-v${event.version}`, event.version, event.target, event.applicationId,
+    event.state, ...(event.version === 1 ? [] : [event.observedAt]), event.runObservationId ?? null, event.note ?? null]);
 }
 
 export function createMitigationApplicationEvent(
   input: Omit<MitigationApplicationEvent, "version" | "id">,
 ): MitigationApplicationEvent {
-  const body = structuredClone({ version: 1 as const, ...input });
+  timestamp(input.observedAt);
+  const body = structuredClone({
+    ...input, version: 2 as const, target: { host: input.target.host, repositoryId: input.target.repositoryId },
+    observedAt: new Date(input.observedAt).toISOString(),
+  });
   const event = { ...body, id: mitigationApplicationEventIdentity(body) };
   validateMitigationApplicationEvent(event);
   return event;
@@ -143,7 +154,7 @@ export function createMitigationApplicationEvent(
 
 export function validateMitigationApplicationEvent(event: MitigationApplicationEvent): void {
   validateScope(event.target);
-  if (event.version !== 1 || !/^[a-f0-9]{64}$/.test(event.applicationId) ||
+  if (![1, 2].includes(event.version) || !/^[a-f0-9]{64}$/.test(event.applicationId) ||
       !(STATES as readonly string[]).includes(event.state)) throw new Error("Mitigation application event is invalid");
   timestamp(event.observedAt);
   if (event.runObservationId !== undefined && !/^[a-f0-9]{64}$/.test(event.runObservationId)) throw new Error("Mitigation event run identity is invalid");
@@ -297,7 +308,11 @@ export function assessMitigation(input: {
     ...(controlMedianMs !== undefined ? { controlMedianMs } : {}),
     ...(treatmentMedianMs !== undefined ? { treatmentMedianMs } : {}),
     ...(pValue !== undefined ? { pValue } : {}),
-    limitations: input.limitations ?? ["Observational comparison; does not establish causality."],
+    limitations: [...new Set([
+      "Observational comparison; does not establish causality.",
+      "Run independence and unchanged workloads are not established; sample selection and repeated comparisons are not corrected.",
+      ...(input.limitations ?? []),
+    ])].sort(),
   });
 }
 
@@ -323,6 +338,10 @@ export function verifyMitigationEvaluation(
   const at = Date.parse(evaluation.evaluatedAt);
   const stateEvent = events.filter((event) => Date.parse(event.observedAt) <= at)
     .sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt) || b.id.localeCompare(a.id))[0];
+  if (stateEvent && evaluation.outcome !== "unknown" &&
+      events.some((event) => Date.parse(event.observedAt) === Date.parse(stateEvent.observedAt) && event.state !== stateEvent.state)) {
+    throw new Error("Mitigation evaluation has ambiguous application state evidence");
+  }
   if (stateEvent?.state !== "applied") {
     if (evaluation.outcome === "unknown" && evaluation.controlObservationIds.length === 0 &&
         evaluation.treatmentObservationIds.length === 0) return;
@@ -355,7 +374,10 @@ export function verifyMitigationEvaluation(
     metric: evaluation.metric, alpha: evaluation.alpha, evaluatedAt: evaluation.evaluatedAt,
     appliedAt: stateEvent.observedAt, limitations: evaluation.limitations,
   });
-  if (expected.id !== evaluation.id) throw new Error("Mitigation evaluation statistics do not match referenced run evidence");
+  // Earlier evaluations retain their original disclosure text; recomputation must not rewrite their identity.
+  if (mitigationEvaluationIdentity({ ...expected, limitations: evaluation.limitations }) !== evaluation.id) {
+    throw new Error("Mitigation evaluation statistics do not match referenced run evidence");
+  }
 }
 
 function uniqueRuns(

@@ -1,5 +1,6 @@
 import { identity, snapshotIdentity, validateRevision, validateScope } from "./identity.js";
 import {
+  equivalentMitigationDefinitions,
   validateMitigationApplication, validateMitigationApplicationEvent, validateMitigationDefinition,
   validateMitigationEvaluation, verifyMitigationEvaluation,
 } from "./mitigation.js";
@@ -124,14 +125,18 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
       observation: Buffer.byteLength(JSON.stringify(observation)) <= MAX_RUN_OBSERVATION_BYTES ? observation : null,
     }))));
   }
-  async saveMitigationDefinition(input: MitigationDefinition): Promise<void> {
+  async saveMitigationDefinition(input: MitigationDefinition): Promise<MitigationDefinition> {
     const definition = structuredClone(input);
     validateMitigationDefinition(definition);
-    const conflict = [...this.mitigationDefinitions.values()].find((item) =>
+    const existing = [...this.mitigationDefinitions.values()].find((item) =>
       item.source.host === definition.source.host && item.source.repositoryId === definition.source.repositoryId &&
-      item.key === definition.key && item.revision === definition.revision && item.id !== definition.id);
-    if (conflict) throw new Error("Mitigation definition revision already has different immutable content");
-    if (!this.mitigationDefinitions.has(definition.id)) this.mitigationDefinitions.set(definition.id, definition);
+      item.key === definition.key && item.revision === definition.revision);
+    if (existing) {
+      if (!equivalentMitigationDefinitions(existing, definition)) throw new Error("Mitigation definition revision already has different immutable content");
+      return structuredClone(existing);
+    }
+    this.mitigationDefinitions.set(definition.id, definition);
+    return structuredClone(definition);
   }
   async loadMitigationDefinition(scope: KnowledgeScope, id: string): Promise<MitigationDefinition | undefined> {
     validateScope(scope);
@@ -183,8 +188,8 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
     validateScope(scope); validateEvidenceLimit(limit);
     if (!/^[a-f0-9]{64}$/.test(applicationId)) throw new Error("Mitigation application identity is invalid");
     return [...this.mitigationEvents.values()].filter((item) => item.applicationId === applicationId && sameScope(item.target, scope))
-      .sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt) || a.id.localeCompare(b.id))
-      .slice(0, limit).map((item) => structuredClone(item));
+      .sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt) || b.id.localeCompare(a.id))
+      .slice(0, limit).reverse().map((item) => structuredClone(item));
   }
   async saveMitigationEvaluation(input: MitigationEvaluation): Promise<void> {
     const evaluation = structuredClone(input);

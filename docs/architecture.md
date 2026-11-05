@@ -88,8 +88,8 @@ single-writer; use Postgres for coordinated hosted replicas. Postgres retention,
 operator responsibilities. Migration details are in [GitHub App deployment](github-app.md#telemetry-schema-upgrades).
 
 This telemetry foundation does not itself implement project/task/version topology, runtime technology detection, context-conditioned
-duration models beyond the conservative cohorts below, mitigation applications/evaluations, semantic retrieval or cross-organization learning. Those should
-build on relational evidence and typed relationships, not natural-language summaries treated as facts. Latest-attempt
+duration models beyond the conservative cohorts below, mitigation applications/evaluations, semantic retrieval or cross-organization learning.
+The knowledge layers below build on relational evidence and typed relationships, not natural-language summaries treated as facts. Latest-attempt
 deduplication prevents retry sample inflation; it does not prove that different workloads, partial reruns or runner
 environments are comparable, or that an observed improvement was caused by a mitigation.
 
@@ -138,8 +138,8 @@ Inputs are copied at the persistence boundary, and loaded evidence is checked ag
 Combined project/technology filters must match the same project. Reads never silently cross repositories or hosts;
 this scoping is not an authorization layer for exposing arbitrary user-supplied IDs. Any future user-facing retrieval
 must first establish repository access and authorize source reads before returning declaration payloads. These records
-also supply the run-source context below, but do not implement
-mitigation applications/evaluations. No causal recommendation, cross-organization learning, vector index or
+also supply the run-source context below, but project declarations alone do not establish
+mitigation outcomes. No causal recommendation, cross-organization learning, vector index or
 natural-language SQL interface is inferred from this foundation.
 
 ### Run-linked source context
@@ -177,8 +177,25 @@ Mitigation definitions are immutable, content-addressed revisions scoped to thei
 retains explicit rule/file selectors and a digest of the patch; recipe prose, compatibility counters, and undeclared
 technologies are not evidence of success. Applications pin a definition and a target repository topology snapshot,
 with selected projects and a commit or pull-request reference. Append-only lifecycle events record proposed/applied/
-reverted/declined/failed/unknown states. These records are persisted evidence primitives: they do not automatically
-publish recipes, apply changes, open pull requests, or authorize reads from another repository.
+reverted/declined/failed/unknown states. Source timestamps distinguish repeated state occurrences; bounded event reads
+return the most recent events, in chronological order. Stable source identity excludes mutable repository aliases.
+New definitions and events use identity version 2. Version-1 records remain readable under their original hash rules;
+equivalent recipe revisions retain their stored definition ID instead of rewriting existing application references.
+These records do not themselves authorize reads from another repository.
+
+Opt-in recipe application/rollout verifies the recipe against its authenticated, commit-pinned published source before
+recording a definition and target topology. Returned GitHub PR/issue identities and recipe markers are checked before
+recording proposals. Target project attribution remains empty rather than assuming a workflow edit executed every
+project. A pinned PR merge is an applied state, not measured success; a changed PR head or completed adaptation issue
+is unknown. Persisting App run collection refreshes the latest 100 applications using fresh GitHub state (one request
+per distinct change). Invalid configurations, source-inaccessible runs, disabled recipes and nonpersisting previews
+do not refresh that history. Failures are explicit and retryable; GitHub writes and database writes are not one transaction.
+
+The `knowledge` CLI exposes bounded application history, explicit lifecycle refresh and caller-selected evaluation.
+It resolves authenticated repository identity and checks current contents access before opening storage, then exact
+topology revisions before returning applications. Evaluations additionally require fresh reads of every referenced
+Actions attempt and source commit. A known database ID is never authorization, and target inspection does not join
+source-repository recipe payloads into its response. No free-form SQL or cross-organization recommendation query is exposed.
 
 An evaluation links exact control/treatment run-observation IDs to the application, verifies same-repository scope,
 first-attempt eligibility, non-overlapping logical runs, compatible workflow context, application chronology, and

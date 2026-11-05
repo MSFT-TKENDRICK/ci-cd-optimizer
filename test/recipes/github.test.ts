@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_HILL_CLIMB_CONFIG } from "../../src/experiments/config.js";
 import { serializeManifest } from "../../src/experiments/manifest.js";
 import { marker, parseMarker } from "../../src/issues/markers.js";
@@ -7,6 +7,8 @@ import { applyRecipe, publishRecipe, recipeStatus } from "../../src/recipes/gith
 import { fakeClient, sampleManifest } from "../experiments/fixtures.js";
 import { CLEAN, defaultConfig, EXCESSIVE_TIMEOUT, MISSING_TIMEOUT, sampleRecipe, workflowInput } from "./fixtures.js";
 import { server } from "./server.js";
+import { MemoryKnowledgeStore } from "../../src/knowledge/store.js";
+import { serializeRecipe } from "../../src/recipes/recipe.js";
 
 const target = { owner: "acme", repo: "web" };
 
@@ -32,9 +34,51 @@ const recipeIssueRaw = (overrides: Record<string, unknown> = {}, revision = "1")
 describe("applyRecipe", () => {
   it("plans without writing in dry-run mode", async () => {
     const client = server({ files: workflow(MISSING_TIMEOUT) });
-    const result = await applyRecipe(client, target, sampleRecipe(), { dryRun: true });
+    const knowledgeStore = vi.fn(async () => { throw new Error("Dry runs must not open storage"); });
+    const result = await applyRecipe(client, target, sampleRecipe(), { dryRun: true, knowledgeStore });
     expect(result).toMatchObject({ repo: "acme/web", attempted: false, plan: { status: "autofix" } });
     expect(routes(client).some((route) => !route.startsWith("GET"))).toBe(false);
+    expect(knowledgeStore).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("records a verified apply result and recovers after persistence failure (%s)", async (failPersistence) => {
+    const store = new MemoryKnowledgeStore();
+    const backing = server({ files: workflow(MISSING_TIMEOUT) });
+    const recipe = sampleRecipe();
+    const headSha = "b".repeat(40);
+    let body = "";
+    const client = fakeClient(async (route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}") return {
+        id: parameters.repo === "platform" ? 43 : 42, node_id: "repository-node", default_branch: "main",
+        owner: { login: "acme" }, name: parameters.repo, html_url: `https://github.com/acme/${parameters.repo}`,
+      };
+      if (route === "GET /repos/{owner}/{repo}/commits/{ref}") return { sha: "a".repeat(40), commit: { tree: { sha: "root" } } };
+      if (route === "GET /repos/{owner}/{repo}/contents/{path}" && parameters.path === "recipes/job-timeouts.yml") {
+        return { content: Buffer.from(serializeRecipe(recipe)).toString("base64"), encoding: "base64" };
+      }
+      if (route === "POST /repos/{owner}/{repo}/pulls") body = String(parameters.body);
+      if (body && route === "GET /repos/{owner}/{repo}/issues") return [{
+        number: 42, state: "open", title: recipe.title, body,
+        labels: [{ name: "cicd-optimizer" }, { name: "recipe:job-timeouts" }], pull_request: { merged_at: null },
+      }];
+      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return {
+        number: 42, state: "open", merged: false, body,
+        created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z",
+        head: { sha: headSha, repo: { id: 42 } }, base: { repo: { id: 42 } },
+      };
+      if (route === "POST /repos/{owner}/{repo}/git/commits") return { sha: headSha };
+      return (await backing.request(route, parameters)).data;
+    });
+    if (failPersistence) {
+      vi.spyOn(store, "saveMitigationApplication").mockRejectedValueOnce(new Error("storage unavailable"));
+      await expect(applyRecipe(client, target, recipe, { knowledgeStore: async () => store })).rejects.toThrow("storage unavailable");
+    }
+    const result = await applyRecipe(client, target, recipe, { knowledgeStore: async () => store });
+    expect(result).toMatchObject({ attempted: true, pullRequest: 42 });
+    expect(result.knowledge?.applicationIds).toHaveLength(1);
+    const application = await store.loadMitigationApplication({ host: "https://github.com", repositoryId: "42" }, result.knowledge!.applicationIds[0]!);
+    expect(application?.change).toEqual({ kind: "pull-request", number: 42, headSha });
+    expect(client.calls.filter(({ route }) => route === "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
   });
 
   it("opens a labeled pull request rebuilt from the target's own files", async () => {

@@ -8,6 +8,7 @@ import { applyRecipe, publishRecipe, recipeStatus, type RecipeApplyResult } from
 import { parseRecipe, recipePath, RECIPES_DIR, serializeRecipe, type Recipe } from "../recipes/recipe.js";
 import { DEFAULT_ROLLOUT, parseRolloutTargets, planRollout, type RolloutConfig, type RolloutPlan, type TargetStatus } from "../recipes/rollout.js";
 import { copilotClient, githubClient, repoFrom, resolvePath, UsageError, writeText, type CliIO } from "./io.js";
+import { usingKnowledgeStore } from "./knowledge-store.js";
 
 export const RECIPES_HELP = `Usage: ci-cd-optimizer recipes <command> [options]
 
@@ -28,6 +29,7 @@ Options:
       --canary <a,b>          Repositories to roll out to first
       --format text|json      Output format (default: text)
       --dry-run               Plan without opening or updating pull requests and issues
+      --record-knowledge      apply/rollout: record authenticated published-recipe proposals in DATABASE_URL
 
 publish:  --experiment <name> [--manifest <file>] [--ref <branch>] [--output-dir ${RECIPES_DIR}] [--config <file>]
 apply:    --recipe <file> --target <owner/name> [--dry-run]
@@ -167,6 +169,7 @@ async function publishCommand(args: string[], io: CliIO): Promise<number> {
 }
 
 function describeApply(result: RecipeApplyResult): string {
+  if (result.error) return `${result.repo}: failed - ${result.error}`;
   const links = [
     result.pullRequest !== undefined ? `PR #${result.pullRequest}` : "",
     result.issue !== undefined ? `issue #${result.issue}${result.copilot ? ` (assigned to ${result.copilot})` : ""}` : "",
@@ -178,7 +181,7 @@ function describeApply(result: RecipeApplyResult): string {
 function applySummary(result: RecipeApplyResult) {
   return {
     repo: result.repo,
-    status: result.plan.status,
+    status: result.error ? "failed" : result.plan.status,
     reason: result.plan.reason,
     attempted: result.attempted,
     rules: result.plan.rules,
@@ -187,21 +190,26 @@ function applySummary(result: RecipeApplyResult) {
     ...(result.issue !== undefined ? { issue: result.issue } : {}),
     ...(result.copilot ? { copilot: result.copilot } : {}),
     ...(result.configProblems ? { configProblems: result.configProblems } : {}),
+    ...(result.knowledge ? { knowledge: result.knowledge } : {}),
+    ...(result.error ? { error: result.error } : {}),
   };
 }
 
 async function applyCommand(args: string[], io: CliIO): Promise<number> {
-  const { values } = parseArgs({ args, strict: true, options: { ...COMMON, recipe: { type: "string" }, target: { type: "string" } } });
+  const { values } = parseArgs({ args, strict: true, options: {
+    ...COMMON, recipe: { type: "string" }, target: { type: "string" }, "record-knowledge": { type: "boolean", default: false },
+  } });
   const outputFormat = format(values.format);
   const recipe = await loadRecipe(io, values.recipe);
   if (!values.target) throw new UsageError("--target <owner/name> is required.");
   const target = repoFrom(values.target, io);
   const copilot = copilotClient(io);
-  const result = await applyRecipe(githubClient(io), target, recipe, {
+  const result = await usingKnowledgeStore(io, values["record-knowledge"] && !values["dry-run"], (knowledgeStore) => applyRecipe(githubClient(io), target, recipe, {
     dryRun: values["dry-run"],
     ...(copilot ? { copilotClient: copilot } : {}),
     ...(io.env.GITHUB_SERVER_URL ? { server: io.env.GITHUB_SERVER_URL } : {}),
-  });
+    ...(knowledgeStore ? { knowledgeStore } : {}),
+  }));
   io.stdout(outputFormat === "json" ? JSON.stringify(applySummary(result), null, 2) : describeApply(result));
   return result.configProblems ? 1 : 0;
 }
@@ -268,6 +276,7 @@ async function rolloutCommand(args: string[], io: CliIO): Promise<number> {
       write: { type: "boolean", default: false },
       summary: { type: "string" },
       "max-scan": { type: "string", default: "50" },
+      "record-knowledge": { type: "boolean", default: false },
     },
   });
   const outputFormat = format(values.format);
@@ -281,7 +290,8 @@ async function rolloutCommand(args: string[], io: CliIO): Promise<number> {
   const plan = planRollout({ id: recipe.id, targets: statuses, config: targets.config, canaries: targets.canaries });
 
   const applied: RecipeApplyResult[] = [];
-  if (plan.action === "advance") {
+  await usingKnowledgeStore(io, values["record-knowledge"] && !values["dry-run"], async (knowledgeStore) => {
+    if (plan.action !== "advance") return;
     const copilot = copilotClient(io);
     let opened = 0;
     let scanned = 0;
@@ -295,6 +305,7 @@ async function rolloutCommand(args: string[], io: CliIO): Promise<number> {
           compatibility: { passed: plan.counts.passed, failed: plan.counts.failed },
           ...(copilot ? { copilotClient: copilot } : {}),
           server,
+          ...(knowledgeStore ? { knowledgeStore } : {}),
         });
         applied.push(result);
         const opens = values["dry-run"] ? ["autofix", "partial", "adapt"].includes(result.plan.status) : result.attempted;
@@ -303,11 +314,12 @@ async function rolloutCommand(args: string[], io: CliIO): Promise<number> {
         applied.push({
           repo: name,
           attempted: false,
+          error: (error as Error).message,
           plan: { status: "ignored", reason: `Failed: ${(error as Error).message}`, rules: [], remaining: [], matchedFiles: [] },
         });
       }
     }
-  }
+  });
   if (values.write && !values["dry-run"]) await storeCompatibility(io, values.recipe as string, recipe, plan);
   const markdown = renderStatus(recipe, statuses, plan, applied);
   if (values.summary) await writeText(io, values.summary, markdown);
@@ -316,7 +328,7 @@ async function rolloutCommand(args: string[], io: CliIO): Promise<number> {
       ? JSON.stringify({ recipe: recipe.id, revision: recipe.revision, plan, statuses, applied: applied.map(applySummary) }, null, 2)
       : markdown,
   );
-  return 0;
+  return applied.some((result) => result.error) ? 1 : 0;
 }
 
 const COMMANDS: Record<string, (args: string[], io: CliIO) => Promise<number>> = {

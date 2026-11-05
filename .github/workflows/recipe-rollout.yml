@@ -58,6 +58,7 @@ jobs:
           COPILOT_ASSIGN_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
           ONLY: ${{ inputs.recipe }}
           DRY_RUN: ${{ inputs.dry-run }}
+          DATABASE_URL: ${{ secrets.CICD_OPTIMIZER_DATABASE_URL }}
         run: |
           if [ ! -f .github/recipe-targets.yml ]; then
             echo "No .github/recipe-targets.yml; nothing to roll out." | tee -a "$GITHUB_STEP_SUMMARY"
@@ -70,6 +71,7 @@ jobs:
           shopt -s nullglob
           flags=(--targets .github/recipe-targets.yml --summary "$RUNNER_TEMP/rollout.md")
           if [ "$DRY_RUN" = "true" ]; then flags+=(--dry-run); else flags+=(--write); fi
+          if [ -n "$DATABASE_URL" ]; then flags+=(--record-knowledge); fi
           status=0
           for recipe in recipes/*.yml; do
             if [ -n "$ONLY" ] && [ "$recipe" != "recipes/$ONLY.yml" ]; then continue; fi

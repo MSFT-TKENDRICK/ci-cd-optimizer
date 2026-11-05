@@ -141,7 +141,7 @@ export type MitigationRisk = "low" | "medium" | "high";
 
 /** A source-controlled recipe revision. Natural-language applicability is not treated as verified technology evidence. */
 export interface MitigationDefinition {
-  version: 1;
+  version: 1 | 2;
   id: string;
   source: RepositoryIdentity;
   key: string;
@@ -161,6 +161,7 @@ export interface MitigationDefinition {
 
 export type MitigationChange =
   | { kind: "commit"; sha: string }
+  | { kind: "issue"; number: number }
   | { kind: "pull-request"; number: number; headSha?: string };
 
 /** Immutable association of one recipe revision with a target repository change and source topology. */
@@ -179,7 +180,7 @@ export type MitigationApplicationState = "proposed" | "applied" | "reverted" | "
 
 /** State is appended as an observation; later events never rewrite earlier outcomes. */
 export interface MitigationApplicationEvent {
-  version: 1;
+  version: 1 | 2;
   id: string;
   target: KnowledgeScope;
   applicationId: string;
@@ -221,7 +222,8 @@ export interface KnowledgeStore {
   listRunObservations(query: RunObservationQuery): Promise<RunObservationSummary[]>;
   /** A single consistent read includes all attempts/corrections of each selected logical run, or marks it incomplete. */
   readRunWindow(query: RunEvidenceWindowQuery): Promise<RunEvidenceWindow>;
-  saveMitigationDefinition(definition: MitigationDefinition): Promise<void>;
+  /** Returns the canonical stored revision, retaining legacy IDs when the content is equivalent. */
+  saveMitigationDefinition(definition: MitigationDefinition): Promise<MitigationDefinition>;
   loadMitigationDefinition(scope: KnowledgeScope, id: string): Promise<MitigationDefinition | undefined>;
   listMitigationDefinitions(scope: KnowledgeScope, limit: number): Promise<MitigationDefinition[]>;
   saveMitigationApplication(application: MitigationApplication): Promise<void>;

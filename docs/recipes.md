@@ -92,6 +92,50 @@ scores about 44%, and 30 of 30 scores about 89%. `recipes status --write` and `r
 in the recipe file. The rollout workflow commits them as a pull request, so the score that target pull requests display
 is versioned and reviewed.
 
+## Evidence-backed application history
+
+`recipes apply` and `recipes rollout` accept `--record-knowledge` to save proposals in the App's Postgres evidence
+database (`DATABASE_URL`). This is opt-in; ordinary CLI commands do not silently connect to a database. Dry runs never
+initialize, read, or write this store, even with the flag. The hosted rollout workflow enables the flag only when
+`secrets.CICD_OPTIMIZER_DATABASE_URL` is configured. The database must be reachable over an appropriately protected
+connection from the runner; this does not provision infrastructure or grant network access.
+
+Recording first reads `recipes/<id>.yml` from an authenticated immutable source revision and requires it to match
+the local recipe definition. Install the App on the **source catalog repository as well as the targets**, with
+Contents read. A local file cannot populate a private source catalog simply by naming that repository. Persisted
+definitions exclude compatibility counts and historical prose-based success claims. Definition-affecting changes
+(including title, summary, risk and provenance) now bump the recipe revision and reset compatibility.
+
+Target topology is pinned to the snapshot used for planning. Proposed PRs pin their actual head commit; adaptation
+issues are tracked separately. Project attribution remains empty until execution evidence establishes it. GitHub
+merge state can mark the pinned proposal applied, but never successful. Issue completion or a subsequently changed
+PR head remains unknown. With `DATABASE_URL`, the App refreshes recorded lifecycle state on completed runs when
+recipes are enabled and source access is available. The latest 100 applications are considered; this is bounded
+coverage, not a complete historical scan.
+
+The authorized CLI makes that history usable without a raw database query:
+
+```sh
+ci-cd-optimizer knowledge applications --repo acme/web --limit 20
+ci-cd-optimizer knowledge inspect --repo acme/web --application <application-id>
+ci-cd-optimizer knowledge runs --repo acme/web --limit 20
+ci-cd-optimizer knowledge refresh --repo acme/web --application <application-id>
+ci-cd-optimizer knowledge evaluate --repo acme/web --application <application-id> \
+  --control <observation-id-1>,<observation-id-2> --treatment <observation-id-3>,<observation-id-4>
+```
+
+Commands output JSON. IDs are immutable database evidence IDs, not Actions run numbers. All commands recheck
+current GitHub access; reading/evaluating measured outcomes also requires Actions read for the exact attempts and
+Contents read for their exact source revisions. `refresh` and `evaluate` write only to the database. Evaluations
+reject retries, conflicting corrections, overlapping logical runs, incomparable contexts and runs that do not bracket
+the recorded application. Small samples remain inconclusive. The two-sided test is exploratory: caller-selected
+windows, temporal dependence, repeated testing and unobserved changes prevent interpreting it as causal proof or a
+prediction for another project. A statistically detected duration change does not replace functional CI compatibility.
+
+If GitHub accepts a change but persistence fails, the command fails visibly. Retry it to recover the existing
+PR/issue and append the missing evidence; it does not claim atomicity across GitHub and Postgres. Rollout exits
+nonzero when any target fails. Do not configure this database secret in untrusted experiment-arm execution.
+
 ## Rollout
 
 [recipe-rollout.yml](../.github/workflows/recipe-rollout.yml) runs weekly, or on dispatch with an optional recipe id and
@@ -133,3 +177,4 @@ node dist-action/index.js recipes apply   --recipe recipes/npm-cache-restore-key
 | `vars.CICD_OPTIMIZER_APP_ID`, `secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY` | recipe-rollout | Mints an installation token for target repositories. The [App](github-app.md) must be installed on them. The rollout is skipped when the variable isn't set. |
 | `secrets.CICD_OPTIMIZER_TOKEN` (optional) | recipe-publish, recipe-rollout | Opens the publish and score pull requests so that required checks run. Pull requests opened with `GITHUB_TOKEN` don't trigger CI. |
 | `secrets.COPILOT_ASSIGN_TOKEN` (optional) | recipe-rollout | A user token that can assign adaptation issues to the Copilot coding agent. Without it, issues get the `copilot:ready` label (see [assign-copilot.yml](../examples/workflows/assign-copilot.yml)). |
+| `secrets.CICD_OPTIMIZER_DATABASE_URL` (optional) | recipe-rollout | Records authenticated recipe definitions and pinned target proposals in the App's evidence database. Requires protected runner-to-database connectivity; dry runs never use it. |

@@ -1,6 +1,7 @@
 import postgres, { type Sql } from "postgres";
 import { validateScope } from "./identity.js";
 import {
+  equivalentMitigationDefinitions,
   validateMitigationApplication, validateMitigationApplicationEvent, validateMitigationDefinition,
   validateMitigationEvaluation, verifyMitigationEvaluation,
 } from "./mitigation.js";
@@ -92,13 +93,22 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
       await sql`CREATE INDEX IF NOT EXISTS knowledge_run_workflow ON knowledge_run_observations (host, repository_id, workflow_id, (observation->'run'->>'branch'), run_id)`;
       await sql`
         CREATE TABLE IF NOT EXISTS mitigation_definitions (
-          id TEXT PRIMARY KEY, version INTEGER NOT NULL CHECK (version = 1),
+          id TEXT PRIMARY KEY, version INTEGER NOT NULL CONSTRAINT mitigation_definitions_version_supported CHECK (version IN (1, 2)),
           host TEXT NOT NULL, repository_id TEXT NOT NULL, owner TEXT NOT NULL, repo TEXT NOT NULL,
           definition_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK (revision > 0),
           content_digest TEXT NOT NULL, definition JSONB NOT NULL,
           UNIQUE (host, repository_id, definition_key, revision),
           UNIQUE (id, host, repository_id)
         )
+      `;
+      await sql`
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'mitigation_definitions'::regclass
+            AND conname = 'mitigation_definitions_version_check') THEN
+            ALTER TABLE mitigation_definitions DROP CONSTRAINT mitigation_definitions_version_check;
+            ALTER TABLE mitigation_definitions ADD CONSTRAINT mitigation_definitions_version_supported CHECK (version IN (1, 2));
+          END IF;
+        END $$
       `;
       await sql`CREATE INDEX IF NOT EXISTS mitigation_definition_scope ON mitigation_definitions (host, repository_id, definition_key, revision DESC)`;
       await sql`
@@ -336,18 +346,25 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
     });
     return runWindowFromRows(query, rows.map((row) => ({ ...row, runId: Number(row.run_id) })));
   }
-  async saveMitigationDefinition(input: MitigationDefinition): Promise<void> {
+  async saveMitigationDefinition(input: MitigationDefinition): Promise<MitigationDefinition> {
     const definition = structuredClone(input);
     validateMitigationDefinition(definition);
-    await this.sql.begin(async (sql) => {
-      const [existing] = await sql<{ id: string }[]>`
-        SELECT id FROM mitigation_definitions
+    return this.sql.begin(async (sql) => {
+      await sql`SET LOCAL lock_timeout = '10s'`;
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${JSON.stringify([
+        "mitigation-definition", definition.source.host, definition.source.repositoryId, definition.key, definition.revision,
+      ])}))`;
+      const [existing] = await sql<{ id: string; definition: MitigationDefinition }[]>`
+        SELECT id, definition FROM mitigation_definitions
         WHERE host = ${definition.source.host} AND repository_id = ${definition.source.repositoryId}
           AND definition_key = ${definition.key} AND revision = ${definition.revision}
       `;
       if (existing) {
-        if (existing.id !== definition.id) throw new Error("Mitigation definition revision already has different immutable content");
-        return;
+        validateMitigationDefinition(existing.definition);
+        if (existing.id !== existing.definition.id || !equivalentMitigationDefinitions(existing.definition, definition)) {
+          throw new Error("Mitigation definition revision already has different immutable content");
+        }
+        return existing.definition;
       }
       await sql`
         INSERT INTO mitigation_definitions (id, version, host, repository_id, owner, repo, definition_key, revision, content_digest, definition)
@@ -356,6 +373,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
           ${sql.json(JSON.parse(JSON.stringify(definition)) as postgres.JSONValue)})
         ON CONFLICT (id) DO NOTHING
       `;
+      return definition;
     });
   }
   async loadMitigationDefinition(scope: KnowledgeScope, id: string): Promise<MitigationDefinition | undefined> {
@@ -478,15 +496,15 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
     const rows = await this.sql<{ event: MitigationApplicationEvent }[]>`
       SELECT event FROM mitigation_application_events
       WHERE host = ${scope.host} AND repository_id = ${scope.repositoryId} AND application_id = ${applicationId}
-      ORDER BY observed_at, id LIMIT ${limit}
+      ORDER BY observed_at DESC, id DESC LIMIT ${limit}
     `;
     for (const { event } of rows) {
       validateMitigationApplicationEvent(event);
-      if (event.target.host !== scope.host || event.target.repositoryId !== scope.repositoryId) {
+      if (event.target.host !== scope.host || event.target.repositoryId !== scope.repositoryId || event.applicationId !== applicationId) {
         throw new Error("Stored mitigation event does not match its indexed scope");
       }
     }
-    return rows.map(({ event }) => structuredClone(event));
+    return rows.reverse().map(({ event }) => structuredClone(event));
   }
   async saveMitigationEvaluation(input: MitigationEvaluation): Promise<void> {
     const evaluation = structuredClone(input);
@@ -550,7 +568,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
     `;
     for (const { evaluation } of rows) {
       validateMitigationEvaluation(evaluation);
-      if (evaluation.target.host !== scope.host || evaluation.target.repositoryId !== scope.repositoryId) {
+      if (evaluation.target.host !== scope.host || evaluation.target.repositoryId !== scope.repositoryId || evaluation.applicationId !== applicationId) {
         throw new Error("Stored mitigation evaluation does not match its indexed scope");
       }
     }

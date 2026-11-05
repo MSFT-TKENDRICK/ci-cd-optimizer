@@ -102,8 +102,12 @@ export interface BuildRecipeOptions {
 
 export type BuildRecipeResult = { recipe: Recipe; changed: boolean } | { error: string; skipped?: boolean };
 
-const contentSignature = (recipe: Pick<Recipe, "rules" | "files" | "patch" | "instructions">) =>
-  signatureOf([recipe.rules.join(","), recipe.files.join(","), recipe.patch ?? "", recipe.instructions]);
+const contentSignature = (recipe: Recipe) => signatureOf([
+  recipe.title, recipe.summary, recipe.risk, recipe.description ?? "",
+  JSON.stringify(recipe.rules), JSON.stringify(recipe.files), JSON.stringify(recipe.patchFiles),
+  recipe.patch ?? "", recipe.instructions, recipe.source.repository, recipe.source.experiment, recipe.source.arm,
+  String(recipe.source.pullRequest ?? ""),
+]);
 
 /** Builds (or re-builds, bumping the revision when content changed) the recipe for a promoted pipeline experiment. */
 export function buildRecipe(options: BuildRecipeOptions): BuildRecipeResult {

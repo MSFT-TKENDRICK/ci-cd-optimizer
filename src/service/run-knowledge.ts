@@ -5,15 +5,17 @@ import { inventoryPolicyDigest, validateRevision } from "../knowledge/identity.j
 import { loadKnowledgeIdentity } from "../knowledge/repository.js";
 import { createRunObservation } from "../knowledge/run-observation.js";
 import { analyzeDurations, describeDurations, type DurationAnalysis, type DurationReport } from "../knowledge/durations.js";
-import type { KnowledgeSnapshot, KnowledgeStore, RunObservation } from "../knowledge/types.js";
+import type { KnowledgeSnapshot, KnowledgeStore, MitigationApplicationEvent, RunObservation } from "../knowledge/types.js";
 import type { LintConfig } from "../lint/config.js";
 import type { WorkflowSnapshot } from "../telemetry/types.js";
+import { refreshMitigationApplications } from "./recipe-knowledge.js";
 
 export interface RunKnowledge {
   observation: RunObservation;
   project?: KnowledgeSnapshot;
   persistence: "saved" | "preview";
   durations?: DurationReport;
+  mitigations?: { coverage: "latest-100-applications"; events: MitigationApplicationEvent[] };
 }
 
 export interface CollectedRunKnowledge extends RunKnowledge {
@@ -70,12 +72,22 @@ export async function collectRunKnowledge(
     project ? { status: "linked", snapshotId: project.id } : { status: "unavailable", reason: "revision-unavailable" }, options.now,
   );
   if (options.store) await options.store.saveRunObservation(observation, project);
+  let mitigations: RunKnowledge["mitigations"];
+  if (options.store && project && config.recipes.enabled) {
+    const applications = (await options.store.listMitigationApplications(repository, 100))
+      .filter((application) => application.change.kind !== "commit");
+    mitigations = {
+      coverage: "latest-100-applications",
+      events: await refreshMitigationApplications(client, repo, options.store, applications),
+    };
+  }
   const window = options.store ? await options.store.readRunWindow({
     ...repository, workflowId: run.workflowId, branch: run.branch, referenceRunId: run.runId, limit: 100,
   }) : { complete: false, groups: [{ runId: run.runId, complete: true, observations: [observation] }] };
   const { report: durations, ...comparison } = analyzeDurations(observation, window, config.durations);
   return {
     observation, ...(project ? { project } : {}), persistence: options.store ? "saved" : "preview", durations,
+    ...(mitigations ? { mitigations } : {}),
     ...(options.store ? { comparison } : {}),
   };
 }
@@ -89,5 +101,11 @@ export function describeRunKnowledge(knowledge: RunKnowledge): string {
     ? " Collection is complete within the supported, configured inventory; configured ignores still apply."
     : " Collection is partial or uncertain; missing declarations do not establish absence.";
   return `\n\n### Project declaration context\n\n${context}${coverage} This does not identify executed projects, installed tool versions, cache use, or a causal optimization benefit.\n\nKnowledge evidence: ${knowledge.persistence === "saved" ? "persisted" : "preview only (no knowledge database writes; durable duration history was not queried)"}.` +
-    (knowledge.durations ? describeDurations(knowledge.durations) : "");
+    (knowledge.durations ? describeDurations(knowledge.durations) : "") +
+    (knowledge.mitigations?.events.length
+      ? `\n\n### Recorded mitigation lifecycle\n\nRefreshed ${knowledge.mitigations.events.length} pinned PR/issue applications from the latest 100 records. ` +
+        `${knowledge.mitigations.events.filter((event) => event.state === "applied").length} report merged proposals; ` +
+        `${knowledge.mitigations.events.filter((event) => event.state === "unknown").length} remain unknown. ` +
+        "Merges and closed issues are not evidence of performance benefit. Use authorized knowledge inspection and explicit run comparisons for outcome evidence."
+      : "");
 }

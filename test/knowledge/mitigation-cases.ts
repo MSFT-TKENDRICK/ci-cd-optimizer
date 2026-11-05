@@ -4,8 +4,9 @@ import {
   createMitigationEvaluation, mitigationDefinitionFromRecipe,
 } from "../../src/knowledge/mitigation.js";
 import { createRunObservation } from "../../src/knowledge/run-observation.js";
+import { identity } from "../../src/knowledge/identity.js";
 import type { Recipe } from "../../src/recipes/recipe.js";
-import type { KnowledgeStore, RunObservation } from "../../src/knowledge/types.js";
+import type { KnowledgeStore, MitigationDefinition, RunObservation } from "../../src/knowledge/types.js";
 import { snapshot as workflow } from "../alerts/fixtures.js";
 import { now, repository, revision, snapshot } from "./fixtures.js";
 
@@ -44,7 +45,35 @@ function measuredObservations(): { control: RunObservation[]; treatment: RunObse
 
 const normalizedSamples = async () => measuredObservations();
 
+export function legacyDefinition(): MitigationDefinition {
+  const { source, key, revision, title, summary, instructions, risk, rules, files, technologies, contraindications, provenance, patchDigest } = definition();
+  const content = { version: 1 as const, source, key, revision, title, summary, instructions, risk, rules, files, technologies, contraindications, provenance, patchDigest };
+  const contentDigest = identity(["mitigation-content-v1", content]);
+  return { ...content, contentDigest, id: identity(["mitigation-definition-v1", source.host, source.repositoryId, key, revision, contentDigest]) };
+}
+
 export function mitigationCases(getStore: () => KnowledgeStore): void {
+  it("preserves version-one definition and event identities while accepting new evidence", async () => {
+    const store = getStore();
+    const old = legacyDefinition();
+    expect(await store.saveMitigationDefinition(old)).toEqual(old);
+    const current = createMitigationDefinition({ ...old, source: { ...repository, repo: "renamed" } });
+    expect(current.version).toBe(2);
+    expect(current.id).not.toBe(old.id);
+    expect(await store.saveMitigationDefinition(current)).toEqual(old);
+    const topology = snapshot();
+    await store.save(topology);
+    const applied = application(topology, old.id);
+    await store.saveMitigationApplication(applied);
+    const oldEvent = { version: 1 as const, target: repository, applicationId: applied.id, state: "applied" as const, observedAt: appliedTime };
+    const legacyEvent = { ...oldEvent, id: identity(["mitigation-application-event-v1", 1, repository, applied.id, "applied", null, null]) };
+    await store.appendMitigationApplicationEvent(legacyEvent);
+    const newEvent = createMitigationApplicationEvent({ ...oldEvent, observedAt: "2026-11-02T00:00:00Z" });
+    await store.appendMitigationApplicationEvent(newEvent);
+    expect(await store.listMitigationApplicationEvents(repository, applied.id, 10)).toEqual([legacyEvent, newEvent]);
+    expect(await store.loadMitigationDefinition(repository, old.id)).toEqual(old);
+  });
+
   it("imports a pinned recipe revision without treating compatibility counts or prose as measured facts", () => {
     const recipe: Recipe = {
       schemaVersion: 1, id: "shared-cache", revision: 3, title: "Use a shared cache", summary: "Share dependency artifacts.",
@@ -66,6 +95,9 @@ export function mitigationCases(getStore: () => KnowledgeStore): void {
     const first = definition();
     await store.saveMitigationDefinition(first);
     await store.saveMitigationDefinition({ ...first, provenance: { ...first.provenance } });
+    const renamed = createMitigationDefinition({ ...first, source: { ...repository, owner: "new-owner", repo: "renamed" } });
+    expect(renamed.id).toBe(first.id);
+    await store.saveMitigationDefinition(renamed);
     expect(await store.loadMitigationDefinition(repository, first.id)).toEqual(first);
     expect((await store.listMitigationDefinitions(repository, 10)).map((item) => item.id)).toEqual([first.id]);
     expect(await store.loadMitigationDefinition({ ...repository, repositoryId: "43" }, first.id)).toBeUndefined();
@@ -75,6 +107,24 @@ export function mitigationCases(getStore: () => KnowledgeStore): void {
     const next = definition({ revision: 2 });
     await store.saveMitigationDefinition(next);
     expect(await store.listMitigationDefinitions(repository, 10)).toHaveLength(2);
+  });
+
+  it("retains repeated state occurrences and returns the latest bounded event history", async () => {
+    const store = getStore();
+    const topology = snapshot();
+    const recipe = definition();
+    await store.save(topology);
+    await store.saveMitigationDefinition(recipe);
+    const applied = application(topology, recipe.id);
+    await store.saveMitigationApplication(applied);
+    const events = ["proposed", "declined", "proposed"].map((state, index) => createMitigationApplicationEvent({
+      target: repository, applicationId: applied.id, state: state as "proposed" | "declined",
+      observedAt: `2026-11-0${index + 1}T00:00:00.000Z`,
+    }));
+    for (const event of events) await store.appendMitigationApplicationEvent(event);
+    expect(new Set(events.map(({ id }) => id)).size).toBe(3);
+    expect(await store.listMitigationApplicationEvents(repository, applied.id, 2)).toEqual(events.slice(1));
+    expect(await store.listMitigationApplicationEvents(repository, applied.id, 0)).toEqual([]);
   });
 
   it("binds applications to a known recipe revision and target topology", async () => {
@@ -118,6 +168,9 @@ export function mitigationCases(getStore: () => KnowledgeStore): void {
     await store.saveMitigationEvaluation(evaluation);
     expect(await store.listMitigationApplicationEvents(repository, applied.id, 10)).toEqual([proposed, active]);
     expect(await store.listMitigationEvaluations(repository, applied.id, 10)).toEqual([evaluation]);
+    const legacyEvaluation = createMitigationEvaluation({ ...evaluation, limitations: ["Observational comparison; does not establish causality."] });
+    await store.saveMitigationEvaluation(legacyEvaluation);
+    expect(await store.listMitigationEvaluations(repository, applied.id, 10)).toHaveLength(2);
     expect(await store.listMitigationEvaluations({ ...repository, repositoryId: "43" }, applied.id, 10)).toEqual([]);
     await expect(store.listMitigationEvaluations(repository, applied.id, 101)).rejects.toThrow("limit");
     const incorrect = createMitigationEvaluation({

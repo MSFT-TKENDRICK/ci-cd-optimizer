@@ -8,7 +8,7 @@ import { snapshot as workflow } from "../alerts/fixtures.js";
 import { isolatedDatabase } from "../webhooks/database.js";
 import { input, now, repository, revision, snapshot } from "./fixtures.js";
 import { runWindowCases } from "./run-window-cases.js";
-import { mitigationCases } from "./mitigation-cases.js";
+import { legacyDefinition, mitigationCases } from "./mitigation-cases.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
@@ -22,6 +22,20 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
   afterEach(async () => { await store?.close(); await database?.close(); });
   runWindowCases(() => store);
   mitigationCases(() => store);
+
+  it("upgrades the legacy definition constraint without rewriting evidence identities", async () => {
+    await database.sql`ALTER TABLE mitigation_definitions DROP CONSTRAINT mitigation_definitions_version_supported`;
+    await database.sql`ALTER TABLE mitigation_definitions ADD CONSTRAINT mitigation_definitions_version_check CHECK (version = 1)`;
+    const legacy = legacyDefinition();
+    await store.saveMitigationDefinition(legacy);
+    await store.initialize();
+    await store.initialize();
+    expect(await store.loadMitigationDefinition(repository, legacy.id)).toEqual(legacy);
+    expect(await store.saveMitigationDefinition(createMitigationDefinition(legacy))).toEqual(legacy);
+    const next = createMitigationDefinition({ ...legacy, revision: 2 });
+    await Promise.all([store.saveMitigationDefinition(next), store.saveMitigationDefinition(next)]);
+    expect(await store.loadMitigationDefinition(repository, next.id)).toEqual(next);
+  });
 
   it("round-trips normalized evidence including JSONB canonicalization across repeated/concurrent initialization", async () => {
     const other = new PostgresKnowledgeStore(database.url);
