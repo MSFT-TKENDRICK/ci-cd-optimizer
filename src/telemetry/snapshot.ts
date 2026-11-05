@@ -204,7 +204,7 @@ export function matchJobKey(jobName: string, definitions: JobDefinitions): strin
 function matchesNameTemplate(template: string, name: string): boolean {
   if (["\r", "\n", "\u2028", "\u2029"].some((character) => name.includes(character))) return false;
   const parts: string[] = [];
-  let cursor = 0;
+  let cursor: number;
   let literal = 0;
   let closing = -1;
   for (let opening = template.indexOf("${{"); opening !== -1; opening = template.indexOf("${{", cursor)) {
