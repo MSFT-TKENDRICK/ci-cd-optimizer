@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { run } from "../../src/cli/index.js";
 import { createRunObservation } from "../../src/knowledge/run-observation.js";
 import { MemoryKnowledgeStore } from "../../src/knowledge/store.js";
+import { createMitigationApplication } from "../../src/knowledge/mitigation.js";
 import type { RunObservation } from "../../src/knowledge/types.js";
 import { serializeRecipe } from "../../src/recipes/recipe.js";
 import {
   evaluateMitigationKnowledge, inspectMitigationKnowledge, listMitigationKnowledge, listRunKnowledge, refreshMitigationKnowledge,
 } from "../../src/service/mitigation-knowledge.js";
-import { prepareRecipeKnowledge, recordRecipeApplications } from "../../src/service/recipe-knowledge.js";
+import { prepareRecipeKnowledge, recordRecipeApplications, refreshMitigationApplications } from "../../src/service/recipe-knowledge.js";
 import { collectRunKnowledge } from "../../src/service/run-knowledge.js";
 import { marker } from "../../src/issues/markers.js";
 import { snapshot as workflow } from "../alerts/fixtures.js";
@@ -24,7 +25,7 @@ function fixture() {
   const recipe = sampleRecipe();
   const observations = new Map<number, RunObservation>();
   const state = {
-    published: serializeRecipe(recipe), denied: "", targetId: 42, mismatchedRun: false,
+    published: serializeRecipe(recipe), denied: "", deniedStatus: 403, targetId: 42, mismatchedRun: false,
     change: {
       number: 81, state: "open", state_reason: null as string | null, merged: false, merged_at: null as string | null,
       body: marker("recipe", recipe.id, { revision: String(recipe.revision) }) + "\n" +
@@ -34,7 +35,7 @@ function fixture() {
     },
   };
   const client = fakeClient((route, parameters) => {
-    if (state.denied === route || state.denied === parameters.ref) throw httpError(403);
+    if (state.denied === route || state.denied === parameters.ref) throw httpError(state.deniedStatus);
     if (route === "GET /repos/{owner}/{repo}") {
       const current = parameters.repo === "platform" ? source : { ...repository, repositoryId: String(state.targetId) };
       return { id: Number(current.repositoryId), owner: { login: current.owner }, name: current.repo,
@@ -136,6 +137,25 @@ describe("authenticated mitigation operations", () => {
     expect(await refreshMitigationKnowledge(f.client, target, async () => f.store, id)).toMatchObject({ state: "unknown" });
   });
 
+  it("deduplicates change reads and rejects cross-repository bulk refresh without appending events", async () => {
+    const f = fixture();
+    const id = await f.record();
+    const application = (await f.store.loadMitigationApplication(repository, id))!;
+    const topology = (await f.store.load(repository, application.topologySnapshotId))!;
+    const second = createMitigationApplication({ ...application, projectIds: [topology.projects[0]!.id] });
+    await f.store.saveMitigationApplication(second);
+    f.merged();
+    const before = f.client.calls.length;
+    await refreshMitigationApplications(f.client, target, f.store, [application, second]);
+    expect(f.client.calls.slice(before).filter(({ route }) => route.includes("/pulls/"))).toHaveLength(1);
+    f.state.change.head.sha = "e".repeat(40);
+    f.state.change.updated_at = "2026-11-02T00:00:00Z";
+    await expect(refreshMitigationApplications(f.client, target, f.store, [
+      application, { ...second, target: { ...repository, repositoryId: "99" } },
+    ])).rejects.toThrow("target identity changed");
+    expect((await f.store.listMitigationApplicationEvents(repository, id, 1))[0]?.state).toBe("applied");
+  });
+
   it("requires contents authorization before touching storage and exact historical revision access before returning data", async () => {
     const f = fixture();
     const id = await f.record();
@@ -181,6 +201,19 @@ describe("authenticated mitigation operations", () => {
     const preview = await collectRunKnowledge(f.client, target, observed, defaultConfig());
     expect(preview.mitigations).toBeUndefined();
     expect(f.client.calls.slice(before).some(({ route }) => route.includes("/pulls/"))).toBe(false);
+  });
+
+  it.each(["disabled", "unavailable"] as const)("does not refresh proposals with %s source/configuration", async (mode) => {
+    const f = fixture();
+    await f.record();
+    await f.samples();
+    const config = defaultConfig();
+    if (mode === "disabled") config.recipes.enabled = false;
+    else { f.state.denied = head; f.state.deniedStatus = 404; }
+    const list = vi.spyOn(f.store, "listMitigationApplications");
+    const result = await collectRunKnowledge(f.client, target, f.observations.get(11)!.run, config, { store: f.store });
+    expect(result.mitigations).toBeUndefined();
+    expect(list).not.toHaveBeenCalled();
   });
 
   it("exposes authorized CLI output and refuses malformed selection without printing cached data", async () => {

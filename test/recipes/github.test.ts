@@ -64,7 +64,8 @@ describe("applyRecipe", () => {
       if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return {
         number: 42, state: "open", merged: false, body,
         created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z",
-        head: { sha: headSha, repo: { id: 42 } }, base: { repo: { id: 42 } },
+        head: { ref: "cicd-optimizer/recipe-job-timeouts", sha: headSha, repo: { id: 42, full_name: "acme/web" } },
+        base: { ref: "main", repo: { id: 42 } },
       };
       if (route === "POST /repos/{owner}/{repo}/git/commits") return { sha: headSha };
       return (await backing.request(route, parameters)).data;
@@ -168,7 +169,9 @@ describe("applyRecipe", () => {
 
   it("does not touch repositories with invalid configuration", async () => {
     const client = server({ files: workflow(MISSING_TIMEOUT), config: "rules:\n  nope/rule: error\n" });
-    const result = await applyRecipe(client, target, sampleRecipe());
+    const knowledgeStore = vi.fn(async () => { throw new Error("Invalid configuration must not open storage"); });
+    const result = await applyRecipe(client, target, sampleRecipe(), { knowledgeStore });
+    expect(knowledgeStore).not.toHaveBeenCalled();
     expect(result).toMatchObject({ attempted: false, plan: { status: "ignored" } });
     expect(result.configProblems?.[0]).toContain("nope/rule");
     expect(routes(client)).not.toContain("GET /repos/{owner}/{repo}/commits/{ref}");
@@ -176,7 +179,9 @@ describe("applyRecipe", () => {
 
   it("respects a target that opted out of recipes", async () => {
     const client = server({ files: workflow(MISSING_TIMEOUT), config: "recipes:\n  ignore: [job-timeouts]\n" });
-    const result = await applyRecipe(client, target, sampleRecipe());
+    const knowledgeStore = vi.fn(async () => { throw new Error("Ignored recipes must not open storage"); });
+    const result = await applyRecipe(client, target, sampleRecipe(), { knowledgeStore });
+    expect(knowledgeStore).not.toHaveBeenCalled();
     expect(result).toMatchObject({ attempted: false, plan: { status: "ignored" } });
     expect(routes(client)).not.toContain("POST /repos/{owner}/{repo}/pulls");
   });

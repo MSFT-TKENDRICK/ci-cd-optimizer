@@ -7,8 +7,6 @@ export async function usingKnowledgeStore<T>(
 ): Promise<T> {
   let owned: KnowledgeStore | undefined;
   let pending: Promise<KnowledgeStore> | undefined;
-  let operationFailed = false;
-  let operationError: unknown;
   const get = () => {
     pending ??= (async () => {
       if (io.knowledgeStore) return io.knowledgeStore();
@@ -20,20 +18,17 @@ export async function usingKnowledgeStore<T>(
     })();
     return pending;
   };
-  try { return await action(enabled ? get : undefined); }
-  catch (error) {
-    operationFailed = true;
-    operationError = error;
-    throw error;
-  } finally {
+  let result: T;
+  try { result = await action(enabled ? get : undefined); }
+  catch (operationError) {
     try { await owned?.close?.(); }
-    catch (error) {
-      if (operationFailed) {
-        const message = (value: unknown) => value instanceof Error ? value.message : String(value);
-        throw new AggregateError([operationError, error],
-          `${message(operationError)}; database cleanup also failed: ${message(error)}`, { cause: operationError });
-      }
-      throw error;
+    catch (cleanupError) {
+      const message = (value: unknown) => value instanceof Error ? value.message : String(value);
+      throw new AggregateError([operationError, cleanupError],
+        `${message(operationError)}; database cleanup also failed: ${message(cleanupError)}`, { cause: cleanupError });
     }
+    throw operationError;
   }
+  await owned?.close?.();
+  return result;
 }
