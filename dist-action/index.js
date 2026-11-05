@@ -13152,9 +13152,13 @@ async function updateBranch(client, repo, branch, sha, expectedSha) {
   if (!expectedSha) throw new Error(`Missing expected head for ${branch}; refusing an unconditional update.`);
   const repository = await client.request("GET /repos/{owner}/{repo}", { ...repo });
   const metadata = repository.data;
-  if (sha === DELETED_REF && metadata.default_branch === branch) throw new Error("Refusing to delete the repository's default branch.");
-  const id = metadata.node_id;
-  if (!id) throw new Error("GitHub did not return the repository node ID required for an atomic ref update.");
+  const id = metadata?.node_id;
+  if (typeof id !== "string" || !id.trim()) throw new Error("GitHub did not return the repository node ID required for an atomic ref update.");
+  const defaultBranch2 = metadata?.default_branch;
+  if (typeof defaultBranch2 !== "string" || !defaultBranch2.trim()) {
+    throw new Error("GitHub did not return the default branch required for a safe atomic ref update.");
+  }
+  if (defaultBranch2 === branch) throw new Error("Refusing to modify the repository's default branch.");
   const result = await graphql(client, `mutation UpdateOptimizerRef($input: UpdateRefsInput!) {
     updateRefs(input: $input) { clientMutationId }
   }`, {
