@@ -3,7 +3,7 @@ import { readFileAt } from "../github/git.js";
 import type { GitHubClient, RepoRef } from "../github/client.js";
 import { mapLimit } from "../utils.js";
 import type { JobSnapshot, StepSnapshot, WorkflowSnapshot } from "./types.js";
-import { validateRunAttempt } from "./history.js";
+import { byCompletion, validateRunAttempt } from "./history.js";
 
 /** The subset of a `workflow_run` webhook payload / REST object the snapshot needs. */
 export interface WorkflowRunPayload {
@@ -231,7 +231,7 @@ export async function loadRunHistory(client: GitHubClient, repo: RepoRef, option
   const snapshots = await mapLimit(runs, options.concurrency ?? 4, async (run) =>
     buildWorkflowSnapshot(client, repo, run),
   );
-  return snapshots.sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId);
+  return snapshots.sort(byCompletion);
 }
 
 function parseNeeds(value: unknown): string[] {

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { latestAttempts } from "./history.js";
+import { byCompletion, latestAttempts } from "./history.js";
 import type { WorkflowSnapshot } from "./types.js";
 
 /** A comparison policy, not a claim that labels identify hardware or that a change caused an improvement. */
@@ -31,6 +31,6 @@ export function comparableHistory(history: readonly WorkflowSnapshot[], referenc
   const key = comparisonKey(reference);
   if (!key) return [];
   return latestAttempts(history).filter((snapshot) =>
-    snapshot.runId !== reference.runId && comparisonKey(snapshot) === key,
+    snapshot.runId !== reference.runId && byCompletion(snapshot, reference) < 0 && comparisonKey(snapshot) === key,
   );
 }

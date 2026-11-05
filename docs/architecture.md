@@ -116,6 +116,9 @@ configured comparison window requires it), filters comparable evidence, then lim
 can backfill up to the requested history window, subject to the Actions API's 100-run page limit. This is bounded
 retrieval, not a claim that no comparable evidence exists anywhere. Ineligible observations do not synchronize alert
 issues. Missing tracked series never count as recovery.
+Baseline queries exclude completions newer than their reference run. When a later run of the same workflow/branch
+is already observed, an older delivery may produce its historical report but cannot advance the alert lifecycle,
+even if that later run belongs to a different workload context.
 
 Workflow queue time for newly collected retries is `null`, not zero or the elapsed time since the original run was
 created. Known queue measurements alone contribute to the queue median; an entirely unknown median is also `null`.

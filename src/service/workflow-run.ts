@@ -77,13 +77,16 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
   if (history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
     return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot };
   }
-  const prior = comparableHistory(history, snapshot);
+  const prior = comparableHistory(history, snapshot).sort(byCompletion).slice(-historyLimit(config));
   const baseline = computeBaseline(prior, snapshot);
   const report = createTelemetryReport(snapshot, baseline);
   const result: WorkflowRunResult = { status: "processed", snapshot, samples: prior.length, report, ...(baseline ? { baseline } : {}) };
 
   const contextKey = comparisonKey(snapshot);
-  if (contextKey && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run, config.alerts.branches, branch)) {
+  const newerRunObserved = history.some((item) =>
+    item.workflowId === snapshot.workflowId && item.branch === snapshot.branch && item.runId !== snapshot.runId && byCompletion(item, snapshot) > 0,
+  );
+  if (contextKey && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run, config.alerts.branches, branch)) {
     const series = buildSeries([...prior, snapshot]);
     const existing = await listManagedIssues(client, repo, "alert");
     const plan = planAlertSync({
@@ -147,10 +150,7 @@ async function loadHistory(
     if (!options.dryRun) for (const item of fetched) await store.save(item);
     history = merge(history, fetched, query.limit);
   }
-  return [
-    ...comparableHistory(history, snapshot).sort(byCompletion).slice(-limit),
-    ...latestAttempts([...current, snapshot]),
-  ].sort(byCompletion);
+  return merge(history, [...current, snapshot], query.limit + 1);
 }
 
 function merge(left: readonly WorkflowSnapshot[], right: readonly WorkflowSnapshot[], limit: number): WorkflowSnapshot[] {

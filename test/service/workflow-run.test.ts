@@ -61,6 +61,18 @@ describe("alertsApply", () => {
 });
 
 describe("processWorkflowRun", () => {
+  it.each([false, true])("does not advance alerts for an old delivery when a newer run is recorded (different context: %s)", async (differentContext) => {
+    const store = seeded();
+    const newer = { ...snapshot(3000, 1, [["build", 1], ["test", 1]]), completedAt: "2026-11-02T00:00:00Z" };
+    if (differentContext) newer.jobs = newer.jobs.map((job) => ({ ...job, labels: ["self-hosted"] }));
+    await store.save(newer);
+    const client = api();
+    const result = await processWorkflowRun(client, repo, run(), { store });
+    expect(result).toMatchObject({ status: "processed", samples: 12, baseline: { sampleCount: 12 } });
+    expect(result.alerts).toBeUndefined();
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/issues")).toEqual([]);
+  });
+
   it("reports retries without a baseline, backfill or alert mutations", async () => {
     const store = seeded();
     const client = api();

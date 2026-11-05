@@ -58,6 +58,12 @@ describe("workload comparison contract", () => {
     expect(computeBaseline([prior, prior], current)?.sampleCount).toBe(1);
   });
 
+  it("does not use future completions as historical baseline evidence", () => {
+    const future = { ...prior, completedAt: "2027-01-01T00:00:00Z" };
+    expect(comparableHistory([future], current)).toEqual([]);
+    expect(computeBaseline([future], current)).toBeUndefined();
+  });
+
   it("keeps unknown queue measurements distinct from zero", () => {
     expect(computeBaseline([{ ...prior, queueMs: null }], current)?.medianQueueMs).toBeNull();
     expect(computeBaseline([{ ...prior, queueMs: null }, { ...prior, runId: 1002, queueMs: 2000 }], current)?.medianQueueMs).toBe(2000);
