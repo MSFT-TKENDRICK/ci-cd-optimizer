@@ -17224,6 +17224,35 @@ import { appendFile as appendFile2, mkdir as mkdir3 } from "node:fs/promises";
 import { dirname as dirname3 } from "node:path";
 import { parseArgs as parseArgs5 } from "node:util";
 
+// src/telemetry/history.ts
+function validateRunAttempt(attempt) {
+  if (!Number.isSafeInteger(attempt) || attempt < 1) throw new Error("Run attempt must be a positive safe integer");
+}
+function validateHistoryQuery(query) {
+  if (!Number.isSafeInteger(query.limit) || query.limit < 0) throw new Error("History limit must be a nonnegative safe integer");
+  if (query.runId !== void 0 && (!Number.isSafeInteger(query.runId) || query.runId < 1)) throw new Error("History run ID must be a positive safe integer");
+  if (query.attempts !== void 0 && query.attempts !== "latest" && query.attempts !== "all") throw new Error("Unknown history attempt selection");
+}
+var runIdentity = (snapshot) => JSON.stringify([snapshot.owner, snapshot.repo, snapshot.runId]);
+var attemptIdentity = (snapshot) => JSON.stringify([snapshot.owner, snapshot.repo, snapshot.runId, snapshot.runAttempt]);
+var byCompletion = (a, b) => Date.parse(a.completedAt) - Date.parse(b.completedAt) || a.runId - b.runId || a.runAttempt - b.runAttempt;
+function latestAttempts(snapshots) {
+  const runs = /* @__PURE__ */ new Map();
+  for (const snapshot of snapshots) {
+    validateRunAttempt(snapshot.runAttempt);
+    const key = runIdentity(snapshot);
+    const previous = runs.get(key);
+    if (!previous || snapshot.runAttempt >= previous.runAttempt) runs.set(key, snapshot);
+  }
+  return [...runs.values()];
+}
+function selectHistory(snapshots, query) {
+  validateHistoryQuery(query);
+  if (query.limit === 0) return [];
+  const scoped = snapshots.filter((item) => item.owner === query.owner && item.repo === query.repo && (query.runId === void 0 || item.runId === query.runId));
+  return (query.attempts === "all" ? scoped : latestAttempts(scoped)).filter((item) => item.workflowId === query.workflowId && (query.branch === void 0 || item.branch === query.branch)).sort(byCompletion).slice(-query.limit);
+}
+
 // src/alerts/anomaly.ts
 function seriesFingerprint(series) {
   return `duration:${series.workflowId}/${series.jobKey ?? "*"}`;
@@ -17238,7 +17267,7 @@ function slowestPerKey(jobs) {
   return [...byKey.values()];
 }
 function buildSeries(snapshots) {
-  const ordered = [...snapshots].filter((snapshot) => snapshot.conclusion === "success").sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId);
+  const ordered = latestAttempts(snapshots).filter((snapshot) => snapshot.conclusion === "success").sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId);
   const byKey = /* @__PURE__ */ new Map();
   const push = (key, base2, point) => {
     const series = byKey.get(key) ?? { ...base2, points: [] };
@@ -17548,7 +17577,7 @@ ${rendered.body}`,
 
 // src/telemetry/baseline.ts
 function computeBaseline(history, snapshot, limit = 20) {
-  const runs = history.filter(
+  const runs = latestAttempts(history).filter(
     (item) => item.runId !== snapshot.runId && item.owner === snapshot.owner && item.repo === snapshot.repo && item.workflowId === snapshot.workflowId && item.branch === snapshot.branch && item.conclusion === "success"
   ).sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId).slice(-limit);
   if (runs.length === 0) return void 0;
@@ -17796,13 +17825,14 @@ async function loadJobDefinitions(client, repo, path, ref) {
     return /* @__PURE__ */ new Map();
   }
 }
-async function listRunJobs(client, repo, runId, maxPages = 5) {
+async function listRunJobs(client, repo, runId, runAttempt = 1, maxPages = 5) {
+  validateRunAttempt(runAttempt);
   const jobs = [];
   for (let page = 1; page <= maxPages; page += 1) {
-    const response = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs", {
+    const response = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs", {
       ...repo,
       run_id: runId,
-      filter: "latest",
+      attempt_number: runAttempt,
       per_page: 100,
       page
     });
@@ -17814,7 +17844,7 @@ async function listRunJobs(client, repo, runId, maxPages = 5) {
 }
 async function buildWorkflowSnapshot(client, repo, run3, options = {}) {
   const [jobs, definitions] = await Promise.all([
-    listRunJobs(client, repo, run3.id),
+    listRunJobs(client, repo, run3.id, run3.run_attempt ?? 1),
     options.definitions ? Promise.resolve(options.definitions) : loadJobDefinitions(client, repo, run3.path, run3.head_sha)
   ]);
   return snapshotFromRun(repo, run3, jobs, definitions);
@@ -17900,7 +17930,7 @@ async function loadRunHistory(client, repo, options) {
   const snapshots = await mapLimit(
     runs,
     options.concurrency ?? 4,
-    async (run3) => snapshotFromRun(repo, run3, await listRunJobs(client, repo, run3.id, 1), options.definitions)
+    async (run3) => snapshotFromRun(repo, run3, await listRunJobs(client, repo, run3.id, run3.run_attempt ?? 1, 1), options.definitions)
   );
   return snapshots.sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId);
 }
@@ -17976,8 +18006,14 @@ async function processWorkflowRun(client, repo, run3, options = {}) {
   if (!config.enabled) return { status: "disabled" };
   const definitions = await loadJobDefinitions(client, repo, run3.path, run3.head_sha);
   const snapshot = await buildWorkflowSnapshot(client, repo, run3, { definitions });
-  if (snapshot.jobs.length === 0) return { status: "skipped", reason: "The run has no completed jobs.", snapshot };
+  if (snapshot.jobs.length === 0) {
+    if (options.store && !options.dryRun) await options.store.save(snapshot);
+    return { status: "skipped", reason: "The run has no completed jobs.", snapshot };
+  }
   const history = await loadHistory(client, repo, run3, snapshot, definitions, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
+  if (history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
+    return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot };
+  }
   const prior = history.filter((item) => item.runId !== snapshot.runId);
   const baseline = computeBaseline(prior, snapshot);
   const report = createTelemetryReport(snapshot, baseline);
@@ -18017,21 +18053,23 @@ async function loadHistory(client, repo, run3, snapshot, definitions, { limit, m
   const store = options.store;
   if (!store) return merge2(await backfill(), [snapshot], limit + 1);
   if (!options.dryRun) await store.save(snapshot);
-  let history = await store.history(query);
+  const [current, stored] = await Promise.all([
+    store.history({ ...query, runId: snapshot.runId, limit: 1 }),
+    store.history(query)
+  ]);
+  let history = stored;
   if (history.filter((item) => item.runId !== snapshot.runId).length < minSamples) {
     const fetched = await backfill();
-    const known2 = new Set(history.map((item) => item.runId));
-    if (!options.dryRun) {
-      for (const item of fetched) if (!known2.has(item.runId)) await store.save(item);
-    }
+    if (!options.dryRun) for (const item of fetched) await store.save(item);
     history = merge2(history, fetched, limit + 1);
   }
-  return merge2(history, [snapshot], limit + 1);
+  return [
+    ...merge2(history.filter((item) => item.runId !== snapshot.runId), [], limit),
+    ...latestAttempts([...current, snapshot])
+  ].sort(byCompletion);
 }
 function merge2(left, right, limit) {
-  const byRun = /* @__PURE__ */ new Map();
-  for (const item of [...left, ...right]) byRun.set(item.runId, item);
-  return [...byRun.values()].sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId).slice(-limit);
+  return latestAttempts([...left, ...right]).sort(byCompletion).slice(-limit);
 }
 function headline(snapshot, baseline) {
   const minutes = (snapshot.durationMs / 6e4).toFixed(1);
@@ -18043,16 +18081,11 @@ function headline(snapshot, baseline) {
 // src/telemetry/store.ts
 import { mkdir as mkdir2, readFile as readFile6, rename, writeFile as writeFile3 } from "node:fs/promises";
 import { dirname as dirname2 } from "node:path";
-var byCompletion = (a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId;
-function selectHistory(snapshots, query) {
-  return snapshots.filter(
-    (item) => item.owner === query.owner && item.repo === query.repo && item.workflowId === query.workflowId && (query.branch === void 0 || item.branch === query.branch)
-  ).sort(byCompletion).slice(-query.limit);
-}
 var FileTelemetryStore = class {
   constructor(path, retain = 200) {
     this.path = path;
     this.retain = retain;
+    if (!Number.isSafeInteger(retain) || retain < 1) throw new Error("Telemetry retention must be a positive safe integer");
   }
   path;
   retain;
@@ -18061,19 +18094,22 @@ var FileTelemetryStore = class {
     await this.load();
   }
   async save(snapshot) {
-    const all = (await this.load()).filter((item) => item.runId !== snapshot.runId);
+    validateRunAttempt(snapshot.runAttempt);
+    const all = (await this.load()).filter((item) => attemptIdentity(item) !== attemptIdentity(snapshot));
     all.push(snapshot);
     const groups = /* @__PURE__ */ new Map();
-    for (const item of all) {
-      const key = `${item.owner}/${item.repo}#${item.workflowId}@${item.branch ?? ""}`;
+    for (const item of latestAttempts(all)) {
+      const key = JSON.stringify([item.owner, item.repo, item.workflowId, item.branch]);
       groups.set(key, [...groups.get(key) ?? [], item]);
     }
-    this.snapshots = [...groups.values()].flatMap((items2) => items2.sort(byCompletion).slice(-this.retain)).sort(byCompletion);
+    const retained = new Set([...groups.values()].flatMap((items2) => items2.sort(byCompletion).slice(-this.retain)).map(runIdentity));
+    const next = all.filter((item) => retained.has(runIdentity(item))).sort(byCompletion);
     await mkdir2(dirname2(this.path), { recursive: true });
     const temporary = `${this.path}.${process.pid}.tmp`;
-    await writeFile3(temporary, this.snapshots.map((item) => `${JSON.stringify(item)}
+    await writeFile3(temporary, next.map((item) => `${JSON.stringify(item)}
 `).join(""), "utf8");
     await rename(temporary, this.path);
+    this.snapshots = next;
   }
   async history(query) {
     return selectHistory(await this.load(), query);

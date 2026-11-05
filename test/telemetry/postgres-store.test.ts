@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto";
+import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgresTelemetryStore } from "../../src/telemetry/postgres-store.js";
 import type { WorkflowSnapshot } from "../../src/telemetry/types.js";
@@ -102,7 +103,7 @@ describe.skipIf(!databaseUrl)("workflow snapshot schema migration", () => {
         ${saved.owner}, ${saved.repo}, ${saved.workflowId}, ${saved.runId}, ${saved.runAttempt},
         ${saved.headSha}, ${saved.branch}, ${saved.event}, ${saved.conclusion},
         ${saved.createdAt}, ${saved.startedAt}, ${saved.completedAt}, ${saved.queueMs}, ${saved.durationMs},
-        ${JSON.stringify(saved)}::jsonb
+        ${db.sql.json(JSON.parse(JSON.stringify(saved)) as postgres.JSONValue)}
       )
     `;
     return { ...db, saved };
