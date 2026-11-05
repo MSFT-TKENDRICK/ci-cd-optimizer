@@ -39,12 +39,14 @@ export async function startGitHubFixture(publicKey, host = "127.0.0.1") {
   const requests = [];
   const errors = [];
   let allowBlocked = false;
+  let stalledCheck;
 
-  async function route(request) {
+  async function route(request, response) {
     const url = new URL(request.url, "http://fixture.invalid");
     const method = request.method;
     const path = url.pathname;
-    requests.push({ method, path });
+    const deliveryId = request.headers["x-github-delivery"];
+    requests.push({ method, path, deliveryId });
     const chunks = [];
     let length = 0;
     for await (const chunk of request) {
@@ -84,7 +86,17 @@ export async function startGitHubFixture(publicKey, host = "127.0.0.1") {
       assert.equal(body.name, "CI/CD Optimizer");
       assert.equal(body.head_sha, HEAD);
       assert.equal(body.status, "in_progress");
-      const check = { ...body, id: checks.length + 1, owner };
+      if (stalledCheck?.owner === owner) {
+        const stalled = stalledCheck;
+        stalledCheck = undefined;
+        stalled.deliveryId = deliveryId;
+        stalled.reached = true;
+        // Observe a claimed worker without allowing a remote write before its process is killed.
+        await once(response, "close");
+        stalled.disconnected = true;
+        return { status: 499, data: { message: "Stalled test request disconnected before its write" } };
+      }
+      const check = { ...body, id: checks.length + 1, owner, deliveryId };
       checks.push(check);
       return { status: 201, data: { id: check.id } };
     }
@@ -111,8 +123,8 @@ export async function startGitHubFixture(publicKey, host = "127.0.0.1") {
   }
 
   const server = createServer((request, response) => {
-    void route(request).then(({ status, data }) => {
-      response.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(data));
+    void route(request, response).then(({ status, data }) => {
+      if (!response.destroyed) response.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(data));
     }).catch((error) => {
       errors.push(error);
       response.writeHead(500, { "content-type": "application/json" }).end(JSON.stringify({ message: "Fixture request rejected" }));
@@ -125,6 +137,12 @@ export async function startGitHubFixture(publicKey, host = "127.0.0.1") {
   return {
     port: address.port, requests, issued, denied, checks,
     restoreInstallation: () => { allowBlocked = true; },
+    stallNextCheck(owner) {
+      assert.ok(["acme", "blocked"].includes(owner), "Unknown fixture owner");
+      assert.equal(stalledCheck, undefined, "A check stall is already armed");
+      stalledCheck = { owner, reached: false, disconnected: false };
+      return stalledCheck;
+    },
     assertClean: () => { assert.deepEqual(errors, [], "Unexpected API request or authentication failure"); },
     async close() {
       server.closeAllConnections();

@@ -90,10 +90,17 @@ durable worker retry. A completed durable redelivery must not duplicate its chec
 failed job's availability to avoid waiting through backoff; retry timing is covered separately by queue tests.
 Non-root/read-only operation, published-port health and graceful shutdown remain checked.
 
+Postgres mode also stalls a claimed worker immediately before the synthetic API creates a check. Duplicate ingress
+and another same-scope delivery must remain accepted without bypassing that job, while an independent scope completes.
+The test kills the App process with SIGKILL, verifies that both pending jobs survive, then replaces the container
+against the same database on the internal-only network. The fresh process must authenticate again, finish both jobs in
+FIFO order, clear their stored payloads, and deduplicate completed redeliveries. This crash boundary is **before the
+remote write**, not a claim of exactly-once effects when a crash occurs after GitHub has already accepted a write.
+
 The durable smoke test requires `SMOKE_DATABASE_URL` and `SMOKE_DATABASE_CONTAINER` for a disposable test Postgres
 container, as supplied by CI. It temporarily attaches that container to its isolated network and changes test-job
-state. **Do not point it at a production database.** Test containers, network attachments and the local API are
-cleaned up after each run.
+state. **Do not point it at a production database.** The App container, temporary network, database network attachment
+and local API are cleaned up after each run; CI owns disposal of the test database.
 
 These checks use synthetic credentials and API responses. They do not establish a real GitHub App installation,
 granted permissions, public HTTPS/TLS, or live delivery and write access; validate those against the deployed App.
@@ -119,6 +126,8 @@ Worker transactions roll back when a worker process dies, leaving the job availa
 HTTP ingress and drains active workers before closing the database. Configure the host's termination grace period for
 the expected job duration; a forced exit instead relies on transactional recovery. Do not set a database
 `idle_in_transaction_session_timeout` shorter than a job: workers hold a transaction while calling GitHub.
+Attempt counts commit with the handler's result; a process crash rolls back that attempt, so the five-attempt
+failure limit does not bound repeated process crashes. Monitor restarts as well as failed-job logs.
 
 This is **at-least-once**, not exactly-once, processing. A crash or lost database connection after a GitHub write but
 before committing completion can replay that write. GitHub writes cannot be rolled back with the database transaction,

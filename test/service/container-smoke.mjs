@@ -37,6 +37,44 @@ async function waitFor(predicate, message) {
   assert.fail(message);
 }
 
+function startContainer(gateway, publish = false) {
+  docker("create", "--name", name, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
+    ...(publish ? ["--publish", "127.0.0.1::3000"] : []),
+    "--env", "APP_ID", "--env", "PRIVATE_KEY", "--env", "WEBHOOK_SECRET",
+    "--network", publish ? "bridge" : network, "--add-host", `github-smoke:${gateway}`, "--env", "GHE_HOST", "--env", "GHE_PROTOCOL",
+    ...(durable ? ["--env", "DATABASE_URL", "--env", "WEBHOOK_QUEUE"] : []),
+    "--env", "LOG_FORMAT=json", "--env", "LOG_LEVEL=warn", "ci-cd-optimizer:smoke");
+  containerCreated = true;
+  if (publish) docker("network", "connect", network, name);
+  docker("start", name);
+  const user = docker("inspect", "--format", "{{.Config.User}}", name);
+  assert.ok(user === "nonroot" || user === "65532", `Expected non-root runtime, got ${user}`);
+}
+
+async function waitForHealth(origin) {
+  let lastError;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    try {
+      const health = await fetch(`${origin}/ping`, { signal: AbortSignal.timeout(1000) });
+      assert.equal(health.status, 200);
+      assert.equal(await health.text(), "PONG");
+      return;
+    } catch (error) {
+      lastError = error;
+      if (docker("inspect", "--format", "{{.State.Running}}", name) !== "true") break;
+      await setTimeout(500);
+    }
+  }
+  assert.fail(`Container did not become reachable at ${origin}: ${lastError}`);
+}
+
+function isolatedOrigin() {
+  const networks = JSON.parse(docker("inspect", "--format", "{{json .NetworkSettings.Networks}}", name));
+  assert.deepEqual(Object.keys(networks), [network], "Authenticated scenarios must have no external network");
+  assert.ok(networks[network].IPAddress, "The isolated container has no address");
+  return `http://${networks[network].IPAddress}:3000`;
+}
+
 const sql = (query) => docker("exec", process.env.SMOKE_DATABASE_CONTAINER, "psql", "-U", "postgres", "-d", "postgres", "-Atc", query);
 const job = (id) => sql(`SELECT status || ':' || attempts FROM webhook_jobs WHERE delivery_id = '${id}'`);
 const completed = (owner) => github.checks.filter((check) => check.owner === owner && check.status === "completed");
@@ -67,39 +105,11 @@ try {
     docker("network", "connect", "--alias", new URL(process.env.SMOKE_DATABASE_URL).hostname, network, process.env.SMOKE_DATABASE_CONTAINER);
     databaseAttached = true;
   }
-  docker("create", "--name", name, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
-    "--publish", "127.0.0.1::3000", "--env", "APP_ID", "--env", "PRIVATE_KEY", "--env", "WEBHOOK_SECRET",
-    "--network", "bridge", "--add-host", `github-smoke:${gateway}`, "--env", "GHE_HOST", "--env", "GHE_PROTOCOL",
-    ...(durable ? ["--env", "DATABASE_URL", "--env", "WEBHOOK_QUEUE"] : []),
-    "--env", "LOG_FORMAT=json", "--env", "LOG_LEVEL=warn", "ci-cd-optimizer:smoke");
-  containerCreated = true;
-  docker("network", "connect", network, name);
-  docker("start", name);
+  startContainer(gateway, true);
   const port = docker("port", name, "3000/tcp").split(":").at(-1);
-  const publishedOrigin = `http://127.0.0.1:${port}`;
-  let ready = false;
-  let lastError;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    try {
-      const health = await fetch(`${publishedOrigin}/ping`, { signal: AbortSignal.timeout(1000) });
-      assert.equal(health.status, 200);
-      assert.equal(await health.text(), "PONG");
-      ready = true;
-      break;
-    } catch (error) {
-      lastError = error;
-      if (docker("inspect", "--format", "{{.State.Running}}", name) !== "true") break;
-      await setTimeout(500);
-    }
-  }
-  assert.ok(ready, `Container did not become reachable through its published port: ${lastError}`);
-  const user = docker("inspect", "--format", "{{.Config.User}}", name);
-  assert.ok(user === "nonroot" || user === "65532", `Expected non-root runtime, got ${user}`);
+  await waitForHealth(`http://127.0.0.1:${port}`);
   docker("network", "disconnect", "bridge", name);
-  const networks = JSON.parse(docker("inspect", "--format", "{{json .NetworkSettings.Networks}}", name));
-  assert.deepEqual(Object.keys(networks), [network], "Authenticated scenarios must have no external network");
-  assert.ok(networks[network].IPAddress, "The isolated container has no address");
-  const origin = `http://${networks[network].IPAddress}:3000`;
+  let origin = isolatedOrigin();
   const send = async (event, payload, signature = "valid", id = randomUUID()) => {
     const body = JSON.stringify(payload);
     const response = await fetch(`${origin}/api/github/webhooks`, {
@@ -157,6 +167,50 @@ try {
     assert.equal((await send("pull_request", pullRequestPayload(456), "valid", denied.id)).status, 200);
     assert.equal(job(denied.id), "completed:2", "Completed redelivery must not reset the job");
     assert.equal(github.checks.length, 3, "Completed redelivery must not duplicate the check");
+
+    const stalled = github.stallNextCheck("acme");
+    const interrupted = await send("pull_request", pullRequestPayload());
+    assert.equal(interrupted.status, 200);
+    await waitFor(() => stalled.reached, "The real worker did not reach the pre-write crash boundary");
+    assert.equal(stalled.deliveryId, interrupted.id);
+    assert.equal((await send("pull_request", pullRequestPayload(), "valid", interrupted.id)).status, 200);
+    const following = await send("pull_request", pullRequestPayload());
+    assert.equal(following.status, 200);
+    const independent = await send("pull_request", pullRequestPayload(456));
+    assert.equal(independent.status, 200);
+    await waitFor(() => job(independent.id) === "completed:1", "A blocked scope prevented independent work");
+    verifyChecks("blocked", 2);
+    assert.equal(github.checks.filter((check) => check.owner === "acme").length, 2, "Same-scope work bypassed the claimed job");
+    for (const id of [interrupted.id, following.id]) {
+      assert.equal(job(id), "pending:0", "Accepted work must remain pending until its handler commits");
+      assert.equal(sql(`SELECT (delivery->>'id' = delivery_id AND completed_at IS NULL AND last_error IS NULL)::text FROM webhook_jobs WHERE delivery_id = '${id}'`), "true");
+    }
+
+    const previousContainer = docker("inspect", "--format", "{{.Id}}", name);
+    docker("kill", "--signal=KILL", name);
+    assert.equal(docker("inspect", "--format", "{{.State.ExitCode}}", name), "137", "The crash scenario must bypass graceful shutdown");
+    await waitFor(() => stalled.disconnected, "The killed worker did not drop its stalled HTTP request");
+    for (const id of [interrupted.id, following.id]) assert.equal(job(id), "pending:0", "Process death lost or completed pending work");
+    docker("rm", name);
+    containerCreated = false;
+    startContainer(gateway);
+    assert.notEqual(docker("inspect", "--format", "{{.Id}}", name), previousContainer, "Recovery must use a fresh container");
+    origin = isolatedOrigin();
+    await waitForHealth(origin);
+    for (const id of [interrupted.id, following.id]) {
+      await waitFor(() => job(id) === "completed:1", "A fresh image process did not recover accepted work");
+      assert.equal(sql(`SELECT (delivery IS NULL AND completed_at IS NOT NULL AND last_error IS NULL)::text FROM webhook_jobs WHERE delivery_id = '${id}'`), "true");
+    }
+    verifyChecks("acme", 4);
+    assert.deepEqual(completed("acme").slice(2).map((check) => check.deliveryId), [interrupted.id, following.id], "Recovery did not preserve same-scope FIFO");
+    assert.deepEqual(github.issued, [123, 456, 123], "The fresh process must authenticate again, then reuse its installation token");
+    const recoveredRequests = github.requests.length;
+    for (const id of [interrupted.id, following.id]) {
+      assert.equal((await send("pull_request", pullRequestPayload(), "valid", id)).status, 200);
+      assert.equal(job(id), "completed:1");
+    }
+    assert.equal(github.requests.length, recoveredRequests, "Completed redelivery after replacement must not access the API");
+    assert.equal(github.checks.length, 6, "Crash recovery or completed redelivery duplicated a pre-write check");
   }
   github.assertClean();
   docker("stop", "--time", "10", name);
@@ -181,4 +235,4 @@ try {
   try { await github?.close(); } catch (error) { failures.push(error); }
 }
 if (failures.length) throw new AggregateError(failures, "Container smoke or cleanup failed");
-console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, isolated signed/unsigned webhooks, JWT and installation-token HTTP exchange, scoped token reuse, PR analysis and check publication, denied-token recovery${durable ? ", durable worker retry and completed-delivery deduplication" : ""}, graceful SIGTERM and cleanup.`);
+console.log(`Container smoke passed (${durable ? "postgres" : "direct"}): non-root startup, published-port health, isolated signed/unsigned webhooks, JWT and installation-token HTTP exchange, scoped token reuse, PR analysis and check publication, denied-token recovery${durable ? ", durable worker retry, pre-write SIGKILL recovery in a fresh container, same-scope FIFO, independent-scope progress, reauthentication and completed-delivery deduplication" : ""}, graceful SIGTERM and cleanup.`);
