@@ -134,7 +134,7 @@ async function harness(state: FakeApiState = {}, durable?: Pick<DeliveryQueue, "
     api,
     probot,
     tokenRequests: () => tokenRequests,
-    send: async (event: string, payload: unknown, signature: "valid" | "invalid" | "missing" = "valid", deliveryId = randomUUID()) => {
+    send: async (event: string, payload: unknown, signature: "valid" | "invalid" | "missing" = "valid", deliveryId = randomUUID(), timeoutMs = 5000) => {
       const body = JSON.stringify(payload);
       const response = await fetch(`http://127.0.0.1:${address.port}/api/github/webhooks`, {
         method: "POST",
@@ -145,7 +145,7 @@ async function harness(state: FakeApiState = {}, durable?: Pick<DeliveryQueue, "
           ...(signature === "missing" ? {} : { "x-hub-signature-256": `sha256=${createHmac("sha256", signature === "valid" ? secret : "wrong-secret").update(body).digest("hex")}` }),
         },
         body,
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       await response.text();
       return response.status;
@@ -174,6 +174,26 @@ describe("signed GitHub App HTTP delivery", () => {
     expect(await app.send("push", push)).toBe(500);
     expect(app.api.calls).toHaveLength(0);
   });
+
+  it("fails rather than acknowledging a durable insert still pending at the HTTP deadline", async () => {
+    const gate = latch();
+    let committed = false;
+    const enqueue = vi.fn<DeliveryQueue["enqueue"]>(async () => {
+      await gate.promise;
+      committed = true;
+    });
+    const app = await harness({}, { enqueue });
+    try {
+      const status = await app.send("push", push, "valid", randomUUID(), 12_000);
+      expect(enqueue).toHaveBeenCalledOnce();
+      expect(committed).toBe(false);
+      expect(status).toBe(503);
+      expect(app.api.calls).toHaveLength(0);
+    } finally {
+      gate.release();
+      await setImmediate();
+    }
+  }, 15_000);
 
   it("rejects invalid signatures before persisting a delivery", async () => {
     const enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockResolvedValue(undefined);
