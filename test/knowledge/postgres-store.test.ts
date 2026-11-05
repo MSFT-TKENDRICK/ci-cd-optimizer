@@ -163,6 +163,8 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
   it("upgrades existing declaration evidence without rewriting or deleting its records", async () => {
     const project = snapshot();
     await store.save(project);
+    await database.sql`DROP TABLE mitigation_application_events`;
+    await database.sql`DROP TABLE mitigation_evaluation_samples`;
     await database.sql`DROP TABLE knowledge_run_observations`;
     await database.sql`DROP INDEX knowledge_snapshot_reference`;
     await store.initialize();
