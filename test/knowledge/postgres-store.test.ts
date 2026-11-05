@@ -68,4 +68,13 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
       WHERE snapshot_id = ${first.id}
     `).rejects.toThrow("foreign key");
   });
+
+  it("copies caller evidence before awaiting database I/O", async () => {
+    const first = snapshot();
+    const saving = store.save(first);
+    first.projects.length = 0;
+    first.repository.repo = "mutated";
+    await saving;
+    expect(await store.load(repository, first.id)).toEqual(snapshot());
+  });
 });

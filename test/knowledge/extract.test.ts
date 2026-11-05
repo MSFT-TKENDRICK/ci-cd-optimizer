@@ -118,6 +118,23 @@ describe("revision-linked project evidence", () => {
     expect(result.coverage.declarationsComplete).toBe(false);
   });
 
+  it("deduplicates malformed-declaration problems and excludes installed dependency configs", () => {
+    const result = extractKnowledge(repository, revision, input({
+      "package.json": { dependencies: { a: 0, b: 1, c: false } },
+      "node_modules/tool/nx.json": {},
+      "node_modules/tool/package.json": { name: "nx" },
+    }), { now });
+    expect(result.coverage.problems).toEqual([{ path: "package.json", code: "invalid-dependencies-entry" }]);
+    expect(result.technologies).toEqual([]);
+    expect(result.projects).toHaveLength(2);
+  });
+
+  it("does not parse a truncated workspace definition as authoritative", () => {
+    const result = extractKnowledge(repository, revision, input({ ...files, "pnpm-workspace.yaml": "packages: [packages/*]" }), { now, truncated: ["pnpm-workspace.yaml"] });
+    expect(result.coverage.problems).toContainEqual({ path: "pnpm-workspace.yaml", code: "truncated-workspace-config" });
+    expect(result.relationships.find((edge) => edge.targetName === "@acme/b")?.to).toBeUndefined();
+  });
+
   it.each(["../package.json", "/package.json", "./package.json", "a//package.json", "C:\\package.json"])("rejects noncanonical path %s", (path) => {
     expect(() => extractKnowledge(repository, revision, input({ [path]: {} }), { now })).toThrow("repository-relative");
   });

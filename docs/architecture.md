@@ -111,12 +111,15 @@ Node/package-manager engines, package-manager pins, Nx/Turborepo/TypeScript/Lern
 tool config filenames are declarations only. Version expressions are not resolved versions. Unsupported expressions,
 URLs and local paths are retained as opaque digests, not copied into the knowledge store. Names, paths and safe
 declarations still constitute private repository metadata: protect the database and exports accordingly.
+Installed `node_modules` manifests/configs are outside this declared-project scope.
 
 Root `package.json` and `pnpm-workspace.yaml` define explicit workspace membership, including exclusions. There is no
 fallback that treats all manifests as members because a tool config exists. Simple `workspace:` dependencies can link
 by a unique collected workspace name only when discovery is complete, no ignores/truncations are present, and workspace
 declarations agree. Duplicate names remain ambiguous; ordinary registry ranges remain unresolved, even if a local
 package shares the name. Declared package relationships are never substituted for observed workflow/task dependencies.
+The shared workspace/inventory glob matcher uses dynamic programming rather than regex backtracking, with work
+proportional to path length times pattern length. Matching consumes the entire path, including unusual trailing newlines.
 
 Coverage is relative to the configured supported inventory, not every technology in the repository. Malformed,
 conflicting or unsupported declarations are recorded with sanitized problem codes. Extraction caps relationship and

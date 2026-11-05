@@ -48,6 +48,11 @@ export function extractKnowledge(
     throw new Error("Knowledge inventory paths must be repository-relative");
   }
   const problems: KnowledgeSnapshot["coverage"]["problems"] = [];
+  const problemKeys = new Set<string>();
+  const problem = (path: string, code: string) => {
+    const key = JSON.stringify([path, code]);
+    if (!problemKeys.has(key)) { problemKeys.add(key); problems.push({ path, code }); }
+  };
   const truncated = new Set(options.truncated ?? []);
   const projects: ProjectEvidence[] = [];
   const technologies: TechnologyEvidence[] = [];
@@ -64,7 +69,7 @@ export function extractKnowledge(
   let limited = false;
   const reserve = (path: string) => {
     if (technologies.length + relationships.length < 10_000) return true;
-    if (!limited) problems.push({ path, code: "evidence-limit" });
+    if (!limited) problem(path, "evidence-limit");
     limited = true;
     return false;
   };
@@ -80,13 +85,13 @@ export function extractKnowledge(
     if (limited) break;
     if (file.path !== "package.json" && !file.path.endsWith("/package.json")) continue;
     if (/(^|\/)node_modules\//.test(file.path)) continue;
-    if (truncated.has(file.path)) { problems.push({ path: file.path, code: "truncated-manifest" }); continue; }
+    if (truncated.has(file.path)) { problem(file.path, "truncated-manifest"); continue; }
     let manifest: PackageManifest;
     try { manifest = parseManifest(file.path, file.content); }
-    catch { problems.push({ path: file.path, code: "invalid-manifest" }); continue; }
+    catch { problem(file.path, "invalid-manifest"); continue; }
     manifests.set(file.path, manifest);
     const named = manifest.name && packageName.test(manifest.name) ? manifest.name : undefined;
-    if (manifest.json.name !== undefined && !named) problems.push({ path: file.path, code: "invalid-package-name" });
+    if (manifest.json.name !== undefined && !named) problem(file.path, "invalid-package-name");
     const project: ProjectEvidence = { id: projectId("npm-package", manifest.dir), kind: "npm-package", path: manifest.dir, ...(named ? { name: named } : {}) };
     projects.push(project);
     addRelationship({ kind: "contains", from: root.id, to: project.id, source: source(file) });
@@ -96,8 +101,8 @@ export function extractKnowledge(
   const workspaceSets: Set<string>[] = [];
   const addWorkspace = (raw: unknown, file: SourceFile, location: string) => {
     if (!Array.isArray(raw) || raw.some((glob) => typeof glob !== "string" || !glob.replace(/^!/, "") ||
-      [...glob].some((char) => char.charCodeAt(0) < 32) || /[\[\]{}()\\]|(^|\/)\.\.(\/|$)|^\//.test(glob.replace(/^!/, "")))) {
-      problems.push({ path: file.path, code: "unsupported-workspace-patterns" });
+      [...glob].some((char) => char.charCodeAt(0) < 32) || /[[\]{}()\\]|(^|\/)\.\.(\/|$)|^\//.test(glob.replace(/^!/, "")))) {
+      problem(file.path, "unsupported-workspace-patterns");
       return;
     }
     const patterns = raw as string[];
@@ -117,18 +122,18 @@ export function extractKnowledge(
     addWorkspace(record(workspaces) ? workspaces.packages : workspaces, files.get("package.json")!, record(workspaces) ? "/workspaces/packages" : "/workspaces");
   }
   const pnpm = files.get("pnpm-workspace.yaml");
-  if (pnpm && truncated.has(pnpm.path)) problems.push({ path: pnpm.path, code: "truncated-workspace-config" });
+  if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
   else if (pnpm) {
     try {
       const parsed = parseDocument(pnpm.content, { uniqueKeys: true });
       if (parsed.errors.length) throw new Error("Invalid workspace YAML");
       const value: unknown = parsed.toJS();
       addWorkspace(record(value) ? value.packages : undefined, pnpm, "/packages");
-    } catch { problems.push({ path: pnpm.path, code: "invalid-workspace-config" }); }
+    } catch { problem(pnpm.path, "invalid-workspace-config"); }
   }
   const workspace = workspaceSets[0];
   const conflicting = workspaceSets.some((set) => JSON.stringify([...set].sort()) !== JSON.stringify([...(workspace ?? [])].sort()));
-  if (conflicting) problems.push({ path: "", code: "conflicting-workspaces" });
+  if (conflicting) problem("", "conflicting-workspaces");
   const canResolveWorkspace = input.mode === "repository" && input.inventoryComplete && truncated.size === 0 &&
     !options.ignorePaths?.length && !conflicting && problems.length === 0;
   const workspaceNames = new Map<string, ProjectEvidence[]>();
@@ -147,10 +152,10 @@ export function extractKnowledge(
     for (const scope of scopes) {
       const declarations = manifest.json[scope];
       if (declarations === undefined) continue;
-      if (!record(declarations)) { problems.push({ path, code: `invalid-${scope}` }); continue; }
+      if (!record(declarations)) { problem(path, `invalid-${scope}`); continue; }
       for (const [name, value] of Object.entries(declarations).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
         if (limited) break;
-        if (!packageName.test(name) || typeof value !== "string") { problems.push({ path, code: `invalid-${scope}-entry` }); continue; }
+        if (!packageName.test(name) || typeof value !== "string") { problem(path, `invalid-${scope}-entry`); continue; }
         const declaration = spec(value);
         const origin = source(file, `/${scope}/${pointer(name)}`);
         const candidates = declaration.kind === "workspace-expression" && canResolveWorkspace && workspace?.has(id)
@@ -168,18 +173,19 @@ export function extractKnowledge(
     if (manager !== undefined) {
       const match = typeof manager === "string" ? /^(npm|pnpm|yarn|bun)@(.+)$/.exec(manager) : null;
       if (match) addTechnology({ projectId: id, technology: match[1] as Technology, basis: "package-manager", spec: spec(match[2]!), source: source(file, "/packageManager") });
-      else problems.push({ path, code: "unsupported-package-manager" });
+      else problem(path, "unsupported-package-manager");
     }
     const engines = manifest.json.engines;
-    if (engines !== undefined && !record(engines)) problems.push({ path, code: "invalid-engines" });
+    if (engines !== undefined && !record(engines)) problem(path, "invalid-engines");
     else if (record(engines)) for (const [name, value] of Object.entries(engines)) {
       if (name !== "node" && !managers.has(name)) continue;
-      if (typeof value !== "string") { problems.push({ path, code: "invalid-engine-entry" }); continue; }
+      if (typeof value !== "string") { problem(path, "invalid-engine-entry"); continue; }
       addTechnology({ projectId: id, technology: name as Technology, basis: "engine", spec: spec(value), source: source(file, `/engines/${pointer(name)}`) });
     }
   }
   for (const file of orderedFiles) {
     if (limited) break;
+    if (/(^|\/)node_modules\//.test(file.path)) continue;
     const slash = file.path.lastIndexOf("/");
     const basename = file.path.slice(slash + 1);
     const tool = Object.hasOwn(toolFiles, basename) ? toolFiles[basename] : undefined;
