@@ -137,6 +137,79 @@ export interface RunEvidenceWindow {
   }>;
 }
 
+export type MitigationRisk = "low" | "medium" | "high";
+
+/** A source-controlled recipe revision. Natural-language applicability is not treated as verified technology evidence. */
+export interface MitigationDefinition {
+  version: 1;
+  id: string;
+  source: RepositoryIdentity;
+  key: string;
+  revision: number;
+  contentDigest: string;
+  patchDigest: string;
+  title: string;
+  summary: string;
+  instructions: string;
+  risk: MitigationRisk;
+  rules: string[];
+  files: string[];
+  technologies: Technology[];
+  contraindications: string[];
+  provenance: { experiment?: string; arm?: string; pullRequest?: number };
+}
+
+export type MitigationChange =
+  | { kind: "commit"; sha: string }
+  | { kind: "pull-request"; number: number; headSha?: string };
+
+/** Immutable association of one recipe revision with a target repository change and source topology. */
+export interface MitigationApplication {
+  version: 1;
+  id: string;
+  target: RepositoryIdentity;
+  definitionId: string;
+  topologySnapshotId: string;
+  projectIds: string[];
+  change: MitigationChange;
+  createdAt: string;
+}
+
+export type MitigationApplicationState = "proposed" | "applied" | "reverted" | "declined" | "failed" | "unknown";
+
+/** State is appended as an observation; later events never rewrite earlier outcomes. */
+export interface MitigationApplicationEvent {
+  version: 1;
+  id: string;
+  target: KnowledgeScope;
+  applicationId: string;
+  state: MitigationApplicationState;
+  observedAt: string;
+  runObservationId?: string;
+  note?: string;
+}
+
+export type MitigationEvaluationOutcome = "observed-faster" | "observed-slower" | "no-detected-difference" | "inconclusive" | "unknown";
+
+export interface MitigationEvaluation {
+  version: 1;
+  id: string;
+  target: KnowledgeScope;
+  applicationId: string;
+  evaluatedAt: string;
+  outcome: MitigationEvaluationOutcome;
+  metric: { kind: "workflow-duration" | "job-duration"; key: string };
+  method: "distinct-run-mann-whitney-2s-v1";
+  contextKey: string;
+  alpha: number;
+  controlObservationIds: string[];
+  treatmentObservationIds: string[];
+  controlMedianMs?: number;
+  treatmentMedianMs?: number;
+  pValue?: number;
+  limitations: string[];
+}
+
 export interface KnowledgeStore {
   initialize(): Promise<void>;
   save(snapshot: KnowledgeSnapshot): Promise<void>;
@@ -148,5 +221,15 @@ export interface KnowledgeStore {
   listRunObservations(query: RunObservationQuery): Promise<RunObservationSummary[]>;
   /** A single consistent read includes all attempts/corrections of each selected logical run, or marks it incomplete. */
   readRunWindow(query: RunEvidenceWindowQuery): Promise<RunEvidenceWindow>;
+  saveMitigationDefinition(definition: MitigationDefinition): Promise<void>;
+  loadMitigationDefinition(scope: KnowledgeScope, id: string): Promise<MitigationDefinition | undefined>;
+  listMitigationDefinitions(scope: KnowledgeScope, limit: number): Promise<MitigationDefinition[]>;
+  saveMitigationApplication(application: MitigationApplication): Promise<void>;
+  loadMitigationApplication(scope: KnowledgeScope, id: string): Promise<MitigationApplication | undefined>;
+  listMitigationApplications(scope: KnowledgeScope, limit: number): Promise<MitigationApplication[]>;
+  appendMitigationApplicationEvent(event: MitigationApplicationEvent): Promise<void>;
+  listMitigationApplicationEvents(scope: KnowledgeScope, applicationId: string, limit: number): Promise<MitigationApplicationEvent[]>;
+  saveMitigationEvaluation(evaluation: MitigationEvaluation): Promise<void>;
+  listMitigationEvaluations(scope: KnowledgeScope, applicationId: string, limit: number): Promise<MitigationEvaluation[]>;
   close?(): Promise<void>;
 }

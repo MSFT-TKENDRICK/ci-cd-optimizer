@@ -1,9 +1,17 @@
 import postgres, { type Sql } from "postgres";
 import { validateScope } from "./identity.js";
+import {
+  validateMitigationApplication, validateMitigationApplicationEvent, validateMitigationDefinition,
+  validateMitigationEvaluation, verifyMitigationEvaluation,
+} from "./mitigation.js";
 import { validateQuery, validateSnapshot } from "./store.js";
 import { validateRunObservation, validateRunObservationQuery, validateRunSource } from "./run-observation.js";
 import { MAX_RUN_OBSERVATIONS, MAX_RUN_OBSERVATION_BYTES, runWindowFromRows, validateRunWindowQuery } from "./run-window.js";
-import type { KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, ProjectEvidence, ProjectRelationship, TechnologyEvidence, RunObservation, RunObservationQuery, RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery } from "./types.js";
+import type {
+  KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, MitigationApplication,
+  MitigationApplicationEvent, MitigationDefinition, MitigationEvaluation, ProjectEvidence, ProjectRelationship,
+  TechnologyEvidence, RunObservation, RunObservationQuery, RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery,
+} from "./types.js";
 
 interface Header {
   id: string;
@@ -66,6 +74,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
       await sql`CREATE INDEX IF NOT EXISTS knowledge_snapshot_scope ON knowledge_snapshots (host, repository_id, revision, collected_at DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_technology_lookup ON knowledge_technologies (snapshot_id, technology, project_id)`;
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS knowledge_snapshot_reference ON knowledge_snapshots (host, repository_id, revision, id)`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS knowledge_snapshot_project_reference ON knowledge_snapshots (id, host, repository_id)`;
       await sql`
         CREATE TABLE IF NOT EXISTS knowledge_run_observations (
           id TEXT PRIMARY KEY, version INTEGER NOT NULL CHECK (version = 1),
@@ -77,9 +86,81 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
             REFERENCES knowledge_snapshots (host, repository_id, revision, id)
         )
       `;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS knowledge_run_scope_reference ON knowledge_run_observations (id, host, repository_id)`;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_run_scope ON knowledge_run_observations (host, repository_id, observed_at DESC, id DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_run_attempt ON knowledge_run_observations (host, repository_id, run_id, run_attempt)`;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_run_workflow ON knowledge_run_observations (host, repository_id, workflow_id, (observation->'run'->>'branch'), run_id)`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS mitigation_definitions (
+          id TEXT PRIMARY KEY, version INTEGER NOT NULL CHECK (version = 1),
+          host TEXT NOT NULL, repository_id TEXT NOT NULL, owner TEXT NOT NULL, repo TEXT NOT NULL,
+          definition_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK (revision > 0),
+          content_digest TEXT NOT NULL, definition JSONB NOT NULL,
+          UNIQUE (host, repository_id, definition_key, revision),
+          UNIQUE (id, host, repository_id)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS mitigation_definition_scope ON mitigation_definitions (host, repository_id, definition_key, revision DESC)`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS mitigation_applications (
+          id TEXT PRIMARY KEY, version INTEGER NOT NULL CHECK (version = 1),
+          host TEXT NOT NULL, repository_id TEXT NOT NULL, definition_id TEXT NOT NULL,
+          topology_snapshot_id TEXT NOT NULL, change JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL,
+          application JSONB NOT NULL, UNIQUE (id, host, repository_id),
+          UNIQUE (id, topology_snapshot_id, host, repository_id),
+          FOREIGN KEY (definition_id) REFERENCES mitigation_definitions (id),
+          FOREIGN KEY (topology_snapshot_id, host, repository_id)
+            REFERENCES knowledge_snapshots (id, host, repository_id)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS mitigation_application_scope ON mitigation_applications (host, repository_id, created_at DESC, id)`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS mitigation_application_projects (
+          application_id TEXT NOT NULL, host TEXT NOT NULL, repository_id TEXT NOT NULL,
+          topology_snapshot_id TEXT NOT NULL, project_id TEXT NOT NULL,
+          PRIMARY KEY (application_id, project_id),
+          FOREIGN KEY (application_id, topology_snapshot_id, host, repository_id)
+            REFERENCES mitigation_applications (id, topology_snapshot_id, host, repository_id),
+          FOREIGN KEY (topology_snapshot_id, project_id)
+            REFERENCES knowledge_projects (snapshot_id, id)
+        )
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS mitigation_application_events (
+          id TEXT PRIMARY KEY, host TEXT NOT NULL, repository_id TEXT NOT NULL, application_id TEXT NOT NULL,
+          observed_at TIMESTAMPTZ NOT NULL, run_observation_id TEXT, event JSONB NOT NULL,
+          UNIQUE (id, host, repository_id),
+          FOREIGN KEY (application_id, host, repository_id)
+            REFERENCES mitigation_applications (id, host, repository_id),
+          FOREIGN KEY (run_observation_id, host, repository_id)
+            REFERENCES knowledge_run_observations (id, host, repository_id)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS mitigation_event_application ON mitigation_application_events (host, repository_id, application_id, observed_at, id)`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS mitigation_evaluations (
+          id TEXT PRIMARY KEY, version INTEGER NOT NULL CHECK (version = 1),
+          host TEXT NOT NULL, repository_id TEXT NOT NULL, application_id TEXT NOT NULL,
+          evaluated_at TIMESTAMPTZ NOT NULL,
+          outcome TEXT NOT NULL CHECK (outcome IN ('observed-faster', 'observed-slower', 'no-detected-difference', 'inconclusive', 'unknown')),
+          evaluation JSONB NOT NULL,
+          UNIQUE (id, host, repository_id),
+          FOREIGN KEY (application_id, host, repository_id)
+            REFERENCES mitigation_applications (id, host, repository_id)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS mitigation_evaluation_application ON mitigation_evaluations (host, repository_id, application_id, evaluated_at DESC, id)`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS mitigation_evaluation_samples (
+          evaluation_id TEXT NOT NULL, host TEXT NOT NULL, repository_id TEXT NOT NULL,
+          side TEXT NOT NULL CHECK (side IN ('control', 'treatment')), run_observation_id TEXT NOT NULL,
+          PRIMARY KEY (evaluation_id, side, run_observation_id),
+          FOREIGN KEY (evaluation_id, host, repository_id)
+            REFERENCES mitigation_evaluations (id, host, repository_id),
+          FOREIGN KEY (run_observation_id, host, repository_id)
+            REFERENCES knowledge_run_observations (id, host, repository_id)
+        )
+      `;
     });
   }
   async save(input: KnowledgeSnapshot): Promise<void> {
@@ -255,4 +336,232 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
     });
     return runWindowFromRows(query, rows.map((row) => ({ ...row, runId: Number(row.run_id) })));
   }
+  async saveMitigationDefinition(input: MitigationDefinition): Promise<void> {
+    const definition = structuredClone(input);
+    validateMitigationDefinition(definition);
+    await this.sql.begin(async (sql) => {
+      const [existing] = await sql<{ id: string }[]>`
+        SELECT id FROM mitigation_definitions
+        WHERE host = ${definition.source.host} AND repository_id = ${definition.source.repositoryId}
+          AND definition_key = ${definition.key} AND revision = ${definition.revision}
+      `;
+      if (existing) {
+        if (existing.id !== definition.id) throw new Error("Mitigation definition revision already has different immutable content");
+        return;
+      }
+      await sql`
+        INSERT INTO mitigation_definitions (id, version, host, repository_id, owner, repo, definition_key, revision, content_digest, definition)
+        VALUES (${definition.id}, ${definition.version}, ${definition.source.host}, ${definition.source.repositoryId},
+          ${definition.source.owner}, ${definition.source.repo}, ${definition.key}, ${definition.revision}, ${definition.contentDigest},
+          ${sql.json(JSON.parse(JSON.stringify(definition)) as postgres.JSONValue)})
+        ON CONFLICT (id) DO NOTHING
+      `;
+    });
+  }
+  async loadMitigationDefinition(scope: KnowledgeScope, id: string): Promise<MitigationDefinition | undefined> {
+    validateScope(scope);
+    const [row] = await this.sql<{ definition: MitigationDefinition }[]>`
+      SELECT definition FROM mitigation_definitions WHERE id = ${id} AND host = ${scope.host} AND repository_id = ${scope.repositoryId}
+    `;
+    if (!row) return undefined;
+    validateMitigationDefinition(row.definition);
+    if (row.definition.id !== id || row.definition.source.host !== scope.host || row.definition.source.repositoryId !== scope.repositoryId) {
+      throw new Error("Stored mitigation definition does not match its indexed identity");
+    }
+    return row.definition;
+  }
+  async listMitigationDefinitions(scope: KnowledgeScope, limit: number): Promise<MitigationDefinition[]> {
+    validateScope(scope); validateMitigationLimit(limit);
+    const rows = await this.sql<{ definition: MitigationDefinition }[]>`
+      SELECT definition FROM mitigation_definitions WHERE host = ${scope.host} AND repository_id = ${scope.repositoryId}
+      ORDER BY definition_key, revision DESC, id LIMIT ${limit}
+    `;
+    for (const { definition } of rows) {
+      validateMitigationDefinition(definition);
+      if (definition.source.host !== scope.host || definition.source.repositoryId !== scope.repositoryId) {
+        throw new Error("Stored mitigation definition does not match its indexed scope");
+      }
+    }
+    return rows.map(({ definition }) => structuredClone(definition));
+  }
+  async saveMitigationApplication(input: MitigationApplication): Promise<void> {
+    const application = structuredClone(input);
+    validateMitigationApplication(application);
+    await this.sql.begin(async (sql) => {
+      const [definition] = await sql<{ id: string }[]>`SELECT id FROM mitigation_definitions WHERE id = ${application.definitionId}`;
+      if (!definition) throw new Error("Mitigation application references an unknown definition revision");
+      const [topology] = await sql<{ coverage: KnowledgeSnapshot["coverage"] }[]>`
+        SELECT coverage FROM knowledge_snapshots
+        WHERE id = ${application.topologySnapshotId} AND host = ${application.target.host} AND repository_id = ${application.target.repositoryId}
+      `;
+      if (!topology) throw new Error("Mitigation application topology snapshot is unavailable in the target repository");
+      if (application.projectIds.length > 0) {
+        const projects = await sql<{ id: string }[]>`
+          SELECT id FROM knowledge_projects WHERE snapshot_id = ${application.topologySnapshotId}
+            AND id IN ${sql(application.projectIds)}
+        `;
+        if (projects.length !== application.projectIds.length) throw new Error("Mitigation application projects must belong to its target topology snapshot");
+      }
+      const inserted = await sql`
+        INSERT INTO mitigation_applications (id, version, host, repository_id, definition_id, topology_snapshot_id, change, created_at, application)
+        VALUES (${application.id}, ${application.version}, ${application.target.host}, ${application.target.repositoryId},
+          ${application.definitionId}, ${application.topologySnapshotId},
+          ${sql.json(JSON.parse(JSON.stringify(application.change)) as postgres.JSONValue)},
+          ${application.createdAt}, ${sql.json(JSON.parse(JSON.stringify(application)) as postgres.JSONValue)})
+        ON CONFLICT (id) DO NOTHING RETURNING id
+      `;
+      if (inserted.length > 0 && application.projectIds.length > 0) {
+        const projects = application.projectIds.map((projectId) => ({
+          application_id: application.id, host: application.target.host, repository_id: application.target.repositoryId,
+          topology_snapshot_id: application.topologySnapshotId, project_id: projectId,
+        }));
+        await sql`INSERT INTO mitigation_application_projects ${sql(projects, "application_id", "host", "repository_id", "topology_snapshot_id", "project_id")}`;
+      }
+    });
+  }
+  async loadMitigationApplication(scope: KnowledgeScope, id: string): Promise<MitigationApplication | undefined> {
+    validateScope(scope);
+    const [row] = await this.sql<{ application: MitigationApplication }[]>`
+      SELECT application FROM mitigation_applications WHERE id = ${id} AND host = ${scope.host} AND repository_id = ${scope.repositoryId}
+    `;
+    if (!row) return undefined;
+    validateMitigationApplication(row.application);
+    const projects = await this.sql<{ project_id: string }[]>`
+      SELECT project_id FROM mitigation_application_projects
+      WHERE application_id = ${id} AND host = ${scope.host} AND repository_id = ${scope.repositoryId} ORDER BY project_id
+    `;
+    if (row.application.id !== id || row.application.target.host !== scope.host ||
+        row.application.target.repositoryId !== scope.repositoryId ||
+        JSON.stringify([...row.application.projectIds].sort()) !== JSON.stringify(projects.map(({ project_id }) => project_id))) {
+      throw new Error("Stored mitigation application does not match its indexed identity");
+    }
+    return row.application;
+  }
+  async listMitigationApplications(scope: KnowledgeScope, limit: number): Promise<MitigationApplication[]> {
+    validateScope(scope); validateMitigationLimit(limit);
+    const rows = await this.sql<{ application: MitigationApplication }[]>`
+      SELECT application FROM mitigation_applications WHERE host = ${scope.host} AND repository_id = ${scope.repositoryId}
+      ORDER BY created_at DESC, id LIMIT ${limit}
+    `;
+    for (const { application } of rows) {
+      validateMitigationApplication(application);
+      if (application.target.host !== scope.host || application.target.repositoryId !== scope.repositoryId) {
+        throw new Error("Stored mitigation application does not match its indexed scope");
+      }
+    }
+    return rows.map(({ application }) => structuredClone(application));
+  }
+  async appendMitigationApplicationEvent(input: MitigationApplicationEvent): Promise<void> {
+    const event = structuredClone(input);
+    validateMitigationApplicationEvent(event);
+    const [application] = await this.sql<{ created_at: Date }[]>`
+      SELECT created_at FROM mitigation_applications
+      WHERE id = ${event.applicationId} AND host = ${event.target.host} AND repository_id = ${event.target.repositoryId}
+    `;
+    if (!application) throw new Error("Mitigation event references an unknown target application");
+    if (Date.parse(event.observedAt) < application.created_at.getTime()) throw new Error("Mitigation event predates its application");
+    await this.sql`
+      INSERT INTO mitigation_application_events (id, host, repository_id, application_id, observed_at, run_observation_id, event)
+      VALUES (${event.id}, ${event.target.host}, ${event.target.repositoryId}, ${event.applicationId}, ${event.observedAt},
+        ${event.runObservationId ?? null}, ${this.sql.json(JSON.parse(JSON.stringify(event)) as postgres.JSONValue)})
+      ON CONFLICT (id) DO NOTHING
+    `;
+    const [row] = await this.sql<{ event: MitigationApplicationEvent }[]>`
+      SELECT event FROM mitigation_application_events
+      WHERE id = ${event.id} AND host = ${event.target.host} AND repository_id = ${event.target.repositoryId}
+    `;
+    if (!row) throw new Error("Mitigation application event was not persisted in the requested scope");
+    validateMitigationApplicationEvent(row.event);
+  }
+  async listMitigationApplicationEvents(scope: KnowledgeScope, applicationId: string, limit: number): Promise<MitigationApplicationEvent[]> {
+    validateScope(scope); validateMitigationLimit(limit); validateMitigationId(applicationId);
+    const rows = await this.sql<{ event: MitigationApplicationEvent }[]>`
+      SELECT event FROM mitigation_application_events
+      WHERE host = ${scope.host} AND repository_id = ${scope.repositoryId} AND application_id = ${applicationId}
+      ORDER BY observed_at, id LIMIT ${limit}
+    `;
+    for (const { event } of rows) {
+      validateMitigationApplicationEvent(event);
+      if (event.target.host !== scope.host || event.target.repositoryId !== scope.repositoryId) {
+        throw new Error("Stored mitigation event does not match its indexed scope");
+      }
+    }
+    return rows.map(({ event }) => structuredClone(event));
+  }
+  async saveMitigationEvaluation(input: MitigationEvaluation): Promise<void> {
+    const evaluation = structuredClone(input);
+    validateMitigationEvaluation(evaluation);
+    await this.sql.begin(async (sql) => {
+      await sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`;
+      await sql`SET LOCAL statement_timeout = '10s'`;
+      const [applicationRow] = await sql<{ application: MitigationApplication }[]>`
+        SELECT application FROM mitigation_applications
+        WHERE id = ${evaluation.applicationId} AND host = ${evaluation.target.host} AND repository_id = ${evaluation.target.repositoryId}
+      `;
+      if (!applicationRow) throw new Error("Mitigation evaluation references an unknown target application");
+      const events = await sql<{ event: MitigationApplicationEvent }[]>`
+        SELECT event FROM mitigation_application_events
+        WHERE host = ${evaluation.target.host} AND repository_id = ${evaluation.target.repositoryId}
+          AND application_id = ${evaluation.applicationId} AND observed_at <= ${evaluation.evaluatedAt}
+      `;
+      const ids = [...evaluation.controlObservationIds, ...evaluation.treatmentObservationIds];
+      const allObservationIds = [...new Set(ids)];
+      const selected = allObservationIds.length === 0 ? [] : await sql<{ observation: RunObservation }[]>`
+        SELECT observation FROM knowledge_run_observations
+        WHERE host = ${evaluation.target.host} AND repository_id = ${evaluation.target.repositoryId}
+          AND id IN ${sql(allObservationIds)}
+      `;
+      if (selected.length !== allObservationIds.length) throw new Error("Mitigation evaluation references unavailable run evidence");
+      const runIds = [...new Set(selected.map(({ observation }) => observation.run.runId))];
+      const observations = runIds.length === 0 ? [] : (await sql<{ observation: RunObservation }[]>`
+        SELECT observation FROM knowledge_run_observations
+        WHERE host = ${evaluation.target.host} AND repository_id = ${evaluation.target.repositoryId}
+          AND run_id IN ${sql(runIds)}
+      `).map(({ observation }) => observation);
+      verifyMitigationEvaluation(applicationRow.application, evaluation, events.map(({ event }) => event), observations);
+      const inserted = await sql`
+        INSERT INTO mitigation_evaluations (id, version, host, repository_id, application_id, evaluated_at, outcome, evaluation)
+        VALUES (${evaluation.id}, ${evaluation.version}, ${evaluation.target.host}, ${evaluation.target.repositoryId},
+          ${evaluation.applicationId}, ${evaluation.evaluatedAt}, ${evaluation.outcome},
+          ${sql.json(JSON.parse(JSON.stringify(evaluation)) as postgres.JSONValue)})
+        ON CONFLICT (id) DO NOTHING RETURNING id
+      `;
+      if (inserted.length > 0 && ids.length > 0) {
+        const samples = [
+          ...evaluation.controlObservationIds.map((run_observation_id) => ({
+            evaluation_id: evaluation.id, host: evaluation.target.host, repository_id: evaluation.target.repositoryId,
+            side: "control", run_observation_id,
+          })),
+          ...evaluation.treatmentObservationIds.map((run_observation_id) => ({
+            evaluation_id: evaluation.id, host: evaluation.target.host, repository_id: evaluation.target.repositoryId,
+            side: "treatment", run_observation_id,
+          })),
+        ];
+        await sql`INSERT INTO mitigation_evaluation_samples ${sql(samples, "evaluation_id", "host", "repository_id", "side", "run_observation_id")}`;
+      }
+    });
+  }
+  async listMitigationEvaluations(scope: KnowledgeScope, applicationId: string, limit: number): Promise<MitigationEvaluation[]> {
+    validateScope(scope); validateMitigationLimit(limit); validateMitigationId(applicationId);
+    const rows = await this.sql<{ evaluation: MitigationEvaluation }[]>`
+      SELECT evaluation FROM mitigation_evaluations
+      WHERE host = ${scope.host} AND repository_id = ${scope.repositoryId} AND application_id = ${applicationId}
+      ORDER BY evaluated_at DESC, id LIMIT ${limit}
+    `;
+    for (const { evaluation } of rows) {
+      validateMitigationEvaluation(evaluation);
+      if (evaluation.target.host !== scope.host || evaluation.target.repositoryId !== scope.repositoryId) {
+        throw new Error("Stored mitigation evaluation does not match its indexed scope");
+      }
+    }
+    return rows.map(({ evaluation }) => structuredClone(evaluation));
+  }
+}
+
+function validateMitigationLimit(limit: number): void {
+  if (!Number.isSafeInteger(limit) || limit < 0 || limit > 100) throw new Error("Mitigation evidence limit must be between 0 and 100");
+}
+
+function validateMitigationId(id: string): void {
+  if (!/^[a-f0-9]{64}$/.test(id)) throw new Error("Mitigation evidence identity is invalid");
 }

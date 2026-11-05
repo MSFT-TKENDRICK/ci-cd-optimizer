@@ -1,8 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { MemoryKnowledgeStore } from "../../src/knowledge/store.js";
 import { identity, snapshotIdentity } from "../../src/knowledge/identity.js";
 import { extractKnowledge } from "../../src/knowledge/extract.js";
 import { input, now, repository, revision, snapshot } from "./fixtures.js";
+import { mitigationCases } from "./mitigation-cases.js";
+
+describe("memory mitigation evidence", () => {
+  let store: MemoryKnowledgeStore;
+  beforeEach(() => { store = new MemoryKnowledgeStore(); });
+  mitigationCases(() => store);
+});
 
 describe("scoped immutable knowledge", () => {
   it("preserves first collection and protects stored evidence from caller mutation", async () => {

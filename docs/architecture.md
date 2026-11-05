@@ -167,9 +167,27 @@ fail processing. Runtime backfill for baseline analytics does not implicitly per
 
 `listRunObservations` is a bounded, scoped **raw evidence** query (0-100 records), optionally narrowed to a run, its
 attempt or a source revision. It includes retries and multiple corrections, ordered by observation time; it is not a
-latest-attempt selector or a duration baseline. Future statistical consumers must select independent runs, consider
-all superseding attempts and contradictory corrections, and apply workload-comparison eligibility before computing
+latest-attempt selector or a duration baseline. Future statistical consumers must deduplicate logical runs, consider
+all retries and contradictory corrections, and apply workload-comparison eligibility before computing
 expectations. Matching a project's declaration context does not establish that the project executed or benefited.
+
+### Mitigation evidence
+
+Mitigation definitions are immutable, content-addressed revisions scoped to their source repository. Recipe import
+retains explicit rule/file selectors and a digest of the patch; recipe prose, compatibility counters, and undeclared
+technologies are not evidence of success. Applications pin a definition and a target repository topology snapshot,
+with selected projects and a commit or pull-request reference. Append-only lifecycle events record proposed/applied/
+reverted/declined/failed/unknown states. These records are persisted evidence primitives: they do not automatically
+publish recipes, apply changes, open pull requests, or authorize reads from another repository.
+
+An evaluation links exact control/treatment run-observation IDs to the application, verifies same-repository scope,
+first-attempt eligibility, non-overlapping logical runs, compatible workflow context, application chronology, and
+consistent corrections, then recomputes medians and a two-sided Mann–Whitney p-value from both tails. Outcome
+direction follows the medians; a significant result with equal medians remains inconclusive. A small p-value is still only
+observational evidence: temporal correlation, runner changes, workload shifts not captured by the context key, and
+other confounders can violate test assumptions. It is not proof that the mitigation caused an improvement or will
+benefit another project. Insufficient samples remain inconclusive; missing evidence can be recorded as unknown.
+Evaluations do not establish randomized or otherwise statistically independent runs.
 
 ### Immutable duration evidence
 

@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PostgresKnowledgeStore } from "../../src/knowledge/postgres-store.js";
 import { extractKnowledge } from "../../src/knowledge/extract.js";
 import { snapshotIdentity } from "../../src/knowledge/identity.js";
+import { createMitigationApplication, createMitigationDefinition } from "../../src/knowledge/mitigation.js";
 import { createRunObservation, runObservationIdentity } from "../../src/knowledge/run-observation.js";
 import { snapshot as workflow } from "../alerts/fixtures.js";
 import { isolatedDatabase } from "../webhooks/database.js";
 import { input, now, repository, revision, snapshot } from "./fixtures.js";
 import { runWindowCases } from "./run-window-cases.js";
+import { mitigationCases } from "./mitigation-cases.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
@@ -19,6 +21,7 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
   });
   afterEach(async () => { await store?.close(); await database?.close(); });
   runWindowCases(() => store);
+  mitigationCases(() => store);
 
   it("round-trips normalized evidence including JSONB canonicalization across repeated/concurrent initialization", async () => {
     const other = new PostgresKnowledgeStore(database.url);
@@ -70,6 +73,28 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
     await expect(database.sql`
       UPDATE knowledge_relationships SET target_project_id = ${other.projects[0]!.id}
       WHERE snapshot_id = ${first.id}
+    `).rejects.toThrow("foreign key");
+  });
+
+  it("binds application projects to the application's exact topology snapshot", async () => {
+    const topology = snapshot();
+    const otherTopology = extractKnowledge(repository, "b".repeat(40), input(), { now: new Date(now.getTime() + 1000) });
+    await store.save(topology);
+    await store.save(otherTopology);
+    const definition = createMitigationDefinition({
+      source: repository, key: "topology-fk", revision: 1, title: "Test mitigation", summary: "Test topology binding.",
+      instructions: "No-op test definition.", risk: "low", rules: [], files: [], technologies: [], contraindications: [],
+      patchDigest: "c".repeat(64), provenance: {},
+    });
+    await store.saveMitigationDefinition(definition);
+    const application = createMitigationApplication({
+      target: repository, definitionId: definition.id, topologySnapshotId: topology.id, projectIds: [],
+      change: { kind: "commit", sha: revision }, createdAt: now.toISOString(),
+    });
+    await store.saveMitigationApplication(application);
+    await expect(database.sql`
+      INSERT INTO mitigation_application_projects (application_id, host, repository_id, topology_snapshot_id, project_id)
+      VALUES (${application.id}, ${repository.host}, ${repository.repositoryId}, ${otherTopology.id}, ${otherTopology.projects[0]!.id})
     `).rejects.toThrow("foreign key");
   });
 

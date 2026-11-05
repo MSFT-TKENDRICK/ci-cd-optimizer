@@ -1,7 +1,15 @@
 import { identity, snapshotIdentity, validateRevision, validateScope } from "./identity.js";
+import {
+  validateMitigationApplication, validateMitigationApplicationEvent, validateMitigationDefinition,
+  validateMitigationEvaluation, verifyMitigationEvaluation,
+} from "./mitigation.js";
 import { runObservationSummary, validateRunObservation, validateRunObservationQuery, validateRunSource } from "./run-observation.js";
 import { MAX_RUN_OBSERVATIONS, MAX_RUN_OBSERVATION_BYTES, runWindowFromRows, validateRunWindowQuery } from "./run-window.js";
-import type { KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, RunObservation, RunObservationQuery, RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery } from "./types.js";
+import type {
+  KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, MitigationApplication,
+  MitigationApplicationEvent, MitigationDefinition, MitigationEvaluation, RunObservation, RunObservationQuery,
+  RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery,
+} from "./types.js";
 
 export function validateQuery(query: KnowledgeQuery): void {
   validateScope(query);
@@ -34,6 +42,8 @@ export function validateSnapshot(snapshot: KnowledgeSnapshot): void {
 
 const inScope = (snapshot: { repository: KnowledgeScope }, scope: KnowledgeScope) =>
   snapshot.repository.host === scope.host && snapshot.repository.repositoryId === scope.repositoryId;
+const sameScope = (left: KnowledgeScope, right: KnowledgeScope) =>
+  left.host === right.host && left.repositoryId === right.repositoryId;
 
 export function summary(snapshot: KnowledgeSnapshot): KnowledgeSummary {
   return { id: snapshot.id, repository: snapshot.repository, revision: snapshot.revision, collectedAt: snapshot.collectedAt, coverage: snapshot.coverage };
@@ -43,6 +53,10 @@ export function summary(snapshot: KnowledgeSnapshot): KnowledgeSummary {
 export class MemoryKnowledgeStore implements KnowledgeStore {
   private readonly snapshots = new Map<string, KnowledgeSnapshot>();
   private readonly observations = new Map<string, RunObservation>();
+  private readonly mitigationDefinitions = new Map<string, MitigationDefinition>();
+  private readonly mitigationApplications = new Map<string, MitigationApplication>();
+  private readonly mitigationEvents = new Map<string, MitigationApplicationEvent>();
+  private readonly mitigationEvaluations = new Map<string, MitigationEvaluation>();
   async initialize(): Promise<void> {}
   async save(snapshot: KnowledgeSnapshot): Promise<void> {
     validateSnapshot(snapshot);
@@ -110,4 +124,87 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
       observation: Buffer.byteLength(JSON.stringify(observation)) <= MAX_RUN_OBSERVATION_BYTES ? observation : null,
     }))));
   }
+  async saveMitigationDefinition(input: MitigationDefinition): Promise<void> {
+    const definition = structuredClone(input);
+    validateMitigationDefinition(definition);
+    const conflict = [...this.mitigationDefinitions.values()].find((item) =>
+      item.source.host === definition.source.host && item.source.repositoryId === definition.source.repositoryId &&
+      item.key === definition.key && item.revision === definition.revision && item.id !== definition.id);
+    if (conflict) throw new Error("Mitigation definition revision already has different immutable content");
+    if (!this.mitigationDefinitions.has(definition.id)) this.mitigationDefinitions.set(definition.id, definition);
+  }
+  async loadMitigationDefinition(scope: KnowledgeScope, id: string): Promise<MitigationDefinition | undefined> {
+    validateScope(scope);
+    const definition = this.mitigationDefinitions.get(id);
+    return definition && sameScope(definition.source, scope) ? structuredClone(definition) : undefined;
+  }
+  async listMitigationDefinitions(scope: KnowledgeScope, limit: number): Promise<MitigationDefinition[]> {
+    validateScope(scope); validateEvidenceLimit(limit);
+    return [...this.mitigationDefinitions.values()].filter((item) => sameScope(item.source, scope))
+      .sort((a, b) => a.key.localeCompare(b.key) || b.revision - a.revision || a.id.localeCompare(b.id))
+      .slice(0, limit).map((item) => structuredClone(item));
+  }
+  async saveMitigationApplication(input: MitigationApplication): Promise<void> {
+    const application = structuredClone(input);
+    validateMitigationApplication(application);
+    const definition = this.mitigationDefinitions.get(application.definitionId);
+    if (!definition) throw new Error("Mitigation application references an unknown definition revision");
+    const topology = this.snapshots.get(application.topologySnapshotId);
+    if (!topology || !sameScope(topology.repository, application.target) ||
+        application.projectIds.some((projectId) => !topology.projects.some((project) => project.id === projectId))) {
+      throw new Error("Mitigation application projects must belong to its target topology snapshot");
+    }
+    if (!this.mitigationApplications.has(application.id)) this.mitigationApplications.set(application.id, application);
+  }
+  async loadMitigationApplication(scope: KnowledgeScope, id: string): Promise<MitigationApplication | undefined> {
+    validateScope(scope);
+    const application = this.mitigationApplications.get(id);
+    return application && sameScope(application.target, scope) ? structuredClone(application) : undefined;
+  }
+  async listMitigationApplications(scope: KnowledgeScope, limit: number): Promise<MitigationApplication[]> {
+    validateScope(scope); validateEvidenceLimit(limit);
+    return [...this.mitigationApplications.values()].filter((item) => sameScope(item.target, scope))
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || a.id.localeCompare(b.id))
+      .slice(0, limit).map((item) => structuredClone(item));
+  }
+  async appendMitigationApplicationEvent(input: MitigationApplicationEvent): Promise<void> {
+    const event = structuredClone(input);
+    validateMitigationApplicationEvent(event);
+    const application = this.mitigationApplications.get(event.applicationId);
+    if (!application || !sameScope(application.target, event.target)) throw new Error("Mitigation event references an unknown target application");
+    if (Date.parse(event.observedAt) < Date.parse(application.createdAt)) throw new Error("Mitigation event predates its application");
+    if (event.runObservationId) {
+      const observation = this.observations.get(event.runObservationId);
+      if (!observation || !inScope(observation, event.target)) throw new Error("Mitigation event run evidence crosses repository scope");
+    }
+    if (!this.mitigationEvents.has(event.id)) this.mitigationEvents.set(event.id, event);
+  }
+  async listMitigationApplicationEvents(scope: KnowledgeScope, applicationId: string, limit: number): Promise<MitigationApplicationEvent[]> {
+    validateScope(scope); validateEvidenceLimit(limit);
+    if (!/^[a-f0-9]{64}$/.test(applicationId)) throw new Error("Mitigation application identity is invalid");
+    return [...this.mitigationEvents.values()].filter((item) => item.applicationId === applicationId && sameScope(item.target, scope))
+      .sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt) || a.id.localeCompare(b.id))
+      .slice(0, limit).map((item) => structuredClone(item));
+  }
+  async saveMitigationEvaluation(input: MitigationEvaluation): Promise<void> {
+    const evaluation = structuredClone(input);
+    validateMitigationEvaluation(evaluation);
+    const application = this.mitigationApplications.get(evaluation.applicationId);
+    if (!application || !sameScope(application.target, evaluation.target)) throw new Error("Mitigation evaluation references an unknown target application");
+    const events = [...this.mitigationEvents.values()].filter((event) => event.applicationId === application.id && sameScope(event.target, evaluation.target));
+    const observations = [...this.observations.values()].filter((observation) => inScope(observation.repository, evaluation.target));
+    verifyMitigationEvaluation(application, evaluation, events, observations);
+    if (!this.mitigationEvaluations.has(evaluation.id)) this.mitigationEvaluations.set(evaluation.id, evaluation);
+  }
+  async listMitigationEvaluations(scope: KnowledgeScope, applicationId: string, limit: number): Promise<MitigationEvaluation[]> {
+    validateScope(scope); validateEvidenceLimit(limit);
+    if (!/^[a-f0-9]{64}$/.test(applicationId)) throw new Error("Mitigation application identity is invalid");
+    return [...this.mitigationEvaluations.values()].filter((item) => item.applicationId === applicationId && sameScope(item.target, scope))
+      .sort((a, b) => Date.parse(b.evaluatedAt) - Date.parse(a.evaluatedAt) || a.id.localeCompare(b.id))
+      .slice(0, limit).map((item) => structuredClone(item));
+  }
+}
+
+function validateEvidenceLimit(limit: number): void {
+  if (!Number.isSafeInteger(limit) || limit < 0 || limit > 100) throw new Error("Mitigation evidence limit must be between 0 and 100");
 }
