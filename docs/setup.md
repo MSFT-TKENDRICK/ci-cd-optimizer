@@ -38,6 +38,9 @@ distroless `nodejs22` runtime stage. Move both Dockerfile stages, `.nvmrc`, and 
 together. `eslint` and `@eslint/js` share one update group, so their majors land in a single PR. TypeScript majors are
 ignored until `typescript-eslint`'s peer range allows them; upgrade both by hand.
 
+`package.json` `overrides` forces `minimatch` to `^11.0.1` for a security fix that eslint's own range (`^10`) excludes,
+so Dependabot can't apply it. Drop the override once eslint depends on a patched minimatch.
+
 Under **Settings → Actions → General**, keep **Workflow permissions** at *Read repository contents and packages
 permissions*. Workflows request the write scopes they need.
 
