@@ -96,13 +96,13 @@ var require_identity = __commonJS({
 var require_visit = __commonJS({
   "node_modules/yaml/dist/visit.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var BREAK = /* @__PURE__ */ Symbol("break visit");
     var SKIP = /* @__PURE__ */ Symbol("skip children");
     var REMOVE = /* @__PURE__ */ Symbol("remove node");
     function visit2(node, visitor) {
       const visitor_ = initVisitor(visitor);
-      if (identity.isDocument(node)) {
+      if (identity2.isDocument(node)) {
         const cd = visit_(null, node.contents, visitor_, Object.freeze([node]));
         if (cd === REMOVE)
           node.contents = null;
@@ -114,12 +114,12 @@ var require_visit = __commonJS({
     visit2.REMOVE = REMOVE;
     function visit_(key, node, visitor, path) {
       const ctrl = callVisitor(key, node, visitor, path);
-      if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
+      if (identity2.isNode(ctrl) || identity2.isPair(ctrl)) {
         replaceNode(key, path, ctrl);
         return visit_(key, ctrl, visitor, path);
       }
       if (typeof ctrl !== "symbol") {
-        if (identity.isCollection(node)) {
+        if (identity2.isCollection(node)) {
           path = Object.freeze(path.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
             const ci = visit_(i, node.items[i], visitor, path);
@@ -132,7 +132,7 @@ var require_visit = __commonJS({
               i -= 1;
             }
           }
-        } else if (identity.isPair(node)) {
+        } else if (identity2.isPair(node)) {
           path = Object.freeze(path.concat(node));
           const ck = visit_("key", node.key, visitor, path);
           if (ck === BREAK)
@@ -150,7 +150,7 @@ var require_visit = __commonJS({
     }
     async function visitAsync(node, visitor) {
       const visitor_ = initVisitor(visitor);
-      if (identity.isDocument(node)) {
+      if (identity2.isDocument(node)) {
         const cd = await visitAsync_(null, node.contents, visitor_, Object.freeze([node]));
         if (cd === REMOVE)
           node.contents = null;
@@ -162,12 +162,12 @@ var require_visit = __commonJS({
     visitAsync.REMOVE = REMOVE;
     async function visitAsync_(key, node, visitor, path) {
       const ctrl = await callVisitor(key, node, visitor, path);
-      if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
+      if (identity2.isNode(ctrl) || identity2.isPair(ctrl)) {
         replaceNode(key, path, ctrl);
         return visitAsync_(key, ctrl, visitor, path);
       }
       if (typeof ctrl !== "symbol") {
-        if (identity.isCollection(node)) {
+        if (identity2.isCollection(node)) {
           path = Object.freeze(path.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
             const ci = await visitAsync_(i, node.items[i], visitor, path);
@@ -180,7 +180,7 @@ var require_visit = __commonJS({
               i -= 1;
             }
           }
-        } else if (identity.isPair(node)) {
+        } else if (identity2.isPair(node)) {
           path = Object.freeze(path.concat(node));
           const ck = await visitAsync_("key", node.key, visitor, path);
           if (ck === BREAK)
@@ -217,31 +217,31 @@ var require_visit = __commonJS({
     function callVisitor(key, node, visitor, path) {
       if (typeof visitor === "function")
         return visitor(key, node, path);
-      if (identity.isMap(node))
+      if (identity2.isMap(node))
         return visitor.Map?.(key, node, path);
-      if (identity.isSeq(node))
+      if (identity2.isSeq(node))
         return visitor.Seq?.(key, node, path);
-      if (identity.isPair(node))
+      if (identity2.isPair(node))
         return visitor.Pair?.(key, node, path);
-      if (identity.isScalar(node))
+      if (identity2.isScalar(node))
         return visitor.Scalar?.(key, node, path);
-      if (identity.isAlias(node))
+      if (identity2.isAlias(node))
         return visitor.Alias?.(key, node, path);
       return void 0;
     }
     function replaceNode(key, path, node) {
       const parent = path[path.length - 1];
-      if (identity.isCollection(parent)) {
+      if (identity2.isCollection(parent)) {
         parent.items[key] = node;
-      } else if (identity.isPair(parent)) {
+      } else if (identity2.isPair(parent)) {
         if (key === "key")
           parent.key = node;
         else
           parent.value = node;
-      } else if (identity.isDocument(parent)) {
+      } else if (identity2.isDocument(parent)) {
         parent.contents = node;
       } else {
-        const pt = identity.isAlias(parent) ? "alias" : "scalar";
+        const pt = identity2.isAlias(parent) ? "alias" : "scalar";
         throw new Error(`Cannot replace node with ${pt} parent`);
       }
     }
@@ -254,7 +254,7 @@ var require_visit = __commonJS({
 var require_directives = __commonJS({
   "node_modules/yaml/dist/doc/directives.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var visit2 = require_visit();
     var escapeChars = {
       "!": "%21",
@@ -397,10 +397,10 @@ var require_directives = __commonJS({
         const lines = this.yaml.explicit ? [`%YAML ${this.yaml.version || "1.2"}`] : [];
         const tagEntries = Object.entries(this.tags);
         let tagNames;
-        if (doc && tagEntries.length > 0 && identity.isNode(doc.contents)) {
+        if (doc && tagEntries.length > 0 && identity2.isNode(doc.contents)) {
           const tags = {};
           visit2.visit(doc.contents, (_key, node) => {
-            if (identity.isNode(node) && node.tag)
+            if (identity2.isNode(node) && node.tag)
               tags[node.tag] = true;
           });
           tagNames = Object.keys(tags);
@@ -425,7 +425,7 @@ var require_directives = __commonJS({
 var require_anchors = __commonJS({
   "node_modules/yaml/dist/doc/anchors.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var visit2 = require_visit();
     function anchorIsValid(anchor) {
       if (/[\x00-\x19\s,[\]{}]/.test(anchor)) {
@@ -472,7 +472,7 @@ var require_anchors = __commonJS({
         setAnchors: () => {
           for (const source of aliasObjects) {
             const ref = sourceObjects.get(source);
-            if (typeof ref === "object" && ref.anchor && (identity.isScalar(ref.node) || identity.isCollection(ref.node))) {
+            if (typeof ref === "object" && ref.anchor && (identity2.isScalar(ref.node) || identity2.isCollection(ref.node))) {
               ref.node.anchor = ref.anchor;
             } else {
               const error = new Error("Failed to resolve repeated object (this should not happen)");
@@ -545,12 +545,12 @@ var require_applyReviver = __commonJS({
 var require_toJS = __commonJS({
   "node_modules/yaml/dist/nodes/toJS.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     function toJS2(value, arg, ctx) {
       if (Array.isArray(value))
         return value.map((v, i) => toJS2(v, String(i), ctx));
       if (value && typeof value.toJSON === "function") {
-        if (!ctx || !identity.hasAnchor(value))
+        if (!ctx || !identity2.hasAnchor(value))
           return value.toJSON(arg, ctx);
         const data = { aliasCount: 0, count: 1, res: void 0 };
         ctx.anchors.set(value, data);
@@ -576,11 +576,11 @@ var require_Node = __commonJS({
   "node_modules/yaml/dist/nodes/Node.js"(exports) {
     "use strict";
     var applyReviver = require_applyReviver();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var toJS2 = require_toJS();
     var NodeBase = class {
       constructor(type) {
-        Object.defineProperty(this, identity.NODE_TYPE, { value: type });
+        Object.defineProperty(this, identity2.NODE_TYPE, { value: type });
       }
       /** Create a copy of this node.  */
       clone() {
@@ -591,7 +591,7 @@ var require_Node = __commonJS({
       }
       /** A plain JavaScript representation of this node. */
       toJS(doc, { mapAsMap, maxAliasCount, onAnchor, reviver } = {}) {
-        if (!identity.isDocument(doc))
+        if (!identity2.isDocument(doc))
           throw new TypeError("A document argument is required");
         const ctx = {
           anchors: /* @__PURE__ */ new Map(),
@@ -618,12 +618,12 @@ var require_Alias = __commonJS({
     "use strict";
     var anchors = require_anchors();
     var visit2 = require_visit();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Node = require_Node();
     var toJS2 = require_toJS();
     var Alias = class extends Node.NodeBase {
       constructor(source) {
-        super(identity.ALIAS);
+        super(identity2.ALIAS);
         this.source = source;
         Object.defineProperty(this, "tag", {
           set() {
@@ -645,7 +645,7 @@ var require_Alias = __commonJS({
           nodes = [];
           visit2.visit(doc, {
             Node: (_key, node) => {
-              if (identity.isAlias(node) || identity.hasAnchor(node))
+              if (identity2.isAlias(node) || identity2.hasAnchor(node))
                 nodes.push(node);
             }
           });
@@ -707,11 +707,11 @@ var require_Alias = __commonJS({
       }
     };
     function getAliasCount(doc, node, anchors2) {
-      if (identity.isAlias(node)) {
+      if (identity2.isAlias(node)) {
         const source = node.resolve(doc);
         const anchor = anchors2 && source && anchors2.get(source);
         return anchor ? anchor.count * anchor.aliasCount : 0;
-      } else if (identity.isCollection(node)) {
+      } else if (identity2.isCollection(node)) {
         let count = 0;
         for (const item of node.items) {
           const c = getAliasCount(doc, item, anchors2);
@@ -719,7 +719,7 @@ var require_Alias = __commonJS({
             count = c;
         }
         return count;
-      } else if (identity.isPair(node)) {
+      } else if (identity2.isPair(node)) {
         const kc = getAliasCount(doc, node.key, anchors2);
         const vc = getAliasCount(doc, node.value, anchors2);
         return Math.max(kc, vc);
@@ -734,13 +734,13 @@ var require_Alias = __commonJS({
 var require_Scalar = __commonJS({
   "node_modules/yaml/dist/nodes/Scalar.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Node = require_Node();
     var toJS2 = require_toJS();
     var isScalarValue = (value) => !value || typeof value !== "function" && typeof value !== "object";
     var Scalar4 = class extends Node.NodeBase {
       constructor(value) {
-        super(identity.SCALAR);
+        super(identity2.SCALAR);
         this.value = value;
       }
       toJSON(arg, ctx) {
@@ -765,7 +765,7 @@ var require_createNode = __commonJS({
   "node_modules/yaml/dist/doc/createNode.js"(exports) {
     "use strict";
     var Alias = require_Alias();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Scalar4 = require_Scalar();
     var defaultTagPrefix = "tag:yaml.org,2002:";
     function findTagObject(value, tagName, tags) {
@@ -779,12 +779,12 @@ var require_createNode = __commonJS({
       return tags.find((t) => t.identify?.(value) && !t.format);
     }
     function createNode(value, tagName, ctx) {
-      if (identity.isDocument(value))
+      if (identity2.isDocument(value))
         value = value.contents;
-      if (identity.isNode(value))
+      if (identity2.isNode(value))
         return value;
-      if (identity.isPair(value)) {
-        const map = ctx.schema[identity.MAP].createNode?.(ctx.schema, null, ctx);
+      if (identity2.isPair(value)) {
+        const map = ctx.schema[identity2.MAP].createNode?.(ctx.schema, null, ctx);
         map.items.push(value);
         return map;
       }
@@ -816,7 +816,7 @@ var require_createNode = __commonJS({
             ref.node = node2;
           return node2;
         }
-        tagObj = value instanceof Map ? schema[identity.MAP] : Symbol.iterator in Object(value) ? schema[identity.SEQ] : schema[identity.MAP];
+        tagObj = value instanceof Map ? schema[identity2.MAP] : Symbol.iterator in Object(value) ? schema[identity2.SEQ] : schema[identity2.MAP];
       }
       if (onTagObj) {
         onTagObj(tagObj);
@@ -840,7 +840,7 @@ var require_Collection = __commonJS({
   "node_modules/yaml/dist/nodes/Collection.js"(exports) {
     "use strict";
     var createNode = require_createNode();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Node = require_Node();
     function collectionFromPath(schema, path, value) {
       let v = value;
@@ -884,7 +884,7 @@ var require_Collection = __commonJS({
         const copy = Object.create(Object.getPrototypeOf(this), Object.getOwnPropertyDescriptors(this));
         if (schema)
           copy.schema = schema;
-        copy.items = copy.items.map((it) => identity.isNode(it) || identity.isPair(it) ? it.clone(schema) : it);
+        copy.items = copy.items.map((it) => identity2.isNode(it) || identity2.isPair(it) ? it.clone(schema) : it);
         if (this.range)
           copy.range = this.range.slice();
         return copy;
@@ -900,7 +900,7 @@ var require_Collection = __commonJS({
         else {
           const [key, ...rest] = path;
           const node = this.get(key, true);
-          if (identity.isCollection(node))
+          if (identity2.isCollection(node))
             node.addIn(rest, value);
           else if (node === void 0 && this.schema)
             this.set(key, collectionFromPath(this.schema, rest, value));
@@ -917,7 +917,7 @@ var require_Collection = __commonJS({
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
-        if (identity.isCollection(node))
+        if (identity2.isCollection(node))
           return node.deleteIn(rest);
         else
           throw new Error(`Expected YAML collection at ${key}. Remaining path: ${rest}`);
@@ -931,16 +931,16 @@ var require_Collection = __commonJS({
         const [key, ...rest] = path;
         const node = this.get(key, true);
         if (rest.length === 0)
-          return !keepScalar && identity.isScalar(node) ? node.value : node;
+          return !keepScalar && identity2.isScalar(node) ? node.value : node;
         else
-          return identity.isCollection(node) ? node.getIn(rest, keepScalar) : void 0;
+          return identity2.isCollection(node) ? node.getIn(rest, keepScalar) : void 0;
       }
       hasAllNullValues(allowScalar) {
         return this.items.every((node) => {
-          if (!identity.isPair(node))
+          if (!identity2.isPair(node))
             return false;
           const n = node.value;
-          return n == null || allowScalar && identity.isScalar(n) && n.value == null && !n.commentBefore && !n.comment && !n.tag;
+          return n == null || allowScalar && identity2.isScalar(n) && n.value == null && !n.commentBefore && !n.comment && !n.tag;
         });
       }
       /**
@@ -951,7 +951,7 @@ var require_Collection = __commonJS({
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
-        return identity.isCollection(node) ? node.hasIn(rest) : false;
+        return identity2.isCollection(node) ? node.hasIn(rest) : false;
       }
       /**
        * Sets a value in this collection. For `!!set`, `value` needs to be a
@@ -963,7 +963,7 @@ var require_Collection = __commonJS({
           this.set(key, value);
         } else {
           const node = this.get(key, true);
-          if (identity.isCollection(node))
+          if (identity2.isCollection(node))
             node.setIn(rest, value);
           else if (node === void 0 && this.schema)
             this.set(key, collectionFromPath(this.schema, rest, value));
@@ -1419,7 +1419,7 @@ var require_stringify = __commonJS({
   "node_modules/yaml/dist/stringify/stringify.js"(exports) {
     "use strict";
     var anchors = require_anchors();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var stringifyComment = require_stringifyComment();
     var stringifyString = require_stringifyString();
     function createStringifyContext(doc, options) {
@@ -1472,7 +1472,7 @@ var require_stringify = __commonJS({
       }
       let tagObj = void 0;
       let obj;
-      if (identity.isScalar(item)) {
+      if (identity2.isScalar(item)) {
         obj = item.value;
         let match2 = tags.filter((t) => t.identify?.(obj));
         if (match2.length > 1) {
@@ -1495,7 +1495,7 @@ var require_stringify = __commonJS({
       if (!doc.directives)
         return "";
       const props = [];
-      const anchor = (identity.isScalar(node) || identity.isCollection(node)) && node.anchor;
+      const anchor = (identity2.isScalar(node) || identity2.isCollection(node)) && node.anchor;
       if (anchor && anchors.anchorIsValid(anchor)) {
         anchors$1.add(anchor);
         props.push(`&${anchor}`);
@@ -1506,9 +1506,9 @@ var require_stringify = __commonJS({
       return props.join(" ");
     }
     function stringify3(item, ctx, onComment, onChompKeep) {
-      if (identity.isPair(item))
+      if (identity2.isPair(item))
         return item.toString(ctx, onComment, onChompKeep);
-      if (identity.isAlias(item)) {
+      if (identity2.isAlias(item)) {
         if (ctx.doc.directives)
           return item.toString(ctx);
         if (ctx.resolvedAliases?.has(item)) {
@@ -1522,15 +1522,15 @@ var require_stringify = __commonJS({
         }
       }
       let tagObj = void 0;
-      const node = identity.isNode(item) ? item : ctx.doc.createNode(item, { onTagObj: (o) => tagObj = o });
+      const node = identity2.isNode(item) ? item : ctx.doc.createNode(item, { onTagObj: (o) => tagObj = o });
       tagObj ?? (tagObj = getTagObject(ctx.doc.schema.tags, node));
       const props = stringifyProps(node, tagObj, ctx);
       if (props.length > 0)
         ctx.indentAtStart = (ctx.indentAtStart ?? 0) + props.length + 1;
-      const str = typeof tagObj.stringify === "function" ? tagObj.stringify(node, ctx, onComment, onChompKeep) : identity.isScalar(node) ? stringifyString.stringifyString(node, ctx, onComment, onChompKeep) : node.toString(ctx, onComment, onChompKeep);
+      const str = typeof tagObj.stringify === "function" ? tagObj.stringify(node, ctx, onComment, onChompKeep) : identity2.isScalar(node) ? stringifyString.stringifyString(node, ctx, onComment, onChompKeep) : node.toString(ctx, onComment, onChompKeep);
       if (!props)
         return str;
-      return identity.isScalar(node) || str[0] === "{" || str[0] === "[" ? `${props} ${str}` : `${props}
+      return identity2.isScalar(node) || str[0] === "{" || str[0] === "[" ? `${props} ${str}` : `${props}
 ${ctx.indent}${str}`;
     }
     exports.createStringifyContext = createStringifyContext;
@@ -1542,23 +1542,23 @@ ${ctx.indent}${str}`;
 var require_stringifyPair = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyPair.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Scalar4 = require_Scalar();
     var stringify3 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyPair({ key, value }, ctx, onComment, onChompKeep) {
       const { allNullValues, doc, indent, indentStep, options: { commentString, indentSeq, simpleKeys } } = ctx;
-      let keyComment = identity.isNode(key) && key.comment || null;
+      let keyComment = identity2.isNode(key) && key.comment || null;
       if (simpleKeys) {
         if (keyComment) {
           throw new Error("With simple keys, key nodes cannot have comments");
         }
-        if (identity.isCollection(key) || !identity.isNode(key) && typeof key === "object") {
+        if (identity2.isCollection(key) || !identity2.isNode(key) && typeof key === "object") {
           const msg = "With simple keys, collection cannot be used as a key value";
           throw new Error(msg);
         }
       }
-      let explicitKey = !simpleKeys && (!key || keyComment && value == null && !ctx.inFlow || identity.isCollection(key) || (identity.isScalar(key) ? key.type === Scalar4.Scalar.BLOCK_FOLDED || key.type === Scalar4.Scalar.BLOCK_LITERAL : typeof key === "object"));
+      let explicitKey = !simpleKeys && (!key || keyComment && value == null && !ctx.inFlow || identity2.isCollection(key) || (identity2.isScalar(key) ? key.type === Scalar4.Scalar.BLOCK_FOLDED || key.type === Scalar4.Scalar.BLOCK_LITERAL : typeof key === "object"));
       ctx = Object.assign({}, ctx, {
         allNullValues: false,
         implicitKey: !explicitKey && (simpleKeys || !allNullValues),
@@ -1599,7 +1599,7 @@ ${indent}:`;
           str += stringifyComment.lineComment(str, ctx.indent, commentString(keyComment));
       }
       let vsb, vcb, valueComment;
-      if (identity.isNode(value)) {
+      if (identity2.isNode(value)) {
         vsb = !!value.spaceBefore;
         vcb = value.commentBefore;
         valueComment = value.comment;
@@ -1611,10 +1611,10 @@ ${indent}:`;
           value = doc.createNode(value);
       }
       ctx.implicitKey = false;
-      if (!explicitKey && !keyComment && identity.isScalar(value))
+      if (!explicitKey && !keyComment && identity2.isScalar(value))
         ctx.indentAtStart = str.length + 1;
       chompKeep = false;
-      if (!indentSeq && indentStep.length >= 2 && !ctx.inFlow && !explicitKey && identity.isSeq(value) && !value.flow && !value.tag && !value.anchor) {
+      if (!indentSeq && indentStep.length >= 2 && !ctx.inFlow && !explicitKey && identity2.isSeq(value) && !value.flow && !value.tag && !value.anchor) {
         ctx.indent = ctx.indent.substring(2);
       }
       let valueCommentDone = false;
@@ -1634,7 +1634,7 @@ ${stringifyComment.indentComment(cs, ctx.indent)}`;
           ws += `
 ${ctx.indent}`;
         }
-      } else if (!explicitKey && identity.isCollection(value)) {
+      } else if (!explicitKey && identity2.isCollection(value)) {
         const vs0 = valueStr[0];
         const nl0 = valueStr.indexOf("\n");
         const hasNewline = nl0 !== -1;
@@ -1697,7 +1697,7 @@ var require_log = __commonJS({
 var require_merge = __commonJS({
   "node_modules/yaml/dist/schema/yaml-1.1/merge.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Scalar4 = require_Scalar();
     var MERGE_KEY = "<<";
     var merge3 = {
@@ -1710,10 +1710,10 @@ var require_merge = __commonJS({
       }),
       stringify: () => MERGE_KEY
     };
-    var isMergeKey2 = (ctx, key) => (merge3.identify(key) || identity.isScalar(key) && (!key.type || key.type === Scalar4.Scalar.PLAIN) && merge3.identify(key.value)) && ctx?.doc.schema.tags.some((tag) => tag.tag === merge3.tag && tag.default);
+    var isMergeKey2 = (ctx, key) => (merge3.identify(key) || identity2.isScalar(key) && (!key.type || key.type === Scalar4.Scalar.PLAIN) && merge3.identify(key.value)) && ctx?.doc.schema.tags.some((tag) => tag.tag === merge3.tag && tag.default);
     function addMergeToJSMap(ctx, map, value) {
       const source = resolveAliasValue(ctx, value);
-      if (identity.isSeq(source))
+      if (identity2.isSeq(source))
         for (const it of source.items)
           mergeValue(ctx, map, it);
       else if (Array.isArray(source))
@@ -1724,7 +1724,7 @@ var require_merge = __commonJS({
     }
     function mergeValue(ctx, map, value) {
       const source = resolveAliasValue(ctx, value);
-      if (!identity.isMap(source))
+      if (!identity2.isMap(source))
         throw new Error("Merge sources must be maps or map aliases");
       const srcMap = source.toJSON(null, ctx, Map);
       for (const [key, value2] of srcMap) {
@@ -1745,7 +1745,7 @@ var require_merge = __commonJS({
       return map;
     }
     function resolveAliasValue(ctx, value) {
-      return ctx && identity.isAlias(value) ? value.resolve(ctx.doc, ctx) : value;
+      return ctx && identity2.isAlias(value) ? value.resolve(ctx.doc, ctx) : value;
     }
     exports.addMergeToJSMap = addMergeToJSMap;
     exports.isMergeKey = isMergeKey2;
@@ -1760,10 +1760,10 @@ var require_addPairToJSMap = __commonJS({
     var log = require_log();
     var merge3 = require_merge();
     var stringify3 = require_stringify();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var toJS2 = require_toJS();
     function addPairToJSMap(ctx, map, { key, value }) {
-      if (identity.isNode(key) && key.addToJSMap)
+      if (identity2.isNode(key) && key.addToJSMap)
         key.addToJSMap(ctx, map, value);
       else if (merge3.isMergeKey(ctx, key))
         merge3.addMergeToJSMap(ctx, map, value);
@@ -1794,7 +1794,7 @@ var require_addPairToJSMap = __commonJS({
         return "";
       if (typeof jsKey !== "object")
         return String(jsKey);
-      if (identity.isNode(key) && ctx?.doc) {
+      if (identity2.isNode(key) && ctx?.doc) {
         const strCtx = stringify3.createStringifyContext(ctx.doc, {});
         strCtx.anchors = /* @__PURE__ */ new Set();
         for (const node of ctx.anchors.keys())
@@ -1824,7 +1824,7 @@ var require_Pair = __commonJS({
     var createNode = require_createNode();
     var stringifyPair = require_stringifyPair();
     var addPairToJSMap = require_addPairToJSMap();
-    var identity = require_identity();
+    var identity2 = require_identity();
     function createPair(key, value, ctx) {
       const k = createNode.createNode(key, void 0, ctx);
       const v = createNode.createNode(value, void 0, ctx);
@@ -1832,15 +1832,15 @@ var require_Pair = __commonJS({
     }
     var Pair = class _Pair {
       constructor(key, value = null) {
-        Object.defineProperty(this, identity.NODE_TYPE, { value: identity.PAIR });
+        Object.defineProperty(this, identity2.NODE_TYPE, { value: identity2.PAIR });
         this.key = key;
         this.value = value;
       }
       clone(schema) {
         let { key, value } = this;
-        if (identity.isNode(key))
+        if (identity2.isNode(key))
           key = key.clone(schema);
-        if (identity.isNode(value))
+        if (identity2.isNode(value))
           value = value.clone(schema);
         return new _Pair(key, value);
       }
@@ -1861,7 +1861,7 @@ var require_Pair = __commonJS({
 var require_stringifyCollection = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyCollection.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var stringify3 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyCollection(collection, ctx, options) {
@@ -1877,14 +1877,14 @@ var require_stringifyCollection = __commonJS({
       for (let i = 0; i < items2.length; ++i) {
         const item = items2[i];
         let comment2 = null;
-        if (identity.isNode(item)) {
+        if (identity2.isNode(item)) {
           if (!chompKeep && item.spaceBefore)
             lines.push("");
           addCommentBefore(ctx, lines, item.commentBefore, chompKeep);
           if (item.comment)
             comment2 = item.comment;
-        } else if (identity.isPair(item)) {
-          const ik = identity.isNode(item.key) ? item.key : null;
+        } else if (identity2.isPair(item)) {
+          const ik = identity2.isNode(item.key) ? item.key : null;
           if (ik) {
             if (!chompKeep && ik.spaceBefore)
               lines.push("");
@@ -1932,14 +1932,14 @@ ${indent}${line}` : "\n";
       for (let i = 0; i < items2.length; ++i) {
         const item = items2[i];
         let comment = null;
-        if (identity.isNode(item)) {
+        if (identity2.isNode(item)) {
           if (item.spaceBefore)
             lines.push("");
           addCommentBefore(ctx, lines, item.commentBefore, false);
           if (item.comment)
             comment = item.comment;
-        } else if (identity.isPair(item)) {
-          const ik = identity.isNode(item.key) ? item.key : null;
+        } else if (identity2.isPair(item)) {
+          const ik = identity2.isNode(item.key) ? item.key : null;
           if (ik) {
             if (ik.spaceBefore)
               lines.push("");
@@ -1947,7 +1947,7 @@ ${indent}${line}` : "\n";
             if (ik.comment)
               reqNewline = true;
           }
-          const iv = identity.isNode(item.value) ? item.value : null;
+          const iv = identity2.isNode(item.value) ? item.value : null;
           if (iv) {
             if (iv.comment)
               comment = iv.comment;
@@ -2015,16 +2015,16 @@ var require_YAMLMap = __commonJS({
     var stringifyCollection = require_stringifyCollection();
     var addPairToJSMap = require_addPairToJSMap();
     var Collection = require_Collection();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Pair = require_Pair();
     var Scalar4 = require_Scalar();
     function findPair(items2, key) {
-      const k = identity.isScalar(key) ? key.value : key;
+      const k = identity2.isScalar(key) ? key.value : key;
       for (const it of items2) {
-        if (identity.isPair(it)) {
+        if (identity2.isPair(it)) {
           if (it.key === key || it.key === k)
             return it;
-          if (identity.isScalar(it.key) && it.key.value === k)
+          if (identity2.isScalar(it.key) && it.key.value === k)
             return it;
         }
       }
@@ -2035,7 +2035,7 @@ var require_YAMLMap = __commonJS({
         return "tag:yaml.org,2002:map";
       }
       constructor(schema) {
-        super(identity.MAP, schema);
+        super(identity2.MAP, schema);
         this.items = [];
       }
       /**
@@ -2073,7 +2073,7 @@ var require_YAMLMap = __commonJS({
        */
       add(pair, overwrite) {
         let _pair;
-        if (identity.isPair(pair))
+        if (identity2.isPair(pair))
           _pair = pair;
         else if (!pair || typeof pair !== "object" || !("key" in pair)) {
           _pair = new Pair.Pair(pair, pair?.value);
@@ -2084,7 +2084,7 @@ var require_YAMLMap = __commonJS({
         if (prev) {
           if (!overwrite)
             throw new Error(`Key ${_pair.key} already set`);
-          if (identity.isScalar(prev.value) && Scalar4.isScalarValue(_pair.value))
+          if (identity2.isScalar(prev.value) && Scalar4.isScalarValue(_pair.value))
             prev.value.value = _pair.value;
           else
             prev.value = _pair.value;
@@ -2108,7 +2108,7 @@ var require_YAMLMap = __commonJS({
       get(key, keepScalar) {
         const it = findPair(this.items, key);
         const node = it?.value;
-        return (!keepScalar && identity.isScalar(node) ? node.value : node) ?? void 0;
+        return (!keepScalar && identity2.isScalar(node) ? node.value : node) ?? void 0;
       }
       has(key) {
         return !!findPair(this.items, key);
@@ -2133,7 +2133,7 @@ var require_YAMLMap = __commonJS({
         if (!ctx)
           return JSON.stringify(this);
         for (const item of this.items) {
-          if (!identity.isPair(item))
+          if (!identity2.isPair(item))
             throw new Error(`Map items must all be pairs; found ${JSON.stringify(item)} instead`);
         }
         if (!ctx.allNullValues && this.hasAllNullValues(false))
@@ -2156,7 +2156,7 @@ var require_YAMLMap = __commonJS({
 var require_map = __commonJS({
   "node_modules/yaml/dist/schema/common/map.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var YAMLMap = require_YAMLMap();
     var map = {
       collection: "map",
@@ -2164,7 +2164,7 @@ var require_map = __commonJS({
       nodeClass: YAMLMap.YAMLMap,
       tag: "tag:yaml.org,2002:map",
       resolve(map2, onError) {
-        if (!identity.isMap(map2))
+        if (!identity2.isMap(map2))
           onError("Expected a mapping for this tag");
         return map2;
       },
@@ -2181,7 +2181,7 @@ var require_YAMLSeq = __commonJS({
     var createNode = require_createNode();
     var stringifyCollection = require_stringifyCollection();
     var Collection = require_Collection();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Scalar4 = require_Scalar();
     var toJS2 = require_toJS();
     var YAMLSeq = class extends Collection.Collection {
@@ -2189,7 +2189,7 @@ var require_YAMLSeq = __commonJS({
         return "tag:yaml.org,2002:seq";
       }
       constructor(schema) {
-        super(identity.SEQ, schema);
+        super(identity2.SEQ, schema);
         this.items = [];
       }
       add(value) {
@@ -2215,7 +2215,7 @@ var require_YAMLSeq = __commonJS({
         if (typeof idx !== "number")
           return void 0;
         const it = this.items[idx];
-        return !keepScalar && identity.isScalar(it) ? it.value : it;
+        return !keepScalar && identity2.isScalar(it) ? it.value : it;
       }
       /**
        * Checks if the collection includes a value with the key `key`.
@@ -2239,7 +2239,7 @@ var require_YAMLSeq = __commonJS({
         if (typeof idx !== "number")
           throw new Error(`Expected a valid index, not ${key}.`);
         const prev = this.items[idx];
-        if (identity.isScalar(prev) && Scalar4.isScalarValue(value))
+        if (identity2.isScalar(prev) && Scalar4.isScalarValue(value))
           prev.value = value;
         else
           this.items[idx] = value;
@@ -2281,7 +2281,7 @@ var require_YAMLSeq = __commonJS({
       }
     };
     function asItemIndex(key) {
-      let idx = identity.isScalar(key) ? key.value : key;
+      let idx = identity2.isScalar(key) ? key.value : key;
       if (idx && typeof idx === "string")
         idx = Number(idx);
       return typeof idx === "number" && Number.isInteger(idx) && idx >= 0 ? idx : null;
@@ -2294,7 +2294,7 @@ var require_YAMLSeq = __commonJS({
 var require_seq = __commonJS({
   "node_modules/yaml/dist/schema/common/seq.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var YAMLSeq = require_YAMLSeq();
     var seq = {
       collection: "seq",
@@ -2302,7 +2302,7 @@ var require_seq = __commonJS({
       nodeClass: YAMLSeq.YAMLSeq,
       tag: "tag:yaml.org,2002:seq",
       resolve(seq2, onError) {
-        if (!identity.isSeq(seq2))
+        if (!identity2.isSeq(seq2))
           onError("Expected a sequence for this tag");
         return seq2;
       },
@@ -2656,17 +2656,17 @@ var require_binary = __commonJS({
 var require_pairs = __commonJS({
   "node_modules/yaml/dist/schema/yaml-1.1/pairs.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Pair = require_Pair();
     var Scalar4 = require_Scalar();
     var YAMLSeq = require_YAMLSeq();
     function resolvePairs(seq, onError) {
-      if (identity.isSeq(seq)) {
+      if (identity2.isSeq(seq)) {
         for (let i = 0; i < seq.items.length; ++i) {
           let item = seq.items[i];
-          if (identity.isPair(item))
+          if (identity2.isPair(item))
             continue;
-          else if (identity.isMap(item)) {
+          else if (identity2.isMap(item)) {
             if (item.items.length > 1)
               onError("Each pair must have its own sequence indicator");
             const pair = item.items[0] || new Pair.Pair(new Scalar4.Scalar(null));
@@ -2680,7 +2680,7 @@ ${cn.comment}` : item.comment;
             }
             item = pair;
           }
-          seq.items[i] = identity.isPair(item) ? item : new Pair.Pair(item);
+          seq.items[i] = identity2.isPair(item) ? item : new Pair.Pair(item);
         }
       } else
         onError("Expected a sequence for this tag");
@@ -2734,7 +2734,7 @@ ${cn.comment}` : item.comment;
 var require_omap = __commonJS({
   "node_modules/yaml/dist/schema/yaml-1.1/omap.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var toJS2 = require_toJS();
     var YAMLMap = require_YAMLMap();
     var YAMLSeq = require_YAMLSeq();
@@ -2761,7 +2761,7 @@ var require_omap = __commonJS({
           ctx.onCreate(map);
         for (const pair of this.items) {
           let key, value;
-          if (identity.isPair(pair)) {
+          if (identity2.isPair(pair)) {
             key = toJS2.toJS(pair.key, "", ctx);
             value = toJS2.toJS(pair.value, key, ctx);
           } else {
@@ -2791,7 +2791,7 @@ var require_omap = __commonJS({
         const pairs$1 = pairs.resolvePairs(seq, onError);
         const seenKeys = [];
         for (const { key } of pairs$1.items) {
-          if (identity.isScalar(key)) {
+          if (identity2.isScalar(key)) {
             if (seenKeys.includes(key.value)) {
               onError(`Ordered maps must not include duplicate keys: ${key.value}`);
             } else {
@@ -2972,7 +2972,7 @@ var require_int2 = __commonJS({
 var require_set = __commonJS({
   "node_modules/yaml/dist/schema/yaml-1.1/set.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Pair = require_Pair();
     var YAMLMap = require_YAMLMap();
     var YAMLSet = class _YAMLSet extends YAMLMap.YAMLMap {
@@ -2982,7 +2982,7 @@ var require_set = __commonJS({
       }
       add(key) {
         let pair;
-        if (identity.isPair(key))
+        if (identity2.isPair(key))
           pair = key;
         else if (key && typeof key === "object" && "key" in key && "value" in key && key.value === null)
           pair = new Pair.Pair(key.key, null);
@@ -2998,7 +2998,7 @@ var require_set = __commonJS({
        */
       get(key, keepPair) {
         const pair = YAMLMap.findPair(this.items, key);
-        return !keepPair && identity.isPair(pair) ? identity.isScalar(pair.key) ? pair.key.value : pair.key : pair;
+        return !keepPair && identity2.isPair(pair) ? identity2.isScalar(pair.key) ? pair.key.value : pair.key : pair;
       }
       set(key, value) {
         if (typeof value !== "boolean")
@@ -3042,7 +3042,7 @@ var require_set = __commonJS({
       tag: "tag:yaml.org,2002:set",
       createNode: (schema, iterable, ctx) => YAMLSet.from(schema, iterable, ctx),
       resolve(map, onError) {
-        if (identity.isMap(map)) {
+        if (identity2.isMap(map)) {
           if (map.hasAllNullValues(true))
             return Object.assign(new YAMLSet(), map);
           else
@@ -3287,7 +3287,7 @@ var require_tags = __commonJS({
 var require_Schema = __commonJS({
   "node_modules/yaml/dist/schema/Schema.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var map = require_map();
     var seq = require_seq();
     var string = require_string();
@@ -3300,9 +3300,9 @@ var require_Schema = __commonJS({
         this.knownTags = resolveKnownTags ? tags.coreKnownTags : {};
         this.tags = tags.getTags(customTags, this.name, merge3);
         this.toStringOptions = toStringDefaults ?? null;
-        Object.defineProperty(this, identity.MAP, { value: map.map });
-        Object.defineProperty(this, identity.SCALAR, { value: string.string });
-        Object.defineProperty(this, identity.SEQ, { value: seq.seq });
+        Object.defineProperty(this, identity2.MAP, { value: map.map });
+        Object.defineProperty(this, identity2.SCALAR, { value: string.string });
+        Object.defineProperty(this, identity2.SEQ, { value: seq.seq });
         this.sortMapEntries = typeof sortMapEntries === "function" ? sortMapEntries : sortMapEntries === true ? sortMapEntriesByKey : null;
       }
       clone() {
@@ -3319,7 +3319,7 @@ var require_Schema = __commonJS({
 var require_stringifyDocument = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyDocument.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var stringify3 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyDocument(doc, options) {
@@ -3346,7 +3346,7 @@ var require_stringifyDocument = __commonJS({
       let chompKeep = false;
       let contentComment = null;
       if (doc.contents) {
-        if (identity.isNode(doc.contents)) {
+        if (identity2.isNode(doc.contents)) {
           if (doc.contents.spaceBefore && hasDirectives)
             lines.push("");
           if (doc.contents.commentBefore) {
@@ -3401,7 +3401,7 @@ var require_Document = __commonJS({
     "use strict";
     var Alias = require_Alias();
     var Collection = require_Collection();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Pair = require_Pair();
     var toJS2 = require_toJS();
     var Schema = require_Schema();
@@ -3416,7 +3416,7 @@ var require_Document = __commonJS({
         this.comment = null;
         this.errors = [];
         this.warnings = [];
-        Object.defineProperty(this, identity.NODE_TYPE, { value: identity.DOC });
+        Object.defineProperty(this, identity2.NODE_TYPE, { value: identity2.DOC });
         let _replacer = null;
         if (typeof replacer === "function" || Array.isArray(replacer)) {
           _replacer = replacer;
@@ -3452,7 +3452,7 @@ var require_Document = __commonJS({
        */
       clone() {
         const copy = Object.create(_Document.prototype, {
-          [identity.NODE_TYPE]: { value: identity.DOC }
+          [identity2.NODE_TYPE]: { value: identity2.DOC }
         });
         copy.commentBefore = this.commentBefore;
         copy.comment = this.comment;
@@ -3462,7 +3462,7 @@ var require_Document = __commonJS({
         if (this.directives)
           copy.directives = this.directives.clone();
         copy.schema = this.schema.clone();
-        copy.contents = identity.isNode(this.contents) ? this.contents.clone(copy.schema) : this.contents;
+        copy.contents = identity2.isNode(this.contents) ? this.contents.clone(copy.schema) : this.contents;
         if (this.range)
           copy.range = this.range.slice();
         return copy;
@@ -3525,7 +3525,7 @@ var require_Document = __commonJS({
           sourceObjects
         };
         const node = createNode.createNode(value, tag, ctx);
-        if (flow && identity.isCollection(node))
+        if (flow && identity2.isCollection(node))
           node.flow = true;
         setAnchors();
         return node;
@@ -3565,7 +3565,7 @@ var require_Document = __commonJS({
        * `true` (collections are always returned intact).
        */
       get(key, keepScalar) {
-        return identity.isCollection(this.contents) ? this.contents.get(key, keepScalar) : void 0;
+        return identity2.isCollection(this.contents) ? this.contents.get(key, keepScalar) : void 0;
       }
       /**
        * Returns item at `path`, or `undefined` if not found. By default unwraps
@@ -3574,14 +3574,14 @@ var require_Document = __commonJS({
        */
       getIn(path, keepScalar) {
         if (Collection.isEmptyPath(path))
-          return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path, keepScalar) : void 0;
+          return !keepScalar && identity2.isScalar(this.contents) ? this.contents.value : this.contents;
+        return identity2.isCollection(this.contents) ? this.contents.getIn(path, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
        */
       has(key) {
-        return identity.isCollection(this.contents) ? this.contents.has(key) : false;
+        return identity2.isCollection(this.contents) ? this.contents.has(key) : false;
       }
       /**
        * Checks if the document includes a value at `path`.
@@ -3589,7 +3589,7 @@ var require_Document = __commonJS({
       hasIn(path) {
         if (Collection.isEmptyPath(path))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path) : false;
+        return identity2.isCollection(this.contents) ? this.contents.hasIn(path) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3696,7 +3696,7 @@ var require_Document = __commonJS({
       }
     };
     function assertCollection(contents) {
-      if (identity.isCollection(contents))
+      if (identity2.isCollection(contents))
         return true;
       throw new Error("Expected a YAML collection as document contents");
     }
@@ -3754,11 +3754,11 @@ var require_errors = __commonJS({
         if (end?.line === line && end.col > col) {
           count = Math.max(1, Math.min(end.col - col, 80 - ci));
         }
-        const pointer = " ".repeat(ci) + "^".repeat(count);
+        const pointer2 = " ".repeat(ci) + "^".repeat(count);
         error.message += `:
 
 ${lineStr}
-${pointer}
+${pointer2}
 `;
       }
     };
@@ -3967,12 +3967,12 @@ var require_util_flow_indent_check = __commonJS({
 var require_util_map_includes = __commonJS({
   "node_modules/yaml/dist/compose/util-map-includes.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     function mapIncludes(ctx, items2, search) {
       const { uniqueKeys } = ctx.options;
       if (uniqueKeys === false)
         return false;
-      const isEqual = typeof uniqueKeys === "function" ? uniqueKeys : (a, b) => a === b || identity.isScalar(a) && identity.isScalar(b) && a.value === b.value;
+      const isEqual = typeof uniqueKeys === "function" ? uniqueKeys : (a, b) => a === b || identity2.isScalar(a) && identity2.isScalar(b) && a.value === b.value;
       return items2.some((pair) => isEqual(pair.key, search));
     }
     exports.mapIncludes = mapIncludes;
@@ -4185,7 +4185,7 @@ var require_resolve_end = __commonJS({
 var require_resolve_flow_collection = __commonJS({
   "node_modules/yaml/dist/compose/resolve-flow-collection.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Pair = require_Pair();
     var YAMLMap = require_YAMLMap();
     var YAMLSeq = require_YAMLSeq();
@@ -4264,7 +4264,7 @@ var require_resolve_flow_collection = __commonJS({
             }
             if (prevItemComment) {
               let prev = coll.items[coll.items.length - 1];
-              if (identity.isPair(prev))
+              if (identity2.isPair(prev))
                 prev = prev.value ?? prev.key;
               if (prev.comment)
                 prev.comment += "\n" + prevItemComment;
@@ -4379,7 +4379,7 @@ var require_resolve_flow_collection = __commonJS({
 var require_compose_collection = __commonJS({
   "node_modules/yaml/dist/compose/compose-collection.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Scalar4 = require_Scalar();
     var YAMLMap = require_YAMLMap();
     var YAMLSeq = require_YAMLSeq();
@@ -4429,7 +4429,7 @@ var require_compose_collection = __commonJS({
       }
       const coll = resolveCollection(CN, ctx, token, onError, tagName, tag);
       const res = tag.resolve?.(coll, (msg) => onError(tagToken, "TAG_RESOLVE_FAILED", msg), ctx.options) ?? coll;
-      const node = identity.isNode(res) ? res : new Scalar4.Scalar(res);
+      const node = identity2.isNode(res) ? res : new Scalar4.Scalar(res);
       node.range = coll.range;
       node.tag = tagName;
       if (tag?.format)
@@ -4848,7 +4848,7 @@ var require_resolve_flow_scalar = __commonJS({
 var require_compose_scalar = __commonJS({
   "node_modules/yaml/dist/compose/compose-scalar.js"(exports) {
     "use strict";
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Scalar4 = require_Scalar();
     var resolveBlockScalar = require_resolve_block_scalar();
     var resolveFlowScalar = require_resolve_flow_scalar();
@@ -4857,17 +4857,17 @@ var require_compose_scalar = __commonJS({
       const tagName = tagToken ? ctx.directives.tagName(tagToken.source, (msg) => onError(tagToken, "TAG_RESOLVE_FAILED", msg)) : null;
       let tag;
       if (ctx.options.stringKeys && ctx.atKey) {
-        tag = ctx.schema[identity.SCALAR];
+        tag = ctx.schema[identity2.SCALAR];
       } else if (tagName)
         tag = findScalarTagByName(ctx.schema, value, tagName, tagToken, onError);
       else if (token.type === "scalar")
         tag = findScalarTagByTest(ctx, value, token, onError);
       else
-        tag = ctx.schema[identity.SCALAR];
+        tag = ctx.schema[identity2.SCALAR];
       let scalar;
       try {
         const res = tag.resolve(value, (msg) => onError(tagToken ?? token, "TAG_RESOLVE_FAILED", msg), ctx.options);
-        scalar = identity.isScalar(res) ? res : new Scalar4.Scalar(res);
+        scalar = identity2.isScalar(res) ? res : new Scalar4.Scalar(res);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         onError(tagToken ?? token, "TAG_RESOLVE_FAILED", msg);
@@ -4887,7 +4887,7 @@ var require_compose_scalar = __commonJS({
     }
     function findScalarTagByName(schema, value, tagName, tagToken, onError) {
       if (tagName === "!")
-        return schema[identity.SCALAR];
+        return schema[identity2.SCALAR];
       const matchWithTest = [];
       for (const tag of schema.tags) {
         if (!tag.collection && tag.tag === tagName) {
@@ -4906,12 +4906,12 @@ var require_compose_scalar = __commonJS({
         return kt;
       }
       onError(tagToken, "TAG_RESOLVE_FAILED", `Unresolved tag: ${tagName}`, tagName !== "tag:yaml.org,2002:str");
-      return schema[identity.SCALAR];
+      return schema[identity2.SCALAR];
     }
     function findScalarTagByTest({ atKey, directives, schema }, value, token, onError) {
-      const tag = schema.tags.find((tag2) => (tag2.default === true || atKey && tag2.default === "key") && tag2.test?.test(value)) || schema[identity.SCALAR];
+      const tag = schema.tags.find((tag2) => (tag2.default === true || atKey && tag2.default === "key") && tag2.test?.test(value)) || schema[identity2.SCALAR];
       if (schema.compat) {
-        const compat = schema.compat.find((tag2) => tag2.default && tag2.test?.test(value)) ?? schema[identity.SCALAR];
+        const compat = schema.compat.find((tag2) => tag2.default && tag2.test?.test(value)) ?? schema[identity2.SCALAR];
         if (tag.tag !== compat.tag) {
           const ts = directives.tagString(tag.tag);
           const cs = directives.tagString(compat.tag);
@@ -4960,7 +4960,7 @@ var require_compose_node = __commonJS({
   "node_modules/yaml/dist/compose/compose-node.js"(exports) {
     "use strict";
     var Alias = require_Alias();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var composeCollection = require_compose_collection();
     var composeScalar = require_compose_scalar();
     var resolveEnd = require_resolve_end();
@@ -5006,7 +5006,7 @@ var require_compose_node = __commonJS({
       node ?? (node = composeEmptyNode(ctx, token.offset, void 0, null, props, onError));
       if (anchor && node.anchor === "")
         onError(anchor, "BAD_ALIAS", "Anchor cannot be an empty string");
-      if (atKey && ctx.options.stringKeys && (!identity.isScalar(node) || typeof node.value !== "string" || node.tag && node.tag !== "tag:yaml.org,2002:str")) {
+      if (atKey && ctx.options.stringKeys && (!identity2.isScalar(node) || typeof node.value !== "string" || node.tag && node.tag !== "tag:yaml.org,2002:str")) {
         const msg = "With stringKeys, all keys must be strings";
         onError(tag ?? token, "NON_STRING_KEY", msg);
       }
@@ -5112,7 +5112,7 @@ var require_composer = __commonJS({
     var directives = require_directives();
     var Document = require_Document();
     var errors = require_errors();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var composeDoc = require_compose_doc();
     var resolveEnd = require_resolve_end();
     function getErrorPos(src) {
@@ -5174,9 +5174,9 @@ var require_composer = __commonJS({
 ${comment}` : comment;
           } else if (afterEmptyLine || doc.directives.docStart || !dc) {
             doc.commentBefore = comment;
-          } else if (identity.isCollection(dc) && !dc.flow && dc.items.length > 0) {
+          } else if (identity2.isCollection(dc) && !dc.flow && dc.items.length > 0) {
             let it = dc.items[0];
-            if (identity.isPair(it))
+            if (identity2.isPair(it))
               it = it.key;
             const cb = it.commentBefore;
             it.commentBefore = cb ? `${comment}
@@ -7224,7 +7224,7 @@ var require_public_api = __commonJS({
     var Document = require_Document();
     var errors = require_errors();
     var log = require_log();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var lineCounter = require_line_counter();
     var parser = require_parser();
     function parseOptions(options) {
@@ -7246,7 +7246,7 @@ var require_public_api = __commonJS({
         return docs;
       return Object.assign([], { empty: true }, composer$1.streamInfo());
     }
-    function parseDocument2(source, options = {}) {
+    function parseDocument3(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -7272,7 +7272,7 @@ var require_public_api = __commonJS({
       } else if (options === void 0 && reviver && typeof reviver === "object") {
         options = reviver;
       }
-      const doc = parseDocument2(src, options);
+      const doc = parseDocument3(src, options);
       if (!doc)
         return null;
       doc.warnings.forEach((warning) => log.warn(doc.options.logLevel, warning));
@@ -7302,13 +7302,13 @@ var require_public_api = __commonJS({
         if (!keepUndefined)
           return void 0;
       }
-      if (identity.isDocument(value) && !_replacer)
+      if (identity2.isDocument(value) && !_replacer)
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
     exports.parse = parse9;
     exports.parseAllDocuments = parseAllDocuments;
-    exports.parseDocument = parseDocument2;
+    exports.parseDocument = parseDocument3;
     exports.stringify = stringify3;
   }
 });
@@ -7322,7 +7322,7 @@ var require_dist = __commonJS({
     var Schema = require_Schema();
     var errors = require_errors();
     var Alias = require_Alias();
-    var identity = require_identity();
+    var identity2 = require_identity();
     var Pair = require_Pair();
     var Scalar4 = require_Scalar();
     var YAMLMap = require_YAMLMap();
@@ -7340,14 +7340,14 @@ var require_dist = __commonJS({
     exports.YAMLParseError = errors.YAMLParseError;
     exports.YAMLWarning = errors.YAMLWarning;
     exports.Alias = Alias.Alias;
-    exports.isAlias = identity.isAlias;
-    exports.isCollection = identity.isCollection;
-    exports.isDocument = identity.isDocument;
-    exports.isMap = identity.isMap;
-    exports.isNode = identity.isNode;
-    exports.isPair = identity.isPair;
-    exports.isScalar = identity.isScalar;
-    exports.isSeq = identity.isSeq;
+    exports.isAlias = identity2.isAlias;
+    exports.isCollection = identity2.isCollection;
+    exports.isDocument = identity2.isDocument;
+    exports.isMap = identity2.isMap;
+    exports.isNode = identity2.isNode;
+    exports.isPair = identity2.isPair;
+    exports.isScalar = identity2.isScalar;
+    exports.isSeq = identity2.isSeq;
     exports.Pair = Pair.Pair;
     exports.Scalar = Scalar4.Scalar;
     exports.YAMLMap = YAMLMap.YAMLMap;
@@ -8958,12 +8958,12 @@ function checkPython(project, step, before, all) {
   if (step.with.has("cache")) return void 0;
   const paths = filePaths(project);
   const names = paths.map(basename);
-  const managers = /* @__PURE__ */ new Set();
-  if (names.includes("poetry.lock")) managers.add("poetry");
-  if (names.includes("Pipfile.lock")) managers.add("pipenv");
-  if (names.includes("uv.lock") && !anyUses(all, "astral-sh/setup-uv")) managers.add("uv");
-  if (paths.some((path) => /^requirements.*\.txt$/i.test(basename(path)) || /(^|\/)requirements\/[^/]+\.txt$/i.test(path))) managers.add("pip");
-  const list3 = [...managers];
+  const managers2 = /* @__PURE__ */ new Set();
+  if (names.includes("poetry.lock")) managers2.add("poetry");
+  if (names.includes("Pipfile.lock")) managers2.add("pipenv");
+  if (names.includes("uv.lock") && !anyUses(all, "astral-sh/setup-uv")) managers2.add("uv");
+  if (paths.some((path) => /^requirements.*\.txt$/i.test(basename(path)) || /(^|\/)requirements\/[^/]+\.txt$/i.test(path))) managers2.add("pip");
+  const list3 = [...managers2];
   if (list3.length === 0 || list3.some((manager2) => covered2(all, manager2))) return void 0;
   if (list3.length > 1) {
     return {
@@ -8997,17 +8997,17 @@ function checkPython(project, step, before, all) {
 function checkJava(project, step, all) {
   if (step.with.has("cache")) return void 0;
   const names = new Set(filePaths(project).map(basename));
-  const managers = [];
-  if (names.has("pom.xml")) managers.push("maven");
-  if (["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"].some((name) => names.has(name))) managers.push("gradle");
-  if (names.has("build.sbt")) managers.push("sbt");
-  if (managers.length === 0 || managers.some((manager2) => covered2(all, manager2))) return void 0;
-  const manager = managers.length === 1 ? managers[0] : void 0;
+  const managers2 = [];
+  if (names.has("pom.xml")) managers2.push("maven");
+  if (["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"].some((name) => names.has(name))) managers2.push("gradle");
+  if (names.has("build.sbt")) managers2.push("sbt");
+  if (managers2.length === 0 || managers2.some((manager2) => covered2(all, manager2))) return void 0;
+  const manager = managers2.length === 1 ? managers2[0] : void 0;
   return {
-    managers,
+    managers: managers2,
     ...manager ? { fixValue: manager } : {},
     message: `\`actions/setup-java\` does not cache ${manager ? LABEL[manager] : "build tool"} dependencies.`,
-    suggestion: manager === "gradle" ? "Add `cache: gradle`, or use `gradle/actions/setup-gradle`, which also caches the Gradle build cache." : `Add \`cache: ${manager ?? managers.join("|")}\` to the step's \`with:\`.`
+    suggestion: manager === "gradle" ? "Add `cache: gradle`, or use `gradle/actions/setup-gradle`, which also caches the Gradle build cache." : `Add \`cache: ${manager ?? managers2.join("|")}\` to the step's \`with:\`.`
   };
 }
 function checkGo(step, all) {
@@ -9938,7 +9938,7 @@ var SPECS = {
     ]
   }
 };
-var KNOWN_TARGETS = Object.values(SPECS).flatMap((spec) => spec.needs.map((need) => need.pattern));
+var KNOWN_TARGETS = Object.values(SPECS).flatMap((spec2) => spec2.needs.map((need) => need.pattern));
 function cacheTool(command) {
   const install = dependencyInstall(command.words);
   if (install === "go") return "go-mod";
@@ -9962,8 +9962,8 @@ function runsAsNonRoot(stage, instruction) {
   }
   return user !== void 0 && !/^(root|0)(:|$)/.test(user);
 }
-function missingMounts(spec, mounts) {
-  return spec.needs.filter((need) => !mounts.some((mount) => need.pattern.test(mount.target)));
+function missingMounts(spec2, mounts) {
+  return spec2.needs.filter((need) => !mounts.some((mount) => need.pattern.test(mount.target)));
 }
 var cache_mount_default = defineRule({
   meta: {
@@ -10005,9 +10005,9 @@ var cache_mount_default = defineRule({
             const tool2 = cacheTool(command);
             if (!tool2 || seen.has(tool2)) continue;
             seen.add(tool2);
-            const spec = SPECS[tool2];
-            if (!spec) continue;
-            const missing = missingMounts(spec, mounts);
+            const spec2 = SPECS[tool2];
+            if (!spec2) continue;
+            const missing = missingMounts(spec2, mounts);
             if (missing.length === 0) continue;
             const workdir = workdirBefore(stage, instruction) ?? "";
             const nonRoot = runsAsNonRoot(stage, instruction) ? " This stage runs as a non-root USER: point the target at that user's home and add `uid=`/`gid=` to the mount." : "";
@@ -10017,7 +10017,7 @@ var cache_mount_default = defineRule({
               path: model.path,
               line: command.line,
               key: `stage:${stageLabel(stage)}:run[${ordinal}]:${tool2}`,
-              message: `\`${command.words.slice(0, 3).join(" ")}\` runs without a BuildKit cache mount, so every rebuild of this layer downloads ${tool2 === "apt" ? "packages" : "dependencies"} from scratch instead of reusing the ${spec.label} cache.`,
+              message: `\`${command.words.slice(0, 3).join(" ")}\` runs without a BuildKit cache mount, so every rebuild of this layer downloads ${tool2 === "apt" ? "packages" : "dependencies"} from scratch instead of reusing the ${spec2.label} cache.`,
               suggestion: `Use \`RUN ${missing.map((need) => need.mount(workdir)).join(" ")} ${command.words.slice(0, 3).join(" ")} ...\`.${missing.map((need) => need.note ? ` ${need.note}` : "").join("")}${apt}${noCache}${nonRoot}${syntax}`
             });
           }
@@ -10352,8 +10352,8 @@ var dockerignore_default = defineRule({
 // src/lint/rules/containers/multi-stage.ts
 var BUILD_PACKAGES = /* @__PURE__ */ new Set(["build-essential", "build-base", "gcc", "g++", "make", "git", "cmake", "clang", "musl-dev", "libc-dev"]);
 var DEV_IMAGE = /(^|\/)\.devcontainer\/|(^|\/)(dev\.Dockerfile|Dockerfile\.dev(elopment)?|[^/]*\.dev\.Dockerfile)$/i;
-function packageName(spec) {
-  return spec.split(/[=~<>]/)[0]?.toLowerCase() ?? spec;
+function packageName(spec2) {
+  return spec2.split(/[=~<>]/)[0]?.toLowerCase() ?? spec2;
 }
 function removesPackages(words2) {
   const [head, ...rest] = words2;
@@ -11310,9 +11310,9 @@ var monolith_default = defineRule({
           suggestion: DECOMPOSE
         });
       }
-      const packageName2 = manifest.name;
-      if (options.maxWorkspaceDependents > 0 && packageName2) {
-        const dependents = [...workspace].filter((other) => other !== manifest && dependsOn(other, packageName2));
+      const packageName3 = manifest.name;
+      if (options.maxWorkspaceDependents > 0 && packageName3) {
+        const dependents = [...workspace].filter((other) => other !== manifest && dependsOn(other, packageName3));
         if (dependents.length > options.maxWorkspaceDependents) {
           report({
             path: manifest.path,
@@ -11321,7 +11321,7 @@ var monolith_default = defineRule({
             confidence: "medium",
             message: `${name} is a dependency of ${dependents.length} workspace packages (more than ${options.maxWorkspaceDependents}), so any change to it invalidates the build and test caches of all of them.`,
             suggestion: `Split ${name} into smaller packages along its consumers' needs, with explicit \`exports\`, so a change only affects the packages that import the changed part.`,
-            related: dependents.sort((a, b) => a.path.localeCompare(b.path)).map((other) => ({ path: other.path, line: other.lineOf(packageName2) }))
+            related: dependents.sort((a, b) => a.path.localeCompare(b.path)).map((other) => ({ path: other.path, line: other.lineOf(packageName3) }))
           });
         }
       }
@@ -11373,12 +11373,12 @@ var version_drift_default = defineRule({
     const ignored = new Set(options.ignore);
     const declarations = /* @__PURE__ */ new Map();
     for (const manifest of manifests) {
-      for (const record2 of [manifest.dependencies, manifest.devDependencies]) {
-        for (const [dependency, raw] of Object.entries(record2)) {
-          const spec = raw.trim();
-          if (!spec || LOCAL_SPEC.test(spec) || internal.has(dependency) || ignored.has(dependency)) continue;
+      for (const record3 of [manifest.dependencies, manifest.devDependencies]) {
+        for (const [dependency, raw] of Object.entries(record3)) {
+          const spec2 = raw.trim();
+          if (!spec2 || LOCAL_SPEC.test(spec2) || internal.has(dependency) || ignored.has(dependency)) continue;
           const list3 = declarations.get(dependency) ?? [];
-          if (!list3.some((entry) => entry.manifest === manifest && entry.spec === spec)) list3.push({ manifest, spec });
+          if (!list3.some((entry) => entry.manifest === manifest && entry.spec === spec2)) list3.push({ manifest, spec: spec2 });
           declarations.set(dependency, list3);
         }
       }
@@ -11395,7 +11395,7 @@ var version_drift_default = defineRule({
         if (entry.manifest === first.manifest || related.some((location) => location.path === entry.manifest.path)) continue;
         related.push({ path: entry.manifest.path, line: entry.manifest.lineOf(dependency) });
       }
-      const summary2 = [...specs].slice(0, 4).map(([spec, paths]) => `\`${spec}\` (${paths.slice(0, 3).join(", ")}${paths.length > 3 ? `, +${paths.length - 3}` : ""})`).join(", ");
+      const summary2 = [...specs].slice(0, 4).map(([spec2, paths]) => `\`${spec2}\` (${paths.slice(0, 3).join(", ")}${paths.length > 3 ? `, +${paths.length - 3}` : ""})`).join(", ");
       const manifestCount = new Set(list3.map((entry) => entry.manifest)).size;
       report({
         path: first.manifest.path,
@@ -12630,22 +12630,41 @@ import { createHash } from "node:crypto";
 
 // src/utils.ts
 function matchesGlob(path, glob) {
-  let regex = "";
+  let matched = new Uint8Array(path.length + 1);
+  matched[0] = 1;
+  const dot = (char) => char !== "\n" && char !== "\r" && char !== "\u2028" && char !== "\u2029";
   for (let index = 0; index < glob.length; index += 1) {
     const char = glob[index];
+    const next = new Uint8Array(path.length + 1);
     if (char === "*" && glob[index + 1] === "*") {
       if (glob[index + 2] === "/") {
-        regex += "(?:.*/)?";
+        next.set(matched);
+        let reachable = false;
+        for (let offset = 0; offset < path.length; offset += 1) {
+          reachable = (reachable || matched[offset] === 1) && dot(path[offset]);
+          if (reachable && path[offset] === "/") next[offset + 1] = 1;
+        }
         index += 2;
       } else {
-        regex += ".*";
+        next[0] = matched[0];
+        for (let offset = 0; offset < path.length; offset += 1) {
+          next[offset + 1] = matched[offset + 1] || (next[offset] && dot(path[offset]) ? 1 : 0);
+        }
         index += 1;
       }
-    } else if (char === "*") regex += "[^/]*";
-    else if (char === "?") regex += "[^/]";
-    else regex += char.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+    } else if (char === "*") {
+      next[0] = matched[0];
+      for (let offset = 0; offset < path.length; offset += 1) {
+        next[offset + 1] = matched[offset + 1] || (next[offset] && path[offset] !== "/" ? 1 : 0);
+      }
+    } else {
+      for (let offset = 0; offset < path.length; offset += 1) {
+        if (matched[offset] && (char === "?" ? path[offset] !== "/" : path[offset] === char)) next[offset + 1] = 1;
+      }
+    }
+    matched = next;
   }
-  return new RegExp(`^${regex}$`).test(path);
+  return matched[path.length] === 1;
 }
 async function mapLimit(items2, limit, fn) {
   const results = new Array(items2.length);
@@ -12678,17 +12697,17 @@ function parseManifest(path, content) {
   if (!json2 || typeof json2 !== "object" || Array.isArray(json2)) {
     throw new Error("package.json must contain a JSON object");
   }
-  const record2 = json2;
+  const record3 = json2;
   const lines = content.split(/\r?\n/);
   const slash = path.lastIndexOf("/");
   return {
     path,
     dir: slash >= 0 ? path.slice(0, slash) : "",
-    json: record2,
-    ...typeof record2.name === "string" ? { name: record2.name } : {},
-    private: record2.private === true,
-    dependencies: stringRecord(record2.dependencies),
-    devDependencies: stringRecord(record2.devDependencies),
+    json: record3,
+    ...typeof record3.name === "string" ? { name: record3.name } : {},
+    private: record3.private === true,
+    dependencies: stringRecord(record3.dependencies),
+    devDependencies: stringRecord(record3.devDependencies),
     lineOf(key) {
       const pattern = new RegExp(`^\\s*"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"\\s*:`);
       const index = lines.findIndex((line) => pattern.test(line));
@@ -13249,7 +13268,7 @@ function validateManifest(input2, options = {}) {
   if (config && arms.length > config.selection.maxArms) v.problem("arms", `At most ${config.selection.maxArms} arms per experiment.`);
   const metrics = root.metrics === void 0 ? void 0 : v.strings("metrics", root.metrics, []);
   if (config && metrics) {
-    for (const metric of metrics) if (!config.metrics.some((spec) => spec.id === metric)) v.problem("metrics", `Unknown metric "${metric}".`);
+    for (const metric of metrics) if (!config.metrics.some((spec2) => spec2.id === metric)) v.problem("metrics", `Unknown metric "${metric}".`);
   }
   const createdAt = v.string("createdAt", root.createdAt, "");
   const expiresAt = v.string("expiresAt", root.expiresAt, "");
@@ -13397,41 +13416,41 @@ var EPSILON = 1e-9;
 var clamp = (value) => Math.max(-1, Math.min(1, value));
 var round = (value) => Math.round(value * 1e4) / 1e4;
 function metricsFor(manifest, config) {
-  if (manifest.metrics?.length) return config.metrics.filter((spec) => manifest.metrics?.includes(spec.id));
+  if (manifest.metrics?.length) return config.metrics.filter((spec2) => manifest.metrics?.includes(spec2.id));
   const source = manifest.kind === "rules" ? "corpus" : "ci";
-  return config.metrics.filter((spec) => spec.source === source);
+  return config.metrics.filter((spec2) => spec2.source === source);
 }
-function relativeDelta(spec, control, arm) {
-  const change = spec.direction === "maximize" ? arm - control : control - arm;
+function relativeDelta(spec2, control, arm) {
+  const change = spec2.direction === "maximize" ? arm - control : control - arm;
   if (Math.abs(control) < EPSILON) return change === 0 ? 0 : clamp(Math.sign(change));
   return clamp(change / Math.abs(control));
 }
-function compare(spec, control, arm, config) {
-  const base2 = { id: spec.id, weight: spec.weight, direction: spec.direction, delta: 0 };
-  if (spec.source === "corpus") {
-    const c2 = control.corpus?.[spec.id];
-    const a2 = arm.corpus?.[spec.id];
+function compare(spec2, control, arm, config) {
+  const base2 = { id: spec2.id, weight: spec2.weight, direction: spec2.direction, delta: 0 };
+  if (spec2.source === "corpus") {
+    const c2 = control.corpus?.[spec2.id];
+    const a2 = arm.corpus?.[spec2.id];
     if (c2 === void 0 || a2 === void 0) return base2;
-    return { ...base2, control: c2, arm: a2, delta: round(relativeDelta(spec, c2, a2)) };
+    return { ...base2, control: c2, arm: a2, delta: round(relativeDelta(spec2, c2, a2)) };
   }
-  const cSamples = control.ci?.[spec.id] ?? [];
-  const aSamples = arm.ci?.[spec.id] ?? [];
+  const cSamples = control.ci?.[spec2.id] ?? [];
+  const aSamples = arm.ci?.[spec2.id] ?? [];
   const minSamples = config.selection.minSamples;
   if (cSamples.length < minSamples || aSamples.length < minSamples) {
     return { ...base2, needs: { control: Math.max(0, minSamples - cSamples.length), arm: Math.max(0, minSamples - aSamples.length) } };
   }
   const c = median(cSamples);
   const a = median(aSamples);
-  const delta = relativeDelta(spec, c, a);
+  const delta = relativeDelta(spec2, c, a);
   const better = delta > 0;
-  const [high, low] = spec.direction === "minimize" === better ? [cSamples, aSamples] : [aSamples, cSamples];
+  const [high, low] = spec2.direction === "minimize" === better ? [cSamples, aSamples] : [aSamples, cSamples];
   const pValue = mannWhitneyGreater(high, low).pValue;
   const significant = delta !== 0 && pValue < config.selection.pValue;
   return { ...base2, control: c, arm: a, pValue: round(pValue), delta: significant ? round(delta) : 0 };
 }
 function scoreArm(manifest, control, arm, config) {
   const specs = metricsFor(manifest, config);
-  const metrics = specs.map((spec) => compare(spec, control, arm, config));
+  const metrics = specs.map((spec2) => compare(spec2, control, arm, config));
   const pending = [];
   const failures = [];
   if (arm.error) failures.push(`evaluation failed: ${arm.error}`);
@@ -13441,12 +13460,12 @@ function scoreArm(manifest, control, arm, config) {
   const touched = arm.changedPaths.filter((path) => config.protectedPaths.some((glob) => matchesGlob(path, glob)));
   if (touched.length > 0) failures.push(`modified protected paths: ${touched.join(", ")}`);
   for (const metric of metrics) {
-    const spec = specs.find((candidate) => candidate.id === metric.id);
+    const spec2 = specs.find((candidate) => candidate.id === metric.id);
     if (metric.needs && (metric.needs.arm > 0 || metric.needs.control > 0)) pending.push(`${metric.id} needs more CI samples`);
     else if (metric.control === void 0 || metric.arm === void 0) {
       if (!arm.error && !control.error) pending.push(`${metric.id} has not been measured`);
-    } else if (spec?.maxRegression !== void 0 && metric.delta < -spec.maxRegression) {
-      failures.push(`${metric.id} regressed ${Math.round(-metric.delta * 100)}% (limit ${Math.round(spec.maxRegression * 100)}%)`);
+    } else if (spec2?.maxRegression !== void 0 && metric.delta < -spec2.maxRegression) {
+      failures.push(`${metric.id} regressed ${Math.round(-metric.delta * 100)}% (limit ${Math.round(spec2.maxRegression * 100)}%)`);
     }
   }
   const totalWeight = metrics.reduce((sum, metric) => sum + metric.weight, 0) || 1;
@@ -13470,11 +13489,11 @@ var seconds = (start, end) => {
   const value = (Date.parse(end ?? "") - Date.parse(start ?? "")) / 1e3;
   return Number.isFinite(value) && value >= 0 ? value : void 0;
 };
-async function ciSamples(client, repo, spec, options) {
-  if (!spec.workflow) return [];
+async function ciSamples(client, repo, spec2, options) {
+  if (!spec2.workflow) return [];
   const response = await client.request("GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs", {
     ...repo,
-    workflow_id: spec.workflow,
+    workflow_id: spec2.workflow,
     branch: options.branch,
     status: "success",
     created: `>=${options.since.slice(0, 10)}`,
@@ -13483,14 +13502,14 @@ async function ciSamples(client, repo, spec, options) {
   const runs = (response.data.workflow_runs ?? []).filter((run3) => !options.headSha || run3.head_sha === options.headSha).slice(0, options.maxRuns ?? 30);
   const samples = [];
   for (const run3 of runs) {
-    if (!spec.job) {
+    if (!spec2.job) {
       const value2 = seconds(run3.run_started_at ?? run3.created_at, run3.updated_at);
       if (value2 !== void 0) samples.push(value2);
       continue;
     }
     const response2 = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs", { ...repo, run_id: run3.id, per_page: 100 }).catch(() => void 0);
     const list3 = response2?.data?.jobs ?? [];
-    const job = list3.find((candidate) => candidate.name === spec.job && candidate.conclusion === "success");
+    const job = list3.find((candidate) => candidate.name === spec2.job && candidate.conclusion === "success");
     const value = job ? seconds(job.started_at, job.completed_at) : void 0;
     if (value !== void 0) samples.push(value);
   }
@@ -13513,15 +13532,15 @@ async function changedPaths(client, repo, base2, head) {
 }
 async function collectMeasurements(client, repo, options) {
   const { manifest, state, config } = options;
-  const ciSpecs = metricsFor(manifest, config).filter((spec) => spec.source === "ci");
+  const ciSpecs = metricsFor(manifest, config).filter((spec2) => spec2.source === "ci");
   const trunk = trunkBranch(manifest.name);
   const measure = async (branch, arm, headSha, pullRequest) => {
     const measurement = { arm, changedPaths: [], ...headSha ? { headSha } : {}, ...pullRequest ? { pullRequest } : {} };
     try {
       if (ciSpecs.length > 0) {
         measurement.ci = {};
-        for (const spec of ciSpecs) {
-          measurement.ci[spec.id] = await ciSamples(client, repo, spec, { branch, since: manifest.createdAt, ...headSha ? { headSha } : {} });
+        for (const spec2 of ciSpecs) {
+          measurement.ci[spec2.id] = await ciSamples(client, repo, spec2, { branch, since: manifest.createdAt, ...headSha ? { headSha } : {} });
         }
       }
       if (arm !== "trunk" && headSha) {
@@ -13538,9 +13557,9 @@ async function collectMeasurements(client, repo, options) {
   };
   const control = await measure(trunk, "trunk", state.trunk?.headSha, state.trunk?.number);
   const arms = [];
-  for (const spec of manifest.arms) {
-    const pull = state.arms.find((candidate) => candidate.arm === spec.name && candidate.state === "open");
-    if (pull) arms.push(await measure(armBranch(manifest.name, spec.name), spec.name, pull.headSha, pull.number));
+  for (const spec2 of manifest.arms) {
+    const pull = state.arms.find((candidate) => candidate.arm === spec2.name && candidate.state === "open");
+    if (pull) arms.push(await measure(armBranch(manifest.name, spec2.name), spec2.name, pull.headSha, pull.number));
   }
   return { experiment: manifest.name, collectedAt: (options.now ?? /* @__PURE__ */ new Date()).toISOString(), control, arms };
 }
@@ -13849,10 +13868,10 @@ function best(scores) {
 }
 function decide(manifest, measurements, config, options) {
   const now = options.now ?? /* @__PURE__ */ new Date();
-  const scores = manifest.arms.map((spec) => {
-    const measured = measurements.arms.find((arm) => arm.arm === spec.name);
+  const scores = manifest.arms.map((spec2) => {
+    const measured = measurements.arms.find((arm) => arm.arm === spec2.name);
     if (!measured) {
-      return { arm: spec.name, metrics: [], deterministic: 0, rank: 0, pending: ["arm has not been built yet"], failures: [], qualifies: false };
+      return { arm: spec2.name, metrics: [], deterministic: 0, rank: 0, pending: ["arm has not been built yet"], failures: [], qualifies: false };
     }
     return scoreArm(manifest, measurements.control, measured, config);
   });
@@ -13871,16 +13890,16 @@ function decide(manifest, measurements, config, options) {
     return { action: "reject", reason: `no arm qualified (${why})`, scores };
   }
   const dispatch = [];
-  const ciSpecs = metricsFor(manifest, config).filter((spec) => spec.source === "ci" && spec.workflow);
-  for (const spec of ciSpecs) {
+  const ciSpecs = metricsFor(manifest, config).filter((spec2) => spec2.source === "ci" && spec2.workflow);
+  for (const spec2 of ciSpecs) {
     let control = 0;
     for (const score of pending) {
-      const needs = score.metrics.find((metric) => metric.id === spec.id)?.needs;
+      const needs = score.metrics.find((metric) => metric.id === spec2.id)?.needs;
       if (!needs) continue;
       control = Math.max(control, needs.control);
-      if (needs.arm > 0) dispatch.push({ ref: options.armRef(score.arm), arm: score.arm, workflow: spec.workflow, runs: needs.arm });
+      if (needs.arm > 0) dispatch.push({ ref: options.armRef(score.arm), arm: score.arm, workflow: spec2.workflow, runs: needs.arm });
     }
-    if (control > 0) dispatch.push({ ref: options.trunkRef, arm: "trunk", workflow: spec.workflow, runs: control });
+    if (control > 0) dispatch.push({ ref: options.trunkRef, arm: "trunk", workflow: spec2.workflow, runs: control });
   }
   const merged = /* @__PURE__ */ new Map();
   for (const request of dispatch) {
@@ -14215,7 +14234,7 @@ function requireDecisionEvidence(manifest, state, measurements) {
   }
   for (const arm of state.arms.filter((pull) => pull.state === "open")) {
     const measured = measurements.arms.filter((item) => item?.arm === arm.arm);
-    if (arm.experiment !== manifest.name || !manifest.arms.some((spec) => spec.name === arm.arm) || arm.head !== armBranch(manifest.name, arm.arm) || arm.base !== name || measured.length !== 1 || !matches(arm, measured[0])) {
+    if (arm.experiment !== manifest.name || !manifest.arms.some((spec2) => spec2.name === arm.arm) || arm.head !== armBranch(manifest.name, arm.arm) || arm.base !== name || measured.length !== 1 || !matches(arm, measured[0])) {
       throw new Error(`Experiment evidence for ${arm.arm} is missing or stale. Recollect and re-evaluate before applying a decision.`);
     }
   }
@@ -16549,12 +16568,12 @@ function parseRolloutTargets(text) {
   return { repositories, canaries, config, problems };
 }
 function fnv1a(text) {
-  let hash2 = 2166136261;
+  let hash3 = 2166136261;
   for (let index = 0; index < text.length; index += 1) {
-    hash2 ^= text.charCodeAt(index);
-    hash2 = Math.imul(hash2, 16777619) >>> 0;
+    hash3 ^= text.charCodeAt(index);
+    hash3 = Math.imul(hash3, 16777619) >>> 0;
   }
-  return hash2;
+  return hash3;
 }
 function rolloutOrder(id, repositories, canaries = []) {
   const unique = [...new Set(repositories)];
@@ -17041,6 +17060,289 @@ ${rendered.body}`,
   });
 }
 
+// src/knowledge/identity.ts
+import { createHash as createHash3 } from "node:crypto";
+var hash2 = (value) => createHash3("sha256").update(value).digest("hex");
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, item]) => [key, canonical(item)]));
+  }
+  return value;
+}
+var identity = (value) => hash2(JSON.stringify(canonical(value)));
+function validateScope(scope2) {
+  const host = new URL(scope2.host);
+  if (host.protocol !== "https:" || host.origin !== scope2.host || !/^[1-9]\d*$/.test(scope2.repositoryId)) {
+    throw new Error("Knowledge scope requires a canonical HTTPS origin and a positive repository ID");
+  }
+}
+function validateRevision(revision) {
+  if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(revision)) throw new Error("Knowledge requires an immutable commit SHA");
+}
+function snapshotIdentity(snapshot) {
+  return identity({
+    version: snapshot.version,
+    repository: snapshot.repository,
+    revision: snapshot.revision,
+    coverage: snapshot.coverage,
+    projects: snapshot.projects,
+    technologies: snapshot.technologies,
+    relationships: snapshot.relationships
+  });
+}
+
+// src/knowledge/extract.ts
+var import_yaml23 = __toESM(require_dist(), 1);
+var packageName2 = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
+var managers = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
+var toolFiles = {
+  "turbo.json": "turborepo",
+  "nx.json": "nx",
+  "lerna.json": "lerna",
+  "rush.json": "rush",
+  "MODULE.bazel": "bazel",
+  WORKSPACE: "bazel",
+  "WORKSPACE.bazel": "bazel",
+  "pants.toml": "pants",
+  "settings.gradle": "gradle",
+  "settings.gradle.kts": "gradle"
+};
+var scopes = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"];
+var pointer = (part) => part.replaceAll("~", "~0").replaceAll("/", "~1");
+var record2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+function spec(value) {
+  const simple = /^(?:[~^]?\d+(?:\.(?:\d+|x|\*)){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|[x*])$/;
+  if (value.length <= 256 && simple.test(value)) return { kind: "version-expression", value, digest: hash2(value) };
+  if (value.length <= 256 && value.startsWith("workspace:") && (["*", "^", "~"].includes(value.slice(10)) || simple.test(value.slice(10)))) {
+    return { kind: "workspace-expression", value, digest: hash2(value) };
+  }
+  return { kind: "opaque", digest: hash2(value) };
+}
+function technology(name) {
+  if (name === "turbo") return "turborepo";
+  if (name === "nx" || name.startsWith("@nx/") || name.startsWith("@nrwl/")) return "nx";
+  if (name === "@microsoft/rush") return "rush";
+  if (name === "typescript" || name === "lerna") return name;
+  return void 0;
+}
+function extractKnowledge(repository, revision, input2, options = {}) {
+  validateScope(repository);
+  validateRevision(revision);
+  const files = new Map(input2.files.map((file) => [file.path, file]));
+  if (files.size !== input2.files.length) throw new Error("Knowledge inventory contains duplicate paths");
+  if ([...files.keys()].some((path) => /[\\:]/.test(path) || path.split("/").some((part) => !part || part === "." || part === "..") || [...path].some((char) => char.charCodeAt(0) < 32))) {
+    throw new Error("Knowledge inventory paths must be repository-relative");
+  }
+  const problems = [];
+  const problemKeys = /* @__PURE__ */ new Set();
+  const problem = (path, code2) => {
+    const key = JSON.stringify([path, code2]);
+    if (!problemKeys.has(key)) {
+      problemKeys.add(key);
+      problems.push({ path, code: code2 });
+    }
+  };
+  const truncated = new Set(options.truncated ?? []);
+  const projects = [];
+  const technologies = [];
+  const relationships = [];
+  const projectId = (kind, path) => identity([repository.host, repository.repositoryId, kind, path]);
+  const root = { id: projectId("repository", ""), kind: "repository", path: "" };
+  projects.push(root);
+  const manifests = /* @__PURE__ */ new Map();
+  const digests = /* @__PURE__ */ new Map();
+  const source = (file, location = "") => {
+    if (!digests.has(file.path)) digests.set(file.path, hash2(file.content));
+    return { path: file.path, pointer: location, digest: digests.get(file.path) };
+  };
+  let limited = false;
+  const reserve = (path) => {
+    if (technologies.length + relationships.length < 1e4) return true;
+    if (!limited) problem(path, "evidence-limit");
+    limited = true;
+    return false;
+  };
+  const addRelationship = (relation) => {
+    if (reserve(relation.source.path)) relationships.push({ id: identity(relation), ...relation });
+  };
+  const addTechnology = (fact) => {
+    if (reserve(fact.source.path)) technologies.push({ id: identity(fact), ...fact });
+  };
+  const orderedFiles = [...files.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+  for (const file of orderedFiles) {
+    if (limited) break;
+    if (file.path !== "package.json" && !file.path.endsWith("/package.json")) continue;
+    if (/(^|\/)node_modules\//.test(file.path)) continue;
+    if (truncated.has(file.path)) {
+      problem(file.path, "truncated-manifest");
+      continue;
+    }
+    let manifest;
+    try {
+      manifest = parseManifest(file.path, file.content);
+    } catch {
+      problem(file.path, "invalid-manifest");
+      continue;
+    }
+    manifests.set(file.path, manifest);
+    const named = manifest.name && packageName2.test(manifest.name) ? manifest.name : void 0;
+    if (manifest.json.name !== void 0 && !named) problem(file.path, "invalid-package-name");
+    const project = { id: projectId("npm-package", manifest.dir), kind: "npm-package", path: manifest.dir, ...named ? { name: named } : {} };
+    projects.push(project);
+    addRelationship({ kind: "contains", from: root.id, to: project.id, source: source(file) });
+  }
+  const rootPackage = projects.find((project) => project.kind === "npm-package" && project.path === "") ?? root;
+  const workspaceSets = [];
+  const addWorkspace = (raw, file, location) => {
+    if (!Array.isArray(raw) || raw.some((glob) => typeof glob !== "string" || !glob.replace(/^!/, "") || [...glob].some((char) => char.charCodeAt(0) < 32) || /[[\]{}()\\]|(^|\/)\.\.(\/|$)|^\//.test(glob.replace(/^!/, "")))) {
+      problem(file.path, "unsupported-workspace-patterns");
+      return;
+    }
+    const patterns = raw;
+    const selected = /* @__PURE__ */ new Set([rootPackage.id]);
+    for (const project of projects) {
+      if (project.kind !== "npm-package" || !project.path) continue;
+      const matches = (glob) => matchesGlob(project.path, glob.replace(/^\.\//, "").replace(/\/$/, ""));
+      if (!patterns.some((glob) => !glob.startsWith("!") && matches(glob)) || patterns.some((glob) => glob.startsWith("!") && matches(glob.slice(1)))) continue;
+      selected.add(project.id);
+      addRelationship({ kind: "workspace-member", from: rootPackage.id, to: project.id, source: source(file, location) });
+    }
+    workspaceSets.push(selected);
+  };
+  const rootManifest = manifests.get("package.json");
+  if (rootManifest?.json.workspaces !== void 0) {
+    const workspaces = rootManifest.json.workspaces;
+    addWorkspace(record2(workspaces) ? workspaces.packages : workspaces, files.get("package.json"), record2(workspaces) ? "/workspaces/packages" : "/workspaces");
+  }
+  const pnpm = files.get("pnpm-workspace.yaml");
+  if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
+  else if (pnpm) {
+    try {
+      const parsed = (0, import_yaml23.parseDocument)(pnpm.content, { uniqueKeys: true });
+      if (parsed.errors.length) throw new Error("Invalid workspace YAML");
+      const value = parsed.toJS();
+      addWorkspace(record2(value) ? value.packages : void 0, pnpm, "/packages");
+    } catch {
+      problem(pnpm.path, "invalid-workspace-config");
+    }
+  }
+  const workspace = workspaceSets[0];
+  const conflicting = workspaceSets.some((set) => JSON.stringify([...set].sort()) !== JSON.stringify([...workspace ?? []].sort()));
+  if (conflicting) problem("", "conflicting-workspaces");
+  const canResolveWorkspace = input2.mode === "repository" && input2.inventoryComplete && truncated.size === 0 && !options.ignorePaths?.length && !conflicting && problems.length === 0;
+  const workspaceNames = /* @__PURE__ */ new Map();
+  for (const project of projects) {
+    if (project.name && workspace?.has(project.id)) {
+      const candidates = workspaceNames.get(project.name) ?? [];
+      candidates.push(project);
+      workspaceNames.set(project.name, candidates);
+    }
+  }
+  for (const [path, manifest] of manifests) {
+    if (limited) break;
+    const file = files.get(path);
+    const id = projectId("npm-package", manifest.dir);
+    for (const scope2 of scopes) {
+      const declarations = manifest.json[scope2];
+      if (declarations === void 0) continue;
+      if (!record2(declarations)) {
+        problem(path, `invalid-${scope2}`);
+        continue;
+      }
+      for (const [name, value] of Object.entries(declarations).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) {
+        if (limited) break;
+        if (!packageName2.test(name) || typeof value !== "string") {
+          problem(path, `invalid-${scope2}-entry`);
+          continue;
+        }
+        const declaration = spec(value);
+        const origin = source(file, `/${scope2}/${pointer(name)}`);
+        const candidates = declaration.kind === "workspace-expression" && canResolveWorkspace && workspace?.has(id) ? workspaceNames.get(name) ?? [] : [];
+        addRelationship({
+          kind: "declares-dependency",
+          from: id,
+          targetName: name,
+          scope: scope2,
+          spec: declaration,
+          source: origin,
+          resolution: candidates.length === 1 ? "workspace-name" : candidates.length > 1 ? "ambiguous" : "unresolved",
+          ...candidates.length === 1 ? { to: candidates[0].id } : {}
+        });
+        const tool2 = technology(name);
+        if (tool2) addTechnology({ projectId: id, technology: tool2, basis: "dependency", spec: declaration, source: origin });
+      }
+    }
+    const manager = manifest.json.packageManager;
+    if (manager !== void 0) {
+      const match2 = typeof manager === "string" ? /^(npm|pnpm|yarn|bun)@(.+)$/.exec(manager) : null;
+      if (match2) addTechnology({ projectId: id, technology: match2[1], basis: "package-manager", spec: spec(match2[2]), source: source(file, "/packageManager") });
+      else problem(path, "unsupported-package-manager");
+    }
+    const engines = manifest.json.engines;
+    if (engines !== void 0 && !record2(engines)) problem(path, "invalid-engines");
+    else if (record2(engines)) for (const [name, value] of Object.entries(engines)) {
+      if (name !== "node" && !managers.has(name)) continue;
+      if (typeof value !== "string") {
+        problem(path, "invalid-engine-entry");
+        continue;
+      }
+      addTechnology({ projectId: id, technology: name, basis: "engine", spec: spec(value), source: source(file, `/engines/${pointer(name)}`) });
+    }
+  }
+  for (const file of orderedFiles) {
+    if (limited) break;
+    if (/(^|\/)node_modules\//.test(file.path)) continue;
+    const slash = file.path.lastIndexOf("/");
+    const basename2 = file.path.slice(slash + 1);
+    const tool2 = Object.hasOwn(toolFiles, basename2) ? toolFiles[basename2] : void 0;
+    if (!tool2) continue;
+    const dir = slash < 0 ? "" : file.path.slice(0, slash);
+    let project = dir === "" ? rootPackage : projects.find((project2) => project2.path === dir);
+    if (!project) {
+      project = { id: projectId("configuration-root", dir), kind: "configuration-root", path: dir };
+      projects.push(project);
+      addRelationship({ kind: "contains", from: root.id, to: project.id, source: source(file) });
+    }
+    addTechnology({ projectId: project.id, technology: tool2, basis: "configuration-file", source: source(file) });
+  }
+  const byId = (items2) => items2.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const snapshot = {
+    version: 1,
+    repository: { ...repository },
+    revision,
+    collectedAt: (options.now ?? /* @__PURE__ */ new Date()).toISOString(),
+    coverage: {
+      scope: "configured-node-manifests-and-tool-configs",
+      inventoryComplete: input2.mode === "repository" && input2.inventoryComplete,
+      declarationsComplete: problems.length === 0 && truncated.size === 0,
+      ignorePaths: [...new Set(options.ignorePaths ?? [])].sort(),
+      truncated: [...truncated].sort(),
+      problems: problems.sort((a, b) => JSON.stringify(a) < JSON.stringify(b) ? -1 : JSON.stringify(a) > JSON.stringify(b) ? 1 : 0)
+    },
+    projects: byId(projects),
+    technologies: byId(technologies),
+    relationships: byId(relationships)
+  };
+  return { id: snapshotIdentity(snapshot), ...snapshot };
+}
+
+// src/knowledge/repository.ts
+async function loadKnowledgeIdentity(client, repo) {
+  const response = await client.request("GET /repos/{owner}/{repo}", { ...repo });
+  const data = response.data;
+  if (!Number.isSafeInteger(data?.id) || Number(data?.id) <= 0 || typeof data?.html_url !== "string" || typeof data.name !== "string" || typeof data.owner?.login !== "string") {
+    throw new Error("Repository metadata lacks a stable identity for knowledge collection");
+  }
+  const url = new URL(data.html_url);
+  const identity2 = { host: url.origin, repositoryId: String(data.id), owner: data.owner.login, repo: data.name };
+  validateScope(identity2);
+  if (url.username || url.password || url.search || url.hash || url.pathname.replace(/\/$/, "") !== `/${identity2.owner}/${identity2.repo}`) {
+    throw new Error("Repository identity URL does not match its metadata");
+  }
+  return identity2;
+}
+
 // src/service/scan.ts
 var isRecipeGroup = (group) => group.startsWith("recipe-");
 async function scanRepository(client, repo, options = {}) {
@@ -17056,6 +17358,16 @@ async function scanRepository(client, repo, options = {}) {
   const snapshot = await loadRepositorySnapshot(client, repo, { ref, config });
   const { input: input2 } = snapshot;
   const truncated = new Set(input2.truncated);
+  const knowledgeStore = options.dryRun ? void 0 : await options.knowledgeStore?.();
+  let knowledge;
+  if (options.knowledge || knowledgeStore || options.dryRun && options.knowledgeStore) {
+    const evidence2 = extractKnowledge(await loadKnowledgeIdentity(client, repo), snapshot.sha, input2, {
+      ignorePaths: config.ignorePaths,
+      truncated: input2.truncated
+    });
+    if (knowledgeStore) await knowledgeStore.save(evidence2);
+    knowledge = { snapshot: evidence2, persistence: options.dryRun ? "dry-run" : knowledgeStore ? "saved" : "not-requested" };
+  }
   const result = lint2({ input: input2, config });
   const scan = {
     repo: name,
@@ -17064,7 +17376,8 @@ async function scanRepository(client, repo, options = {}) {
     status: "scanned",
     result,
     inventoryComplete: input2.inventoryComplete,
-    truncated: input2.truncated
+    truncated: input2.truncated,
+    ...knowledge ? { knowledge } : {}
   };
   if (options.uploadSarif) {
     scan.sarif = options.dryRun ? { status: "skipped" } : await uploadSarif(client, repo, { sarif: sarif(result, allRules, VERSION), commitSha: snapshot.sha, ref: ref === snapshot.sha ? branch : ref });
@@ -17113,6 +17426,7 @@ function describeScan(scan) {
   for (const diagnostic of scan.result?.diagnostics ?? []) counts[diagnostic.severity] += 1;
   const parts = [`${scan.repo}@${scan.ref}: ${counts.error} error(s), ${counts.warn} warning(s), ${counts.info} info`];
   if (scan.sarif) parts.push(`SARIF ${scan.sarif.status}`);
+  if (scan.knowledge) parts.push(`knowledge: ${scan.knowledge.snapshot.projects.length} projects, ${scan.knowledge.snapshot.technologies.length} declarations (${scan.knowledge.persistence})`);
   if (scan.issues) parts.push(`issues: ${tally(scan.issues.actions)}${scan.issues.skipped.length ? `, ${scan.issues.skipped.length} skipped` : ""}`);
   if (scan.fixes) parts.push(`fix PRs: ${tally(scan.fixes.actions)}${scan.fixes.skipped.length ? `, ${scan.fixes.skipped.length} skipped` : ""}`);
   if (scan.inventoryComplete === false) parts.push(`inventory truncated (${scan.truncated?.length ?? 0} file(s))`);
@@ -17138,6 +17452,7 @@ Options:
       --upload-sarif        Upload findings to code scanning (needs security-events: write)
       --no-issues           Do not open, update, or close finding issues
       --no-fixes            Do not open or update autofix pull requests
+      --knowledge           Include revision-linked declaration evidence (use --format json for details; no database writes)
       --dry-run             Plan everything, write nothing
       --fail-on <sev>       Exit 1 when findings reach: info | warn | error | never (default: never)
   -f, --format text|json    Output format (default: text)
@@ -17165,6 +17480,7 @@ function summary(scan) {
     ...scan.result ? { diagnostics: scan.result.diagnostics } : {},
     ...scan.inventoryComplete !== void 0 ? { inventoryComplete: scan.inventoryComplete } : {},
     ...scan.sarif ? { sarif: scan.sarif } : {},
+    ...scan.knowledge ? { knowledge: scan.knowledge } : {},
     ...scan.issues ? {
       issues: {
         actions: scan.issues.actions.map(issueAction),
@@ -17191,6 +17507,7 @@ async function scanCommand(args, io) {
       "upload-sarif": { type: "boolean", default: false },
       "no-issues": { type: "boolean", default: false },
       "no-fixes": { type: "boolean", default: false },
+      knowledge: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       "fail-on": { type: "string", default: "never" },
       format: { type: "string", short: "f", default: "text" },
@@ -17211,6 +17528,7 @@ async function scanCommand(args, io) {
     uploadSarif: values["upload-sarif"],
     issues: !values["no-issues"],
     fixes: !values["no-fixes"],
+    knowledge: values.knowledge,
     ...values.ref ? { ref: values.ref } : {},
     ...copilot ? { copilotClient: copilot } : {}
   });
@@ -17254,7 +17572,7 @@ function selectHistory(snapshots, query) {
 }
 
 // src/telemetry/context.ts
-import { createHash as createHash3 } from "node:crypto";
+import { createHash as createHash4 } from "node:crypto";
 function comparisonProblem(snapshot) {
   if (snapshot.runAttempt !== 1) return "Reruns may execute only part of the workload or reuse warmed state.";
   if (snapshot.conclusion !== "success") return "The workflow did not complete successfully.";
@@ -17276,7 +17594,7 @@ function comparisonKey(snapshot) {
     [...new Set(job.labels)].sort(),
     job.runnerGroupId ?? null
   ])).sort();
-  return createHash3("sha256").update(JSON.stringify([
+  return createHash4("sha256").update(JSON.stringify([
     "workload-comparison-v1",
     snapshot.owner,
     snapshot.repo,
@@ -17846,14 +18164,14 @@ function escapeCell(value) {
 }
 
 // src/telemetry/snapshot.ts
-var import_yaml23 = __toESM(require_dist(), 1);
+var import_yaml24 = __toESM(require_dist(), 1);
 function workflowPath(path) {
   return path.replace(/@.*$/, "");
 }
 function parseJobDefinitions(text) {
   let document;
   try {
-    document = (0, import_yaml23.parse)(text);
+    document = (0, import_yaml24.parse)(text);
   } catch {
     return /* @__PURE__ */ new Map();
   }
