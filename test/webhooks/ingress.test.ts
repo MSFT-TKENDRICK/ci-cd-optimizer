@@ -36,95 +36,6 @@ async function harness(enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockResolvedV
   const server = createServer((req, res) => {
     void middleware(req, res).then((handled) => { if (!handled) res.writeHead(404).end(); });
   });
-
-  async function serverHarness(checkReadiness = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)) {
-    const { probot, api } = await probotFixture();
-    const queue = { enqueue: vi.fn<DeliveryQueue["enqueue"]>().mockResolvedValue(undefined), checkReadiness };
-    const server = await startDurableServer(probot, queue, { host: "127.0.0.1", port: 0 });
-    cleanups.push(async () => { await server.stop(); expect(api).not.toHaveBeenCalled(); });
-    const origin = `http://127.0.0.1:${server.port}`;
-    const get = async (path: string) => {
-      const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(3000) });
-      return { status: response.status, text: await response.text(), cacheControl: response.headers.get("cache-control") };
-    };
-    return { server, queue, origin, get };
-  }
-
-  describe("durable HTTP health routes", () => {
-    it("keeps liveness independent, reports readiness without private data, and preserves signed webhooks", async () => {
-      const app = await serverHarness();
-      expect(await app.get("/ping")).toMatchObject({ status: 200, text: "PONG" });
-      expect(app.queue.checkReadiness).not.toHaveBeenCalled();
-      expect(await app.get("/ready")).toEqual({ status: 200, text: "READY", cacheControl: "no-store" });
-      expect(app.queue.checkReadiness).toHaveBeenCalledOnce();
-      expect(app.queue.enqueue).not.toHaveBeenCalled();
-      const response = await fetch(`${app.origin}/api/github/webhooks`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-github-event": "push",
-          "x-github-delivery": randomUUID(),
-          "x-hub-signature-256": `sha256=${createHmac("sha256", secret).update(event).digest("hex")}`,
-        },
-        body: event,
-      });
-      expect(response.status).toBe(200);
-      await response.text();
-      expect(app.queue.enqueue).toHaveBeenCalledOnce();
-      expect((await app.get("/unknown")).status).toBe(404);
-      const wrongMethod = await fetch(`${app.origin}/ready`, { method: "POST" });
-      expect(wrongMethod.status).toBe(404);
-      await wrongMethod.text();
-      expect(app.queue.checkReadiness).toHaveBeenCalledOnce();
-    });
-
-    it("withholds readiness but not liveness on database failure and recovers on a fresh probe", async () => {
-      const app = await serverHarness(vi.fn<() => Promise<void>>().mockRejectedValue(new Error("Private database connection details")));
-      expect(await app.get("/ready")).toEqual({ status: 503, text: "NOT READY", cacheControl: "no-store" });
-      expect(await app.get("/ping")).toMatchObject({ status: 200, text: "PONG" });
-      app.queue.checkReadiness.mockResolvedValue(undefined);
-      await setTimeout(READINESS_CACHE_MS);
-      expect(await app.get("/ready")).toMatchObject({ status: 200, text: "READY" });
-    });
-
-    it("bounds a stalled probe while HTTP liveness continues responding", async () => {
-      const gate = latch();
-      const entered = latch();
-      const app = await serverHarness(vi.fn(async () => { entered.release(); await gate.promise; }));
-      try {
-        const started = Date.now();
-        const result = app.get("/ready");
-        await entered.promise;
-        expect(await app.get("/ping")).toMatchObject({ status: 200, text: "PONG" });
-        expect(await result).toMatchObject({ status: 503, text: "NOT READY" });
-        expect(Date.now() - started).toBeLessThan(2500);
-      } finally { gate.release(); await setImmediate(); }
-    });
-
-    it("does not return ready when shutdown begins during an in-flight successful probe", async () => {
-      const gate = latch();
-      const entered = latch();
-      const app = await serverHarness(vi.fn(async () => { entered.release(); await gate.promise; }));
-      const response = app.get("/ready");
-      try {
-        await entered.promise;
-        const stopped = app.server.stop();
-        gate.release();
-        expect(await response).toMatchObject({ status: 503, text: "NOT READY" });
-        await stopped;
-        await app.server.stop();
-      } finally { gate.release(); await response; }
-    });
-
-    it.each(["/ping", "/ping/", "/ready", "/ready/"])("rejects a webhook path that conflicts with %s", async (path) => {
-      const { probot, api } = await probotFixture(path);
-      await expect(startDurableServer(probot, {
-        enqueue: vi.fn().mockResolvedValue(undefined),
-        checkReadiness: vi.fn().mockResolvedValue(undefined),
-      }, { host: "127.0.0.1", port: 0 })).rejects.toThrow("reserved for health probes");
-      expect(api).not.toHaveBeenCalled();
-    });
-  });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   cleanups.push(async () => {
@@ -149,7 +60,96 @@ async function harness(enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockResolvedV
   return { probot, enqueue, error, warn, url, headers, send };
 }
 
+async function serverHarness(checkReadiness = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)) {
+  const { probot, api } = await probotFixture();
+  const queue = { enqueue: vi.fn<DeliveryQueue["enqueue"]>().mockResolvedValue(undefined), checkReadiness };
+  const server = await startDurableServer(probot, queue, { host: "127.0.0.1", port: 0 });
+  cleanups.push(async () => { await server.stop(); expect(api).not.toHaveBeenCalled(); });
+  const origin = `http://127.0.0.1:${server.port}`;
+  const get = async (path: string) => {
+    const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(3000) });
+    return { status: response.status, text: await response.text(), cacheControl: response.headers.get("cache-control") };
+  };
+  return { server, queue, origin, get };
+}
+
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
+
+describe("durable HTTP health routes", () => {
+  it("keeps liveness independent, reports readiness without private data, and preserves signed webhooks", async () => {
+    const app = await serverHarness();
+    expect(await app.get("/ping")).toMatchObject({ status: 200, text: "PONG" });
+    expect(app.queue.checkReadiness).not.toHaveBeenCalled();
+    expect(await app.get("/ready")).toEqual({ status: 200, text: "READY", cacheControl: "no-store" });
+    expect(app.queue.checkReadiness).toHaveBeenCalledOnce();
+    expect(app.queue.enqueue).not.toHaveBeenCalled();
+    const response = await fetch(`${app.origin}/api/github/webhooks`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-github-event": "push",
+        "x-github-delivery": randomUUID(),
+        "x-hub-signature-256": `sha256=${createHmac("sha256", secret).update(event).digest("hex")}`,
+      },
+      body: event,
+    });
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(app.queue.enqueue).toHaveBeenCalledOnce();
+    expect((await app.get("/unknown")).status).toBe(404);
+    const wrongMethod = await fetch(`${app.origin}/ready`, { method: "POST" });
+    expect(wrongMethod.status).toBe(404);
+    await wrongMethod.text();
+    expect(app.queue.checkReadiness).toHaveBeenCalledOnce();
+  });
+
+  it("withholds readiness but not liveness on database failure and recovers on a fresh probe", async () => {
+    const app = await serverHarness(vi.fn<() => Promise<void>>().mockRejectedValue(new Error("Private database connection details")));
+    expect(await app.get("/ready")).toEqual({ status: 503, text: "NOT READY", cacheControl: "no-store" });
+    expect(await app.get("/ping")).toMatchObject({ status: 200, text: "PONG" });
+    app.queue.checkReadiness.mockResolvedValue(undefined);
+    await setTimeout(READINESS_CACHE_MS);
+    expect(await app.get("/ready")).toMatchObject({ status: 200, text: "READY" });
+  });
+
+  it("bounds a stalled probe while HTTP liveness continues responding", async () => {
+    const gate = latch();
+    const entered = latch();
+    const app = await serverHarness(vi.fn(async () => { entered.release(); await gate.promise; }));
+    try {
+      const started = Date.now();
+      const result = app.get("/ready");
+      await entered.promise;
+      expect(await app.get("/ping")).toMatchObject({ status: 200, text: "PONG" });
+      expect(await result).toMatchObject({ status: 503, text: "NOT READY" });
+      expect(Date.now() - started).toBeLessThan(2500);
+    } finally { gate.release(); await setImmediate(); }
+  });
+
+  it("does not return ready when shutdown begins during an in-flight successful probe", async () => {
+    const gate = latch();
+    const entered = latch();
+    const app = await serverHarness(vi.fn(async () => { entered.release(); await gate.promise; }));
+    const response = app.get("/ready");
+    try {
+      await entered.promise;
+      const stopped = app.server.stop();
+      gate.release();
+      expect(await response).toMatchObject({ status: 503, text: "NOT READY" });
+      await stopped;
+      await app.server.stop();
+    } finally { gate.release(); await response; }
+  });
+
+  it.each(["/ping", "/ping/", "/ready", "/ready/"])("rejects a webhook path that conflicts with %s", async (path) => {
+    const { probot, api } = await probotFixture(path);
+    await expect(startDurableServer(probot, {
+      enqueue: vi.fn().mockResolvedValue(undefined),
+      checkReadiness: vi.fn().mockResolvedValue(undefined),
+    }, { host: "127.0.0.1", port: 0 })).rejects.toThrow("reserved for health probes");
+    expect(api).not.toHaveBeenCalled();
+  });
+});
 
 describe("bounded durable HTTP ingress", () => {
   it("waits for committed persistence before returning success", async () => {
