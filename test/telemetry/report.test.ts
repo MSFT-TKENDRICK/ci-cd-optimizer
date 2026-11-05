@@ -20,6 +20,7 @@ const snapshot: WorkflowSnapshot = {
   completedAt: "2026-01-01T00:02:05Z",
   queueMs: 5_000,
   durationMs: 120_000,
+  provenance: { version: 1, collector: "github-actions-rest", collectedAt: "2026-01-01T00:02:05Z", jobsComplete: true, definitionKnown: true },
   jobs: [
     {
       id: 1,
@@ -30,6 +31,7 @@ const snapshot: WorkflowSnapshot = {
       completedAt: "2026-01-01T00:01:05Z",
       durationMs: 60_000,
       needs: [],
+      labels: ["ubuntu-24.04"],
     },
     {
       id: 2,
@@ -40,6 +42,7 @@ const snapshot: WorkflowSnapshot = {
       completedAt: "2026-01-01T00:02:05Z",
       durationMs: 60_000,
       needs: ["build"],
+      labels: ["ubuntu-24.04"],
     },
   ],
 };

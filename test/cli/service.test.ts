@@ -42,6 +42,21 @@ function cli(client: FakeApi, env: Record<string, string> = {}) {
 }
 
 describe("scan command", () => {
+  it("includes opt-in knowledge in JSON without writing to a database or GitHub", async () => {
+    const client = fakeApi({
+      config: TIMEOUT_ONLY, commitSha: "a".repeat(40),
+      repositoryMetadata: { id: 42, html_url: "https://github.com/acme/widgets", name: "widgets", owner: { login: "acme" } },
+      refs: { main: { "package.json": '{"name":"root","devDependencies":{"turbo":"^2.0.0"}}' } },
+    });
+    const session = cli(client);
+    expect(await session.run("scan", "--knowledge", "--dry-run", "--format", "json")).toBe(0);
+    expect(session.json().knowledge).toMatchObject({ persistence: "dry-run", snapshot: {
+      repository: { repositoryId: "42", host: "https://github.com" },
+      technologies: [expect.objectContaining({ technology: "turborepo", basis: "dependency" })],
+    } });
+    expect(writes(client)).toEqual([]);
+  });
+
   it("prints help", async () => {
     const session = cli(fakeApi());
     expect(await session.run("scan", "--help")).toBe(0);
@@ -117,8 +132,8 @@ const workflowRun = {
   html_url: "https://github.com/acme/widgets/actions/runs/2000",
 };
 const jobs = [
-  { id: 1, name: "build", conclusion: "success", created_at: at("00:05"), started_at: at("00:10"), completed_at: at("02:10"), steps: [] },
-  { id: 2, name: "test", conclusion: "success", created_at: at("02:10"), started_at: at("02:15"), completed_at: at("10:05"), steps: [] },
+  { id: 1, name: "build", conclusion: "success", labels: ["ubuntu-24.04"], created_at: at("00:05"), started_at: at("00:10"), completed_at: at("02:10"), steps: [] },
+  { id: 2, name: "test", conclusion: "success", labels: ["ubuntu-24.04"], created_at: at("02:10"), started_at: at("02:15"), completed_at: at("10:05"), steps: [] },
 ];
 const telemetryApi = (overrides: Parameters<typeof fakeApi>[0] = {}) =>
   fakeApi({ refs: { abc: { ".github/workflows/ci.yml": workflowFile } }, jobs: { 2000: jobs }, runs: { 2000: workflowRun }, ...overrides });
@@ -136,6 +151,45 @@ async function seededStore(): Promise<string> {
 const lines = async (path: string) => (await readFile(path, "utf8")).split("\n").filter(Boolean);
 
 describe("telemetry command", () => {
+  it("prints requested source context even when a cancelled run has no completed jobs", async () => {
+    const sha = "a".repeat(40);
+    const client = telemetryApi({
+      repositoryMetadata: { id: 42, html_url: "https://github.com/acme/widgets", owner: { login: "acme" }, name: "widgets" },
+      refs: { [sha]: { "package.json": "{}" } }, jobs: { 2000: [] },
+      runs: { 2000: { ...workflowRun, head_sha: sha, conclusion: "cancelled" } },
+    });
+    const session = cli(client);
+    expect(await session.run("telemetry", "--run-id", "2000", "--knowledge", "--dry-run")).toBe(0);
+    expect(session.stdout).toContain("The run has no completed jobs");
+    expect(session.stdout).toContain("Project declaration context");
+    expect(session.stdout).toContain("preview only");
+    expect(writes(client)).toEqual([]);
+  });
+
+  it("previews run-linked source context without knowledge database writes", async () => {
+    const sha = "a".repeat(40);
+    const client = telemetryApi({
+      config: "durations:\n  minSamples: 2\n  objectives:\n    - workflow: .github/workflows/ci.yml\n      job: build\n      maxDurationMs: 120000\n",
+      repositoryMetadata: { id: 42, html_url: "https://github.com/acme/widgets", owner: { login: "acme" }, name: "widgets" },
+      refs: { [sha]: { ".github/workflows/ci.yml": workflowFile, "package.json": '{"devDependencies":{"turbo":"2"}}' } },
+      runs: { 2000: { ...workflowRun, head_sha: sha } },
+    });
+    const session = cli(client);
+    expect(await session.run("telemetry", "--run-id", "2000", "--knowledge", "--dry-run", "--format", "json")).toBe(0);
+    expect(session.json().knowledge).toMatchObject({
+      persistence: "preview", observation: { run: { headSha: sha }, source: { status: "linked" } },
+      project: { revision: sha, technologies: [expect.objectContaining({ technology: "turborepo" })] },
+      durations: {
+        status: "insufficient-history", samples: [],
+        jobs: expect.arrayContaining([expect.objectContaining({
+          key: "build", metric: expect.objectContaining({ objective: expect.objectContaining({ maxDurationMs: 120000, currentStatus: "within-budget" }) }),
+        })]),
+      },
+    });
+    expect(session.json().knowledge).not.toHaveProperty("comparison");
+    expect(writes(client)).toEqual([]);
+  });
+
   it("requires a valid run id", async () => {
     const session = cli(telemetryApi());
     expect(await session.run("telemetry")).toBe(2);
@@ -194,7 +248,7 @@ describe("telemetry command", () => {
 });
 
 describe("FileTelemetryStore", () => {
-  it("round-trips snapshots, replaces reruns, prunes per workflow and branch, and ignores corrupt lines", async () => {
+  it("round-trips attempts, prunes whole runs per workflow and branch, and ignores corrupt lines", async () => {
     const path = join(root, "store.jsonl");
     await writeFile(path, "not json\n", "utf8");
     const store = new FileTelemetryStore(path, 3);
@@ -208,6 +262,6 @@ describe("FileTelemetryStore", () => {
     expect(main.map((item) => item.runId)).toEqual([1002, 1003, 1004]);
     expect(main.at(-1)).toMatchObject({ runAttempt: 2, durationMs: 400_000 });
     expect((await reopened.history({ owner: "acme", repo: "widgets", workflowId: 7, limit: 10 })).map((item) => item.runId)).toEqual([1002, 1003, 1004, 1005]);
-    expect(await lines(path)).toHaveLength(4);
+    expect(await lines(path)).toHaveLength(5);
   });
 });

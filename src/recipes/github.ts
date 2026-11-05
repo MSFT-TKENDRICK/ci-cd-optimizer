@@ -15,6 +15,8 @@ import { classifyIssueOutcome, classifyOutcome, compatibility, type CheckRunSumm
 import { planRecipe, recipeGroup, recipeIssue, recipePullRequestBody, recipeTitle, type RecipePlan } from "./apply.js";
 import { buildRecipe, type BuildRecipeResult, type PullRequestFile, type Recipe } from "./recipe.js";
 import type { TargetStatus } from "./rollout.js";
+import type { KnowledgeStore } from "../knowledge/types.js";
+import { prepareRecipeKnowledge, recordRecipeApplications } from "../service/recipe-knowledge.js";
 
 /**
  * Builds the recipe for a promoted experiment from the merged winning-arm pull request
@@ -56,6 +58,8 @@ export interface RecipeApplyResult {
   /** True when a pull request or issue now exists for the recipe (the target counts as attempted). */
   attempted: boolean;
   configProblems?: string[];
+  knowledge?: { definitionId: string; applicationIds: string[] };
+  error?: string;
 }
 
 export interface ApplyRecipeOptions {
@@ -65,6 +69,7 @@ export interface ApplyRecipeOptions {
   /** Current compatibility shown in the change (from the rollout); defaults to the recipe's recorded stats. */
   compatibility?: { passed: number; failed: number };
   server?: string;
+  knowledgeStore?: () => Promise<KnowledgeStore>;
 }
 
 /**
@@ -89,13 +94,20 @@ export async function applyRecipe(client: GitHubClient, target: RepoRef, recipe:
   const plan = planRecipe({ recipe, input: snapshot.input, config });
   const result: RecipeApplyResult = { repo: name, plan, attempted: false };
   if (options.dryRun) return result;
+  const knowledge = options.knowledgeStore && ["autofix", "partial", "adapt"].includes(plan.status)
+    ? await prepareRecipeKnowledge(client, target, recipe, snapshot, config, await options.knowledgeStore())
+    : undefined;
 
   const compat = compatibility(options.compatibility ?? recipe.compatibility);
   const render = { compatibility: compat, ...(options.server ? { server: options.server } : {}) };
   const group = recipeGroup(recipe);
-  const existingPulls = (await listManagedPullRequests(client, target)).filter((pr) => pr.group === group);
+  const existingPulls = (await listManagedPullRequests(client, target, {
+    baseBranch: branch, branchPrefix: config.fixes.branchPrefix, groups: [group],
+  })).filter((pr) => pr.group === group);
   const fixes = { ...config.fixes, labels: [...new Set([...config.fixes.labels, `recipe:${recipe.id}`, ...config.recipes.labels])] };
-  const fixPlan = planFixPullRequests(plan.change ? [plan.change] : [], existingPulls, { openPullRequestsLimit: 1 });
+  const fixPlan = planFixPullRequests(plan.change ? [plan.change] : [], existingPulls, {
+    openPullRequestsLimit: 1, baseSha: snapshot.sha, labels: ["cicd-optimizer", ...fixes.labels], reviewers: fixes.reviewers,
+  });
   const appliedPulls = await applyFixActions(client, target, fixPlan.actions, {
     baseBranch: branch,
     baseSha: snapshot.sha,
@@ -133,6 +145,10 @@ export async function applyRecipe(client: GitHubClient, target: RepoRef, recipe:
     if (open) result.issue = open.number;
   }
   result.attempted = result.pullRequest !== undefined || result.issue !== undefined;
+  if (knowledge) result.knowledge = {
+    definitionId: knowledge.definition.id,
+    applicationIds: await recordRecipeApplications(client, target, knowledge, result),
+  };
   return result;
 }
 

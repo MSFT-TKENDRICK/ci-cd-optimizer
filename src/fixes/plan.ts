@@ -30,7 +30,7 @@ export function isIgnored(diagnostic: Pick<Diagnostic, "ruleId" | "path">, confi
   );
 }
 
-export function branchFor(group: string, config: FixesConfig): string {
+export function branchFor(group: string, config: Pick<FixesConfig, "branchPrefix">): string {
   return `${config.branchPrefix}${group.toLowerCase().replace(/[^a-z0-9._/-]+/g, "-").replace(/^-+|-+$/g, "")}`;
 }
 
@@ -101,6 +101,22 @@ export function computeFixChanges(options: ComputeFixOptions): FixChange[] {
   return changes;
 }
 
+export interface PendingFixUpdate {
+  fromSha: string;
+  commitSha: string;
+  signature: string;
+  baseSha: string;
+  rules: string[];
+}
+
+export type CleanupStatus = "pending" | "deleted" | "missing" | "changed" | "in-use" | "reopened";
+
+export interface BranchCleanup {
+  branch: string;
+  headSha: string;
+  status: CleanupStatus;
+}
+
 export interface ExistingFixPullRequest {
   number: number;
   state: "open" | "closed";
@@ -112,16 +128,22 @@ export interface ExistingFixPullRequest {
   commitSha?: string;
   /** Current head of the PR branch; differs from `commitSha` when someone else pushed. */
   headSha?: string;
+  draft?: boolean;
+  labels?: readonly string[];
+  pendingReviewers?: readonly string[];
+  pendingUpdate?: PendingFixUpdate;
+  cleanup?: BranchCleanup;
 }
 
 export type FixAction =
   | { type: "create"; change: FixChange }
   | { type: "update"; number: number; change: FixChange }
+  | { type: "metadata"; number: number; group: string; labels: string[]; reviewers: string[]; recoverUpdate?: true; cleanup?: true }
   | { type: "close"; number: number; group: string; branch?: string; comment: string };
 
 export interface SkippedFix {
   group: string;
-  reason: "up-to-date" | "edited" | "declined" | "limit";
+  reason: "up-to-date" | "edited" | "declined" | "limit" | "reopened";
   number?: number;
 }
 
@@ -132,6 +154,9 @@ export interface FixPlan {
 
 export interface FixPlanOptions {
   openPullRequestsLimit: number;
+  baseSha?: string;
+  labels?: readonly string[];
+  reviewers?: readonly string[];
   /** Groups to rebuild even when unchanged (`rebase`); refuses when someone else pushed to the branch. */
   rebase?: ReadonlySet<string>;
   /** Groups to rebuild unconditionally, overwriting edits (`recreate`). */
@@ -139,7 +164,8 @@ export interface FixPlanOptions {
 }
 
 function edited(pr: ExistingFixPullRequest): boolean {
-  return pr.commitSha !== undefined && pr.headSha !== undefined && pr.commitSha !== pr.headSha;
+  // Without an owned branch (see listManagedPullRequests) the PR is never rewritten or closed automatically.
+  return !pr.branch || !pr.commitSha || !pr.headSha || pr.commitSha !== pr.headSha;
 }
 
 /**
@@ -153,12 +179,19 @@ function edited(pr: ExistingFixPullRequest): boolean {
 export function planFixPullRequests(changes: readonly FixChange[], existing: readonly ExistingFixPullRequest[], options: FixPlanOptions): FixPlan {
   const actions: FixAction[] = [];
   const skipped: SkippedFix[] = [];
-  const newestFirst = [...existing].sort((a, b) => b.number - a.number);
+  // A recorded target at the current head is our completed write, even if finalizing its marker failed.
+  const newestFirst = existing.map((pr) => pr.pendingUpdate && pr.headSha === pr.pendingUpdate.commitSha
+    ? { ...pr, commitSha: pr.pendingUpdate.commitSha, signature: pr.pendingUpdate.signature }
+    : pr).sort((a, b) => b.number - a.number);
   const wanted = new Set(changes.map((change) => change.group));
   let open = existing.filter((pr) => pr.state === "open").length;
 
   for (const pr of newestFirst) {
     if (pr.state !== "open" || wanted.has(pr.group)) continue;
+    if (pr.cleanup && !options.rebase?.has(pr.group) && !options.recreate?.has(pr.group)) {
+      skipped.push({ group: pr.group, reason: "reopened", number: pr.number });
+      continue;
+    }
     if (edited(pr) && !options.recreate?.has(pr.group)) {
       skipped.push({ group: pr.group, reason: "edited", number: pr.number });
       continue;
@@ -176,9 +209,16 @@ export function planFixPullRequests(changes: readonly FixChange[], existing: rea
   for (const change of changes) {
     const current = newestFirst.find((pr) => pr.group === change.group && pr.state === "open");
     if (current) {
-      if (options.recreate?.has(change.group)) actions.push({ type: "update", number: current.number, change });
+      if (current.cleanup && !options.rebase?.has(change.group) && !options.recreate?.has(change.group)) {
+        skipped.push({ group: change.group, reason: "reopened", number: current.number });
+        continue;
+      }
+      const completed = current.pendingUpdate?.commitSha === current.headSha && current.pendingUpdate !== undefined;
+      const satisfied = completed && current.signature === change.signature && current.pendingUpdate?.baseSha === options.baseSha;
+      if (satisfied) skipped.push({ group: change.group, reason: "up-to-date", number: current.number });
+      else if (options.recreate?.has(change.group)) actions.push({ type: "update", number: current.number, change });
       else if (edited(current)) skipped.push({ group: change.group, reason: "edited", number: current.number });
-      else if (current.signature === change.signature && !options.rebase?.has(change.group)) {
+      else if (current.signature === change.signature && !options.rebase?.has(change.group) && (!current.pendingUpdate || completed)) {
         skipped.push({ group: change.group, reason: "up-to-date", number: current.number });
       } else actions.push({ type: "update", number: current.number, change });
       continue;
@@ -195,5 +235,24 @@ export function planFixPullRequests(changes: readonly FixChange[], existing: rea
     actions.push({ type: "create", change });
     open += 1;
   }
-  return { actions, skipped };
+  const metadata: FixAction[] = [];
+  for (const pr of newestFirst) {
+    const cleanup = pr.cleanup?.status === "pending";
+    if (pr.state !== "open" && !pr.pendingUpdate && !cleanup) continue;
+    const currentLabels = new Set((pr.labels ?? []).map((label) => label.toLowerCase()));
+    const labels = pr.state === "open" ? [...new Set(options.labels ?? [])].filter((label) => !currentLabels.has(label.toLowerCase())) : [];
+    const closing = actions.some((action) => action.type === "close" && action.number === pr.number);
+    const pending = closing || pr.state !== "open" || pr.draft ? [] : pr.pendingReviewers ?? [];
+    if (labels.length === 0 && pending.length === 0 && !pr.pendingUpdate && !cleanup) continue;
+    metadata.push({
+      type: "metadata",
+      number: pr.number,
+      group: pr.group,
+      labels,
+      reviewers: pending.filter((reviewer) => options.reviewers?.includes(reviewer)),
+      ...(pr.pendingUpdate ? { recoverUpdate: true as const } : {}),
+      ...(cleanup ? { cleanup: true as const } : {}),
+    });
+  }
+  return { actions: [...metadata, ...actions], skipped };
 }

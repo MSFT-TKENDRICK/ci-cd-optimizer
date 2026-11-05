@@ -10,6 +10,10 @@ import { lint } from "../lint/api.js";
 import { sarif } from "../lint/formatters/index.js";
 import { allRules } from "../lint/rules/index.js";
 import type { AnalysisInput, LintResult } from "../lint/types.js";
+import { extractKnowledge } from "../knowledge/extract.js";
+import { inventoryPolicyDigest } from "../knowledge/identity.js";
+import { loadKnowledgeIdentity } from "../knowledge/repository.js";
+import type { KnowledgeSnapshot, KnowledgeStore } from "../knowledge/types.js";
 import { VERSION } from "../version.js";
 
 export interface ScanOptions {
@@ -26,6 +30,11 @@ export interface ScanOptions {
   recreate?: ReadonlySet<string>;
   /** Client authenticated as a Copilot-licensed user, to assign finding issues to the coding agent. */
   copilotClient?: GitHubClient;
+  /** Include revision-linked declaration evidence in the result. Does not enable database writes. */
+  knowledge?: boolean;
+  /** Lazily obtain an initialized evidence store after configuration permits a scan. Not called during dry runs. */
+  knowledgeStore?: () => Promise<KnowledgeStore | undefined>;
+  expectedRepositoryId?: number;
 }
 
 export interface ScanResult {
@@ -37,6 +46,7 @@ export interface ScanResult {
   result?: LintResult;
   inventoryComplete?: boolean;
   truncated?: string[];
+  knowledge?: { snapshot: KnowledgeSnapshot; persistence: "saved" | "not-requested" | "dry-run" };
   sarif?: SarifUploadResult | { status: "skipped" };
   issues?: { actions: IssueAction[]; skipped: SkippedIssue[]; applied: AppliedIssueAction[] };
   fixes?: { actions: FixAction[]; skipped: SkippedFix[]; applied: AppliedFixAction[] };
@@ -51,7 +61,7 @@ const isRecipeGroup = (group: string) => group.startsWith("recipe-");
  */
 export async function scanRepository(client: GitHubClient, repo: RepoRef, options: ScanOptions = {}): Promise<ScanResult> {
   const name = `${repo.owner}/${repo.repo}`;
-  const branch = await defaultBranch(client, repo);
+  const branch = await defaultBranch(client, repo, options.expectedRepositoryId);
   const ref = options.ref ?? branch;
   const remote = await loadRemoteConfig(client, repo, branch);
   if (remote.problems.length > 0) {
@@ -63,6 +73,15 @@ export async function scanRepository(client: GitHubClient, repo: RepoRef, option
   const snapshot = await loadRepositorySnapshot(client, repo, { ref, config });
   const { input } = snapshot;
   const truncated = new Set(input.truncated);
+  const knowledgeStore = options.dryRun ? undefined : await options.knowledgeStore?.();
+  let knowledge: ScanResult["knowledge"];
+  if (options.knowledge || knowledgeStore || (options.dryRun && options.knowledgeStore)) {
+    const evidence = extractKnowledge(await loadKnowledgeIdentity(client, repo, options.expectedRepositoryId), snapshot.sha, input, {
+      ignorePaths: config.ignorePaths, truncated: input.truncated, inventoryPolicyDigest: inventoryPolicyDigest(config),
+    });
+    if (knowledgeStore) await knowledgeStore.save(evidence);
+    knowledge = { snapshot: evidence, persistence: options.dryRun ? "dry-run" : knowledgeStore ? "saved" : "not-requested" };
+  }
   const result = lint({ input, config });
   const scan: ScanResult = {
     repo: name,
@@ -72,6 +91,7 @@ export async function scanRepository(client: GitHubClient, repo: RepoRef, option
     result,
     inventoryComplete: input.inventoryComplete,
     truncated: input.truncated,
+    ...(knowledge ? { knowledge } : {}),
   };
 
   if (options.uploadSarif) {
@@ -94,7 +114,11 @@ export async function scanRepository(client: GitHubClient, repo: RepoRef, option
 
   if (onDefaultBranch && options.fixes !== false && config.fixes.enabled) {
     // Recipe pull requests are owned by their rollout; leave them alone here.
-    const existing = (await listManagedPullRequests(client, repo)).filter((pr) => !isRecipeGroup(pr.group));
+    const existing = (await listManagedPullRequests(client, repo, {
+      baseBranch: branch,
+      branchPrefix: config.fixes.branchPrefix,
+      groups: [...Object.keys(config.fixes.groups), ...allRules.map((rule) => rule.meta.ruleset)],
+    })).filter((pr) => !isRecipeGroup(pr.group));
     const changes = computeFixChanges({
       input,
       // Fixing a file the inventory only partly read would truncate it.
@@ -107,6 +131,9 @@ export async function scanRepository(client: GitHubClient, repo: RepoRef, option
     });
     const plan = planFixPullRequests(changes, existing, {
       openPullRequestsLimit: config.fixes.openPullRequestsLimit,
+      baseSha: snapshot.sha,
+      labels: ["cicd-optimizer", ...config.fixes.labels],
+      reviewers: config.fixes.reviewers,
       ...(options.rebase ? { rebase: options.rebase } : {}),
       ...(options.recreate ? { recreate: options.recreate } : {}),
     });
@@ -126,6 +153,7 @@ export function describeScan(scan: ScanResult): string {
   for (const diagnostic of scan.result?.diagnostics ?? []) counts[diagnostic.severity] += 1;
   const parts = [`${scan.repo}@${scan.ref}: ${counts.error} error(s), ${counts.warn} warning(s), ${counts.info} info`];
   if (scan.sarif) parts.push(`SARIF ${scan.sarif.status}`);
+  if (scan.knowledge) parts.push(`knowledge: ${scan.knowledge.snapshot.projects.length} projects, ${scan.knowledge.snapshot.technologies.length} declarations (${scan.knowledge.persistence})`);
   if (scan.issues) parts.push(`issues: ${tally(scan.issues.actions)}${scan.issues.skipped.length ? `, ${scan.issues.skipped.length} skipped` : ""}`);
   if (scan.fixes) parts.push(`fix PRs: ${tally(scan.fixes.actions)}${scan.fixes.skipped.length ? `, ${scan.fixes.skipped.length} skipped` : ""}`);
   if (scan.inventoryComplete === false) parts.push(`inventory truncated (${scan.truncated?.length ?? 0} file(s))`);

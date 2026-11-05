@@ -77,6 +77,36 @@ Changes to protected files require review.
 Merging a promoted trunk into `main` publishes a [recipe](recipes.md) so the winning change can be applied to other
 repositories.
 
+Applied promotion, rejection and expiry require collected commit SHAs and PR numbers for the control and every
+currently open arm. The CLI reads the manifest at the observed trunk commit and rejects missing or stale evidence
+before applying these decisions.
+Older measurement files without the control PR number must be recollected (and corpus experiments re-evaluated).
+Dry-run grading remains available without applying these writes.
+
+Before a merge, the executor rereads the trunk and arms to verify repository ownership, branch/base, PR identity,
+state and head. A merge must explicitly return `merged: true` and its commit SHA, and the squash commit's sole parent
+must be the measured control commit. The promoted manifest is committed on that exact merge commit, and an
+expected-head `updateRefs` write refuses a changed trunk. Ref writes also require current repository metadata and
+refuse the observed default branch, including when the experiment trunk has been selected as the default.
+Arm cleanup is deferred
+until the manifest write and the promotion PR's marker/readiness are confirmed. Missing ready-for-review
+acknowledgements fail the operation; an unavailable optional auto-merge request is reported in the grading notes.
+
+Rejection and expiry verify every open target before starting the outcome batch. Each closure (including a
+promotion's losing arms) rereads PR identity before the outcome comment and again immediately before closing.
+After the close request, the executor must observe the same unmerged PR, head, base and repository in the closed
+state before cleanup or reporting that PR as closed. Failed or unpersisted closures, retargeting, changed heads and
+reopening stop that operation. Unknown or fork ownership is refused before posting outcome comments, not merely
+used to retain the branch afterward.
+
+This is not a transaction across GitHub operations. PR-state/base checks cannot lock out retargeting or other
+metadata changes after preflight; require protected default branches and coordinate all writers. A merge or manifest
+write can succeed before a later step fails. Such partial promotions require operator reconciliation, not a blind
+retry or an assumption that the merge was rolled back. Cleanup retains a branch observed in use by another open PR.
+Closures are also non-transactional: earlier verified targets may already be closed and cleaned when a later target
+fails. A lost close response may leave a closed PR with its branch retained; no durable experiment cleanup intent is
+recorded, so reconcile such retained branches manually rather than replaying cleanup from old closed-PR history.
+
 ## Scoring
 
 For each metric, an arm's relative improvement over the control is computed and clamped to ±100%:
@@ -203,5 +233,6 @@ The agent jobs use `copilot-requests: write` for inference, so no personal acces
 | Untrusted arm code runs during evaluation. | It runs only in the grader's `evaluate` step, which has no token in a read-only job. The numbers are uploaded as an artifact before the agent runs and are re-read by the grading job. |
 | A prompt-injected agent pushes a persuasive but harmful change. | Agents never hold write tokens. gh-aw safe outputs validate and apply their requests, and gh-aw threat detection scans their output. Judgments only reorder arms that already qualify on measurements. |
 | A winning arm merges without oversight. | Winners merge only into the experiment trunk. `main` changes only when a human approves the trunk pull request, unless `promotion.autoMerge` is enabled. |
+| An arm forges its measurements. | **Not prevented.** Arm code controls the commands whose results are measured, so it can make itself look faster (for example, by skipping work or editing the report). Grading ranks self-reported evidence; it is not attestation. Human review of the trunk pull request is the trust boundary: confirm the winning diff still does the same work. Do not enable `promotion.autoMerge` when arms may come from untrusted proposers. |
 | Workflow changes are used for privilege escalation. | Keep the repository's default `GITHUB_TOKEN` permissions read-only, require review for `.github/workflows/**` via CODEOWNERS, and scope `CICD_OPTIMIZER_TOKEN` to this repository. |
 | Runaway cost. | Pre-activation checks skip inference when there's nothing to do. `maxConcurrent`, `maxArms`, `maxAgeDays`, and per-job timeouts bound the work. |

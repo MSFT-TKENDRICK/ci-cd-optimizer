@@ -6,7 +6,7 @@ branding:
   color: green
 inputs:
   command:
-    description: "CLI command: lint, scan, telemetry, experiments, recipes, or rules."
+    description: "CLI command: lint, scan, telemetry, experiments, recipes, rules, knowledge, execution, or operator-only maintenance."
     required: false
     default: lint
   args:
@@ -23,7 +23,7 @@ inputs:
     default: ""
 outputs:
   exit-code:
-    description: The command's exit code (0 ok, 1 threshold exceeded, 2 usage or configuration error).
+    description: The command's exit code (0 ok, 1 failed operation or threshold exceeded, 2 usage error; execution capture propagates the child exit code).
 runs:
   using: node24
   main: dist-action/index.js

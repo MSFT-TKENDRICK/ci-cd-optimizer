@@ -4,6 +4,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import type { GitHubClient, RepoRef } from "../github/client.js";
 import { parseRepo, restClient } from "../github/rest.js";
 import type { Exec } from "../experiments/evaluate.js";
+import type { KnowledgeStore } from "../knowledge/types.js";
 
 export type { Exec, ExecResult } from "../experiments/evaluate.js";
 
@@ -16,6 +17,8 @@ export interface CliIO {
   github?: () => GitHubClient;
   exec?: Exec;
   now?: () => Date;
+  /** Initialized, caller-owned knowledge store for embedded clients/tests. */
+  knowledgeStore?: () => Promise<KnowledgeStore>;
 }
 
 /** Wrong arguments or configuration (exit code 2, like ESLint). */

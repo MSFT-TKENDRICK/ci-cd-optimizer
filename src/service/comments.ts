@@ -1,4 +1,4 @@
-import type { GitHubClient, RepoRef } from "../github/client.js";
+import { httpStatus, type GitHubClient, type RepoRef } from "../github/client.js";
 import { parseCommands, type FixCommand } from "../fixes/commands.js";
 import { handleFixCommands, listManagedPullRequests, type CommandOutcome } from "../fixes/github.js";
 import { scanRepository, type ScanOptions, type ScanResult } from "./scan.js";
@@ -15,9 +15,21 @@ export interface CommentResult {
   scan?: ScanResult;
 }
 
-/** Same bar as Dependabot: only people with push access can steer the bot's pull requests. */
-const TRUSTED = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+const PUSH_PERMISSIONS = new Set(["write", "admin"]);
 const REBUILD = new Set<FixCommand["type"]>(["rebase", "recreate"]);
+
+async function hasPushAccess(client: GitHubClient, repo: RepoRef, username: string | undefined): Promise<boolean> {
+  if (!username) return false;
+  try {
+    // Association is not authority. GitHub's effective base permission maps maintain to write and triage to read.
+    const { data } = await client.request("GET /repos/{owner}/{repo}/collaborators/{username}/permission", { ...repo, username });
+    return typeof data === "object" && data !== null && "permission" in data
+      && typeof data.permission === "string" && PUSH_PERMISSIONS.has(data.permission);
+  } catch (error) {
+    if (httpStatus(error) === 404) return false;
+    throw error;
+  }
+}
 
 /**
  * Handles `@cicd-optimizer` commands on the app's fix and recipe pull requests. Ignores and closes apply
@@ -36,7 +48,7 @@ export async function handleIssueComment(
 
   const pr = (await listManagedPullRequests(client, repo)).find((candidate) => candidate.number === payload.issue.number);
   if (!pr) return { status: "ignored", reason: "Not a pull request managed by this app." };
-  if (!TRUSTED.has(payload.comment.author_association ?? "")) {
+  if (!(await hasPushAccess(client, repo, payload.comment.user?.login))) {
     if (!options.dryRun) {
       await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
         ...repo,

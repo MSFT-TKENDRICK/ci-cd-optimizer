@@ -7,6 +7,25 @@ const paths = (problems: Array<{ path: string }>) => problems.map((problem) => p
 const ids = (resolved: ReturnType<typeof resolveRules>) => resolved.map((entry) => entry.rule.meta.id);
 
 describe("validateConfig", () => {
+  it("keeps explicit duration budgets separate from historical quantile policy", () => {
+    const durations = { minSamples: 5, objectives: [{ workflow: ".github/workflows/ci.yml", job: "build", maxDurationMs: 60_000 }] };
+    const result = validateConfig({ durations }, allRules);
+    expect(result.problems).toEqual([]);
+    expect(result.config.durations).toEqual(durations);
+  });
+
+  it.each([
+    { minSamples: 1 }, { minSamples: 2.5 }, { minSamples: 100 }, { objectives: {} },
+    { objectives: [{ workflow: ".github/workflows/*.yml", maxDurationMs: 1000 }] },
+    { objectives: [{ workflow: ".github/workflows/ci.yml", job: "bad.key", maxDurationMs: 1000 }] },
+    { objectives: [{ workflow: ".github/workflows/ci.yml" }] },
+    { objectives: [{ workflow: ".github/workflows/ci.yml", maxDurationMs: Infinity }] },
+    { objectives: [{ workflow: ".github/workflows/ci.yml", maxDurationMs: 0 }] },
+    { objectives: [{ workflow: ".github/workflows/ci.yml", maxDurationMs: 1000, typo: true }] },
+    { objectives: [1, 2].map(() => ({ workflow: ".github/workflows/ci.yml", maxDurationMs: 1000 })) },
+  ])("rejects invalid duration policy %j", (durations) => {
+    expect(validateConfig({ durations }, allRules).problems.length).toBeGreaterThan(0);
+  });
   it("returns a copy of the defaults for empty input", () => {
     for (const empty of [undefined, null]) {
       const parsed = validateConfig(empty, allRules);

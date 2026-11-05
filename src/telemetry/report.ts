@@ -1,4 +1,5 @@
 import type { JobSnapshot, WorkflowBaseline, WorkflowSnapshot } from "./types.js";
+import { comparisonProblem } from "./context.js";
 
 const QUEUE_THRESHOLD_MS = 5_000;
 
@@ -15,12 +16,14 @@ export function createTelemetryReport(
   const slowest = [...snapshot.jobs].sort((a, b) => b.durationMs - a.durationMs).slice(0, 5);
   const comparison = baseline
     ? compare(snapshot.durationMs, baseline.medianDurationMs, baseline.sampleCount)
-    : "No historical baseline exists yet; this run establishes the first snapshot.";
+    : comparisonProblem(snapshot)
+      ? `Performance comparison withheld: ${comparisonProblem(snapshot)}`
+      : "No comparable historical baseline is available in the retained/backfilled evidence window.";
 
   return [
     `## ${snapshot.workflowName} performance snapshot`,
     "",
-    `**Run:** ${formatDuration(snapshot.durationMs)} · **Queue:** ${formatDuration(snapshot.queueMs)} · **Jobs:** ${snapshot.jobs.length}`,
+    `**Run:** ${formatDuration(snapshot.durationMs)} · **Attempt:** ${snapshot.runAttempt} · **Queue:** ${snapshot.queueMs === null || snapshot.runAttempt !== 1 ? "unavailable" : formatDuration(snapshot.queueMs)} · **Jobs:** ${snapshot.jobs.length}`,
     "",
     comparison,
     "",
@@ -201,7 +204,7 @@ function recommendations(
       `- **${waits.length} job(s) waited over a minute for a runner** (worst: ${worst.name}, ${formatDuration(worst.queueMs ?? 0)}${worst.labels ? ` on \`${worst.labels.join(", ")}\`` : ""}). Check runner pool capacity or move short jobs to a less contended label.`,
     );
   }
-  if (snapshot.queueMs > 60_000) {
+  if (snapshot.runAttempt === 1 && snapshot.queueMs !== null && snapshot.queueMs > 60_000) {
     messages.push(
       `- **Runner queueing added ${formatDuration(snapshot.queueMs)}.** Review runner concurrency, autoscaling latency, labels, and peak utilization.`,
     );
@@ -218,7 +221,9 @@ function recommendations(
   }
   if (messages.length === 2) {
     messages.push(
-      "- No strong timing anomaly was detected. Accumulate more snapshots to improve trend confidence.",
+      baseline
+        ? "- No strong timing anomaly was detected in the comparable evidence."
+        : "- Timing comparisons are unavailable; no recovery or optimization benefit is inferred.",
     );
   }
   return messages;
@@ -235,7 +240,7 @@ function percentage(part: number, whole: number): string {
   return whole > 0 ? `${((part / whole) * 100).toFixed(0)}%` : "0%";
 }
 
-function formatDuration(milliseconds: number): string {
+export function formatDuration(milliseconds: number): string {
   const seconds = Math.round(milliseconds / 1000);
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
@@ -250,6 +255,6 @@ function sanitizeMermaid(value: string): string {
   return value.replace(/["`:;#]/g, "").replace(/\r?\n/g, " ").slice(0, 120);
 }
 
-function escapeCell(value: string): string {
+export function escapeCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\n/g, " ");
 }

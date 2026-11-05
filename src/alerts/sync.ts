@@ -9,6 +9,7 @@ export interface ExistingAlertIssue extends ExistingIssue {
 }
 
 export interface AlertSyncInput {
+  contextKey?: string;
   owner: string;
   repo: string;
   branch?: string | null;
@@ -18,6 +19,11 @@ export interface AlertSyncInput {
   series: readonly DurationSeries[];
   /** Managed alert issues of the repository (other workflows are ignored). */
   existing: readonly ExistingAlertIssue[];
+  /**
+   * Contexts observed in a complete recent window of this workflow and branch. Open alerts of other contexts that are
+   * absent from it no longer receive runs and are superseded; omit when the window is incomplete.
+   */
+  activeContexts?: ReadonlySet<string>;
   config: AlertsConfig;
   now: Date;
 }
@@ -26,8 +32,8 @@ export interface AlertSyncPlan extends IssueSyncPlan {
   alerts: DurationAlert[];
 }
 
-export function alertIssueFingerprint(workflowId: number): string {
-  return `duration:${workflowId}`;
+export function alertIssueFingerprint(workflowId: number, contextKey?: string): string {
+  return `duration:${workflowId}${contextKey ? `/${contextKey}` : ""}`;
 }
 
 function readBaselines(issue: ExistingAlertIssue | undefined): Record<string, number> {
@@ -58,14 +64,32 @@ function shapeOf(alerts: readonly DurationAlert[]): string {
  *   slower runs become the new baseline, which must not count as recovery).
  */
 export function planAlertSync(input: AlertSyncInput): AlertSyncPlan {
-  const fingerprint = alertIssueFingerprint(input.workflowId);
-  const seriesMap = new Map(input.series.map((series) => [seriesFingerprint(series), series]));
-  const alerts = detectAnomalies(input.series, input.config);
+  const fingerprint = alertIssueFingerprint(input.workflowId, input.contextKey);
+  const scopedSeries = input.series.filter((series) => series.workflowId === input.workflowId && series.contextKey === input.contextKey);
+  const seriesMap = new Map(scopedSeries.map((series) => [seriesFingerprint(series), series]));
+  const alerts = detectAnomalies(scopedSeries, input.config);
   const history = input.existing.filter((issue) => issue.fingerprint === fingerprint).sort((a, b) => b.number - a.number);
   const open = history.find((issue) => issue.state === "open");
-  const latestClosed = history.find((issue) => issue.state === "closed");
+  // Pre-context alerts (`duration:<id>`) and alerts of an earlier job layout on this branch share the lineage.
+  const legacy = alertIssueFingerprint(input.workflowId);
+  const related = input.contextKey === undefined ? [] : input.existing.filter((issue) =>
+    issue.fingerprint === legacy ||
+    (issue.fingerprint.startsWith(`${legacy}/`) && issue.fingerprint !== fingerprint && issue.attributes.branch === (input.branch ?? "")));
+  const latestClosed = [...history, ...related].sort((a, b) => b.number - a.number).find((issue) => issue.state === "closed");
   const actions: IssueAction[] = [];
   const plan: AlertSyncPlan = { actions, skipped: [], alerts };
+  for (const issue of related) {
+    if (issue.state !== "open") continue;
+    const stale = issue.fingerprint === legacy || (input.activeContexts !== undefined && !input.activeContexts.has(issue.attributes.context ?? ""));
+    if (!stale) continue;
+    actions.push({
+      type: "close",
+      number: issue.number,
+      fingerprint: issue.fingerprint,
+      comment: "Superseded: this alert tracked a job layout, runner routing, or alert identity that no longer runs on this branch. " +
+        "Durations are now compared per workload context; a new alert opens if the slowdown persists.",
+    });
+  }
 
   if (alerts.length === 0) {
     if (!open) return plan;
@@ -74,8 +98,10 @@ export function planAlertSync(input: AlertSyncInput): AlertSyncPlan {
     const recovered =
       keys.length > 0 &&
       keys.every((key) => {
-        const series = seriesMap.get(seriesFingerprint({ workflowId: input.workflowId, ...(key === "*" ? {} : { jobKey: key }) }));
-        return !series || hasRecovered(series, baselines[key] as number, input.config);
+        const series = seriesMap.get(seriesFingerprint({
+          workflowId: input.workflowId, ...(input.contextKey ? { contextKey: input.contextKey } : {}), ...(key === "*" ? {} : { jobKey: key }),
+        }));
+        return series !== undefined && hasRecovered(series, baselines[key] as number, input.config);
       });
     if (recovered) {
       actions.push({
@@ -118,7 +144,7 @@ export function planAlertSync(input: AlertSyncInput): AlertSyncPlan {
     fingerprint,
     signature,
     title: rendered.title,
-    body: `${marker("alert", fingerprint, { signature, shape, workflow: String(input.workflowId), baselines: JSON.stringify(baselines) })}\n${rendered.body}`,
+    body: `${marker("alert", fingerprint, { signature, shape, workflow: String(input.workflowId), ...(input.contextKey ? { context: input.contextKey, branch: input.branch ?? "" } : {}), baselines: JSON.stringify(baselines) })}\n${rendered.body}`,
     labels: [...new Set(["cicd-optimizer", "alert:duration", critical ? "severity:error" : "severity:warn", ...input.config.labels])],
     assignees: input.config.assignees,
     assignCopilot: input.config.assignCopilot,

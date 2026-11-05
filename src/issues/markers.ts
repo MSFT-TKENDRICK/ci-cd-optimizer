@@ -25,7 +25,14 @@ export function parseMarker(body: string | null | undefined): Marker | undefined
   const attributes: Record<string, string> = {};
   for (const pair of (match[2] ?? "").split(/\s+/)) {
     const index = pair.indexOf("=");
-    if (index > 0) attributes[pair.slice(0, index)] = decodeURIComponent(pair.slice(index + 1));
+    if (index > 0) {
+      try {
+        attributes[pair.slice(0, index)] = decodeURIComponent(pair.slice(index + 1));
+      } catch (error) {
+        if (error instanceof URIError) return undefined;
+        throw error;
+      }
+    }
   }
   const fingerprint = attributes.fingerprint;
   if (!fingerprint) return undefined;

@@ -9,7 +9,7 @@ export interface StepSnapshot {
 
 export interface JobSnapshot {
   id: number;
-  /** Workflow job id (`jobs.<key>`); matrix legs and reusable-workflow jobs keep their display name. */
+  /** Resolved workflow job id (`jobs.<key>`); unresolved or ambiguous jobs fall back to their display name. */
   key: string;
   name: string;
   conclusion: string | null;
@@ -21,6 +21,7 @@ export interface JobSnapshot {
   queuedAt?: string;
   queueMs?: number;
   runnerName?: string;
+  runnerGroupId?: number;
   labels?: string[];
   steps?: StepSnapshot[];
 }
@@ -41,16 +42,24 @@ export interface WorkflowSnapshot {
   createdAt: string;
   startedAt: string;
   completedAt: string;
-  queueMs: number;
+  /** Unknown for retries: run creation is not an attempt's queue-entry time. */
+  queueMs: number | null;
   durationMs: number;
   htmlUrl?: string;
   jobs: JobSnapshot[];
+  provenance?: {
+    version: 1;
+    collector: "github-actions-rest";
+    collectedAt: string;
+    jobsComplete: boolean;
+    definitionKnown: boolean;
+  };
 }
 
 export interface WorkflowBaseline {
   sampleCount: number;
   medianDurationMs: number;
-  medianQueueMs: number;
+  medianQueueMs: number | null;
   /** Median duration per job key over the same runs. */
   jobs?: Record<string, number>;
 }

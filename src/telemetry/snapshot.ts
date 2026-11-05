@@ -3,6 +3,7 @@ import { readFileAt } from "../github/git.js";
 import type { GitHubClient, RepoRef } from "../github/client.js";
 import { mapLimit } from "../utils.js";
 import type { JobSnapshot, StepSnapshot, WorkflowSnapshot } from "./types.js";
+import { byCompletion, validateRunAttempt } from "./history.js";
 
 /** The subset of a `workflow_run` webhook payload / REST object the snapshot needs. */
 export interface WorkflowRunPayload {
@@ -38,6 +39,7 @@ export interface ApiJob {
   started_at: string | null;
   completed_at: string | null;
   runner_name?: string | null;
+  runner_group_id?: number | null;
   labels?: string[];
   steps?: ApiStep[];
 }
@@ -79,21 +81,27 @@ export async function loadJobDefinitions(client: GitHubClient, repo: RepoRef, pa
   }
 }
 
-export async function listRunJobs(client: GitHubClient, repo: RepoRef, runId: number, maxPages = 5): Promise<ApiJob[]> {
+export async function listRunJobs(client: GitHubClient, repo: RepoRef, runId: number, runAttempt = 1, maxPages = 5): Promise<{ jobs: ApiJob[]; complete: boolean }> {
+  validateRunAttempt(runAttempt);
   const jobs: ApiJob[] = [];
   for (let page = 1; page <= maxPages; page += 1) {
-    const response = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs", {
+    const response = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs", {
       ...repo,
       run_id: runId,
-      filter: "latest",
+      attempt_number: runAttempt,
       per_page: 100,
       page,
     });
-    const batch = (response.data as { jobs?: ApiJob[] }).jobs ?? [];
+    const data = response.data as { jobs?: ApiJob[]; total_count?: number };
+    if (!Array.isArray(data.jobs)) throw new Error("Actions jobs response did not contain a jobs array");
+    const batch = data.jobs;
     jobs.push(...batch);
-    if (batch.length < 100) break;
+    if (batch.length < 100 || data.total_count === jobs.length) {
+      const unique = [...new Map(jobs.map((job) => [job.id, job])).values()];
+      return { jobs: unique, complete: unique.length === jobs.length && (data.total_count === undefined || data.total_count === jobs.length) };
+    }
   }
-  return jobs;
+  return { jobs: [...new Map(jobs.map((job) => [job.id, job])).values()], complete: false };
 }
 
 export async function buildWorkflowSnapshot(
@@ -103,14 +111,15 @@ export async function buildWorkflowSnapshot(
   options: { definitions?: JobDefinitions } = {},
 ): Promise<WorkflowSnapshot> {
   const [jobs, definitions] = await Promise.all([
-    listRunJobs(client, repo, run.id),
+    listRunJobs(client, repo, run.id, run.run_attempt ?? 1),
     options.definitions ? Promise.resolve(options.definitions) : loadJobDefinitions(client, repo, run.path, run.head_sha),
   ]);
-  return snapshotFromRun(repo, run, jobs, definitions);
+  return snapshotFromRun(repo, run, jobs.jobs, definitions, jobs.complete);
 }
 
-export function snapshotFromRun(repo: RepoRef, run: WorkflowRunPayload, apiJobs: readonly ApiJob[], definitions: JobDefinitions): WorkflowSnapshot {
-  const jobs = apiJobs.filter((job) => job.started_at && job.completed_at).map((job) => jobSnapshot(job, definitions));
+export function snapshotFromRun(repo: RepoRef, run: WorkflowRunPayload, apiJobs: readonly ApiJob[], definitions: JobDefinitions, jobsComplete = false): WorkflowSnapshot {
+  const mapped = apiJobs.filter((job) => job.started_at && job.completed_at).map((job) => ({ job, key: matchJobKey(job.name, definitions) }));
+  const jobs = mapped.map(({ job, key }) => jobSnapshot(job, definitions, key));
   const startedAt = run.run_started_at ?? run.created_at;
   const lastJob = jobs.map((job) => job.completedAt).sort().at(-1);
   const completedAt = lastJob && Date.parse(lastJob) > Date.parse(startedAt) ? lastJob : run.updated_at;
@@ -129,15 +138,21 @@ export function snapshotFromRun(repo: RepoRef, run: WorkflowRunPayload, apiJobs:
     createdAt: run.created_at,
     startedAt,
     completedAt,
-    queueMs: elapsed(run.created_at, startedAt),
+    queueMs: (run.run_attempt ?? 1) === 1 ? elapsed(run.created_at, startedAt) : null,
     durationMs: elapsed(startedAt, completedAt),
     ...(run.html_url ? { htmlUrl: run.html_url } : {}),
     jobs,
+    provenance: {
+      version: 1,
+      collector: "github-actions-rest",
+      collectedAt: new Date().toISOString(),
+      jobsComplete,
+      definitionKnown: definitions.size > 0 && mapped.every(({ key }) => key !== undefined),
+    },
   };
 }
 
-function jobSnapshot(job: ApiJob, definitions: JobDefinitions): JobSnapshot {
-  const key = matchJobKey(job.name, definitions);
+function jobSnapshot(job: ApiJob, definitions: JobDefinitions, key: string | undefined): JobSnapshot {
   const startedAt = job.started_at as string;
   const completedAt = job.completed_at as string;
   const steps = (job.steps ?? [])
@@ -163,6 +178,7 @@ function jobSnapshot(job: ApiJob, definitions: JobDefinitions): JobSnapshot {
     needs: key ? (definitions.get(key)?.needs ?? []) : [],
     ...(job.created_at ? { queuedAt: job.created_at, queueMs: elapsed(job.created_at, startedAt) } : {}),
     ...(job.runner_name ? { runnerName: job.runner_name } : {}),
+    ...(typeof job.runner_group_id === "number" ? { runnerGroupId: job.runner_group_id } : {}),
     ...(job.labels && job.labels.length > 0 ? { labels: job.labels } : {}),
     ...(steps.length > 0 ? { steps } : {}),
   };
@@ -173,22 +189,62 @@ function jobSnapshot(job: ApiJob, definitions: JobDefinitions): JobSnapshot {
  * reusable-workflow callers (`key / inner`), and `name:` templates with `${{ }}` expressions.
  */
 export function matchJobKey(jobName: string, definitions: JobDefinitions): string | undefined {
-  for (const [key, definition] of definitions) {
-    for (const candidate of [key, definition.name]) {
-      if (!candidate) continue;
-      if (jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `)) return key;
-      if (candidate.includes("${{") && templatePattern(candidate).test(jobName)) return key;
+  // Templates without literal text (e.g. `${{ matrix.name }}`) match anything, so they are only a fallback.
+  const tiers: Array<(candidate: string) => boolean> = [
+    (candidate) => jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `) ||
+      (candidate.includes("${{") && hasTemplateLiteral(candidate) && matchesNameTemplate(candidate, jobName)),
+    (candidate) => candidate.includes("${{") && !hasTemplateLiteral(candidate) && matchesNameTemplate(candidate, jobName),
+  ];
+  for (const matchesTier of tiers) {
+    const matches = new Set<string>();
+    for (const [key, definition] of definitions) {
+      if ([key, definition.name].some((candidate) => candidate && matchesTier(candidate))) matches.add(key);
     }
+    if (matches.size > 1) return undefined;
+    if (matches.size === 1) return [...matches][0];
   }
   return undefined;
 }
 
-function templatePattern(template: string): RegExp {
-  const source = template
-    .split(/\$\{\{[^}]*\}\}/)
-    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join(".*");
-  return new RegExp(`^${source}(?: \\(.*\\)| / .*)?$`);
+function hasTemplateLiteral(template: string): boolean {
+  for (let cursor = 0; cursor < template.length;) {
+    const opening = template.indexOf("${{", cursor);
+    if (opening === -1) return template.slice(cursor).trim().length > 0;
+    if (template.slice(cursor, opening).trim()) return true;
+    const closing = template.indexOf("}}", opening + 3);
+    if (closing === -1) return true;
+    cursor = closing + 2;
+  }
+  return false;
+}
+
+function matchesNameTemplate(template: string, name: string): boolean {
+  if (["\r", "\n", "\u2028", "\u2029"].some((character) => name.includes(character))) return false;
+  const parts: string[] = [];
+  let cursor: number;
+  let literal = 0;
+  let closing = -1;
+  for (let opening = template.indexOf("${{"); opening !== -1; opening = template.indexOf("${{", cursor)) {
+    if (closing < opening + 3) closing = template.indexOf("}", opening + 3);
+    if (closing === -1) break;
+    if (template[closing + 1] === "}") {
+      parts.push(template.slice(literal, opening));
+      cursor = closing + 2;
+      literal = cursor;
+    } else cursor = opening + 3;
+  }
+  parts.push(template.slice(literal));
+  if (parts.length < 2 || !name.startsWith(parts[0]!)) return false;
+  let position = parts[0]!.length;
+  for (const part of parts.slice(1, -1)) {
+    const found = name.indexOf(part, position);
+    if (found === -1) return false;
+    position = found + part.length;
+  }
+  const suffix = parts.at(-1)!;
+  return (name.endsWith(suffix) && name.length - suffix.length >= position) ||
+    name.indexOf(`${suffix} / `, position) !== -1 ||
+    (name.endsWith(")") && name.indexOf(`${suffix} (`, position) !== -1);
 }
 
 export interface RunHistoryOptions {
@@ -196,8 +252,6 @@ export interface RunHistoryOptions {
   /** `null` lists every branch. */
   branch: string | null;
   limit: number;
-  /** Definitions from the current run, reused so job keys stay consistent across history. */
-  definitions: JobDefinitions;
   excludeRunId?: number;
   concurrency?: number;
 }
@@ -215,9 +269,9 @@ export async function loadRunHistory(client: GitHubClient, repo: RepoRef, option
     .filter((run) => run.id !== options.excludeRunId)
     .slice(0, options.limit);
   const snapshots = await mapLimit(runs, options.concurrency ?? 4, async (run) =>
-    snapshotFromRun(repo, run, await listRunJobs(client, repo, run.id, 1), options.definitions),
+    buildWorkflowSnapshot(client, repo, run),
   );
-  return snapshots.sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId);
+  return snapshots.sort(byCompletion);
 }
 
 function parseNeeds(value: unknown): string[] {

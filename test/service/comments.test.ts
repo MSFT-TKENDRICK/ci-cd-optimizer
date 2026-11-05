@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { marker } from "../../src/issues/markers.js";
 import { handleIssueComment, type IssueCommentPayload } from "../../src/service/comments.js";
-import { repo } from "../experiments/fixtures.js";
+import { httpError, repo } from "../experiments/fixtures.js";
 import { callsTo, CLEAN, fakeApi, TIMEOUT_ONLY, WORKFLOW, writes } from "./api.js";
 
 const managedPull = (group = "workflow", number = 12) => ({
@@ -34,11 +34,54 @@ describe("handleIssueComment", () => {
   });
 
   it("refuses commands from users without push access", async () => {
-    const client = fakeApi({ issues: [managedPull()] });
+    const client = fakeApi({ issues: [managedPull()], collaboratorPermission: "read" });
     const result = await handleIssueComment(client, repo, payload("@cicd-optimizer close", { author_association: "CONTRIBUTOR" }));
     expect(result.status).toBe("unauthorized");
     expect(comments(client)).toEqual(["Sorry @octocat, only users with push access to this repository can use `@cicd-optimizer` commands."]);
     expect(callsTo(client, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")).toHaveLength(0);
+  });
+
+  it.each(["OWNER", "MEMBER", "COLLABORATOR"])("does not trust %s association when current access is read-only", async (association) => {
+    const client = fakeApi({ issues: [managedPull()], collaboratorPermission: "read" });
+    expect((await handleIssueComment(client, repo, payload("@cicd-optimizer recreate", { author_association: association }))).status).toBe("unauthorized");
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/collaborators/{username}/permission")[0]?.parameters).toMatchObject({ ...repo, username: "octocat" });
+    expect(writes(client).map((call) => call.route)).toEqual(["POST /repos/{owner}/{repo}/issues/{issue_number}/comments"]);
+  });
+
+  it.each(["write", "admin"])("permits current base permission %s regardless of contributor association", async (permission) => {
+    const client = fakeApi({ issues: [managedPull()], collaboratorPermission: permission });
+    expect((await handleIssueComment(client, repo, payload("@cicd-optimizer close", { author_association: "CONTRIBUTOR" }))).status).toBe("handled");
+    expect(callsTo(client, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")[0]?.parameters.state).toBe("closed");
+  });
+
+  it.each(["none", "triage", "unknown", ""])("rejects insufficient or unknown permission %j", async (permission) => {
+    const client = fakeApi({ issues: [managedPull()], collaboratorPermission: permission });
+    expect((await handleIssueComment(client, repo, payload("@cicd-optimizer close"))).status).toBe("unauthorized");
+    expect(callsTo(client, "DELETE /repos/{owner}/{repo}/git/refs/{ref}")).toHaveLength(0);
+  });
+
+  it.each([403, 404, 429, 500])("does not mutate a PR when the permission lookup returns %s", async (status) => {
+    const client = fakeApi({ issues: [managedPull()] });
+    const original = client.request.bind(client);
+    vi.spyOn(client, "request").mockImplementation((route, parameters) => {
+      if (route.endsWith("/permission")) return Promise.reject(httpError(status));
+      return original(route, parameters);
+    });
+    const result = handleIssueComment(client, repo, payload("@cicd-optimizer close"));
+    if (status === 404) {
+      expect((await result).status).toBe("unauthorized");
+    } else {
+      await expect(result).rejects.toThrow(`HTTP ${status}`);
+      expect(writes(client)).toHaveLength(0);
+    }
+    expect(callsTo(client, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")).toHaveLength(0);
+    expect(callsTo(client, "DELETE /repos/{owner}/{repo}/git/refs/{ref}")).toHaveLength(0);
+  });
+
+  it("rejects a comment with no user login without making a permission lookup", async () => {
+    const client = fakeApi({ issues: [managedPull()] });
+    expect((await handleIssueComment(client, repo, payload("@cicd-optimizer close", { user: null }))).status).toBe("unauthorized");
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/collaborators/{username}/permission")).toHaveLength(0);
   });
 
   it("closes the pull request and deletes its branch", async () => {
@@ -47,7 +90,9 @@ describe("handleIssueComment", () => {
     expect(result.status).toBe("handled");
     expect(result.scan).toBeUndefined();
     expect(callsTo(client, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")[0]?.parameters).toMatchObject({ pull_number: 12, state: "closed" });
-    expect(callsTo(client, "DELETE /repos/{owner}/{repo}/git/refs/{ref}")[0]?.parameters.ref).toBe("heads/cicd-optimizer/workflow");
+    expect(callsTo(client, "POST /graphql")[0]?.parameters.variables).toMatchObject({
+      input: { refUpdates: [{ name: "refs/heads/cicd-optimizer/workflow", beforeOid: "pr-head", afterOid: "0".repeat(40) }] },
+    });
   });
 
   it("rebuilds via a fixes-only scan on rebase", async () => {

@@ -114,7 +114,23 @@ fixes:
       paths: [.github/workflows/legacy-*.yml]
 ```
 
+Scans reconcile missing configured labels and unfinished reviewer setup as `metadata` actions, also visible in dry-run
+output. These do not rebuild the branch, including when someone has pushed human commits. Draft PRs retain pending
+reviewer setup until a scan after they become ready. Interrupted PR updates are also reconciled as `metadata` actions
+(`recoverUpdate: true`): an already-applied target needs only marker finalization, while an unapplied intent is
+discarded before the normal planner considers current policy and base contents. Keep review notes outside the
+generated body's hidden boundaries; marker-only recovery preserves all current body text.
+Pending branch cleanup is also a `metadata` action (`cleanup: true`), including for closed PRs. It retains the original
+observed head across retries; changed heads and observed open-PR reuse are preserved. A manually reopened PR with cleanup history
+is held rather than immediately closed again. Normal fix PRs can resume with an explicit rebase/recreate command.
+Removing a management/configured label alone does not opt out:
+use the ignore controls below. See [partial-write recovery](github-app.md#durable-hosted-processing) for limits.
+
 Comment on a fix pull request to control it:
+
+Commands require current repository **write**, **maintain**, or **admin** permission, checked through GitHub's API when
+the command executes. Organization membership or collaborator association alone does not grant permission. If the
+permission lookup is unavailable, no command is executed; transient API failures fail the webhook for later redelivery.
 
 - `@cicd-optimizer rebase` rebuilds the change on the latest base, unless someone else has pushed to the branch.
 - `@cicd-optimizer recreate` rebuilds the change and overwrites manual edits.
@@ -122,6 +138,10 @@ Comment on a fix pull request to control it:
 - `@cicd-optimizer ignore this rule [rule-id]` stops fixes for that rule. Without an id, it stops fixes for every rule
   in the pull request.
 - `@cicd-optimizer ignore this group` closes the pull request and stops fixes for the group.
+
+Branch rebuilds are conditional on the head observed by the scan. Even `recreate` will fail rather than overwrite a
+new push that arrives during the operation; rescan before trying again. Existing PRs retain their head branch when
+`branchPrefix` changes; the new prefix applies to new PRs.
 
 Ignores are recorded with the `cicd-optimizer:ignored` label; remove it to undo. Use `fixes.ignore` for permanent ignores.
 
@@ -146,6 +166,42 @@ alerts:
   assignees: []
   assignCopilot: false
 ```
+
+## Duration evidence and budgets (`durations`)
+
+The configured App knowledge store supplies immutable, context-matched workflow and job duration evidence.
+Budgets are explicit preferences, never values inferred from a historical median or percentile.
+
+```yaml
+durations:
+  minSamples: 20           # integer 2-99; below this, quantiles are withheld
+  objectives:             # optional, at most 100; no duplicate workflow/job selectors
+    - workflow: .github/workflows/ci.yml
+      maxDurationMs: 600000
+    - workflow: .github/workflows/ci.yml
+      job: build          # jobs.build; each observed matrix leg is assessed separately
+      maxDurationMs: 180000
+```
+
+Workflow paths are exact, not globs. Budgets must be positive safe integers in milliseconds; equality is within
+budget. Missing job selectors are reported as unassessed, not passed. Ambiguous display-name mappings (including
+collisions with matrix prefixes or name templates) withhold comparison/budget assessment rather than selecting the
+first matching job. Objectives apply to eligible successful
+first attempts, not shortened failed/cancelled runs. Current configuration is compared with the current run and
+eligible history; this is **not** a record of which objective applied when a historical run executed, nor SLO
+compliance or a deployment gate. The definition digest changes when the budget/selector changes; raw measurements
+and sample quantiles do not. Configuration remains versioned in Git.
+
+The report shows p50/p95; JSON also includes p90, observed min/max, sample identities, exclusions, budget assessments
+and unmatched job objectives. Quantiles use [R7 linear interpolation](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/quantile.html).
+These are descriptive successful-run estimates, not prediction intervals, confidence guarantees or learned targets.
+The default 20-sample display threshold is not a statistical guarantee.
+
+The App uses complete, nonconflicting, comparable immutable run groups for its baseline and alerts when a knowledge
+store is configured. It does not fill gaps with mutable telemetry/API history; cold stores therefore need new
+eligible observations before comparisons recover. Legacy telemetry-only installations retain their existing
+backfill behavior. CLI `telemetry --knowledge` previews show current budgets but do not read or initialize a durable
+knowledge database. See [duration evidence](architecture.md#immutable-duration-evidence) for query bounds and exclusions.
 
 ## Recipes (`recipes`)
 

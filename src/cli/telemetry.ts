@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { httpStatus } from "../github/client.js";
 import { processWorkflowRun, type WorkflowRunResult } from "../service/workflow-run.js";
+import { describeRunKnowledge } from "../service/run-knowledge.js";
 import type { WorkflowRunPayload } from "../telemetry/snapshot.js";
 import { FileTelemetryStore } from "../telemetry/store.js";
 import { copilotClient, githubClient, repoFrom, resolvePath, UsageError, writeText, type CliIO } from "./io.js";
@@ -22,11 +23,12 @@ Options:
       --summary <file>      Append the markdown report (default: $GITHUB_STEP_SUMMARY when set; "-" to disable)
       --check               Also publish the report as a neutral check run on the run's head commit
       --no-alerts           Do not open or update duration alert issues
+      --knowledge           Include source context and configured duration budgets (preview only; no durable history)
       --dry-run             Analyze and report, but write nothing to GitHub or the store
   -f, --format markdown|json  Output format (default: markdown)
   -o, --output <file>       Write the output to a file
 
-Needs actions: read, and issues: write for alerts (checks: write with --check).
+Needs actions: read, and issues: write for alerts (checks: write with --check; contents: read with --knowledge).
 `;
 
 function runSummary(result: WorkflowRunResult, repo: string) {
@@ -37,6 +39,8 @@ function runSummary(result: WorkflowRunResult, repo: string) {
     ...(result.snapshot ? { snapshot: result.snapshot } : {}),
     ...(result.baseline ? { baseline: result.baseline } : {}),
     ...(result.samples !== undefined ? { samples: result.samples } : {}),
+    ...(result.knowledge ? { knowledge: result.knowledge } : {}),
+    ...(result.knowledgeSkipped ? { knowledgeSkipped: result.knowledgeSkipped } : {}),
     ...(result.alerts
       ? {
           alerts: {
@@ -61,6 +65,7 @@ export async function telemetryCommand(args: string[], io: CliIO): Promise<numbe
       summary: { type: "string" },
       check: { type: "boolean", default: false },
       "no-alerts": { type: "boolean", default: false },
+      knowledge: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       format: { type: "string", short: "f", default: "markdown" },
       output: { type: "string", short: "o" },
@@ -92,13 +97,15 @@ export async function telemetryCommand(args: string[], io: CliIO): Promise<numbe
     dryRun: values["dry-run"],
     check: values.check,
     alerts: !values["no-alerts"],
+    knowledge: values.knowledge,
     ...(store ? { store } : {}),
     ...(copilot ? { copilotClient: copilot } : {}),
     ...(io.now ? { now: io.now() } : {}),
   });
 
   const name = `${repo.owner}/${repo.repo}`;
-  const markdown = result.report ?? `Telemetry ${result.status} for run ${runId}${result.reason ? `: ${result.reason}` : "."}`;
+  const markdown = result.report ?? `Telemetry ${result.status} for run ${runId}${result.reason ? `: ${result.reason}` : "."}` +
+    (result.knowledge ? describeRunKnowledge(result.knowledge) : "");
   const summaryPath = values.summary ?? io.env.GITHUB_STEP_SUMMARY;
   if (summaryPath && summaryPath !== "-" && result.report) {
     const target = resolvePath(io, summaryPath);

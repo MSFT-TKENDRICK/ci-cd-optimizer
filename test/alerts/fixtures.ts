@@ -43,6 +43,7 @@ export function snapshot(runId: number, durationSeconds: number, jobs: Array<[st
     completedAt,
     queueMs: 1000,
     durationMs: durationSeconds * 1000,
+    provenance: { version: 1, collector: "github-actions-rest", collectedAt: completedAt, jobsComplete: true, definitionKnown: true },
     jobs: jobs.map(([key, seconds, jobConclusion], index) => ({
       id: runId * 10 + index,
       key,
@@ -51,7 +52,8 @@ export function snapshot(runId: number, durationSeconds: number, jobs: Array<[st
       startedAt: completedAt,
       completedAt,
       durationMs: seconds * 1000,
-      needs: [],
+      needs: key === "test" && jobs.some(([key]) => key === "build") ? ["build"] : [],
+      labels: ["ubuntu-24.04"],
     })),
   };
 }

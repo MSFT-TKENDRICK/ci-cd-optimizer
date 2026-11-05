@@ -104,6 +104,8 @@ describe("buildRecipe", () => {
     expect(same).toMatchObject({ changed: false, recipe: { revision: 1, compatibility: { passed: 4, failed: 1 } } });
     const changed = buildRecipe({ manifest: promoted(), repository: "a/b", files: [{ ...ciChange, patch: "+  timeout-minutes: 20" }], previous });
     expect(changed).toMatchObject({ changed: true, recipe: { revision: 2, compatibility: { passed: 0, failed: 0 } } });
+    const changedDefinition = buildRecipe({ manifest: promoted({ title: "Revised mitigation title" }), repository: "a/b", files: [ciChange], previous });
+    expect(changedDefinition).toMatchObject({ changed: true, recipe: { revision: 2, compatibility: { passed: 0, failed: 0 } } });
   });
 
   it("honors custom excludes", () => {

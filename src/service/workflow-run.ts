@@ -6,12 +6,16 @@ import { applyIssueActions, listManagedIssues, type AppliedIssueAction } from ".
 import type { IssueAction, SkippedIssue } from "../issues/plan.js";
 import type { LintConfig } from "../lint/config.js";
 import { computeBaseline } from "../telemetry/baseline.js";
+import { byCompletion, latestAttempts } from "../telemetry/history.js";
+import { comparableHistory, comparisonKey } from "../telemetry/context.js";
 import { createTelemetryReport } from "../telemetry/report.js";
 import { buildWorkflowSnapshot, loadJobDefinitions, loadRunHistory, type WorkflowRunPayload } from "../telemetry/snapshot.js";
 import type { TelemetryStore } from "../telemetry/store.js";
 import type { WorkflowBaseline, WorkflowSnapshot } from "../telemetry/types.js";
 import { matchesGlob } from "../utils.js";
 import { publishCheck, TELEMETRY_CHECK_PREFIX } from "./checks.js";
+import type { KnowledgeStore } from "../knowledge/types.js";
+import { collectRunKnowledge, describeRunKnowledge, type CollectedRunKnowledge, type RunKnowledge } from "./run-knowledge.js";
 
 export interface WorkflowRunOptions {
   /** Persists snapshots between runs; without one, history is rebuilt from the Actions API each time. */
@@ -23,6 +27,9 @@ export interface WorkflowRunOptions {
   check?: boolean;
   /** Set false to skip duration alerting even when enabled in the configuration. */
   alerts?: boolean;
+  knowledge?: boolean;
+  knowledgeStore?: () => Promise<KnowledgeStore | undefined>;
+  expectedRepositoryId?: number;
 }
 
 export interface WorkflowRunResult {
@@ -35,6 +42,8 @@ export interface WorkflowRunResult {
   report?: string;
   alerts?: { detected: DurationAlert[]; actions: IssueAction[]; skipped: SkippedIssue[]; applied: AppliedIssueAction[] };
   checkRunId?: number;
+  knowledge?: RunKnowledge;
+  knowledgeSkipped?: "invalid-config";
 }
 
 const PULL_REQUEST_EVENTS = new Set(["pull_request", "pull_request_target"]);
@@ -59,25 +68,60 @@ function historyLimit(config: LintConfig): number {
  */
 export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, run: WorkflowRunPayload, options: WorkflowRunOptions = {}): Promise<WorkflowRunResult> {
   if (run.status && run.status !== "completed") return { status: "skipped", reason: `Run is ${run.status}.` };
-  const branch = await defaultBranch(client, repo);
+  const branch = await defaultBranch(client, repo, options.expectedRepositoryId);
   const remote = await loadRemoteConfig(client, repo, branch);
   const config = remote.config;
   if (!config.enabled) return { status: "disabled" };
 
   const definitions = await loadJobDefinitions(client, repo, run.path, run.head_sha);
   const snapshot = await buildWorkflowSnapshot(client, repo, run, { definitions });
-  if (snapshot.jobs.length === 0) return { status: "skipped", reason: "The run has no completed jobs.", snapshot };
+  const knowledgeSkipped = remote.problems.length > 0 && (options.knowledge || options.knowledgeStore) ? "invalid-config" as const : undefined;
+  let knowledge: RunKnowledge | undefined;
+  let knowledgeComparison: CollectedRunKnowledge["comparison"];
+  if (remote.problems.length === 0) {
+    const store = options.dryRun ? undefined : await options.knowledgeStore?.();
+    if (options.knowledge || store || (options.dryRun && options.knowledgeStore)) {
+      const { comparison, ...captured } = await collectRunKnowledge(client, repo, snapshot, config, {
+        ...(store ? { store } : {}),
+        ...(options.expectedRepositoryId !== undefined ? { expectedRepositoryId: options.expectedRepositoryId } : {}),
+        ...(options.now ? { now: options.now } : {}),
+      });
+      knowledge = captured;
+      knowledgeComparison = comparison;
+    }
+  }
+  if (snapshot.jobs.length === 0) {
+    if (options.store && !options.dryRun) await options.store.save(snapshot);
+    return { status: "skipped", reason: "The run has no completed jobs.", snapshot, ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}) };
+  }
 
-  const history = await loadHistory(client, repo, run, snapshot, definitions, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
-  const prior = history.filter((item) => item.runId !== snapshot.runId);
+  const history = await loadHistory(client, repo, run, snapshot, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options, knowledgeComparison !== undefined);
+  if (knowledgeComparison?.newerAttemptObserved || history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
+    return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot, ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}) };
+  }
+  const prior = (knowledgeComparison?.history ?? comparableHistory(history, snapshot)).sort(byCompletion).slice(-historyLimit(config));
   const baseline = computeBaseline(prior, snapshot);
-  const report = createTelemetryReport(snapshot, baseline);
-  const result: WorkflowRunResult = { status: "processed", snapshot, samples: prior.length, report, ...(baseline ? { baseline } : {}) };
+  const report = createTelemetryReport(snapshot, baseline) + (knowledge ? describeRunKnowledge(knowledge) : "") +
+    (knowledgeSkipped ? "\n\nProject declaration collection was skipped because the repository configuration is invalid." : "");
+  const result: WorkflowRunResult = {
+    status: "processed", snapshot, samples: prior.length, report, ...(baseline ? { baseline } : {}),
+    ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}),
+  };
 
-  if (options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run, config.alerts.branches, branch)) {
+  const contextKey = knowledgeComparison && knowledge?.durations?.status === "reference-excluded" ? undefined : comparisonKey(snapshot);
+  const newerRunObserved = knowledgeComparison?.newerRunObserved || history.some((item) =>
+    item.workflowId === snapshot.workflowId && item.branch === snapshot.branch && item.runId !== snapshot.runId && byCompletion(item, snapshot) > 0,
+  );
+  if (contextKey && !knowledgeComparison?.alertHistoryUncertain && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run, config.alerts.branches, branch)) {
     const series = buildSeries([...prior, snapshot]);
     const existing = await listManagedIssues(client, repo, "alert");
+    const branchRuns = history.filter((item) => item.workflowId === snapshot.workflowId && item.branch === snapshot.branch).slice(-historyLimit(config));
+    const activeContexts = branchRuns.length >= historyLimit(config)
+      ? new Set(branchRuns.map(comparisonKey).filter((key): key is string => key !== undefined))
+      : undefined;
     const plan = planAlertSync({
+      contextKey,
+      ...(activeContexts ? { activeContexts } : {}),
       owner: repo.owner,
       repo: repo.repo,
       branch: run.head_branch,
@@ -116,29 +160,33 @@ async function loadHistory(
   repo: RepoRef,
   run: WorkflowRunPayload,
   snapshot: WorkflowSnapshot,
-  definitions: Awaited<ReturnType<typeof loadJobDefinitions>>,
   { limit, minSamples }: { limit: number; minSamples: number },
   options: WorkflowRunOptions,
+  immutableHistory = false,
 ): Promise<WorkflowSnapshot[]> {
-  const query = { owner: repo.owner, repo: repo.repo, workflowId: snapshot.workflowId, branch: snapshot.branch, limit: limit + 1 };
-  const backfill = () => loadRunHistory(client, repo, { workflowId: snapshot.workflowId, branch: snapshot.branch, limit, definitions, excludeRunId: run.id });
+  const query = { owner: repo.owner, repo: repo.repo, workflowId: snapshot.workflowId, branch: snapshot.branch, limit: Math.max(200, limit + 1) };
+  const backfill = () => loadRunHistory(client, repo, { workflowId: snapshot.workflowId, branch: snapshot.branch, limit, excludeRunId: run.id });
   const store = options.store;
-  if (!store) return merge(await backfill(), [snapshot], limit + 1);
+  if (!store) return !immutableHistory && comparisonKey(snapshot) ? merge(await backfill(), [snapshot], limit + 1) : [snapshot];
   if (!options.dryRun) await store.save(snapshot);
-  let history = await store.history(query);
-  if (history.filter((item) => item.runId !== snapshot.runId).length < minSamples) {
-    const fetched = await backfill();
-    const known = new Set(history.map((item) => item.runId));
-    if (!options.dryRun) for (const item of fetched) if (!known.has(item.runId)) await store.save(item);
-    history = merge(history, fetched, limit + 1);
+  if (!comparisonKey(snapshot)) {
+    return latestAttempts([...(await store.history({ ...query, runId: snapshot.runId, limit: 1 })), snapshot]);
   }
-  return merge(history, [snapshot], limit + 1);
+  const [current, stored] = await Promise.all([
+    store.history({ ...query, runId: snapshot.runId, limit: 1 }),
+    store.history(query),
+  ]);
+  let history = stored;
+  if (!immutableHistory && comparisonKey(snapshot) && comparableHistory(history, snapshot).length < minSamples) {
+    const fetched = await backfill();
+    if (!options.dryRun) for (const item of fetched) await store.save(item);
+    history = merge(history, fetched, query.limit);
+  }
+  return merge(history, [...current, snapshot], query.limit + 1);
 }
 
 function merge(left: readonly WorkflowSnapshot[], right: readonly WorkflowSnapshot[], limit: number): WorkflowSnapshot[] {
-  const byRun = new Map<number, WorkflowSnapshot>();
-  for (const item of [...left, ...right]) byRun.set(item.runId, item);
-  return [...byRun.values()].sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId).slice(-limit);
+  return latestAttempts([...left, ...right]).sort(byCompletion).slice(-limit);
 }
 
 function headline(snapshot: WorkflowSnapshot, baseline?: WorkflowBaseline): string {

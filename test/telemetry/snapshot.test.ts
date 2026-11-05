@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildWorkflowSnapshot,
   loadRunHistory,
+  listRunJobs,
   matchJobKey,
   parseJobDefinitions,
   snapshotFromRun,
@@ -96,6 +97,36 @@ describe("job definitions", () => {
     expect(matchJobKey("unknown", definitions)).toBeUndefined();
   });
 
+  it("rejects ambiguous key/name/prefix matches regardless of definition order", () => {
+    for (const name of ["build", "build (unit)", "build / inner", "build${{ matrix.suffix }}"]) {
+      const definitions = new Map([["build", { needs: [] }], ["other", { name, needs: [] }]]);
+      const display = name.includes("${{") ? "build (unit)" : name;
+      expect(matchJobKey(display, definitions)).toBeUndefined();
+      expect(matchJobKey(display, new Map([...definitions].reverse()))).toBeUndefined();
+    }
+  });
+
+  it("does not let a catch-all name template shadow exact matches", () => {
+    const definitions = new Map([["lint", { name: "Lint", needs: [] }], ["test", { name: "${{ matrix.name }}", needs: [] }]]);
+    for (const order of [definitions, new Map([...definitions].reverse())]) {
+      expect(matchJobKey("Lint", order)).toBe("lint");
+      expect(matchJobKey("Node 22", order)).toBe("test");
+    }
+    const two = new Map([["a", { name: "${{ matrix.a }}", needs: [] }], ["b", { name: "${{ matrix.b }}", needs: [] }]]);
+    expect(matchJobKey("anything", two)).toBeUndefined();
+  });
+
+  it("matches templates literally without regex backtracking or treating partial names as a match", () => {
+    const definitions = new Map([["build", { name: "Test [literal] ${{ matrix.os }} - ${{ matrix.node }} done", needs: [] }]]);
+    for (const suffix of ["", " (2)", " / child"]) {
+      expect(matchJobKey(`Test [literal] linux - 22 done${suffix}`, definitions)).toBe("build");
+    }
+    expect(matchJobKey("Test literal linux - 22 done", definitions)).toBeUndefined();
+    expect(matchJobKey("Test [literal] linux - 22 done\n", definitions)).toBeUndefined();
+    expect(matchJobKey("a".repeat(200), new Map([["job", { name: "${{ value }}a".repeat(30) + "z", needs: [] }]]))).toBeUndefined();
+    expect(matchJobKey("ordinary", new Map([["job", { name: "${{".repeat(10_000), needs: [] }]]))).toBeUndefined();
+  });
+
   it("strips the ref suffix from reusable workflow paths", () => {
     expect(workflowPath(".github/workflows/ci.yml@refs/heads/main")).toBe(".github/workflows/ci.yml");
   });
@@ -149,6 +180,21 @@ describe("snapshotFromRun", () => {
 describe("API loading", () => {
   const content = Buffer.from(workflow).toString("base64");
 
+  it("collects the requested attempt even when latest jobs belong to a rerun", async () => {
+    const client = fakeClient((route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs") {
+        return { jobs: [jobs[parameters.attempt_number === 1 ? 0 : 1]] };
+      }
+      if (route.endsWith("/jobs")) return { jobs: [jobs[1]] };
+      throw new Error(route);
+    });
+    const old = await buildWorkflowSnapshot(client, repo, run(), { definitions: new Map() });
+    const latest = await buildWorkflowSnapshot(client, repo, run({ run_attempt: 2 }), { definitions: new Map() });
+    expect(old.jobs.map((item) => item.id)).toEqual([1]);
+    expect(latest.jobs.map((item) => item.id)).toEqual([2]);
+    expect([old.runAttempt, latest.runAttempt]).toEqual([1, 2]);
+  });
+
   it("builds a snapshot from the jobs API and the workflow file at the head SHA", async () => {
     const client = fakeClient((route, parameters) => {
       if (route.includes("/jobs")) return { total_count: jobs.length, jobs };
@@ -160,7 +206,10 @@ describe("API loading", () => {
     });
     const snapshot = await buildWorkflowSnapshot(client, repo, run({ path: ".github/workflows/ci.yml@refs/heads/main" }));
     expect(snapshot.jobs.map((item) => item.key)).toEqual(["build", "test", "test", "deploy"]);
-    expect(client.calls.find((call) => call.route.includes("/jobs"))?.parameters).toMatchObject({ run_id: 500, filter: "latest" });
+    expect(client.calls.find((call) => call.route.includes("/jobs"))).toMatchObject({
+      route: "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+      parameters: { run_id: 500, attempt_number: 1 },
+    });
   });
 
   it("degrades to display names when the workflow file is unreadable", async () => {
@@ -184,7 +233,7 @@ describe("API loading", () => {
   });
 
   it("backfills completed run history oldest first, excluding the current run", async () => {
-    const runs = [run({ id: 503, updated_at: "2026-01-03T00:00:00Z" }), run({ id: 500 }), run({ id: 502 }), run({ id: 501 })].map((item, index) => ({
+    const runs = [run({ id: 503, run_attempt: 3, updated_at: "2026-01-03T00:00:00Z" }), run({ id: 500 }), run({ id: 502 }), run({ id: 501 })].map((item, index) => ({
       ...item,
       created_at: `2026-01-0${4 - index}T00:00:00Z`,
       run_started_at: `2026-01-0${4 - index}T00:00:00Z`,
@@ -197,8 +246,43 @@ describe("API loading", () => {
       }
       return { jobs: [] };
     });
-    const history = await loadRunHistory(client, repo, { workflowId: 7, branch: "main", limit: 2, definitions: new Map(), excludeRunId: 500 });
+    const history = await loadRunHistory(client, repo, { workflowId: 7, branch: "main", limit: 2, excludeRunId: 500 });
     expect(history.map((item) => item.runId)).toEqual([502, 503]);
     expect(client.calls.filter((call) => call.route.includes("/jobs"))).toHaveLength(2);
+    expect(client.calls.find((call) => call.parameters.run_id === 503)).toMatchObject({
+      route: "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
+      parameters: { attempt_number: 3 },
+    });
   });
 });
+  it("marks capped, duplicate or inconsistent job pages as incomplete, not complete evidence", async () => {
+    const hundred = Array.from({ length: 100 }, (_, index) => ({ ...jobs[0]!, id: index }));
+    const capped = fakeClient(() => ({ jobs: hundred, total_count: 101 }));
+    expect(await listRunJobs(capped, repo, 500, 1, 1)).toMatchObject({ complete: false, jobs: hundred });
+    const exact = fakeClient(() => ({ jobs: hundred, total_count: 100 }));
+    expect((await listRunJobs(exact, repo, 500, 1, 1)).complete).toBe(true);
+    const duplicate = fakeClient(() => ({ jobs: [jobs[0], jobs[0]], total_count: 2 }));
+    expect(await listRunJobs(duplicate, repo, 500)).toMatchObject({ complete: false, jobs: [jobs[0]] });
+    const missing = fakeClient(() => ({}));
+    await expect(listRunJobs(missing, repo, 500)).rejects.toThrow("did not contain a jobs array");
+  });
+
+  it("records collection provenance and keeps retry queue time unknown", async () => {
+    const client = fakeClient(() => ({ jobs: [jobs[0]], total_count: 1 }));
+    const result = await buildWorkflowSnapshot(client, repo, run({ run_attempt: 2 }), { definitions: parseJobDefinitions(workflow) });
+    expect(result).toMatchObject({ queueMs: null, provenance: { version: 1, collector: "github-actions-rest", jobsComplete: true, definitionKnown: true } });
+    expect(Number.isFinite(Date.parse(result.provenance!.collectedAt))).toBe(true);
+  });
+
+  it("backfills job definitions from each historical source revision, not the current graph", async () => {
+    const historical = run({ id: 501, head_sha: "historical-sha" });
+    const oldWorkflow = "jobs:\n  prepare:\n    runs-on: ubuntu-24.04\n  legacy:\n    name: Old Build\n    needs: prepare\n    runs-on: ubuntu-24.04\n";
+    const client = fakeClient((route, parameters) => {
+      if (route.endsWith("/runs")) return { workflow_runs: [historical] };
+      if (route.endsWith("/jobs")) return { jobs: [{ ...jobs[0], name: "Old Build" }], total_count: 1 };
+      expect(parameters.ref).toBe("historical-sha");
+      return { content: Buffer.from(oldWorkflow).toString("base64"), encoding: "base64" };
+    });
+    const result = await loadRunHistory(client, repo, { workflowId: 7, branch: "main", limit: 10 });
+    expect(result[0]).toMatchObject({ headSha: "historical-sha", jobs: [{ key: "legacy", needs: ["prepare"] }], provenance: { definitionKnown: true } });
+  });

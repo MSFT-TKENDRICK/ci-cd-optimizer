@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_HILL_CLIMB_CONFIG } from "../../src/experiments/config.js";
 import { serializeManifest } from "../../src/experiments/manifest.js";
 import { marker, parseMarker } from "../../src/issues/markers.js";
@@ -7,6 +7,8 @@ import { applyRecipe, publishRecipe, recipeStatus } from "../../src/recipes/gith
 import { fakeClient, sampleManifest } from "../experiments/fixtures.js";
 import { CLEAN, defaultConfig, EXCESSIVE_TIMEOUT, MISSING_TIMEOUT, sampleRecipe, workflowInput } from "./fixtures.js";
 import { server } from "./server.js";
+import { MemoryKnowledgeStore } from "../../src/knowledge/store.js";
+import { serializeRecipe } from "../../src/recipes/recipe.js";
 
 const target = { owner: "acme", repo: "web" };
 
@@ -17,7 +19,7 @@ const recipePull = (overrides: Record<string, unknown> = {}, attributes: Record<
   title: "ci: recipe",
   state: "open",
   body: `${marker("fix", "group:recipe-job-timeouts", { signature: "old", commit: "head-sha", ...attributes })}\n${marker("recipe", "job-timeouts", { revision })}`,
-  labels: [{ name: "cicd-optimizer" }],
+  labels: [{ name: "cicd-optimizer" }, { name: "recipe:job-timeouts" }],
   pull_request: { merged_at: null },
   ...overrides,
 });
@@ -32,9 +34,52 @@ const recipeIssueRaw = (overrides: Record<string, unknown> = {}, revision = "1")
 describe("applyRecipe", () => {
   it("plans without writing in dry-run mode", async () => {
     const client = server({ files: workflow(MISSING_TIMEOUT) });
-    const result = await applyRecipe(client, target, sampleRecipe(), { dryRun: true });
+    const knowledgeStore = vi.fn(async () => { throw new Error("Dry runs must not open storage"); });
+    const result = await applyRecipe(client, target, sampleRecipe(), { dryRun: true, knowledgeStore });
     expect(result).toMatchObject({ repo: "acme/web", attempted: false, plan: { status: "autofix" } });
     expect(routes(client).some((route) => !route.startsWith("GET"))).toBe(false);
+    expect(knowledgeStore).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("records a verified apply result and recovers after persistence failure (%s)", async (failPersistence) => {
+    const store = new MemoryKnowledgeStore();
+    const backing = server({ files: workflow(MISSING_TIMEOUT) });
+    const recipe = sampleRecipe();
+    const headSha = "b".repeat(40);
+    let body = "";
+    const client = fakeClient(async (route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}") return {
+        id: parameters.repo === "platform" ? 43 : 42, node_id: "repository-node", default_branch: "main",
+        owner: { login: "acme" }, name: parameters.repo, html_url: `https://github.com/acme/${parameters.repo}`,
+      };
+      if (route === "GET /repos/{owner}/{repo}/commits/{ref}") return { sha: "a".repeat(40), commit: { tree: { sha: "root" } } };
+      if (route === "GET /repos/{owner}/{repo}/contents/{path}" && parameters.path === "recipes/job-timeouts.yml") {
+        return { content: Buffer.from(serializeRecipe(recipe)).toString("base64"), encoding: "base64" };
+      }
+      if (route === "POST /repos/{owner}/{repo}/pulls") body = String(parameters.body);
+      if (body && route === "GET /repos/{owner}/{repo}/issues") return [{
+        number: 42, state: "open", title: recipe.title, body,
+        labels: [{ name: "cicd-optimizer" }, { name: "recipe:job-timeouts" }], pull_request: { merged_at: null },
+      }];
+      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return {
+        number: 42, state: "open", merged: false, body,
+        created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z",
+        head: { ref: "cicd-optimizer/recipe-job-timeouts", sha: headSha, repo: { id: 42, full_name: "acme/web" } },
+        base: { ref: "main", repo: { id: 42 } },
+      };
+      if (route === "POST /repos/{owner}/{repo}/git/commits") return { sha: headSha };
+      return (await backing.request(route, parameters)).data;
+    });
+    if (failPersistence) {
+      vi.spyOn(store, "saveMitigationApplication").mockRejectedValueOnce(new Error("storage unavailable"));
+      await expect(applyRecipe(client, target, recipe, { knowledgeStore: async () => store })).rejects.toThrow("storage unavailable");
+    }
+    const result = await applyRecipe(client, target, recipe, { knowledgeStore: async () => store });
+    expect(result).toMatchObject({ attempted: true, pullRequest: 42 });
+    expect(result.knowledge?.applicationIds).toHaveLength(1);
+    const application = await store.loadMitigationApplication({ host: "https://github.com", repositoryId: "42" }, result.knowledge!.applicationIds[0]!);
+    expect(application?.change).toEqual({ kind: "pull-request", number: 42, headSha });
+    expect(client.calls.filter(({ route }) => route === "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
   });
 
   it("opens a labeled pull request rebuilt from the target's own files", async () => {
@@ -58,6 +103,44 @@ describe("applyRecipe", () => {
     const result = await applyRecipe(client, target, sampleRecipe());
     expect(result).toMatchObject({ pullRequest: 30, attempted: true });
     expect(routes(client).some((route) => route.startsWith("POST") || route.startsWith("PATCH"))).toBe(false);
+  });
+
+  it.each([false, true])("recovers an unlabeled recipe PR without rewriting its branch (human edits: %s)", async (humanEdits) => {
+    const plan = planRecipe({ recipe: sampleRecipe(), input: workflowInput(MISSING_TIMEOUT), config: defaultConfig() });
+    const pull = recipePull({
+      labels: [],
+      head: { ref: "custom/recipe-job-timeouts", sha: humanEdits ? "maintainer-commit" : "head-sha", repo: { full_name: "acme/web" } },
+      base: { ref: "main" },
+    }, { signature: plan.change?.signature as string });
+    const client = server({
+      files: workflow(MISSING_TIMEOUT), config: "fixes:\n  branchPrefix: custom/\n", pulls: [pull],
+    });
+    const result = await applyRecipe(client, target, sampleRecipe());
+    expect(result).toMatchObject({ pullRequest: 30, attempted: true });
+    expect(routes(client)).not.toContain("POST /repos/{owner}/{repo}/pulls");
+    expect(routes(client)).not.toContain("POST /repos/{owner}/{repo}/git/commits");
+    expect(routes(client)).not.toContain("PATCH /repos/{owner}/{repo}/pulls/{pull_number}");
+    expect(client.calls.find((call) => call.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/labels")?.parameters)
+      .toMatchObject({ issue_number: 30, labels: ["cicd-optimizer", "recipe:job-timeouts"] });
+  });
+
+  it.each([false, true])("protects the existing recipe branch during updates (human edits: %s)", async (humanEdits) => {
+    const client = server({
+      files: workflow(MISSING_TIMEOUT), config: "fixes:\n  branchPrefix: new-prefix/\n",
+      issues: [recipePull()], head: { ref: "old-prefix/recipe-job-timeouts", sha: humanEdits ? "human-commit" : "head-sha" },
+    });
+    expect(await applyRecipe(client, target, sampleRecipe())).toMatchObject({ pullRequest: 30, attempted: true });
+    const mutation = client.calls.find((call) => call.route === "POST /graphql");
+    if (humanEdits) {
+      expect(mutation).toBeUndefined();
+      expect(routes(client).some((route) => !route.startsWith("GET"))).toBe(false);
+    } else {
+      expect(mutation?.parameters.variables).toMatchObject({
+        input: { refUpdates: [{ name: "refs/heads/old-prefix/recipe-job-timeouts", beforeOid: "head-sha", afterOid: "new-commit" }] },
+      });
+      expect(client.calls.find((call) => call.route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")?.parameters.body)
+        .toContain("cicd-optimizer:recipe");
+    }
   });
 
   it("opens an adaptation issue labeled for the coding agent when no autofix applies", async () => {
@@ -86,7 +169,9 @@ describe("applyRecipe", () => {
 
   it("does not touch repositories with invalid configuration", async () => {
     const client = server({ files: workflow(MISSING_TIMEOUT), config: "rules:\n  nope/rule: error\n" });
-    const result = await applyRecipe(client, target, sampleRecipe());
+    const knowledgeStore = vi.fn(async () => { throw new Error("Invalid configuration must not open storage"); });
+    const result = await applyRecipe(client, target, sampleRecipe(), { knowledgeStore });
+    expect(knowledgeStore).not.toHaveBeenCalled();
     expect(result).toMatchObject({ attempted: false, plan: { status: "ignored" } });
     expect(result.configProblems?.[0]).toContain("nope/rule");
     expect(routes(client)).not.toContain("GET /repos/{owner}/{repo}/commits/{ref}");
@@ -94,7 +179,9 @@ describe("applyRecipe", () => {
 
   it("respects a target that opted out of recipes", async () => {
     const client = server({ files: workflow(MISSING_TIMEOUT), config: "recipes:\n  ignore: [job-timeouts]\n" });
-    const result = await applyRecipe(client, target, sampleRecipe());
+    const knowledgeStore = vi.fn(async () => { throw new Error("Ignored recipes must not open storage"); });
+    const result = await applyRecipe(client, target, sampleRecipe(), { knowledgeStore });
+    expect(knowledgeStore).not.toHaveBeenCalled();
     expect(result).toMatchObject({ attempted: false, plan: { status: "ignored" } });
     expect(routes(client)).not.toContain("POST /repos/{owner}/{repo}/pulls");
   });

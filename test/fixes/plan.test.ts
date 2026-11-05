@@ -146,6 +146,38 @@ function pr(overrides: Partial<ExistingFixPullRequest> & Pick<ExistingFixPullReq
 }
 
 describe("planFixPullRequests", () => {
+  it.each(["base-1", "base-2"])("reconciles a completed rebase against the current base (%s)", (baseSha) => {
+    const pendingUpdate = { fromSha: "c1", commitSha: "c2", signature: "s2", baseSha: "base-1", rules: ["a/rule"] };
+    const plan = planFixPullRequests([change("a", "s2")], [pr({ number: 1, group: "a", headSha: "c2", pendingUpdate })], {
+      openPullRequestsLimit: 5, baseSha, rebase: new Set(["a"]),
+    });
+    expect(plan.actions.map((action) => action.type)).toEqual(baseSha === "base-1" ? ["metadata"] : ["metadata", "update"]);
+    expect(plan.actions[0]).toMatchObject({ recoverUpdate: true });
+  });
+
+  it("does not skip an uncommitted rebase intent merely because the old signature still matches", () => {
+    const pendingUpdate = { fromSha: "c1", commitSha: "c2", signature: "s1", baseSha: "base-1", rules: ["a/rule"] };
+    const plan = planFixPullRequests([change("a", "s1")], [pr({ number: 1, group: "a", pendingUpdate })], { openPullRequestsLimit: 5 });
+    expect(plan.actions.map((action) => action.type)).toEqual(["metadata", "update"]);
+  });
+
+  it("repairs pending metadata independently of changed or human-edited branch contents", () => {
+    const existing = [pr({ number: 1, group: "a", headSha: "human", labels: ["CI"], pendingReviewers: ["alice", "removed"] })];
+    const plan = planFixPullRequests([change("a", "s1")], existing, {
+      openPullRequestsLimit: 0, labels: ["cicd-optimizer", "ci"], reviewers: ["alice"],
+    });
+    expect(plan.actions).toEqual([{ type: "metadata", number: 1, group: "a", labels: ["cicd-optimizer"], reviewers: ["alice"] }]);
+    expect(plan.skipped).toEqual([{ group: "a", reason: "edited", number: 1 }]);
+  });
+
+  it("does not request reviews for a PR that is being closed", () => {
+    const plan = planFixPullRequests([], [pr({ number: 1, group: "a", labels: [], pendingReviewers: ["alice"] })], {
+      openPullRequestsLimit: 5, labels: ["cicd-optimizer"], reviewers: ["alice"],
+    });
+    expect(plan.actions.map((action) => action.type)).toEqual(["metadata", "close"]);
+    expect(plan.actions[0]).toMatchObject({ reviewers: [] });
+  });
+
   it("creates new pull requests within the open limit (0 disables)", () => {
     const plan = planFixPullRequests([change("a", "s1"), change("b", "s1"), change("c", "s1")], [], { openPullRequestsLimit: 2 });
     expect(plan.actions.map((action) => action.type)).toEqual(["create", "create"]);
@@ -165,6 +197,19 @@ describe("planFixPullRequests", () => {
       { group: "a", reason: "edited", number: 1 },
     ]);
     expect(planFixPullRequests([change("a", "s2")], existing, { openPullRequestsLimit: 5, recreate: new Set(["a"]) }).actions[0]?.type).toBe("update");
+  });
+
+  it("does not rebuild or close a PR without verifiable bot ownership", () => {
+    const missingCommit = pr({ number: 1, group: "a" });
+    delete missingCommit.commitSha;
+    const missingHead = pr({ number: 2, group: "b" });
+    delete missingHead.headSha;
+    const plan = planFixPullRequests([change("a", "s2")], [missingCommit, missingHead], { openPullRequestsLimit: 5 });
+    expect(plan.actions).toEqual([]);
+    expect(plan.skipped).toEqual([
+      { group: "b", reason: "edited", number: 2 },
+      { group: "a", reason: "edited", number: 1 },
+    ]);
   });
 
   it("rebases on request even when the fixes are unchanged", () => {

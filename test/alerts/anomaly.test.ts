@@ -6,15 +6,16 @@ import { seriesOf, snapshot, stable } from "./fixtures.js";
 const settings = DEFAULT_CONFIG.alerts;
 
 describe("buildSeries", () => {
-  it("builds workflow and per-job series from successful runs only, oldest first", () => {
+  it("builds context-scoped series only from fully successful first attempts, oldest first", () => {
     const series = buildSeries([
       snapshot(3, 120, [["build", 60], ["test", 50]]),
       snapshot(1, 100, [["build", 50], ["test", 40]]),
       snapshot(2, 500, [["build", 400]], "failure"),
       snapshot(4, 130, [["build", 70], ["test", 55, "failure"]]),
     ]);
-    const byKey = Object.fromEntries(series.map((entry) => [seriesFingerprint(entry), entry.points.map((point) => point.runId)]));
-    expect(byKey).toEqual({ "duration:7/*": [1, 3, 4], "duration:7/build": [1, 3, 4], "duration:7/test": [1, 3] });
+    const byKey = Object.fromEntries(series.map((entry) => [entry.jobKey ?? "*", entry.points.map((point) => point.runId)]));
+    expect(byKey).toEqual({ "*": [1, 3], build: [1, 3], test: [1, 3] });
+    expect(series.every((entry) => seriesFingerprint(entry).includes(entry.contextKey!))).toBe(true);
   });
 });
 

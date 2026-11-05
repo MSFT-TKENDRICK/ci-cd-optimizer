@@ -1,10 +1,11 @@
-import { ensureLabels, httpStatus, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
-import { branchSha, commitFiles, deleteBranch } from "../github/git.js";
+import { ensureLabels, graphql, httpStatus, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
+import { branchSha, commitFiles, deleteBranch, updateBranch } from "../github/git.js";
 import { marker, parseMarker } from "../issues/markers.js";
 import type { SourceFile } from "../lint/types.js";
 import type { HillClimbConfig } from "./config.js";
 import { renderDecision, type Decision, type DispatchRequest } from "./decide.js";
 import { armBranch, manifestPath, parseExperimentRef, renderRubric, scoreRubric, serializeManifest, TRUNK, trunkBranch, type ExperimentManifest } from "./manifest.js";
+import type { BranchMeasurement, ExperimentMeasurements } from "./score.js";
 
 export const EXPERIMENT_LABEL = "experiment";
 export const PROMOTE_LABEL = "experiment:promote";
@@ -21,6 +22,7 @@ export interface ExperimentPullRequest {
   labels: string[];
   head: string;
   headSha: string;
+  headRepository?: string;
   base: string;
   experiment: string;
   arm: string;
@@ -43,7 +45,7 @@ interface RawPull {
   title: string;
   body: string | null;
   labels: Array<{ name: string }>;
-  head: { ref: string; sha: string };
+  head: { ref: string; sha: string; repo?: { full_name: string } | null };
   base: { ref: string };
 }
 
@@ -64,6 +66,7 @@ export async function listExperimentPullRequests(client: GitHubClient, repo: Rep
         labels: pull.labels.map((label) => label.name),
         head: pull.head.ref,
         headSha: pull.head.sha,
+        ...(pull.head.repo?.full_name ? { headRepository: pull.head.repo.full_name } : {}),
         base: pull.base.ref,
         experiment: ref.experiment,
         arm: ref.arm,
@@ -180,17 +183,36 @@ async function upsertComment(client: GitHubClient, repo: RepoRef, issue: number,
   else await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: issue, body: text });
 }
 
-async function graphql(client: GitHubClient, query: string, variables: Record<string, unknown>): Promise<void> {
-  const response = await client.request("POST /graphql", { query, variables });
-  const errors = (response.data as { errors?: Array<{ message: string }> } | undefined)?.errors;
-  if (errors?.length) throw new Error(errors.map((error) => error.message).join("; "));
+async function cleanupBranch(client: GitHubClient, repo: RepoRef, pull: ExperimentPullRequest, notes: string[]): Promise<void> {
+  if (pull.headRepository?.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
+    notes.push(`Branch ${pull.head} retained because same-repository ownership could not be verified.`);
+    return;
+  }
+  if (pull.head === pull.base) throw new Error("Refusing cleanup of an experiment's base branch.");
+  const open = await client.request("GET /repos/{owner}/{repo}/pulls", {
+    ...repo, state: "open", head: `${repo.owner}:${pull.head}`, per_page: 1,
+  });
+  if (!Array.isArray(open.data)) throw new Error("GitHub did not return the open PRs required for experiment cleanup.");
+  if (open.data.length > 0) {
+    notes.push(`Branch ${pull.head} retained because an open PR uses it.`);
+    return;
+  }
+  const status = await deleteBranch(client, repo, pull.head, pull.headSha);
+  if (status === "changed") notes.push(`Branch ${pull.head} retained because its head changed after grading.`);
 }
 
-async function closePull(client: GitHubClient, repo: RepoRef, pull: ExperimentPullRequest, comment: string): Promise<void> {
-  if (pull.state !== "open") return;
-  await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: pull.number, body: comment });
+async function closeVerifiedPull(client: GitHubClient, repo: RepoRef, pull: ExperimentPullRequest, notes: string[]): Promise<void> {
+  await currentExperimentPull(client, repo, pull);
   await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pull.number, state: "closed" });
-  await deleteBranch(client, repo, pull.head);
+  await currentExperimentPull(client, repo, { ...pull, state: "closed" });
+  await cleanupBranch(client, repo, pull, notes);
+}
+
+async function closePull(client: GitHubClient, repo: RepoRef, pull: ExperimentPullRequest, comment: string, notes: string[]): Promise<void> {
+  if (pull.state !== "open") return;
+  await currentExperimentPull(client, repo, pull);
+  await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: pull.number, body: comment });
+  await closeVerifiedPull(client, repo, pull, notes);
 }
 
 export interface AppliedDecision {
@@ -201,11 +223,50 @@ export interface AppliedDecision {
   notes: string[];
 }
 
-/** Executes a grading decision. Every step is idempotent so a re-run after a partial failure converges. */
+function requireDecisionEvidence(manifest: ExperimentManifest, state: ExperimentState, measurements?: ExperimentMeasurements): void {
+  const trunk = state.trunk;
+  const name = trunkBranch(manifest.name);
+  const matches = (pull: ExperimentPullRequest, measurement: BranchMeasurement | undefined) =>
+    Boolean(pull.headSha && measurement?.headSha === pull.headSha && measurement?.pullRequest === pull.number);
+  if (manifest.status !== "running" || state.name !== manifest.name || !trunk || trunk.state !== "open" ||
+    trunk.experiment !== manifest.name || trunk.arm !== TRUNK || trunk.head !== name || trunk.base === name ||
+    measurements?.experiment !== manifest.name || measurements.control?.arm !== TRUNK ||
+    !matches(trunk, measurements.control) || !Array.isArray(measurements.arms)) {
+    throw new Error("Experiment control evidence is missing or stale. Recollect and re-evaluate the experiment before applying a decision.");
+  }
+  for (const arm of state.arms.filter((pull) => pull.state === "open")) {
+    const measured = measurements.arms.filter((item) => item?.arm === arm.arm);
+    if (arm.experiment !== manifest.name || !manifest.arms.some((spec) => spec.name === arm.arm) ||
+      arm.head !== armBranch(manifest.name, arm.arm) || arm.base !== name ||
+      measured.length !== 1 || !matches(arm, measured[0])) {
+      throw new Error(`Experiment evidence for ${arm.arm} is missing or stale. Recollect and re-evaluate before applying a decision.`);
+    }
+  }
+}
+
+async function currentExperimentPull(client: GitHubClient, repo: RepoRef, expected: ExperimentPullRequest): Promise<RawPull> {
+  const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: expected.number });
+  const pull = response.data as RawPull | undefined;
+  const repository = `${repo.owner}/${repo.repo}`.toLowerCase();
+  if (!pull || pull.number !== expected.number || !expected.nodeId || pull.node_id !== expected.nodeId ||
+    pull.state !== expected.state || expected.merged || pull.merged_at !== null || typeof pull.draft !== "boolean" || !expected.headSha ||
+    expected.headRepository?.toLowerCase() !== repository || pull.head?.repo?.full_name.toLowerCase() !== repository ||
+    pull.head.ref !== expected.head || pull.head.sha !== expected.headSha || pull.base?.ref !== expected.base) {
+    const reason = expected.state === "closed" ? "closure was not confirmed; reconcile before cleanup."
+      : "changed or its ownership cannot be verified; recollect before applying the decision.";
+    throw new Error(`Experiment PR #${expected.number} ${reason}`);
+  }
+  return pull;
+}
+
+const isMutationPayload = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Executes a grading decision; interrupted multi-write promotions may require operator reconciliation. */
 export async function applyDecision(
   client: GitHubClient,
   repo: RepoRef,
-  options: { manifest: ExperimentManifest; decision: Decision; state: ExperimentState; config: HillClimbConfig },
+  options: { manifest: ExperimentManifest; decision: Decision; state: ExperimentState; config: HillClimbConfig; measurements?: ExperimentMeasurements },
 ): Promise<AppliedDecision> {
   const { manifest, decision, state, config } = options;
   const result: AppliedDecision = { action: decision.action, closed: [], dispatched: 0, notes: [] };
@@ -221,12 +282,15 @@ export async function applyDecision(
 
   if (decision.action === "promote") {
     const winner = state.arms.find((arm) => arm.arm === decision.winner && arm.state === "open");
-    if (!winner) {
-      result.notes.push(`winning arm ${decision.winner} has no open pull request`);
-      return result;
+    if (!winner || !trunk) throw new Error("Promotion requires an open winner and trunk PR. Recollect the experiment before retrying.");
+    requireDecisionEvidence(manifest, state, options.measurements);
+    await currentExperimentPull(client, repo, trunk);
+    for (const arm of state.arms.filter((pull) => pull.state === "open")) {
+      const current = await currentExperimentPull(client, repo, arm);
+      if (arm.number === winner.number && current.draft) throw new Error("The winning arm is still a draft; recollect after it is ready.");
     }
     const measured = decision.scores.find((score) => score.arm === decision.winner);
-    await client.request("PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge", {
+    const response = await client.request("PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge", {
       ...repo,
       pull_number: winner.number,
       merge_method: "squash",
@@ -234,11 +298,17 @@ export async function applyDecision(
       commit_title: `experiment(${manifest.name}): adopt ${decision.winner} (#${winner.number})`,
       commit_message: `${decision.reason}\n\nWeighted improvement: ${((measured?.deterministic ?? 0) * 100).toFixed(1)}%`,
     });
+    const merge = response.data as { merged?: unknown; sha?: unknown } | undefined;
+    if (response.status !== 200 || merge?.merged !== true || typeof merge.sha !== "string" || !merge.sha.trim()) {
+      throw new Error(`GitHub did not confirm merging winning PR #${winner.number}; reconcile the merge before retrying.`);
+    }
+    const mergeSha = merge.sha;
     result.merged = winner.number;
-    await deleteBranch(client, repo, winner.head);
-    for (const loser of state.arms.filter((arm) => arm.arm !== decision.winner)) {
-      await closePull(client, repo, loser, `Not selected: \`${decision.winner}\` won experiment \`${manifest.name}\`.\n\n${report}`);
-      if (loser.state === "open") result.closed.push(loser.number);
+    await currentExperimentPull(client, repo, { ...trunk, headSha: mergeSha });
+    const mergedCommit = await client.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", { ...repo, commit_sha: mergeSha });
+    const parents = (mergedCommit.data as { parents?: Array<{ sha?: string }> } | undefined)?.parents;
+    if (!Array.isArray(parents) || parents.length !== 1 || parents[0]?.sha !== trunk.headSha) {
+      throw new Error("The squash merge is not based on the measured control commit; reconcile it before promotion.");
     }
     const promoted: ExperimentManifest = {
       ...manifest,
@@ -256,54 +326,66 @@ export async function applyDecision(
       },
     };
     const trunkName = trunkBranch(manifest.name);
-    const head = await branchSha(client, repo, trunkName);
-    const sha = await commitFiles(client, repo, head, [{ path: manifestPath(manifest.name), content: serializeManifest(promoted) }], `experiment(${manifest.name}): promote ${decision.winner}`);
-    await client.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", { ...repo, ref: `heads/${trunkName}`, sha, force: false });
-    if (trunk) {
-      await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: trunk.number, body: experimentBody(promoted, config, report) });
-      const labels = [PROMOTE_LABEL, ...config.promotion.labels];
-      await ensureLabels(client, repo, labels);
-      await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: trunk.number, labels });
-      if (trunk.draft) {
-        await graphql(client, "mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { clientMutationId } }", { id: trunk.nodeId });
+    const sha = await commitFiles(client, repo, mergeSha, [{ path: manifestPath(manifest.name), content: serializeManifest(promoted) }], `experiment(${manifest.name}): promote ${decision.winner}`);
+    await updateBranch(client, repo, trunkName, sha, mergeSha);
+    const current = await currentExperimentPull(client, repo, { ...trunk, headSha: sha });
+    await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: trunk.number, body: experimentBody(promoted, config, report) });
+    const labels = [PROMOTE_LABEL, ...config.promotion.labels];
+    await ensureLabels(client, repo, labels);
+    await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: trunk.number, labels });
+    if (current.draft) {
+      const ready = await graphql(client, "mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { clientMutationId } }", { id: trunk.nodeId }) as { markPullRequestReadyForReview?: unknown } | undefined;
+      if (!isMutationPayload(ready?.markPullRequestReadyForReview)) throw new Error("GitHub did not acknowledge marking the promotion PR ready for review.");
+    }
+    const users = config.promotion.reviewers.filter((reviewer) => !reviewer.includes("/"));
+    const teams = config.promotion.reviewers.filter((reviewer) => reviewer.includes("/")).map((team) => team.split("/")[1] as string);
+    if (users.length > 0 || teams.length > 0) {
+      try {
+        await client.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", { ...repo, pull_number: trunk.number, reviewers: users, team_reviewers: teams });
+      } catch (error) {
+        if (httpStatus(error) !== 422) throw error;
+        result.notes.push("could not request reviewers");
       }
-      const users = config.promotion.reviewers.filter((reviewer) => !reviewer.includes("/"));
-      const teams = config.promotion.reviewers.filter((reviewer) => reviewer.includes("/")).map((team) => team.split("/")[1] as string);
-      if (users.length > 0 || teams.length > 0) {
-        try {
-          await client.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", { ...repo, pull_number: trunk.number, reviewers: users, team_reviewers: teams });
-        } catch (error) {
-          if (httpStatus(error) !== 422) throw error;
-          result.notes.push("could not request reviewers");
-        }
+    }
+    const confirmed = await currentExperimentPull(client, repo, { ...trunk, headSha: sha });
+    const recorded = parseMarker(confirmed.body);
+    if (confirmed.draft || recorded?.kind !== "experiment" || recorded.fingerprint !== manifest.name ||
+      recorded.attributes.status !== "promoted" || recorded.attributes.winner !== decision.winner) {
+      throw new Error("The promotion PR metadata was not confirmed; reconcile it before cleanup.");
+    }
+    if (config.promotion.autoMerge) {
+      try {
+        const enabled = await graphql(client, "mutation($id: ID!) { enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) { clientMutationId } }", { id: trunk.nodeId }) as { enablePullRequestAutoMerge?: unknown } | undefined;
+        if (!isMutationPayload(enabled?.enablePullRequestAutoMerge)) throw new Error("GitHub did not acknowledge enabling auto-merge.");
+      } catch (error) {
+        result.notes.push(`auto-merge unavailable: ${error instanceof Error ? error.message : String(error)}`);
       }
-      if (config.promotion.autoMerge) {
-        try {
-          await graphql(client, "mutation($id: ID!) { enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) { clientMutationId } }", { id: trunk.nodeId });
-        } catch (error) {
-          result.notes.push(`auto-merge unavailable: ${(error as Error).message}`);
-        }
-      }
-      await upsertComment(client, repo, trunk.number, manifest.name, report);
+    }
+    await upsertComment(client, repo, trunk.number, manifest.name, report);
+    await cleanupBranch(client, repo, winner, result.notes);
+    for (const loser of state.arms.filter((arm) => arm.arm !== decision.winner && arm.state === "open")) {
+      await closePull(client, repo, loser, `Not selected: \`${decision.winner}\` won experiment \`${manifest.name}\`.\n\n${report}`, result.notes);
+      result.closed.push(loser.number);
     }
     return result;
   }
 
   // reject / expire: close everything but keep the pull requests (and their grading comments) as the learning record.
+  requireDecisionEvidence(manifest, state, options.measurements);
+  if (trunk) await currentExperimentPull(client, repo, trunk);
+  for (const arm of state.arms.filter((pull) => pull.state === "open")) await currentExperimentPull(client, repo, arm);
   for (const arm of state.arms) {
-    await closePull(client, repo, arm, `Experiment \`${manifest.name}\` ${decision.action === "reject" ? "was rejected" : "expired"}.`);
+    await closePull(client, repo, arm, `Experiment \`${manifest.name}\` ${decision.action === "reject" ? "was rejected" : "expired"}.`, result.notes);
     if (arm.state === "open") result.closed.push(arm.number);
   }
   if (trunk) {
+    await currentExperimentPull(client, repo, trunk);
     await upsertComment(client, repo, trunk.number, manifest.name, report);
     const label = OUTCOME_LABELS[decision.action];
     await ensureLabels(client, repo, [label]);
     await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: trunk.number, labels: [label] });
-    if (trunk.state === "open") {
-      await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: trunk.number, state: "closed" });
-      result.closed.push(trunk.number);
-    }
-    await deleteBranch(client, repo, trunk.head);
+    await closeVerifiedPull(client, repo, trunk, result.notes);
+    result.closed.push(trunk.number);
   }
   return result;
 }

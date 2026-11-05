@@ -68,9 +68,9 @@ async function loadHillClimbConfig(io: CliIO, explicit: string | undefined): Pro
   return parsed.config;
 }
 
-async function loadManifest(client: GitHubClient, repo: RepoRef, name: string, config: HillClimbConfig): Promise<ExperimentManifest> {
-  const text = await readFileAt(client, repo, manifestPath(name), trunkBranch(name));
-  if (text === undefined) throw new Error(`${manifestPath(name)} was not found on ${trunkBranch(name)}`);
+async function loadManifest(client: GitHubClient, repo: RepoRef, name: string, config: HillClimbConfig, ref = trunkBranch(name)): Promise<ExperimentManifest> {
+  const text = await readFileAt(client, repo, manifestPath(name), ref);
+  if (text === undefined) throw new Error(`${manifestPath(name)} was not found at ${ref}`);
   const parsed = parseManifest(text, { config });
   if (!parsed.manifest) throw new Error(`${manifestPath(name)} is invalid: ${parsed.problems.map((p) => `${p.path}: ${p.message}`).join("; ")}`);
   return parsed.manifest;
@@ -88,7 +88,7 @@ async function runningExperiments(client: GitHubClient, repo: RepoRef, config: H
   const result: RunningExperiment[] = [];
   for (const state of states) {
     try {
-      result.push({ state, manifest: await loadManifest(client, repo, state.name, config) });
+      result.push({ state, manifest: await loadManifest(client, repo, state.name, config, state.trunk?.headSha) });
     } catch (error) {
       result.push({ state, error: (error as Error).message });
     }
@@ -373,7 +373,7 @@ async function decideCommand(args: string[], io: CliIO): Promise<number> {
       io.stderr(`Skipping ${name}: no open trunk pull request.`);
       continue;
     }
-    const manifest = await loadManifest(client, repo, name, config);
+    const manifest = await loadManifest(client, repo, name, config, state.trunk.headSha);
     for (const judgment of judged.filter((candidate) => candidate.experiment === name && candidate.arm !== "trunk")) {
       if (measurements.arms.some((arm) => arm.arm === judgment.arm)) {
         measurements = { ...measurements, arms: measurements.arms.map((arm) => (arm.arm === judgment.arm ? { ...arm, judge: { score: judgment.score, rationale: judgment.rationale } } : arm)) };
@@ -382,7 +382,7 @@ async function decideCommand(args: string[], io: CliIO): Promise<number> {
     const decision = decide(manifest, measurements, config, { now, trunkRef: trunkBranch(name), armRef: (arm) => armBranch(name, arm) });
     reports.push(renderDecision(manifest, decision));
     if (values.apply) {
-      const applied = await applyDecision(client, repo, { manifest, decision, state, config });
+      const applied = await applyDecision(client, repo, { manifest, decision, state, config, measurements });
       io.stderr(`${name}: ${applied.action}${applied.merged ? ` (merged #${applied.merged})` : ""}${applied.closed.length ? `, closed ${applied.closed.map((n) => `#${n}`).join(", ")}` : ""}${applied.dispatched ? `, dispatched ${applied.dispatched} run(s)` : ""}${applied.notes.length ? `; ${applied.notes.join("; ")}` : ""}`);
     } else {
       io.stderr(`${name}: ${decision.action} (dry run; pass --apply to act)`);

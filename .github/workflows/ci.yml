@@ -45,7 +45,34 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
-      - run: npx vitest run test/telemetry/postgres-store.test.ts
+      - run: npx vitest run test/telemetry/postgres-store.test.ts test/knowledge/postgres-store.test.ts test/webhooks/postgres-queue.test.ts test/service/webhooks.test.ts
+
+  app:
+    # Exercise the shipped image through its published port, not just service mocks.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: docker build --tag ci-cd-optimizer:smoke .
+      - run: node test/service/container-smoke.mjs
+      - name: Durable production image
+        run: node test/service/container-smoke.mjs
+        env:
+          SMOKE_DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+          SMOKE_DATABASE_CONTAINER: ${{ job.services.postgres.id }}
 
   lint:
     runs-on: ubuntu-24.04
@@ -69,10 +96,20 @@ jobs:
           fi
       - uses: ./.github/actions/setup
       - run: npm run build
+      - name: Generate Action bundle
+        id: bundle
+        run: npm run bundle
       - name: Action bundle is up to date
+        id: bundle_check
         run: |
-          npm run bundle
           git diff --exit-code --stat -- dist-action || { echo "::error::dist-action is stale; run npm run bundle and commit it."; exit 1; }
+      - name: Upload generated bundle for reconciliation
+        if: failure() && steps.bundle.outcome == 'success' && steps.bundle_check.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: action-bundle-${{ github.sha }}
+          path: dist-action/index.js
+          retention-days: 1
       - name: Dogfood the linter on this repository
         uses: ./
         with:

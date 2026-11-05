@@ -75,7 +75,7 @@ describe("recipes cli", () => {
   it("plans an apply without writing in dry-run mode", async () => {
     const client = server({ files });
     const c = cli(client);
-    expect(await c.run("apply", ...RECIPE, "--target", "acme/web", "--dry-run", "-f", "json")).toBe(0);
+    expect(await c.run("apply", ...RECIPE, "--target", "acme/web", "--dry-run", "--record-knowledge", "-f", "json")).toBe(0);
     expect(c.json()).toMatchObject({ repo: "acme/web", status: "autofix", attempted: false, rules: ["workflow/job-timeout"] });
     expect(posts(client)).toEqual([]);
   });

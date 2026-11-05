@@ -1,4 +1,5 @@
 import { parse as parseYamlText } from "yaml";
+import { durationPolicyProblems, type DurationsConfig } from "../knowledge/duration-policy.js";
 import type { ActiveSeverity, AnyRule, Impact, Preset, ResolvedRule, Severity } from "./types.js";
 
 export const CONFIG_PATHS = [".github/ci-cd-optimizer.yml", ".github/ci-cd-optimizer.yaml"];
@@ -108,6 +109,7 @@ export interface LintConfig {
   issues: IssuesConfig;
   fixes: FixesConfig;
   alerts: AlertsConfig;
+  durations: DurationsConfig;
   recipes: RecipesConfig;
 }
 
@@ -172,6 +174,7 @@ export const DEFAULT_CONFIG: LintConfig = {
     labels: [],
     assignCopilot: true,
   },
+  durations: { minSamples: 20, objectives: [] },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -339,6 +342,7 @@ export function validateConfig(input: unknown, rules: AnyRule[]): ParsedConfig {
     "fixes",
     "alerts",
     "recipes",
+    "durations",
   ]);
   if (raw.schemaVersion !== undefined && raw.schemaVersion !== 1) {
     v.problem("schemaVersion", `Unsupported schemaVersion ${String(raw.schemaVersion)}; expected 1.`);
@@ -485,6 +489,24 @@ export function validateConfig(input: unknown, rules: AnyRule[]): ParsedConfig {
     labels: v.strings("recipes.labels", recipes.labels, []),
     assignCopilot: v.boolean("recipes.assignCopilot", recipes.assignCopilot, recipeDefaults.assignCopilot),
   };
+
+  const durations = v.record("durations", raw.durations);
+  v.unknownKeys("durations", durations, ["minSamples", "objectives"]);
+  if (durations.objectives !== undefined && !Array.isArray(durations.objectives)) v.problem("durations.objectives", "Expected a list of duration objectives.");
+  config.durations = {
+    minSamples: v.number("durations.minSamples", durations.minSamples, DEFAULT_CONFIG.durations.minSamples, 2),
+    objectives: (Array.isArray(durations.objectives) ? durations.objectives : []).map((entry, index) => {
+      const path = `durations.objectives[${index}]`;
+      const objective = v.record(path, entry);
+      v.unknownKeys(path, objective, ["workflow", "job", "maxDurationMs"]);
+      return {
+        workflow: v.string(`${path}.workflow`, objective.workflow, ""),
+        ...(objective.job !== undefined ? { job: v.string(`${path}.job`, objective.job, "") } : {}),
+        maxDurationMs: v.number(`${path}.maxDurationMs`, objective.maxDurationMs, 0, 1),
+      };
+    }),
+  };
+  v.problems.push(...durationPolicyProblems(config.durations));
 
   return { config, problems: v.problems, migrated: legacy !== undefined };
 }
