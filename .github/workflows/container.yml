@@ -32,6 +32,12 @@ jobs:
         with:
           context: .
           push: ${{ env.GHCR_IMAGE != '' }}
-          tags: ${{ env.GHCR_IMAGE != '' && format('{0}:{1}', env.GHCR_IMAGE, github.sha) || format('ci-cd-optimizer:{0}', github.sha) }}
+          tags: |
+            ${{ env.GHCR_IMAGE || 'ci-cd-optimizer' }}:${{ github.sha }}
+            ${{ env.GHCR_IMAGE || 'ci-cd-optimizer' }}:${{ github.ref_type == 'tag' && github.ref_name || 'main' }}
+          # Links the GHCR package to this repository so it inherits the repository's access.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

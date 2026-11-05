@@ -41,7 +41,8 @@ The fastest path uses Probot's manifest flow:
 3. Open <http://localhost:3000> and register the App. Probot writes its credentials to `.env`.
 
 You can also create the App manually under **Settings → Developer settings → GitHub Apps** with the permissions and
-events above. The webhook path is `/api/github/webhooks`.
+events above. The webhook path is `/api/github/webhooks`. For Actions-only use without hosting, the
+[setup checklist](setup.md#3-github-app-owner) has a prefilled registration link.
 
 ## Configure
 
@@ -58,7 +59,8 @@ events above. The webhook path is `/api/github/webhooks`.
 The [Dockerfile](../Dockerfile) builds a distroless, non-root Node 22 image. The production dependency layer is cached
 separately from the TypeScript build. The [Container workflow](../.github/workflows/container.yml) builds the image on
 every push to `main` and every `v*` tag. Set the repository variable `GHCR_IMAGE` (for example
-`ghcr.io/my-org/ci-cd-optimizer`) to push it to GitHub Container Registry, tagged with the commit SHA.
+`ghcr.io/my-org/ci-cd-optimizer`) to push it to GitHub Container Registry. Images are tagged with the commit SHA and
+with `main` or the release tag (such as `v0.2.0`), and labeled so the package is linked to the repository.
 
 ```sh
 docker run -p 3000:3000 --env-file .env ghcr.io/my-org/ci-cd-optimizer:<sha>

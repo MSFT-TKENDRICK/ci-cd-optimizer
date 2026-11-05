@@ -52,7 +52,8 @@ npm run cli -- rules --format markdown       # rule catalog
 - On pushes to the default branch and on install, a repository scan.
 - After every completed workflow run, telemetry and alerts.
 
-See [docs/github-app.md](docs/github-app.md).
+See [docs/github-app.md](docs/github-app.md). To take any of these to production (repository security, GHCR, App
+credentials, tokens, and releases), follow the checklist in [docs/setup.md](docs/setup.md).
 
 ## What it finds
 
