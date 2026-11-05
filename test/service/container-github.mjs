@@ -79,7 +79,7 @@ export async function startGitHubFixture(publicKey, host = "127.0.0.1") {
     const installation = owner === "acme" ? 123 : 456;
     assert.ok(issued.includes(installation), "Repository request arrived before its installation token was issued");
     assert.ok(request.headers.authorization === `token ${tokens.get(installation)}`, "Repository request used the wrong installation token");
-    const resource = repository[2];
+    const resource = decodeURIComponent(repository[2]);
     if (method === "POST" && resource === "/check-runs") {
       assert.equal(body.name, "CI/CD Optimizer");
       assert.equal(body.head_sha, HEAD);
