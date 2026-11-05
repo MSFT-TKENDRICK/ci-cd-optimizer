@@ -9,6 +9,7 @@ import { snapshot as workflow } from "../alerts/fixtures.js";
 import { fakeApi, callsTo, TIMEOUT_ONLY, writes } from "../service/api.js";
 import { httpError } from "../experiments/fixtures.js";
 import { now, repository, revision } from "./fixtures.js";
+import { observation } from "./run-window-cases.js";
 
 const metadata = { id: 42, html_url: "https://github.com/acme/widgets", owner: { login: "acme" }, name: "widgets" };
 const workflowFile = "name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps: [{run: make}]\n";
@@ -154,5 +155,50 @@ describe("run source context collection", () => {
     expect(describeRunKnowledge(first)).toContain("partial or uncertain");
     await collectRunKnowledge(client, repository, { ...runtime(), runId: 101 }, config, { store, now });
     expect(callsTo(client, "GET /repos/{owner}/{repo}/git/trees/{tree_sha}")).toHaveLength(2);
+  });
+
+  it("uses immutable eligible evidence for configured baselines instead of corrected mutable history", async () => {
+    const store = new MemoryKnowledgeStore();
+    const telemetry = new MemoryTelemetryStore();
+    for (const item of [observation(1, 10), observation(1, 90), observation(2, 20), observation(3, 40)]) {
+      await store.saveRunObservation(item);
+      await telemetry.save(item.run);
+    }
+    const result = await processWorkflowRun(api(), repository, payload(), { store: telemetry, knowledgeStore: async () => store, now, check: false, alerts: false });
+    expect(result.samples).toBe(2);
+    expect(result.baseline?.medianDurationMs).toBe(30_000);
+    expect(result.knowledge?.durations?.excluded).toContainEqual({ runId: 1, reason: "conflicting-runtime-observations" });
+    expect(result.knowledge).not.toHaveProperty("comparison");
+  });
+
+  it("surfaces history read failures before publishing checks or alerts", async () => {
+    const store = new MemoryKnowledgeStore();
+    vi.spyOn(store, "readRunWindow").mockRejectedValue(new Error("History read failed"));
+    const client = api();
+    await expect(processWorkflowRun(client, repository, payload(), { knowledgeStore: async () => store, now })).rejects.toThrow("History read failed");
+    expect(writes(client)).toEqual([]);
+    expect(await store.listRunObservations({ ...repository, limit: 10 })).toHaveLength(1);
+  });
+
+  it("suppresses a stale attempt known only to immutable history", async () => {
+    const store = new MemoryKnowledgeStore();
+    await store.saveRunObservation(observation(100, 10, { runAttempt: 2 }));
+    const client = api();
+    const result = await processWorkflowRun(client, repository, payload(), { knowledgeStore: async () => store, now });
+    expect(result.status).toBe("skipped");
+    expect(writes(client)).toEqual([]);
+  });
+
+  it("holds alert changes for a conflicted reference and never backfills mutable history into knowledge comparisons", async () => {
+    const store = new MemoryKnowledgeStore();
+    for (const item of [observation(1), observation(2), observation(3), observation(100, 90)]) await store.saveRunObservation(item);
+    const client = api({ config: "extends: []\nalerts:\n  enabled: true\n  minSamples: 3\n" });
+    const result = await processWorkflowRun(client, repository, payload(), { knowledgeStore: async () => store, now, check: false });
+    expect(result.knowledge?.durations?.reason).toBe("conflicting-runtime-observations");
+    expect(result.baseline).toBeUndefined();
+    expect(result.alerts).toBeUndefined();
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/issues")).toEqual([]);
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs")).toEqual([]);
+    expect(writes(client)).toEqual([]);
   });
 });

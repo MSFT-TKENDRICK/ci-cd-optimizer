@@ -23,7 +23,7 @@ Options:
       --summary <file>      Append the markdown report (default: $GITHUB_STEP_SUMMARY when set; "-" to disable)
       --check               Also publish the report as a neutral check run on the run's head commit
       --no-alerts           Do not open or update duration alert issues
-      --knowledge           Include source-linked project context (preview only; use JSON for complete evidence)
+      --knowledge           Include source context and configured duration budgets (preview only; no durable history)
       --dry-run             Analyze and report, but write nothing to GitHub or the store
   -f, --format markdown|json  Output format (default: markdown)
   -o, --output <file>       Write the output to a file

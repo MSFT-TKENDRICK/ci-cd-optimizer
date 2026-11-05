@@ -4,6 +4,7 @@ import { extractKnowledge, isKnowledgePath } from "../knowledge/extract.js";
 import { inventoryPolicyDigest, validateRevision } from "../knowledge/identity.js";
 import { loadKnowledgeIdentity } from "../knowledge/repository.js";
 import { createRunObservation } from "../knowledge/run-observation.js";
+import { analyzeDurations, describeDurations, type DurationAnalysis, type DurationReport } from "../knowledge/durations.js";
 import type { KnowledgeSnapshot, KnowledgeStore, RunObservation } from "../knowledge/types.js";
 import type { LintConfig } from "../lint/config.js";
 import type { WorkflowSnapshot } from "../telemetry/types.js";
@@ -12,13 +13,19 @@ export interface RunKnowledge {
   observation: RunObservation;
   project?: KnowledgeSnapshot;
   persistence: "saved" | "preview";
+  durations?: DurationReport;
+}
+
+export interface CollectedRunKnowledge extends RunKnowledge {
+  /** Internal statistical inputs; not included in the public result/JSON payload. */
+  comparison?: Omit<DurationAnalysis, "report">;
 }
 
 /** Only the run-recorded head revision supplies source context; checkout/task execution remains unknown. */
 export async function collectRunKnowledge(
   client: GitHubClient, repo: RepoRef, run: WorkflowSnapshot, config: LintConfig,
   options: { store?: KnowledgeStore; expectedRepositoryId?: number; now?: Date } = {},
-): Promise<RunKnowledge> {
+): Promise<CollectedRunKnowledge> {
   validateRevision(run.headSha);
   const repository = await loadKnowledgeIdentity(client, repo, options.expectedRepositoryId);
   const policy = inventoryPolicyDigest(config);
@@ -63,7 +70,14 @@ export async function collectRunKnowledge(
     project ? { status: "linked", snapshotId: project.id } : { status: "unavailable", reason: "revision-unavailable" }, options.now,
   );
   if (options.store) await options.store.saveRunObservation(observation, project);
-  return { observation, ...(project ? { project } : {}), persistence: options.store ? "saved" : "preview" };
+  const window = options.store ? await options.store.readRunWindow({
+    ...repository, workflowId: run.workflowId, branch: run.branch, referenceRunId: run.runId, limit: 100,
+  }) : { complete: false, groups: [{ runId: run.runId, complete: true, observations: [observation] }] };
+  const { report: durations, ...comparison } = analyzeDurations(observation, window, config.durations);
+  return {
+    observation, ...(project ? { project } : {}), persistence: options.store ? "saved" : "preview", durations,
+    ...(options.store ? { comparison } : {}),
+  };
 }
 
 export function describeRunKnowledge(knowledge: RunKnowledge): string {
@@ -74,5 +88,6 @@ export function describeRunKnowledge(knowledge: RunKnowledge): string {
   const coverage = !evidence ? "" : evidence.coverage.inventoryComplete && evidence.coverage.declarationsComplete
     ? " Collection is complete within the supported, configured inventory; configured ignores still apply."
     : " Collection is partial or uncertain; missing declarations do not establish absence.";
-  return `\n\n### Project declaration context\n\n${context}${coverage} This does not identify executed projects, installed tool versions, cache use, or a causal optimization benefit.\n\nKnowledge evidence: ${knowledge.persistence === "saved" ? "persisted" : "preview only (no knowledge database writes)"}.`;
+  return `\n\n### Project declaration context\n\n${context}${coverage} This does not identify executed projects, installed tool versions, cache use, or a causal optimization benefit.\n\nKnowledge evidence: ${knowledge.persistence === "saved" ? "persisted" : "preview only (no knowledge database writes; durable duration history was not queried)"}.` +
+    (knowledge.durations ? describeDurations(knowledge.durations) : "");
 }

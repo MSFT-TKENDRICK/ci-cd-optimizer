@@ -167,6 +167,40 @@ alerts:
   assignCopilot: false
 ```
 
+## Duration evidence and budgets (`durations`)
+
+The configured App knowledge store supplies immutable, context-matched workflow and job duration evidence.
+Budgets are explicit preferences, never values inferred from a historical median or percentile.
+
+```yaml
+durations:
+  minSamples: 20           # integer 2-99; below this, quantiles are withheld
+  objectives:             # optional, at most 100; no duplicate workflow/job selectors
+    - workflow: .github/workflows/ci.yml
+      maxDurationMs: 600000
+    - workflow: .github/workflows/ci.yml
+      job: build          # jobs.build; each observed matrix leg is assessed separately
+      maxDurationMs: 180000
+```
+
+Workflow paths are exact, not globs. Budgets must be positive safe integers in milliseconds; equality is within
+budget. Missing job selectors are reported as unassessed, not passed. Objectives apply to eligible successful
+first attempts, not shortened failed/cancelled runs. Current configuration is compared with the current run and
+eligible history; this is **not** a record of which objective applied when a historical run executed, nor SLO
+compliance or a deployment gate. The definition digest changes when the budget/selector changes; raw measurements
+and sample quantiles do not. Configuration remains versioned in Git.
+
+The report shows p50/p95; JSON also includes p90, observed min/max, sample identities, exclusions, budget assessments
+and unmatched job objectives. Quantiles use [R7 linear interpolation](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/quantile.html).
+These are descriptive successful-run estimates, not prediction intervals, confidence guarantees or learned targets.
+The default 20-sample display threshold is not a statistical guarantee.
+
+The App uses complete, nonconflicting, comparable immutable run groups for its baseline and alerts when a knowledge
+store is configured. It does not fill gaps with mutable telemetry/API history; cold stores therefore need new
+eligible observations before comparisons recover. Legacy telemetry-only installations retain their existing
+backfill behavior. CLI `telemetry --knowledge` previews show current budgets but do not read or initialize a durable
+knowledge database. See [duration evidence](architecture.md#immutable-duration-evidence) for query bounds and exclusions.
+
 ## Recipes (`recipes`)
 
 Target-side preferences for recipes rolled out from other repositories, similar to a per-repository

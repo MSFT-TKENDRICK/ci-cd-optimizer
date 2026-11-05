@@ -171,6 +171,39 @@ latest-attempt selector or a duration baseline. Future statistical consumers mus
 all superseding attempts and contradictory corrections, and apply workload-comparison eligibility before computing
 expectations. Matching a project's declaration context does not establish that the project executed or benefited.
 
+### Immutable duration evidence
+
+`readRunWindow` provides one consistent, scoped database read of at most 100 logical runs, with the reference run
+pinned first. Other runs are ordered by their latest observation time, not claimed to be the latest executions.
+Any observation matching the workflow/branch selects its logical run, but **all** stored attempts/corrections of
+that run participate, including corrections to the branch/workflow. Filtering first-attempt successes before grouping
+would incorrectly resurrect successes hidden by a later failure or correction.
+
+Each group admits at most eight observations of at most 64 KiB each in its adapter's serialized representation
+(compact JSON in memory, JSONB text in Postgres). Oversized or truncated groups expose no partial sample; limits do
+not discard stored evidence. Postgres performs selection and group loading in one statement with a ten-second
+statement timeout. Results distinguish window truncation from incomplete run groups. A complete stored window is
+not proof that every Actions run was observed; no knowledge backfill is inferred.
+
+`analyzeDurations` collapses source-context-only variants but rejects any contradictory runtime facts, any observed
+retry, incomplete groups, unsuccessful/incompletely collected workloads and mismatched routing/workload contexts.
+Future completions are excluded. An ambiguous reference withholds comparisons and budget assessments; a known
+newer attempt suppresses stale report publication. Indistinguishable job identities are excluded rather than
+merging matrix legs. Each admitted logical run contributes one sample per disambiguated job context.
+
+The App's knowledge-backed baseline and alert inputs use these eligible immutable observations, not a mutable
+correction chosen from the legacy telemetry store. Incomplete groups also hold alert lifecycle changes; known later
+runs supplement the existing chronology guard. This deliberately changes cold-store behavior only when knowledge
+persistence is configured. Telemetry-only and nonpersisting preview paths preserve legacy baseline/backfill behavior.
+The descriptive duration report uses up to 99 prior logical runs; existing baseline/alert window limits still apply
+to their own consumers. No budget automatically opens issues, changes a workflow timeout or promotes an experiment.
+
+Versioned analysis policy `immutable-duration-v1` records source observation IDs, exclusions, context, sample count
+and window coverage in JSON. R7 p50/p90/p95 and min/max are descriptive, not future time bounds. Configured budgets
+have separate definition digests and assessments; they do not alter measurements or quantiles. Missing objectives
+remain unconfigured. Current configuration is not a historical objective-application ledger or causal evaluation.
+Project execution, installed tool versions, cache behavior and mitigation benefit still require separate evidence.
+
 ### Workload comparison contract
 
 Collection records versioned provenance: collector, capture time, whether every job page was collected, and whether

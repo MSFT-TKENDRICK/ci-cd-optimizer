@@ -169,6 +169,7 @@ describe("telemetry command", () => {
   it("previews run-linked source context without knowledge database writes", async () => {
     const sha = "a".repeat(40);
     const client = telemetryApi({
+      config: "durations:\n  minSamples: 2\n  objectives:\n    - workflow: .github/workflows/ci.yml\n      job: build\n      maxDurationMs: 120000\n",
       repositoryMetadata: { id: 42, html_url: "https://github.com/acme/widgets", owner: { login: "acme" }, name: "widgets" },
       refs: { [sha]: { ".github/workflows/ci.yml": workflowFile, "package.json": '{"devDependencies":{"turbo":"2"}}' } },
       runs: { 2000: { ...workflowRun, head_sha: sha } },
@@ -178,7 +179,14 @@ describe("telemetry command", () => {
     expect(session.json().knowledge).toMatchObject({
       persistence: "preview", observation: { run: { headSha: sha }, source: { status: "linked" } },
       project: { revision: sha, technologies: [expect.objectContaining({ technology: "turborepo" })] },
+      durations: {
+        status: "insufficient-history", samples: [],
+        jobs: expect.arrayContaining([expect.objectContaining({
+          key: "build", metric: expect.objectContaining({ objective: expect.objectContaining({ maxDurationMs: 120000, currentStatus: "within-budget" }) }),
+        })]),
+      },
     });
+    expect(session.json().knowledge).not.toHaveProperty("comparison");
     expect(writes(client)).toEqual([]);
   });
 

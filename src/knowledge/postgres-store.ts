@@ -2,7 +2,8 @@ import postgres, { type Sql } from "postgres";
 import { validateScope } from "./identity.js";
 import { validateQuery, validateSnapshot } from "./store.js";
 import { validateRunObservation, validateRunObservationQuery, validateRunSource } from "./run-observation.js";
-import type { KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, ProjectEvidence, ProjectRelationship, TechnologyEvidence, RunObservation, RunObservationQuery, RunObservationSummary } from "./types.js";
+import { MAX_RUN_OBSERVATIONS, MAX_RUN_OBSERVATION_BYTES, runWindowFromRows, validateRunWindowQuery } from "./run-window.js";
+import type { KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, ProjectEvidence, ProjectRelationship, TechnologyEvidence, RunObservation, RunObservationQuery, RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery } from "./types.js";
 
 interface Header {
   id: string;
@@ -78,6 +79,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
       `;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_run_scope ON knowledge_run_observations (host, repository_id, observed_at DESC, id DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_run_attempt ON knowledge_run_observations (host, repository_id, run_id, run_attempt)`;
+      await sql`CREATE INDEX IF NOT EXISTS knowledge_run_workflow ON knowledge_run_observations (host, repository_id, workflow_id, (observation->'run'->>'branch'), run_id)`;
     });
   }
   async save(input: KnowledgeSnapshot): Promise<void> {
@@ -220,4 +222,37 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
     }));
   }
   async close(): Promise<void> { await this.sql.end({ timeout: 5 }); }
+  async readRunWindow(input: RunEvidenceWindowQuery): Promise<RunEvidenceWindow> {
+    const query = structuredClone(input);
+    validateRunWindowQuery(query);
+    const rows = await this.sql.begin(async (sql) => {
+      await sql`SET LOCAL statement_timeout = '10s'`;
+      return sql<{ run_id: string; id: string; observation: RunObservation | null }[]>`
+        WITH matching_runs AS (
+          SELECT DISTINCT run_id FROM knowledge_run_observations
+          WHERE host = ${query.host} AND repository_id = ${query.repositoryId}
+          AND (run_id = ${query.referenceRunId} OR (
+            workflow_id = ${query.workflowId} AND observation->'run'->>'branch' IS NOT DISTINCT FROM ${query.branch}
+          ))
+        ), candidates AS (
+          SELECT k.run_id, MAX(k.observed_at) AS latest FROM knowledge_run_observations k
+          JOIN matching_runs m ON m.run_id = k.run_id
+          WHERE k.host = ${query.host} AND k.repository_id = ${query.repositoryId}
+          GROUP BY k.run_id
+          ORDER BY (k.run_id = ${query.referenceRunId}) DESC, latest DESC, k.run_id DESC
+          LIMIT ${query.limit + 1}
+        )
+        SELECT c.run_id, o.id,
+          CASE WHEN octet_length(o.observation::text) <= ${MAX_RUN_OBSERVATION_BYTES} THEN o.observation ELSE NULL END AS observation
+        FROM candidates c
+        CROSS JOIN LATERAL (
+          SELECT id, observation, observed_at FROM knowledge_run_observations
+          WHERE host = ${query.host} AND repository_id = ${query.repositoryId} AND run_id = c.run_id
+          ORDER BY observed_at DESC, id DESC LIMIT ${MAX_RUN_OBSERVATIONS + 1}
+        ) o
+        ORDER BY (c.run_id = ${query.referenceRunId}) DESC, c.latest DESC, c.run_id DESC, o.observed_at DESC, o.id DESC
+      `;
+    });
+    return runWindowFromRows(query, rows.map((row) => ({ ...row, runId: Number(row.run_id) })));
+  }
 }

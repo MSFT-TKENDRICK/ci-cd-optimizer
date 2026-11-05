@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { byCompletion, latestAttempts } from "./history.js";
-import type { WorkflowSnapshot } from "./types.js";
+import type { JobSnapshot, WorkflowSnapshot } from "./types.js";
 
 /** A comparison policy, not a claim that labels identify hardware or that a change caused an improvement. */
 export function comparisonProblem(snapshot: WorkflowSnapshot): string | undefined {
@@ -16,11 +16,15 @@ export function comparisonProblem(snapshot: WorkflowSnapshot): string | undefine
   return undefined;
 }
 
+export function jobComparisonContext(job: JobSnapshot): string {
+  return JSON.stringify([
+    job.key, job.name, [...new Set(job.needs)].sort(), [...new Set(job.labels)].sort(), job.runnerGroupId ?? null,
+  ]);
+}
+
 export function comparisonKey(snapshot: WorkflowSnapshot): string | undefined {
   if (comparisonProblem(snapshot)) return undefined;
-  const jobs = snapshot.jobs.map((job) => JSON.stringify([
-    job.key, job.name, [...new Set(job.needs)].sort(), [...new Set(job.labels)].sort(), job.runnerGroupId ?? null,
-  ])).sort();
+  const jobs = snapshot.jobs.map(jobComparisonContext).sort();
   return createHash("sha256").update(JSON.stringify([
     "workload-comparison-v1", snapshot.owner, snapshot.repo, snapshot.workflowId, snapshot.branch, snapshot.event, jobs,
   ])).digest("hex");

@@ -240,7 +240,7 @@ function percentage(part: number, whole: number): string {
   return whole > 0 ? `${((part / whole) * 100).toFixed(0)}%` : "0%";
 }
 
-function formatDuration(milliseconds: number): string {
+export function formatDuration(milliseconds: number): string {
   const seconds = Math.round(milliseconds / 1000);
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
@@ -255,6 +255,6 @@ function sanitizeMermaid(value: string): string {
   return value.replace(/["`:;#]/g, "").replace(/\r?\n/g, " ").slice(0, 120);
 }
 
-function escapeCell(value: string): string {
+export function escapeCell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\n/g, " ");
 }

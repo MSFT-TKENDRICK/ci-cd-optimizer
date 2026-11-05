@@ -15,7 +15,7 @@ import type { WorkflowBaseline, WorkflowSnapshot } from "../telemetry/types.js";
 import { matchesGlob } from "../utils.js";
 import { publishCheck, TELEMETRY_CHECK_PREFIX } from "./checks.js";
 import type { KnowledgeStore } from "../knowledge/types.js";
-import { collectRunKnowledge, describeRunKnowledge, type RunKnowledge } from "./run-knowledge.js";
+import { collectRunKnowledge, describeRunKnowledge, type CollectedRunKnowledge, type RunKnowledge } from "./run-knowledge.js";
 
 export interface WorkflowRunOptions {
   /** Persists snapshots between runs; without one, history is rebuilt from the Actions API each time. */
@@ -77,14 +77,17 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
   const snapshot = await buildWorkflowSnapshot(client, repo, run, { definitions });
   const knowledgeSkipped = remote.problems.length > 0 && (options.knowledge || options.knowledgeStore) ? "invalid-config" as const : undefined;
   let knowledge: RunKnowledge | undefined;
+  let knowledgeComparison: CollectedRunKnowledge["comparison"];
   if (remote.problems.length === 0) {
     const store = options.dryRun ? undefined : await options.knowledgeStore?.();
     if (options.knowledge || store || (options.dryRun && options.knowledgeStore)) {
-      knowledge = await collectRunKnowledge(client, repo, snapshot, config, {
+      const { comparison, ...captured } = await collectRunKnowledge(client, repo, snapshot, config, {
         ...(store ? { store } : {}),
         ...(options.expectedRepositoryId !== undefined ? { expectedRepositoryId: options.expectedRepositoryId } : {}),
         ...(options.now ? { now: options.now } : {}),
       });
+      knowledge = captured;
+      knowledgeComparison = comparison;
     }
   }
   if (snapshot.jobs.length === 0) {
@@ -92,11 +95,11 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
     return { status: "skipped", reason: "The run has no completed jobs.", snapshot, ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}) };
   }
 
-  const history = await loadHistory(client, repo, run, snapshot, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
-  if (history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
+  const history = await loadHistory(client, repo, run, snapshot, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options, knowledgeComparison !== undefined);
+  if (knowledgeComparison?.newerAttemptObserved || history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
     return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot, ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}) };
   }
-  const prior = comparableHistory(history, snapshot).sort(byCompletion).slice(-historyLimit(config));
+  const prior = (knowledgeComparison?.history ?? comparableHistory(history, snapshot)).sort(byCompletion).slice(-historyLimit(config));
   const baseline = computeBaseline(prior, snapshot);
   const report = createTelemetryReport(snapshot, baseline) + (knowledge ? describeRunKnowledge(knowledge) : "") +
     (knowledgeSkipped ? "\n\nProject declaration collection was skipped because the repository configuration is invalid." : "");
@@ -105,11 +108,11 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
     ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}),
   };
 
-  const contextKey = comparisonKey(snapshot);
-  const newerRunObserved = history.some((item) =>
+  const contextKey = knowledgeComparison && knowledge?.durations?.status === "reference-excluded" ? undefined : comparisonKey(snapshot);
+  const newerRunObserved = knowledgeComparison?.newerRunObserved || history.some((item) =>
     item.workflowId === snapshot.workflowId && item.branch === snapshot.branch && item.runId !== snapshot.runId && byCompletion(item, snapshot) > 0,
   );
-  if (contextKey && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run, config.alerts.branches, branch)) {
+  if (contextKey && !knowledgeComparison?.alertHistoryUncertain && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run, config.alerts.branches, branch)) {
     const series = buildSeries([...prior, snapshot]);
     const existing = await listManagedIssues(client, repo, "alert");
     const plan = planAlertSync({
@@ -154,11 +157,12 @@ async function loadHistory(
   snapshot: WorkflowSnapshot,
   { limit, minSamples }: { limit: number; minSamples: number },
   options: WorkflowRunOptions,
+  immutableHistory = false,
 ): Promise<WorkflowSnapshot[]> {
   const query = { owner: repo.owner, repo: repo.repo, workflowId: snapshot.workflowId, branch: snapshot.branch, limit: Math.max(200, limit + 1) };
   const backfill = () => loadRunHistory(client, repo, { workflowId: snapshot.workflowId, branch: snapshot.branch, limit, excludeRunId: run.id });
   const store = options.store;
-  if (!store) return comparisonKey(snapshot) ? merge(await backfill(), [snapshot], limit + 1) : [snapshot];
+  if (!store) return !immutableHistory && comparisonKey(snapshot) ? merge(await backfill(), [snapshot], limit + 1) : [snapshot];
   if (!options.dryRun) await store.save(snapshot);
   if (!comparisonKey(snapshot)) {
     return latestAttempts([...(await store.history({ ...query, runId: snapshot.runId, limit: 1 })), snapshot]);
@@ -168,7 +172,7 @@ async function loadHistory(
     store.history(query),
   ]);
   let history = stored;
-  if (comparisonKey(snapshot) && comparableHistory(history, snapshot).length < minSamples) {
+  if (!immutableHistory && comparisonKey(snapshot) && comparableHistory(history, snapshot).length < minSamples) {
     const fetched = await backfill();
     if (!options.dryRun) for (const item of fetched) await store.save(item);
     history = merge(history, fetched, query.limit);

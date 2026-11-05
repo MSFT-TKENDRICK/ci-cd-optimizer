@@ -85,6 +85,16 @@ access. Metadata access alone never unlocks cached source evidence. Reports dist
 declarations from actual project execution. Runtime source backfill, project/task attribution, installed tool/cache
 telemetry and learned mitigation evaluation are not inferred from these links.
 
+With knowledge persistence configured, workflow/job baselines and duration alerts now use complete, nonconflicting
+immutable run groups; they do not fall back to mutable corrections or Actions API backfill to fill a cold knowledge
+store. The additional duration report separates descriptive R7 quantiles from optional configured budgets
+([configuration](configuration.md#duration-evidence-and-budgets-durations)). It lists exclusions and bounded coverage;
+ambiguous references withhold comparisons, and incomplete groups hold alert lifecycle changes. History query failures
+fail the delivery before publishing checks/alerts, even if the immutable observation already committed; redelivery
+deduplicates that observation. Each Postgres window read has a ten-second statement timeout. Initialization adds a
+workflow/branch lookup index under the existing schema lock; no new table or permission is required for these derived
+reports. Telemetry-only installations and nonpersisting previews retain legacy backfill.
+
 The evidence tables are append-only observations, not a retention policy or audit-grade tamper-proof ledger. Operators
 must configure backups, database access, capacity, deletion/retention procedures and repository-removal policy before
 production rollout. No knowledge API, learned mitigation recommender, or automatic deletion on uninstall is enabled.

@@ -1,6 +1,7 @@
 import { identity, snapshotIdentity, validateRevision, validateScope } from "./identity.js";
 import { runObservationSummary, validateRunObservation, validateRunObservationQuery, validateRunSource } from "./run-observation.js";
-import type { KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, RunObservation, RunObservationQuery, RunObservationSummary } from "./types.js";
+import { MAX_RUN_OBSERVATIONS, MAX_RUN_OBSERVATION_BYTES, runWindowFromRows, validateRunWindowQuery } from "./run-window.js";
+import type { KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, RunObservation, RunObservationQuery, RunObservationSummary, RunEvidenceWindow, RunEvidenceWindowQuery } from "./types.js";
 
 export function validateQuery(query: KnowledgeQuery): void {
   validateScope(query);
@@ -86,5 +87,27 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
       (query.revision === undefined || observation.run.headSha === query.revision),
     ).sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
       .slice(0, query.limit).map((observation) => structuredClone(runObservationSummary(observation)));
+  }
+  async readRunWindow(query: RunEvidenceWindowQuery): Promise<RunEvidenceWindow> {
+    validateRunWindowQuery(query);
+    const grouped = new Map<number, RunObservation[]>();
+    for (const observation of this.observations.values()) {
+      if (!inScope(observation, query)) continue;
+      const group = grouped.get(observation.run.runId) ?? [];
+      group.push(observation);
+      grouped.set(observation.run.runId, group);
+    }
+    const selected = [...grouped].filter(([id, observations]) => id === query.referenceRunId ||
+      observations.some(({ run }) => run.workflowId === query.workflowId && run.branch === query.branch))
+      .map(([id, observations]) => ({
+        id, observations: observations.sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt) || b.id.localeCompare(a.id)),
+        latest: observations.reduce((latest, observation) => Math.max(latest, Date.parse(observation.observedAt)), -Infinity),
+      }))
+      .sort((a, b) => Number(b.id === query.referenceRunId) - Number(a.id === query.referenceRunId) || b.latest - a.latest || b.id - a.id)
+      .slice(0, query.limit + 1);
+    return runWindowFromRows(query, selected.flatMap(({ id, observations }) => observations.slice(0, MAX_RUN_OBSERVATIONS + 1).map((observation) => ({
+      runId: id, id: observation.id,
+      observation: Buffer.byteLength(JSON.stringify(observation)) <= MAX_RUN_OBSERVATION_BYTES ? observation : null,
+    }))));
   }
 }

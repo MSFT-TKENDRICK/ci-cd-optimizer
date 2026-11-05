@@ -6,6 +6,7 @@ import { createRunObservation, runObservationIdentity } from "../../src/knowledg
 import { snapshot as workflow } from "../alerts/fixtures.js";
 import { isolatedDatabase } from "../webhooks/database.js";
 import { input, now, repository, revision, snapshot } from "./fixtures.js";
+import { runWindowCases } from "./run-window-cases.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
@@ -17,6 +18,7 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
     await store.initialize();
   });
   afterEach(async () => { await store?.close(); await database?.close(); });
+  runWindowCases(() => store);
 
   it("round-trips normalized evidence including JSONB canonicalization across repeated/concurrent initialization", async () => {
     const other = new PostgresKnowledgeStore(database.url);

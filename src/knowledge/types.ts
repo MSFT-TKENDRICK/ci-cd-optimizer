@@ -118,6 +118,25 @@ export interface RunObservationSummary {
   source: RunProjectContext;
 }
 
+export interface RunEvidenceWindowQuery extends KnowledgeScope {
+  workflowId: number;
+  branch: string | null;
+  referenceRunId: number;
+  /** Logical runs, including the pinned reference run; 0-100. */
+  limit: number;
+}
+
+export interface RunEvidenceWindow {
+  /** All matching logical runs currently stored fit in the window, not proof of complete Actions history. */
+  complete: boolean;
+  groups: Array<{
+    runId: number;
+    /** Incomplete groups expose no observations and must not contribute samples. */
+    complete: boolean;
+    observations: RunObservation[];
+  }>;
+}
+
 export interface KnowledgeStore {
   initialize(): Promise<void>;
   save(snapshot: KnowledgeSnapshot): Promise<void>;
@@ -127,5 +146,7 @@ export interface KnowledgeStore {
   saveRunObservation(observation: RunObservation, source?: KnowledgeSnapshot): Promise<void>;
   loadRunObservation(scope: KnowledgeScope, id: string): Promise<RunObservation | undefined>;
   listRunObservations(query: RunObservationQuery): Promise<RunObservationSummary[]>;
+  /** A single consistent read includes all attempts/corrections of each selected logical run, or marks it incomplete. */
+  readRunWindow(query: RunEvidenceWindowQuery): Promise<RunEvidenceWindow>;
   close?(): Promise<void>;
 }

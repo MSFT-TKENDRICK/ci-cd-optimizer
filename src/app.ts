@@ -189,6 +189,7 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
         {
           runId: context.payload.workflow_run.id, status: result.status, alerts: result.alerts?.detected.length ?? 0,
           knowledge: result.knowledge?.persistence, projectContext: result.knowledge?.observation.source.status, knowledgeSkipped: result.knowledgeSkipped,
+          durationEvidence: result.knowledge?.durations?.status, durationSamples: result.knowledge?.durations?.samples.length,
         },
         result.reason ?? "Workflow run telemetry processed",
       );

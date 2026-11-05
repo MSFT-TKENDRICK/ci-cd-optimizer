@@ -4,9 +4,8 @@ import type { KnowledgeSnapshot, RepositoryIdentity, RunObservation, RunObservat
 
 function provenanceFacts({ collectedAt: _collectedAt, ...facts }: NonNullable<WorkflowSnapshot["provenance"]>) { return facts; }
 
-export function runObservationIdentity(observation: Omit<RunObservation, "id"> | RunObservation): string {
-  const run = { ...observation.run };
-  const facts = {
+function runtimeFacts(run: WorkflowSnapshot) {
+  return {
     ...run,
     ...(run.provenance ? { provenance: provenanceFacts(run.provenance) } : {}),
     jobs: run.jobs.map((job) => ({
@@ -15,7 +14,14 @@ export function runObservationIdentity(observation: Omit<RunObservation, "id"> |
       ...(job.steps ? { steps: [...job.steps].sort((a, b) => a.number - b.number) } : {}),
     })).sort((a, b) => a.id - b.id),
   };
-  return identity(["knowledge-run-observation-v1", observation.version, observation.repository, observation.source, facts]);
+}
+
+export function runtimeFactsIdentity(run: WorkflowSnapshot): string {
+  return identity(["knowledge-runtime-facts-v1", runtimeFacts(run)]);
+}
+
+export function runObservationIdentity(observation: Omit<RunObservation, "id"> | RunObservation): string {
+  return identity(["knowledge-run-observation-v1", observation.version, observation.repository, observation.source, runtimeFacts(observation.run)]);
 }
 
 const positive = (value: number, field: string) => {
@@ -33,6 +39,7 @@ export function validateRunObservation(observation: RunObservation): void {
   validateRevision(observation.run.headSha);
   if (observation.version !== 1 || observation.id !== runObservationIdentity(observation)) throw new Error("Run observation identity does not match its evidence");
   const run = observation.run;
+  if (run.branch !== null && (typeof run.branch !== "string" || !run.branch)) throw new Error("Run evidence branch must be a nonempty string or null");
   positive(run.runId, "Run ID"); positive(run.runAttempt, "Run attempt"); positive(run.workflowId, "Workflow ID");
   [observation.observedAt, run.createdAt, run.startedAt, run.completedAt].forEach(timestamp);
   duration(run.durationMs);
