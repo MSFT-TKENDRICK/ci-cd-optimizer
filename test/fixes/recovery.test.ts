@@ -265,4 +265,39 @@ describe("interrupted fix updates", () => {
     expect(parseMarker(f.pull.body)?.attributes.commit).toBe("bot-update-1");
     expect(callsTo(f.client, "POST /graphql")).toHaveLength(1);
   });
+
+  it.each([false, true].flatMap((recipe) => [false, true].map((missing) => ({ recipe, missing }))))(
+    "retains a prepared update when default-branch protection changes (recipe: $recipe, missing: $missing)",
+    async ({ recipe, missing }) => {
+      const f = await fixture({ recipe });
+      const apply = () => recipe ? applyRecipe(f.client, repo, sampleRecipe({ revision: 2 })) : f.scan();
+      const original = f.client.request.bind(f.client);
+      let protectedBranch = false;
+      let injected = false;
+      f.client.request = async (route, parameters = {}) => {
+        const response = await original(route, parameters);
+        if (!injected && route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" &&
+          typeof parameters.body === "string" && parseMarker(parameters.body)?.attributes.pendingCommit) {
+          injected = true;
+          protectedBranch = true;
+        }
+        if (protectedBranch && route === "GET /repos/{owner}/{repo}") {
+          return { status: 200, data: { node_id: "repository-node", ...(missing ? {} : { default_branch: f.pull.head.ref }) } };
+        }
+        return response;
+      };
+      await expect(apply()).rejects.toThrow("default branch");
+      expect(injected).toBe(true);
+      expect(f.pull.head.sha).toBe("new-commit");
+      expect(f.state.branchHeads![f.pull.head.ref]).toBe("new-commit");
+      expect(parseMarker(f.pull.body)?.attributes.pendingCommit).toBe("bot-update-1");
+      expect(callsTo(f.client, "POST /graphql")).toHaveLength(0);
+      protectedBranch = false;
+      await apply();
+      expect(parseMarker(f.pull.body)?.attributes.pendingCommit).toBeUndefined();
+      expect(f.pull.head.sha).not.toBe("new-commit");
+      expect(callsTo(f.client, "POST /graphql")).toHaveLength(1);
+      expect(callsTo(f.client, "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
+    },
+  );
 });

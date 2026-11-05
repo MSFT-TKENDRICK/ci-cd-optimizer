@@ -247,7 +247,7 @@ describe("applyFixActions", () => {
       if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return {
         ...previous, head: { sha: "old-bot", ref: change.branch, repo: { full_name: "acme/widgets" } }, base: { ref: "main" },
       };
-      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
+      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node", default_branch: "main" };
       if (route === "POST /graphql") return { data: { updateRefs: {} } };
       if (route === "GET /repos/{owner}/{repo}/git/ref/{ref}") return { object: { sha: "old-bot" } };
       if (route === "GET /repos/{owner}/{repo}/git/commits/{commit_sha}") return { tree: { sha: "tree" } };
@@ -269,7 +269,7 @@ describe("applyFixActions", () => {
     let body = previous.body;
     let sha = "c2";
     const client = fakeClient((route, parameters) => {
-      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
+      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node", default_branch: "main" };
       if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return { body, state: "open", head: { sha, ref: change.branch, repo: { full_name: "acme/widgets" } } };
       if (route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}") body = String(parameters.body);
       if (route === "POST /graphql") { sha = "c3"; return { data: { updateRefs: {} } }; }

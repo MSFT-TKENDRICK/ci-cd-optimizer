@@ -30,6 +30,26 @@ function fixture() {
 }
 
 describe("closed-PR branch reuse", () => {
+  it("does not reuse a branch selected as default after commit creation", async () => {
+    const f = fixture();
+    const original = f.client.request.bind(f.client);
+    let selected = false;
+    f.client.request = async (route, parameters) => {
+      const response = await original(route, parameters);
+      if (route === "POST /repos/{owner}/{repo}/git/commits") selected = true;
+      if (selected && route === "GET /repos/{owner}/{repo}") {
+        return { status: 200, data: { node_id: "repository-node", default_branch: change.branch } };
+      }
+      return response;
+    };
+    await expect(f.apply()).rejects.toThrow("default branch");
+    expect(selected).toBe(true);
+    expect(f.heads[change.branch]).toBe("old-bot");
+    expect(f.pull.state).toBe("closed");
+    expect(callsTo(f.client, "POST /graphql")).toEqual([]);
+    expect(callsTo(f.client, "POST /repos/{owner}/{repo}/pulls")).toEqual([]);
+  });
+
   it.each(["fork", "different branch", "different head", "different base", "different marker"])(
     "does not authorize a local branch from %s history",
     async (mismatch) => {

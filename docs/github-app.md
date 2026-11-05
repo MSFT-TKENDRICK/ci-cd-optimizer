@@ -158,6 +158,14 @@ the branch write, and simultaneous body edits between a read and PATCH cannot be
 writers coordinated as above. Pre-existing interrupted updates without intent markers still need operator
 reconciliation, and replayed comments/commands after their completion is fully recorded are not exactly-once.
 
+Every conditional existing-ref write (fix/recipe rebuild or reuse, experiment promotion, and cleanup) rereads
+repository metadata and requires a nonempty repository node ID and default branch. Both updates and deletions
+refuse the observed default branch, even when its head still matches the planned commit. Missing or malformed
+metadata fails before the ref mutation; there is no unconditional fallback. A blocked write may leave a prepared
+fix/recipe intent or an already-merged experiment arm, so use the corresponding recovery or reconciliation path.
+This repository-metadata check is preflight, not an atomic lock against a later default-branch change. Keep default
+branches protected with GitHub rules and coordinate repository-setting changes with automated writers.
+
 Fix/recipe closure records the cleanup branch and observed head in the same PR update that closes it. Cleanup uses
 an atomic zero-OID `updateRefs` mutation with that original head, never unconditional REST deletion. Missing refs
 are reported as absent; changed heads, branches used by another open PR, and reopened PRs are retained with a visible

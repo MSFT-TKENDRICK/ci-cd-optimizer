@@ -30,10 +30,14 @@ export async function pushBranch(client: GitHubClient, repo: RepoRef, branch: st
 export async function updateBranch(client: GitHubClient, repo: RepoRef, branch: string, sha: string, expectedSha: string): Promise<void> {
   if (!expectedSha) throw new Error(`Missing expected head for ${branch}; refusing an unconditional update.`);
   const repository = await client.request("GET /repos/{owner}/{repo}", { ...repo });
-  const metadata = repository.data as { node_id?: string; default_branch?: string };
-  if (sha === DELETED_REF && metadata.default_branch === branch) throw new Error("Refusing to delete the repository's default branch.");
-  const id = metadata.node_id;
-  if (!id) throw new Error("GitHub did not return the repository node ID required for an atomic ref update.");
+  const metadata = repository.data as { node_id?: unknown; default_branch?: unknown } | null | undefined;
+  const id = metadata?.node_id;
+  if (typeof id !== "string" || !id.trim()) throw new Error("GitHub did not return the repository node ID required for an atomic ref update.");
+  const defaultBranch = metadata?.default_branch;
+  if (typeof defaultBranch !== "string" || !defaultBranch.trim()) {
+    throw new Error("GitHub did not return the default branch required for a safe atomic ref update.");
+  }
+  if (defaultBranch === branch) throw new Error("Refusing to modify the repository's default branch.");
   const result = await graphql(client, `mutation UpdateOptimizerRef($input: UpdateRefsInput!) {
     updateRefs(input: $input) { clientMutationId }
   }`, {

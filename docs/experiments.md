@@ -86,7 +86,9 @@ Dry-run grading remains available without applying these writes.
 Before a merge, the executor rereads the trunk and arms to verify repository ownership, branch/base, PR identity,
 state and head. A merge must explicitly return `merged: true` and its commit SHA, and the squash commit's sole parent
 must be the measured control commit. The promoted manifest is committed on that exact merge commit, and an
-expected-head `updateRefs` write refuses a changed trunk. Arm cleanup is deferred
+expected-head `updateRefs` write refuses a changed trunk. Ref writes also require current repository metadata and
+refuse the observed default branch, including when the experiment trunk has been selected as the default.
+Arm cleanup is deferred
 until the manifest write and the promotion PR's marker/readiness are confirmed. Missing ready-for-review
 acknowledgements fail the operation; an unavailable optional auto-merge request is reported in the grading notes.
 

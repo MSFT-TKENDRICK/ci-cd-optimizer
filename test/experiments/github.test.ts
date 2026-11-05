@@ -179,7 +179,7 @@ describe("applyDecision", () => {
     let draft = true;
     const closed = new Set<number>();
     const client = fakeClient((route, parameters) => {
-      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
+      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node", default_branch: "main" };
       if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") {
         const pull = [planned.trunk!, ...planned.arms].find((pull) => pull.number === parameters.pull_number);
         if (!pull) throw httpError(404);
@@ -273,7 +273,7 @@ describe("applyDecision", () => {
         return rawPull({ ...pr, state: closed.has(pr.number) ? "closed" : pr.state });
       }
       if (route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" && parameters.state === "closed") closed.add(Number(parameters.pull_number));
-      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
+      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node", default_branch: "main" };
       if (route === "POST /graphql") return { data: { updateRefs: {} } };
       if (route.startsWith("GET /repos/{owner}/{repo}/git/ref/")) return { object: { sha: `sha-${String(parameters.ref).split("/").at(-1)}` } };
       return route.startsWith("GET") ? [] : {};

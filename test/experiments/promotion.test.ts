@@ -424,4 +424,24 @@ describe("verified experiment promotion", () => {
     expect(result.notes.join(" ")).toContain("an open PR uses it");
     expect(f.heads[f.winner.head]).toBe(f.winner.headSha);
   });
+
+  it.each([false, true])("retains promotion arms if the trunk default-branch guard fails (missing metadata: %s)", async (missing) => {
+    const f = fixture();
+    const original = f.client.request.bind(f.client);
+    let prepared = false;
+    f.client.request = async (route, parameters) => {
+      const response = await original(route, parameters);
+      if (route === "POST /repos/{owner}/{repo}/git/commits") prepared = true;
+      if (prepared && route === "GET /repos/{owner}/{repo}") {
+        return { status: 200, data: { node_id: "repo-node", ...(missing ? {} : { default_branch: f.trunk.head }) } };
+      }
+      return response;
+    };
+    await expect(applyDecision(f.client, repo, f.options)).rejects.toThrow("default branch");
+    expect(prepared).toBe(true);
+    expect(f.heads[f.trunk.head]).toBe("merged-trunk");
+    expect(f.current(f.trunk.number).body).toBe("");
+    expect(f.client.calls.some((call) => call.route === refMutation)).toBe(false);
+    expectArmsRetained(f);
+  });
 });
