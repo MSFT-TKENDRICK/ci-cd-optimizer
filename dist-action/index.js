@@ -15212,6 +15212,22 @@ async function loadRepositorySnapshot(client, repo, options) {
   };
 }
 
+// src/fixes/commands.ts
+var COMMAND_HELP = [
+  "<details>",
+  "<summary>Commands</summary>",
+  "",
+  "You can trigger actions by commenting on this pull request:",
+  "- `@cicd-optimizer rebase` rebuilds the fixes on the latest base branch (unless someone else pushed to it)",
+  "- `@cicd-optimizer recreate` rebuilds the fixes, overwriting any edits made to this pull request",
+  "- `@cicd-optimizer close` closes this pull request; it is not reopened for the same change",
+  "- `@cicd-optimizer ignore this rule <rule-id>` stops proposing fixes for that rule (all rules in this pull request when omitted)",
+  "- `@cicd-optimizer ignore this group` closes this pull request and stops proposing fixes for this group",
+  "",
+  "Ignores are remembered through the `cicd-optimizer:ignored` label; remove it from the pull request to undo. Use `fixes.ignore` in `.github/ci-cd-optimizer.yml` for permanent configuration.",
+  "</details>"
+].join("\n");
+
 // src/fixes/plan.ts
 var NO_DISMISSALS = { rules: /* @__PURE__ */ new Set(), groups: /* @__PURE__ */ new Set() };
 function groupName(diagnostic, config) {
@@ -15272,7 +15288,7 @@ function edited(pr) {
 function planFixPullRequests(changes, existing, options) {
   const actions = [];
   const skipped = [];
-  const newestFirst = [...existing].sort((a, b) => b.number - a.number);
+  const newestFirst = existing.map((pr) => pr.pendingUpdate && pr.headSha === pr.pendingUpdate.commitSha ? { ...pr, commitSha: pr.pendingUpdate.commitSha, signature: pr.pendingUpdate.signature } : pr).sort((a, b) => b.number - a.number);
   const wanted = new Set(changes.map((change) => change.group));
   let open = existing.filter((pr) => pr.state === "open").length;
   for (const pr of newestFirst) {
@@ -15293,9 +15309,12 @@ function planFixPullRequests(changes, existing, options) {
   for (const change of changes) {
     const current = newestFirst.find((pr) => pr.group === change.group && pr.state === "open");
     if (current) {
-      if (options.recreate?.has(change.group)) actions.push({ type: "update", number: current.number, change });
+      const completed = current.pendingUpdate?.commitSha === current.headSha && current.pendingUpdate !== void 0;
+      const satisfied = completed && current.signature === change.signature && current.pendingUpdate?.baseSha === options.baseSha;
+      if (satisfied) skipped.push({ group: change.group, reason: "up-to-date", number: current.number });
+      else if (options.recreate?.has(change.group)) actions.push({ type: "update", number: current.number, change });
       else if (edited(current)) skipped.push({ group: change.group, reason: "edited", number: current.number });
-      else if (current.signature === change.signature && !options.rebase?.has(change.group)) {
+      else if (current.signature === change.signature && !options.rebase?.has(change.group) && (!current.pendingUpdate || completed)) {
         skipped.push({ group: change.group, reason: "up-to-date", number: current.number });
       } else actions.push({ type: "update", number: current.number, change });
       continue;
@@ -15314,38 +15333,23 @@ function planFixPullRequests(changes, existing, options) {
   }
   const metadata = [];
   for (const pr of newestFirst) {
-    if (pr.state !== "open") continue;
+    if (pr.state !== "open" && !pr.pendingUpdate) continue;
     const currentLabels = new Set((pr.labels ?? []).map((label) => label.toLowerCase()));
-    const labels = [...new Set(options.labels ?? [])].filter((label) => !currentLabels.has(label.toLowerCase()));
+    const labels = pr.state === "open" ? [...new Set(options.labels ?? [])].filter((label) => !currentLabels.has(label.toLowerCase())) : [];
     const closing = actions.some((action) => action.type === "close" && action.number === pr.number);
-    const pending = closing || pr.draft ? [] : pr.pendingReviewers ?? [];
-    if (labels.length === 0 && pending.length === 0) continue;
+    const pending = closing || pr.state !== "open" || pr.draft ? [] : pr.pendingReviewers ?? [];
+    if (labels.length === 0 && pending.length === 0 && !pr.pendingUpdate) continue;
     metadata.push({
       type: "metadata",
       number: pr.number,
       group: pr.group,
       labels,
-      reviewers: pending.filter((reviewer) => options.reviewers?.includes(reviewer))
+      reviewers: pending.filter((reviewer) => options.reviewers?.includes(reviewer)),
+      ...pr.pendingUpdate ? { recoverUpdate: true } : {}
     });
   }
   return { actions: [...metadata, ...actions], skipped };
 }
-
-// src/fixes/commands.ts
-var COMMAND_HELP = [
-  "<details>",
-  "<summary>Commands</summary>",
-  "",
-  "You can trigger actions by commenting on this pull request:",
-  "- `@cicd-optimizer rebase` rebuilds the fixes on the latest base branch (unless someone else pushed to it)",
-  "- `@cicd-optimizer recreate` rebuilds the fixes, overwriting any edits made to this pull request",
-  "- `@cicd-optimizer close` closes this pull request; it is not reopened for the same change",
-  "- `@cicd-optimizer ignore this rule <rule-id>` stops proposing fixes for that rule (all rules in this pull request when omitted)",
-  "- `@cicd-optimizer ignore this group` closes this pull request and stops proposing fixes for this group",
-  "",
-  "Ignores are remembered through the `cicd-optimizer:ignored` label; remove it from the pull request to undo. Use `fixes.ignore` in `.github/ci-cd-optimizer.yml` for permanent configuration.",
-  "</details>"
-].join("\n");
 
 // src/fixes/render.ts
 function fixTitle(change) {
@@ -15404,9 +15408,38 @@ function fixBody(change, context) {
 // src/fixes/github.ts
 var IGNORED_LABEL = "cicd-optimizer:ignored";
 var list = (value) => value ? value.split(",").filter(Boolean) : [];
+var PENDING_NOTICE = "\n\n> **Update pending:** The generated description below describes an intended update. Its branch write has not yet been confirmed.\n\n";
+var INTERRUPTED_NOTICE = "\n\n> **Update interrupted:** The intended commit is not the current branch head. The description below may not match the branch; changed heads are protected from automatic replacement.\n\n";
+var UPDATE_KEYS = ["pendingFrom", "pendingCommit", "pendingSignature", "pendingBase", "pendingRules"];
+var BODY_START = "<!-- cicd-optimizer:fix-body-start -->";
+var BODY_END = "<!-- cicd-optimizer:fix-body-end -->";
+function managedBody(generated, previous = "") {
+  if (generated.includes(BODY_START) || generated.includes(BODY_END)) throw new Error("Rendered fix content contains reserved body boundaries.");
+  const start = previous.indexOf(BODY_START);
+  const end = previous.indexOf(BODY_END);
+  const wrapped = `${BODY_START}
+${generated}
+${BODY_END}`;
+  if (start < 0 && end < 0) {
+    const commands = previous.indexOf(COMMAND_HELP);
+    return wrapped + (commands >= 0 ? previous.slice(commands + COMMAND_HELP.length) : "");
+  }
+  if (start < 0 || end < start || start !== previous.lastIndexOf(BODY_START) || end !== previous.lastIndexOf(BODY_END)) {
+    throw new Error("Fix body boundaries changed; reconcile the generated section before retrying.");
+  }
+  return previous.slice(0, start) + wrapped + previous.slice(end + BODY_END.length);
+}
+function pendingUpdate(parsed, number) {
+  const attrs = parsed.attributes;
+  if (!UPDATE_KEYS.some((key) => key in attrs)) return void 0;
+  if (!attrs.pendingFrom || !attrs.pendingCommit || !attrs.pendingSignature || !attrs.pendingBase) {
+    throw new Error(`Incomplete pending update on PR #${number}; reconcile its fix marker before retrying.`);
+  }
+  return { fromSha: attrs.pendingFrom, commitSha: attrs.pendingCommit, signature: attrs.pendingSignature, baseSha: attrs.pendingBase, rules: list(attrs.pendingRules) };
+}
 async function listManagedPullRequests(client, repo, discovery) {
   const raw = await paginate(client, "GET /repos/{owner}/{repo}/issues", { ...repo, state: "all", labels: "cicd-optimizer" });
-  const heads = /* @__PURE__ */ new Map();
+  const details = /* @__PURE__ */ new Map();
   if (discovery) {
     const known2 = new Set(raw.map((issue) => issue.number));
     for (const group of new Set(discovery.groups)) {
@@ -15426,20 +15459,35 @@ async function listManagedPullRequests(client, repo, discovery) {
         const parsed = parseMarker(pull.body);
         if (parsed?.kind !== "fix" || parsed.fingerprint !== `group:${group}` || !parsed.attributes.signature || !parsed.attributes.commit) continue;
         raw.push({ ...pull, pull_request: { merged_at: pull.merged_at ?? null } });
-        heads.set(pull.number, pull.head);
+        details.set(pull.number, pull);
         known2.add(pull.number);
       }
     }
   }
   const result = [];
-  for (const issue of raw) {
+  for (let issue of raw) {
     if (!issue.pull_request) continue;
-    const parsed = parseMarker(issue.body);
+    let parsed = parseMarker(issue.body);
     if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
+    const initialAttributes = parsed.attributes;
+    let head;
+    if (issue.state === "open" || UPDATE_KEYS.some((key) => key in initialAttributes)) {
+      let pull = details.get(issue.number);
+      if (!pull) {
+        const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: issue.number });
+        pull = response.data;
+      }
+      head = pull.head;
+      if (head?.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) continue;
+      issue = { ...issue, ...pull, pull_request: { ...issue.pull_request, ...pull.merged_at !== void 0 ? { merged_at: pull.merged_at } : {} } };
+      parsed = parseMarker(issue.body);
+      if (!parsed || parsed.kind !== "fix" || !parsed.fingerprint.startsWith("group:")) continue;
+    }
+    const pending = pendingUpdate(parsed, issue.number);
     const pr = {
       number: issue.number,
       state: issue.state,
-      merged: Boolean(issue.pull_request.merged_at),
+      merged: Boolean(issue.pull_request?.merged_at),
       group: parsed.fingerprint.slice("group:".length),
       title: issue.title,
       body: issue.body ?? "",
@@ -15450,20 +15498,12 @@ async function listManagedPullRequests(client, repo, discovery) {
       pendingReviewers: list(parsed.attributes.pendingReviewers),
       ...issue.draft !== void 0 ? { draft: issue.draft } : {},
       ...parsed.attributes.signature ? { signature: parsed.attributes.signature } : {},
-      ...parsed.attributes.commit ? { commitSha: parsed.attributes.commit } : {}
+      ...parsed.attributes.commit ? { commitSha: parsed.attributes.commit } : {},
+      ...pending ? { pendingUpdate: pending } : {},
+      ...head?.sha ? { headSha: head.sha } : {},
+      ...head?.ref ? { branch: head.ref } : {}
     };
-    if (pr.state === "open") {
-      let head = heads.get(pr.number);
-      if (!head) {
-        const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr.number });
-        const pull = response.data;
-        head = pull.head;
-        if (pull.draft !== void 0) pr.draft = pull.draft;
-      }
-      if (head?.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) continue;
-      if (head?.sha) pr.headSha = head.sha;
-      if (head?.ref) pr.branch = head.ref;
-    }
+    if (pending && head?.sha === pending.commitSha) pr.rules = pending.rules;
     result.push(pr);
   }
   return result;
@@ -15477,6 +15517,30 @@ function dismissalsFrom(prs) {
     if (pr.ignoredGroup) groups.add(pr.group);
   }
   return { rules: rules9, groups };
+}
+async function currentFix(client, repo, previous) {
+  const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number });
+  const pull = response.data;
+  const parsed = parseMarker(pull.body);
+  const expected = parseMarker(previous.body);
+  if (!parsed || parsed.kind !== "fix" || parsed.fingerprint !== `group:${previous.group}` || !expected || [.../* @__PURE__ */ new Set([...Object.keys(parsed.attributes), ...Object.keys(expected.attributes)])].some((key) => parsed.attributes[key] !== expected.attributes[key]) || pull.state !== previous.state || !pull.head?.sha || pull.head.sha !== previous.headSha || !previous.branch || pull.head.ref !== previous.branch || pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
+    throw new Error(`PR #${previous.number} changed since planning; retry without overwriting its branch or marker.`);
+  }
+  return { pull, parsed };
+}
+async function finishPendingUpdate(client, repo, previous) {
+  const { pull, parsed } = await currentFix(client, repo, previous);
+  const pending = pendingUpdate(parsed, previous.number);
+  if (!pending) throw new Error(`Missing pending update on PR #${previous.number}; replan before retrying.`);
+  const completed = pull.head.sha === pending.commitSha;
+  const attributes = Object.fromEntries(UPDATE_KEYS.map((key) => [key, ""]));
+  if (completed) Object.assign(attributes, { commit: pending.commitSha, signature: pending.signature, rules: pending.rules.join(",") });
+  const body = updateMarker((pull.body ?? "").replace(PENDING_NOTICE, completed ? "\n\n" : INTERRUPTED_NOTICE), "fix", parsed.fingerprint, attributes);
+  await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number, body });
+  const recovered = { ...previous, body };
+  delete recovered.pendingUpdate;
+  if (completed) Object.assign(recovered, { commitSha: pending.commitSha, signature: pending.signature, rules: pending.rules });
+  return recovered;
 }
 async function finishReviewRequests(client, repo, number, group, reviewers) {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number });
@@ -15513,14 +15577,23 @@ async function applyFixActions(client, repo, actions, options) {
   const neededLabels = actions.flatMap((action) => action.type === "create" ? labels : action.type === "metadata" ? action.labels : []);
   if (neededLabels.length > 0) await ensureLabels(client, repo, neededLabels);
   const applied = [];
+  const existing = new Map(options.existing.map((pr) => [pr.number, pr]));
   for (const action of actions) {
     if (action.type === "metadata") {
+      let previous2 = existing.get(action.number);
+      if (action.recoverUpdate) {
+        if (!previous2) throw new Error(`Missing PR #${action.number} for pending-update recovery.`);
+        previous2 = await finishPendingUpdate(client, repo, previous2);
+        existing.set(action.number, previous2);
+      }
       if (action.labels.length > 0) {
         await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: action.number, labels: action.labels });
       }
-      const previous2 = options.existing.find((pr) => pr.number === action.number);
       const closing = actions.some((candidate) => candidate.type === "close" && candidate.number === action.number);
-      if (!closing && !previous2?.draft && previous2?.pendingReviewers?.length) await finishReviewRequests(client, repo, action.number, action.group, action.reviewers);
+      if (!closing && previous2?.state === "open" && !previous2.draft && previous2.pendingReviewers?.length) {
+        await finishReviewRequests(client, repo, action.number, action.group, action.reviewers);
+        existing.set(action.number, { ...previous2, body: updateMarker(previous2.body, "fix", `group:${previous2.group}`, { pendingReviewers: "" }), pendingReviewers: [] });
+      }
       applied.push({ action, number: action.number });
       continue;
     }
@@ -15532,7 +15605,7 @@ async function applyFixActions(client, repo, actions, options) {
       continue;
     }
     const { change } = action;
-    const previous = action.type === "update" ? options.existing.find((pr) => pr.number === action.number) : void 0;
+    const previous = action.type === "update" ? existing.get(action.number) : void 0;
     const branch = action.type === "update" ? previous?.branch : change.branch;
     if (!branch || branch === options.baseBranch) throw new Error("A fix requires a known branch distinct from the repository's base branch.");
     let expectedHead = previous?.headSha;
@@ -15558,19 +15631,41 @@ async function applyFixActions(client, repo, actions, options) {
       }
     }
     const commitSha = await commitFiles(client, repo, options.baseSha, change.files, commitMessage(change));
-    if (expectedHead) await updateBranch(client, repo, branch, commitSha, expectedHead);
-    else await pushBranch(client, repo, branch, commitSha);
     const ignoredRules = previous?.ignoredRules ?? [];
     let body = options.render?.body ? options.render.body(change, { commitSha, ignoredRules }) : fixBody(change, { rules: options.rules, commitSha, ignoredRules });
     const title = options.render?.title ? options.render.title(change) : fixTitle(change);
     if (action.type === "update") {
+      if (!previous || !expectedHead) throw new Error(`Missing planned state for PR #${action.number}.`);
+      const { pull, parsed } = await currentFix(client, repo, previous);
+      if (pendingUpdate(parsed, action.number)) throw new Error(`PR #${action.number} has an unfinished update; reconcile it before rebuilding.`);
+      const rendered = parseMarker(body);
+      if (rendered?.kind !== "fix" || rendered.fingerprint !== `group:${change.group}`) throw new Error("An updated fix body must retain its group marker.");
+      body = updateMarker(body, "fix", parsed.fingerprint, {
+        ...parsed.attributes,
+        commit: parsed.attributes.commit ?? "",
+        signature: parsed.attributes.signature ?? "",
+        rules: parsed.attributes.rules ?? "",
+        pendingFrom: expectedHead,
+        pendingCommit: commitSha,
+        pendingSignature: change.signature,
+        pendingBase: options.baseSha,
+        pendingRules: change.rules.join(",")
+      });
+      body = managedBody(`${PENDING_NOTICE}${body}`, pull.body ?? "");
       await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: action.number, title, body });
+      const prepared = { ...previous, body, title };
+      await currentFix(client, repo, prepared);
+      await updateBranch(client, repo, branch, commitSha, expectedHead);
+      await finishPendingUpdate(client, repo, { ...prepared, headSha: commitSha });
       applied.push({ action, number: action.number, commitSha });
       continue;
     }
     if (options.config.reviewers.length > 0) {
       body = updateMarker(body, "fix", `group:${change.group}`, { pendingReviewers: options.config.reviewers.join(",") });
     }
+    body = managedBody(body);
+    if (expectedHead) await updateBranch(client, repo, branch, commitSha, expectedHead);
+    else await pushBranch(client, repo, branch, commitSha);
     const created = await client.request("POST /repos/{owner}/{repo}/pulls", {
       ...repo,
       title,
@@ -16146,6 +16241,7 @@ async function applyRecipe(client, target, recipe, options = {}) {
   const fixes = { ...config.fixes, labels: [.../* @__PURE__ */ new Set([...config.fixes.labels, `recipe:${recipe.id}`, ...config.recipes.labels])] };
   const fixPlan = planFixPullRequests(plan.change ? [plan.change] : [], existingPulls, {
     openPullRequestsLimit: 1,
+    baseSha: snapshot.sha,
     labels: ["cicd-optimizer", ...fixes.labels],
     reviewers: fixes.reviewers
   });
@@ -16801,6 +16897,7 @@ async function scanRepository(client, repo, options = {}) {
     });
     const plan = planFixPullRequests(changes, existing, {
       openPullRequestsLimit: config.fixes.openPullRequestsLimit,
+      baseSha: snapshot.sha,
       labels: ["cicd-optimizer", ...config.fixes.labels],
       reviewers: config.fixes.reviewers,
       ...options.rebase ? { rebase: options.rebase } : {},
