@@ -118,7 +118,8 @@ export async function buildWorkflowSnapshot(
 }
 
 export function snapshotFromRun(repo: RepoRef, run: WorkflowRunPayload, apiJobs: readonly ApiJob[], definitions: JobDefinitions, jobsComplete = false): WorkflowSnapshot {
-  const jobs = apiJobs.filter((job) => job.started_at && job.completed_at).map((job) => jobSnapshot(job, definitions));
+  const mapped = apiJobs.filter((job) => job.started_at && job.completed_at).map((job) => ({ job, key: matchJobKey(job.name, definitions) }));
+  const jobs = mapped.map(({ job, key }) => jobSnapshot(job, definitions, key));
   const startedAt = run.run_started_at ?? run.created_at;
   const lastJob = jobs.map((job) => job.completedAt).sort().at(-1);
   const completedAt = lastJob && Date.parse(lastJob) > Date.parse(startedAt) ? lastJob : run.updated_at;
@@ -146,13 +147,12 @@ export function snapshotFromRun(repo: RepoRef, run: WorkflowRunPayload, apiJobs:
       collector: "github-actions-rest",
       collectedAt: new Date().toISOString(),
       jobsComplete,
-      definitionKnown: definitions.size > 0 && jobs.every((job) => definitions.has(job.key)),
+      definitionKnown: definitions.size > 0 && mapped.every(({ key }) => key !== undefined),
     },
   };
 }
 
-function jobSnapshot(job: ApiJob, definitions: JobDefinitions): JobSnapshot {
-  const key = matchJobKey(job.name, definitions);
+function jobSnapshot(job: ApiJob, definitions: JobDefinitions, key: string | undefined): JobSnapshot {
   const startedAt = job.started_at as string;
   const completedAt = job.completed_at as string;
   const steps = (job.steps ?? [])
@@ -189,22 +189,45 @@ function jobSnapshot(job: ApiJob, definitions: JobDefinitions): JobSnapshot {
  * reusable-workflow callers (`key / inner`), and `name:` templates with `${{ }}` expressions.
  */
 export function matchJobKey(jobName: string, definitions: JobDefinitions): string | undefined {
+  const matches = new Set<string>();
   for (const [key, definition] of definitions) {
     for (const candidate of [key, definition.name]) {
       if (!candidate) continue;
-      if (jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `)) return key;
-      if (candidate.includes("${{") && templatePattern(candidate).test(jobName)) return key;
+      if (jobName === candidate || jobName.startsWith(`${candidate} (`) || jobName.startsWith(`${candidate} / `) ||
+          (candidate.includes("${{") && matchesNameTemplate(candidate, jobName))) matches.add(key);
+      if (matches.size > 1) return undefined;
     }
   }
-  return undefined;
+  return [...matches][0];
 }
 
-function templatePattern(template: string): RegExp {
-  const source = template
-    .split(/\$\{\{[^}]*\}\}/)
-    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join(".*");
-  return new RegExp(`^${source}(?: \\(.*\\)| / .*)?$`);
+function matchesNameTemplate(template: string, name: string): boolean {
+  if (["\r", "\n", "\u2028", "\u2029"].some((character) => name.includes(character))) return false;
+  const parts: string[] = [];
+  let cursor = 0;
+  let literal = 0;
+  let closing = -1;
+  for (let opening = template.indexOf("${{"); opening !== -1; opening = template.indexOf("${{", cursor)) {
+    if (closing < opening + 3) closing = template.indexOf("}", opening + 3);
+    if (closing === -1) break;
+    if (template[closing + 1] === "}") {
+      parts.push(template.slice(literal, opening));
+      cursor = closing + 2;
+      literal = cursor;
+    } else cursor = opening + 3;
+  }
+  parts.push(template.slice(literal));
+  if (parts.length < 2 || !name.startsWith(parts[0]!)) return false;
+  let position = parts[0]!.length;
+  for (const part of parts.slice(1, -1)) {
+    const found = name.indexOf(part, position);
+    if (found === -1) return false;
+    position = found + part.length;
+  }
+  const suffix = parts.at(-1)!;
+  return (name.endsWith(suffix) && name.length - suffix.length >= position) ||
+    name.indexOf(`${suffix} / `, position) !== -1 ||
+    (name.endsWith(")") && name.indexOf(`${suffix} (`, position) !== -1);
 }
 
 export interface RunHistoryOptions {

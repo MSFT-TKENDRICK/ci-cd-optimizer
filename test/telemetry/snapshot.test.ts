@@ -97,6 +97,26 @@ describe("job definitions", () => {
     expect(matchJobKey("unknown", definitions)).toBeUndefined();
   });
 
+  it("rejects ambiguous key/name/prefix matches regardless of definition order", () => {
+    for (const name of ["build", "build (unit)", "build / inner", "build${{ matrix.suffix }}"]) {
+      const definitions = new Map([["build", { needs: [] }], ["other", { name, needs: [] }]]);
+      const display = name.includes("${{") ? "build (unit)" : name;
+      expect(matchJobKey(display, definitions)).toBeUndefined();
+      expect(matchJobKey(display, new Map([...definitions].reverse()))).toBeUndefined();
+    }
+  });
+
+  it("matches templates literally without regex backtracking or treating partial names as a match", () => {
+    const definitions = new Map([["build", { name: "Test [literal] ${{ matrix.os }} - ${{ matrix.node }} done", needs: [] }]]);
+    for (const suffix of ["", " (2)", " / child"]) {
+      expect(matchJobKey(`Test [literal] linux - 22 done${suffix}`, definitions)).toBe("build");
+    }
+    expect(matchJobKey("Test literal linux - 22 done", definitions)).toBeUndefined();
+    expect(matchJobKey("Test [literal] linux - 22 done\n", definitions)).toBeUndefined();
+    expect(matchJobKey("a".repeat(200), new Map([["job", { name: "${{ value }}a".repeat(30) + "z", needs: [] }]]))).toBeUndefined();
+    expect(matchJobKey("ordinary", new Map([["job", { name: "${{".repeat(10_000), needs: [] }]]))).toBeUndefined();
+  });
+
   it("strips the ref suffix from reusable workflow paths", () => {
     expect(workflowPath(".github/workflows/ci.yml@refs/heads/main")).toBe(".github/workflows/ci.yml");
   });

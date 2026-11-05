@@ -190,6 +190,9 @@ retry, incomplete groups, unsuccessful/incompletely collected workloads and mism
 Future completions are excluded. An ambiguous reference withholds comparisons and budget assessments; a known
 newer attempt suppresses stale report publication. Indistinguishable job identities are excluded rather than
 merging matrix legs. Each admitted logical run contributes one sample per disambiguated job context.
+Collection also rejects names matching multiple workflow definitions, even if the display-name fallback equals a
+declared key. Template matching uses bounded literal searches, not backtracking regular expressions. Unknown mappings
+cannot satisfy comparison eligibility or job budgets.
 
 The App's knowledge-backed baseline and alert inputs use these eligible immutable observations, not a mutable
 correction chosen from the legacy telemetry store. Incomplete groups also hold alert lifecycle changes; known later

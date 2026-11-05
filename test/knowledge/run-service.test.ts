@@ -201,4 +201,17 @@ describe("run source context collection", () => {
     expect(callsTo(client, "GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs")).toEqual([]);
     expect(writes(client)).toEqual([]);
   });
+
+  it.each(["build", "build (unit)"])("never assesses budgets using an ambiguous display-name mapping: %s", async (name) => {
+    const client = api({
+      config: "durations:\n  objectives:\n    - workflow: .github/workflows/ci.yml\n      job: build\n      maxDurationMs: 1000\n",
+      refs: { [revision]: { ".github/workflows/ci.yml": `name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps: [{run: make}]\n  other:\n    name: ${name}\n    runs-on: ubuntu-24.04\n    steps: [{run: make}]\n` } },
+      jobs: { 100: [{ id: 1, name, conclusion: "success", labels: ["ubuntu-24.04"], started_at: "2026-11-01T00:00:00Z", completed_at: "2026-11-01T00:01:00Z", steps: [] }] },
+    });
+    const result = await processWorkflowRun(client, repository, payload(), { knowledge: true, dryRun: true, now });
+    expect(result.snapshot?.provenance?.definitionKnown).toBe(false);
+    expect(result.knowledge?.durations).toMatchObject({ status: "reference-excluded", reason: "ineligible-workload", jobs: [] });
+    expect(result.knowledge?.durations?.workflow).toBeUndefined();
+    expect(writes(client)).toEqual([]);
+  });
 });

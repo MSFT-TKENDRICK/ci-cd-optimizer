@@ -9,7 +9,7 @@ export interface StepSnapshot {
 
 export interface JobSnapshot {
   id: number;
-  /** Workflow job id (`jobs.<key>`); matrix legs and reusable-workflow jobs keep their display name. */
+  /** Resolved workflow job id (`jobs.<key>`); unresolved or ambiguous jobs fall back to their display name. */
   key: string;
   name: string;
   conclusion: string | null;
