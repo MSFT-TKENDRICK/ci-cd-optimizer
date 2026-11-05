@@ -184,39 +184,6 @@ describe("signed GitHub App HTTP delivery", () => {
       refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } },
     });
 
-    describe.skipIf(!process.env.DATABASE_URL)("durable HTTP delivery through Postgres", () => {
-      let db: Awaited<ReturnType<typeof isolatedDatabase>>;
-      let ingress: PostgresWebhookQueue;
-      let worker: PostgresWebhookQueue;
-      beforeAll(async () => {
-        db = await isolatedDatabase(process.env.DATABASE_URL!);
-        ingress = new PostgresWebhookQueue(db.url);
-        await ingress.initialize();
-        worker = new PostgresWebhookQueue(db.url);
-      });
-      afterAll(async () => {
-        await ingress?.close();
-        await worker?.close();
-        await db?.close();
-      });
-
-      it("commits before acknowledgement, executes via another worker, and suppresses completed redelivery", async () => {
-        const app = await harness({
-          config: `${TIMEOUT_ONLY}issues:\n  enabled: true\nfixes:\n  enabled: true\n`,
-          refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } },
-        }, ingress);
-        const id = randomUUID();
-        expect(await app.send("push", push, "valid", id)).toBe(200);
-        expect(await ingress.status(id)).toMatchObject([{ status: "pending", attempts: 0 }]);
-        expect(app.api.calls).toHaveLength(0);
-        expect(await worker.processNext((delivery) => app.probot.receive(delivery))).toMatchObject({ status: "completed", id });
-        expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
-        expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
-        expect(await app.send("push", push, "valid", id)).toBe(200);
-        expect((await worker.processNext((delivery) => app.probot.receive(delivery))).status).toBe("idle");
-        expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
-      });
-    });
     expect(await app.send("push", push)).toBe(200);
     expect(app.tokenRequests()).toBe(1);
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
@@ -445,5 +412,39 @@ describe("signed GitHub App HTTP delivery", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("WEBHOOK_SECRET", secret);
     await expect(app.probot.load(createApp())).resolves.toBeUndefined();
+  });
+});
+
+describe.skipIf(!process.env.DATABASE_URL)("durable HTTP delivery through Postgres", () => {
+  let db: Awaited<ReturnType<typeof isolatedDatabase>>;
+  let ingress: PostgresWebhookQueue;
+  let worker: PostgresWebhookQueue;
+  beforeAll(async () => {
+    db = await isolatedDatabase(process.env.DATABASE_URL!);
+    ingress = new PostgresWebhookQueue(db.url);
+    await ingress.initialize();
+    worker = new PostgresWebhookQueue(db.url);
+  });
+  afterAll(async () => {
+    await ingress?.close();
+    await worker?.close();
+    await db?.close();
+  });
+
+  it("commits before acknowledgement, executes via another worker, and suppresses completed redelivery", async () => {
+    const app = await harness({
+      config: `${TIMEOUT_ONLY}issues:\n  enabled: true\nfixes:\n  enabled: true\n`,
+      refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } },
+    }, ingress);
+    const id = randomUUID();
+    expect(await app.send("push", push, "valid", id)).toBe(200);
+    expect(await ingress.status(id)).toMatchObject([{ status: "pending", attempts: 0 }]);
+    expect(app.api.calls).toHaveLength(0);
+    expect(await worker.processNext((delivery) => app.probot.receive(delivery))).toMatchObject({ status: "completed", id });
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
+    expect(await app.send("push", push, "valid", id)).toBe(200);
+    expect((await worker.processNext((delivery) => app.probot.receive(delivery))).status).toBe("idle");
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/issues")).toHaveLength(1);
   });
 });
