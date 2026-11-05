@@ -79,6 +79,25 @@ describe("applyRecipe", () => {
       .toMatchObject({ issue_number: 30, labels: ["cicd-optimizer", "recipe:job-timeouts"] });
   });
 
+  it.each([false, true])("protects the existing recipe branch during updates (human edits: %s)", async (humanEdits) => {
+    const client = server({
+      files: workflow(MISSING_TIMEOUT), config: "fixes:\n  branchPrefix: new-prefix/\n",
+      issues: [recipePull()], head: { ref: "old-prefix/recipe-job-timeouts", sha: humanEdits ? "human-commit" : "head-sha" },
+    });
+    expect(await applyRecipe(client, target, sampleRecipe())).toMatchObject({ pullRequest: 30, attempted: true });
+    const mutation = client.calls.find((call) => call.route === "POST /graphql");
+    if (humanEdits) {
+      expect(mutation).toBeUndefined();
+      expect(routes(client).some((route) => !route.startsWith("GET"))).toBe(false);
+    } else {
+      expect(mutation?.parameters.variables).toMatchObject({
+        input: { refUpdates: [{ name: "refs/heads/old-prefix/recipe-job-timeouts", beforeOid: "head-sha", afterOid: "new-commit" }] },
+      });
+      expect(client.calls.find((call) => call.route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")?.parameters.body)
+        .toContain("cicd-optimizer:recipe");
+    }
+  });
+
   it("opens an adaptation issue labeled for the coding agent when no autofix applies", async () => {
     const client = server({ files: workflow(EXCESSIVE_TIMEOUT) });
     const result = await applyRecipe(client, target, sampleRecipe());

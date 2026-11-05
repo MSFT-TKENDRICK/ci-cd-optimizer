@@ -1,5 +1,5 @@
 import type { SourceFile } from "../lint/types.js";
-import { httpStatus, type GitHubClient, type RepoRef } from "./client.js";
+import { graphql, httpStatus, type GitHubClient, type RepoRef } from "./client.js";
 
 /** Creates a commit on top of `baseSha` with the given full file contents (Git Data API, no checkout needed). */
 export async function commitFiles(client: GitHubClient, repo: RepoRef, baseSha: string, files: readonly SourceFile[], message: string): Promise<string> {
@@ -19,14 +19,23 @@ export async function commitFiles(client: GitHubClient, repo: RepoRef, baseSha: 
   return (commit.data as { sha: string }).sha;
 }
 
-/** Points `branch` at `sha`; callers creating a new branch can forbid overwriting an existing ref. */
-export async function pushBranch(client: GitHubClient, repo: RepoRef, branch: string, sha: string, overwriteExisting = true): Promise<void> {
-  try {
-    await client.request("POST /repos/{owner}/{repo}/git/refs", { ...repo, ref: `refs/heads/${branch}`, sha });
-  } catch (error) {
-    if (httpStatus(error) !== 422 || !overwriteExisting) throw error;
-    await client.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", { ...repo, ref: `heads/${branch}`, sha, force: true });
-  }
+/** Creates a branch without overwriting an existing ref; use updateBranch for conditional rebuilds. */
+export async function pushBranch(client: GitHubClient, repo: RepoRef, branch: string, sha: string): Promise<void> {
+  await client.request("POST /repos/{owner}/{repo}/git/refs", { ...repo, ref: `refs/heads/${branch}`, sha });
+}
+
+/** GitHub enforces beforeOid atomically, even for a non-fast-forward rebuild. Never fall back to an unconditional push. */
+export async function updateBranch(client: GitHubClient, repo: RepoRef, branch: string, sha: string, expectedSha: string): Promise<void> {
+  if (!expectedSha) throw new Error(`Missing expected head for ${branch}; refusing an unconditional update.`);
+  const repository = await client.request("GET /repos/{owner}/{repo}", { ...repo });
+  const id = (repository.data as { node_id?: string }).node_id;
+  if (!id) throw new Error("GitHub did not return the repository node ID required for an atomic ref update.");
+  const result = await graphql(client, `mutation UpdateOptimizerRef($input: UpdateRefsInput!) {
+    updateRefs(input: $input) { clientMutationId }
+  }`, {
+    input: { repositoryId: id, refUpdates: [{ name: `refs/heads/${branch}`, beforeOid: expectedSha, afterOid: sha, force: true }] },
+  }) as { updateRefs?: { clientMutationId?: string | null } } | undefined;
+  if (!result?.updateRefs) throw new Error(`GitHub did not acknowledge the atomic update of ${branch}.`);
 }
 
 export async function deleteBranch(client: GitHubClient, repo: RepoRef, branch: string | undefined): Promise<void> {

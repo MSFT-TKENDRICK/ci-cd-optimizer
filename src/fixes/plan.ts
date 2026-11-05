@@ -145,7 +145,7 @@ export interface FixPlanOptions {
 }
 
 function edited(pr: ExistingFixPullRequest): boolean {
-  return pr.commitSha !== undefined && pr.headSha !== undefined && pr.commitSha !== pr.headSha;
+  return !pr.commitSha || !pr.headSha || pr.commitSha !== pr.headSha;
 }
 
 /**

@@ -11,9 +11,24 @@ export interface RepoRef {
   repo: string;
 }
 
-export function fromOctokit(octokit: { request: (...args: never[]) => Promise<unknown> }): GitHubClient {
+export function fromOctokit(octokit: {
+  request: ((...args: never[]) => Promise<unknown>) & { endpoint?: { DEFAULTS?: { baseUrl?: string } } };
+}): GitHubClient {
   const request = octokit.request as unknown as (route: string, parameters?: Record<string, unknown>) => Promise<{ status: number; data: unknown }>;
-  return { request: (route, parameters) => request(route, parameters) };
+  const baseUrl = octokit.request.endpoint?.DEFAULTS?.baseUrl;
+  return {
+    request: (route, parameters) => request(route, route === "POST /graphql" && baseUrl && /\/api\/v3\/?$/.test(baseUrl)
+      ? { ...parameters, baseUrl: baseUrl.replace(/\/v3\/?$/, "") }
+      : parameters),
+  };
+}
+
+/** GraphQL can report rejected writes in an HTTP 200 response. */
+export async function graphql(client: GitHubClient, query: string, variables: Record<string, unknown>): Promise<unknown> {
+  const response = await client.request("POST /graphql", { query, variables });
+  const result = response.data as { data?: unknown; errors?: Array<{ message: string }> } | undefined;
+  if (result?.errors?.length) throw new Error(result.errors.map((error) => error.message).join("; "));
+  return result?.data;
 }
 
 export function httpStatus(error: unknown): number | undefined {

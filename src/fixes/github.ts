@@ -1,7 +1,7 @@
 import type { FixesConfig } from "../lint/config.js";
 import type { AnyRule } from "../lint/types.js";
 import { ensureLabels, httpStatus, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
-import { branchSha, commitFiles, deleteBranch, pushBranch } from "../github/git.js";
+import { branchSha, commitFiles, deleteBranch, pushBranch, updateBranch } from "../github/git.js";
 import { parseMarker, updateMarker } from "../issues/markers.js";
 import type { FixCommand } from "./commands.js";
 import { branchFor, type Dismissals, type ExistingFixPullRequest, type FixAction, type FixChange } from "./plan.js";
@@ -88,13 +88,14 @@ export async function listManagedPullRequests(client: GitHubClient, repo: RepoRe
       ...(parsed.attributes.commit ? { commitSha: parsed.attributes.commit } : {}),
     };
     if (pr.state === "open") {
-      let head: { sha?: string; ref?: string } | undefined = heads.get(pr.number);
+      let head: { sha?: string; ref?: string; repo?: { full_name: string } | null } | undefined = heads.get(pr.number);
       if (!head) {
         const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr.number });
-        const pull = response.data as { head?: { sha?: string; ref?: string }; draft?: boolean };
+        const pull = response.data as { head?: typeof head; draft?: boolean };
         head = pull.head;
         if (pull.draft !== undefined) pr.draft = pull.draft;
       }
+      if (head?.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) continue;
       if (head?.sha) pr.headSha = head.sha;
       if (head?.ref) pr.branch = head.ref;
     }
@@ -188,8 +189,11 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
       continue;
     }
     const { change } = action;
-    if (change.branch === options.baseBranch) throw new Error("A fix branch cannot be the repository's base branch.");
-    let replaceExistingBranch = false;
+    const previous = action.type === "update" ? options.existing.find((pr) => pr.number === action.number) : undefined;
+    const branch = action.type === "update" ? previous?.branch : change.branch;
+    if (!branch || branch === options.baseBranch) throw new Error("A fix requires a known branch distinct from the repository's base branch.");
+    let expectedHead = previous?.headSha;
+    if (action.type === "update" && !expectedHead) throw new Error(`Missing current head for PR #${action.number}; refusing an unconditional update.`);
     if (action.type === "create") {
       const response = await client.request("GET /repos/{owner}/{repo}/pulls", {
         ...repo, state: "open", head: `${repo.owner}:${change.branch}`, per_page: 100,
@@ -200,15 +204,17 @@ export async function applyFixActions(client: GitHubClient, repo: RepoRef, actio
       }
       try {
         const currentSha = await branchSha(client, repo, change.branch);
-        replaceExistingBranch = options.existing.some((pr) => pr.state === "closed" && pr.group === change.group && pr.commitSha === currentSha);
-        if (!replaceExistingBranch) throw new Error(`Refusing to overwrite unrecognized or modified branch ${change.branch}; reconcile it before retrying.`);
+        if (!options.existing.some((pr) => pr.state === "closed" && pr.group === change.group && pr.commitSha === currentSha)) {
+          throw new Error(`Refusing to overwrite unrecognized or modified branch ${change.branch}; reconcile it before retrying.`);
+        }
+        expectedHead = currentSha;
       } catch (error) {
         if (httpStatus(error) !== 404) throw error;
       }
     }
     const commitSha = await commitFiles(client, repo, options.baseSha, change.files, commitMessage(change));
-    await pushBranch(client, repo, change.branch, commitSha, action.type === "update" || replaceExistingBranch);
-    const previous = action.type === "update" ? options.existing.find((pr) => pr.number === action.number) : undefined;
+    if (expectedHead) await updateBranch(client, repo, branch, commitSha, expectedHead);
+    else await pushBranch(client, repo, branch, commitSha);
     const ignoredRules = previous?.ignoredRules ?? [];
     let body = options.render?.body ? options.render.body(change, { commitSha, ignoredRules }) : fixBody(change, { rules: options.rules, commitSha, ignoredRules });
     const title = options.render?.title ? options.render.title(change) : fixTitle(change);

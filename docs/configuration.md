@@ -132,6 +132,10 @@ permission lookup is unavailable, no command is executed; transient API failures
   in the pull request.
 - `@cicd-optimizer ignore this group` closes the pull request and stops fixes for the group.
 
+Branch rebuilds are conditional on the head observed by the scan. Even `recreate` will fail rather than overwrite a
+new push that arrives during the operation; rescan before trying again. Existing PRs retain their head branch when
+`branchPrefix` changes; the new prefix applies to new PRs.
+
 Ignores are recorded with the `cicd-optimizer:ignored` label; remove it to undo. Use `fixes.ignore` for permanent ignores.
 
 ## Duration alerts (`alerts`)

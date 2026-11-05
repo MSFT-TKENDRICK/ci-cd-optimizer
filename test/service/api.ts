@@ -25,6 +25,7 @@ export interface FakeApiState {
   /** Supply an array to persist PR creation, labels and reviewer requests across scans. */
   pulls?: FakePull[];
   pullHeads?: Record<number, { sha: string; ref: string }>;
+  branchHeads?: Record<string, string>;
   pullFiles?: Array<{ filename: string; previous_filename?: string }>;
   /** Jobs per workflow run id. */
   jobs?: Record<number, unknown[]>;
@@ -47,7 +48,7 @@ export function fakeApi(state: FakeApiState = {}) {
     if (state.failOn?.(route)) throw httpError(500);
     switch (route) {
       case "GET /repos/{owner}/{repo}":
-        return { default_branch: branch };
+        return { default_branch: branch, node_id: "repository-node" };
       case "GET /repos/{owner}/{repo}/collaborators/{username}/permission":
         return { permission: state.collaboratorPermission ?? "write" };
       case "GET /repos/{owner}/{repo}/contents/{path}": {
@@ -90,7 +91,20 @@ export function fakeApi(state: FakeApiState = {}) {
       }
       case "GET /repos/{owner}/{repo}/pulls/{pull_number}":
         return state.pulls?.find((pull) => pull.number === Number(parameters.pull_number)) ??
-          { head: state.pullHeads?.[Number(parameters.pull_number)] ?? { sha: "pr-head", ref: "cicd-optimizer/workflow" } };
+          { head: { ...(state.pullHeads?.[Number(parameters.pull_number)] ?? { sha: "pr-head", ref: "cicd-optimizer/workflow" }), repo: { full_name: `${parameters.owner}/${parameters.repo}` } } };
+      case "POST /graphql": {
+        const variables = parameters.variables as { input: { refUpdates: Array<{ name: string; beforeOid: string; afterOid: string }> } };
+        const updates = variables.input.refUpdates;
+        if (state.branchHeads && updates.some((update) => state.branchHeads?.[update.name.slice("refs/heads/".length)] !== update.beforeOid)) {
+          return { data: { updateRefs: null }, errors: [{ message: "Reference no longer points to the expected commit" }] };
+        }
+        for (const update of updates) {
+          const ref = update.name.slice("refs/heads/".length);
+          if (state.branchHeads) state.branchHeads[ref] = update.afterOid;
+          for (const pull of state.pulls ?? []) if (pull.head.ref === ref) pull.head.sha = update.afterOid;
+        }
+        return { data: { updateRefs: { clientMutationId: null } } };
+      }
       case "GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers": {
         const pull = state.pulls?.find((pull) => pull.number === Number(parameters.pull_number));
         return { users: pull?.requested_reviewers ?? [], teams: pull?.requested_teams ?? [] };
@@ -128,6 +142,7 @@ export function fakeApi(state: FakeApiState = {}) {
       case "GET /repos/{owner}/{repo}/git/commits/{commit_sha}":
         return { tree: { sha: "base-tree" } };
       case "GET /repos/{owner}/{repo}/git/ref/{ref}":
+        if (state.branchHeads?.[String(parameters.ref).slice("heads/".length)]) return { object: { sha: state.branchHeads[String(parameters.ref).slice("heads/".length)] } };
         throw httpError(404);
       case "POST /repos/{owner}/{repo}/git/trees":
         return { sha: "new-tree" };

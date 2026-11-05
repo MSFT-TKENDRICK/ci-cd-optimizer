@@ -184,6 +184,19 @@ describe("planFixPullRequests", () => {
     expect(planFixPullRequests([change("a", "s2")], existing, { openPullRequestsLimit: 5, recreate: new Set(["a"]) }).actions[0]?.type).toBe("update");
   });
 
+  it("does not rebuild or close a PR without verifiable bot ownership", () => {
+    const missingCommit = pr({ number: 1, group: "a" });
+    delete missingCommit.commitSha;
+    const missingHead = pr({ number: 2, group: "b" });
+    delete missingHead.headSha;
+    const plan = planFixPullRequests([change("a", "s2")], [missingCommit, missingHead], { openPullRequestsLimit: 5 });
+    expect(plan.actions).toEqual([]);
+    expect(plan.skipped).toEqual([
+      { group: "b", reason: "edited", number: 2 },
+      { group: "a", reason: "edited", number: 1 },
+    ]);
+  });
+
   it("rebases on request even when the fixes are unchanged", () => {
     const plan = planFixPullRequests([change("a", "s1")], [pr({ number: 1, group: "a" })], { openPullRequestsLimit: 5, rebase: new Set(["a"]) });
     expect(plan.actions[0]).toMatchObject({ type: "update", number: 1 });

@@ -1,4 +1,4 @@
-import { ensureLabels, httpStatus, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
+import { ensureLabels, graphql, httpStatus, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
 import { branchSha, commitFiles, deleteBranch } from "../github/git.js";
 import { marker, parseMarker } from "../issues/markers.js";
 import type { SourceFile } from "../lint/types.js";
@@ -178,12 +178,6 @@ async function upsertComment(client: GitHubClient, repo: RepoRef, issue: number,
   const text = `${marker("experiment", name, { role: "grade" })}\n${body}`;
   if (existing) await client.request("PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}", { ...repo, comment_id: existing.id, body: text });
   else await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: issue, body: text });
-}
-
-async function graphql(client: GitHubClient, query: string, variables: Record<string, unknown>): Promise<void> {
-  const response = await client.request("POST /graphql", { query, variables });
-  const errors = (response.data as { errors?: Array<{ message: string }> } | undefined)?.errors;
-  if (errors?.length) throw new Error(errors.map((error) => error.message).join("; "));
 }
 
 async function closePull(client: GitHubClient, repo: RepoRef, pull: ExperimentPullRequest, comment: string): Promise<void> {

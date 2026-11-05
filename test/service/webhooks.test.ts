@@ -53,6 +53,7 @@ const endpoints = [
   "POST /repos/{owner}/{repo}/git/refs",
   "POST /repos/{owner}/{repo}/pulls",
   "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers",
+  "POST /graphql",
   "POST /repos/{owner}/{repo}/check-runs",
   "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}",
   "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
@@ -96,7 +97,7 @@ async function harness(state: FakeApiState = {}, durable?: Pick<DeliveryQueue, "
       try {
         const response = await api.request(endpoint.route, parameters);
         if (request.method === "DELETE") return new Response(null, { status: 204 });
-        return Response.json(response.data, { status: request.method === "POST" ? 201 : 200 });
+        return Response.json(response.data, { status: request.method === "POST" && endpoint.route !== "POST /graphql" ? 201 : 200 });
       } catch (error) {
         const status = httpStatus(error);
         if (!status) throw error;
@@ -259,6 +260,46 @@ describe("signed GitHub App HTTP delivery", () => {
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers")).toHaveLength(1);
     expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/commits")).toHaveLength(1);
     expect(parseMarker(pull.body)?.attributes.pendingReviewers).toBeUndefined();
+  });
+
+  it.each([false, true])("uses expected-head writes for an updated fix PR (concurrent human push: %s)", async (humanPush) => {
+    const files = { [WORKFLOW]: MISSING_TIMEOUT };
+    const heads: Record<string, string> = {};
+    const state: FakeApiState = {
+      config: `${TIMEOUT_ONLY}fixes:\n  enabled: true\n`,
+      refs: { main: files }, pulls: [], branchHeads: heads,
+    };
+    const app = await harness(state);
+    expect(await app.send("push", push)).toBe(200);
+    const pull = state.pulls?.[0];
+    if (!pull) throw new Error("Expected created fix PR");
+    heads[pull.head.ref] = pull.head.sha;
+    const oldBody = pull.body;
+    files[WORKFLOW] = MISSING_TIMEOUT.replace("echo hi", "echo changed");
+    const original = app.api.request.bind(app.api);
+    vi.spyOn(app.api, "request").mockImplementation(async (route, parameters = {}) => {
+      const response = await original(route, parameters);
+      if (route === "POST /repos/{owner}/{repo}/git/commits") {
+        if (humanPush) { heads[pull.head.ref] = "human-commit"; pull.head.sha = "human-commit"; }
+        return { status: 200, data: { sha: "next-bot-commit" } };
+      }
+      return response;
+    });
+    expect(await app.send("push", push)).toBe(humanPush ? 500 : 200);
+    expect(pull.head.sha).toBe(humanPush ? "human-commit" : "next-bot-commit");
+    expect(heads[pull.head.ref]).toBe(pull.head.sha);
+    expect(callsTo(app.api, "POST /graphql")[0]?.parameters.variables).toMatchObject({
+      input: { refUpdates: [{ beforeOid: "new-commit", afterOid: "next-bot-commit", force: true }] },
+    });
+    if (humanPush) {
+      expect(pull.body).toBe(oldBody);
+      expect(callsTo(app.api, "PATCH /repos/{owner}/{repo}/pulls/{pull_number}")).toHaveLength(0);
+    } else {
+      expect(parseMarker(pull.body)?.attributes.commit).toBe("next-bot-commit");
+    }
+    expect(await app.send("push", push)).toBe(200);
+    expect(callsTo(app.api, "POST /graphql")).toHaveLength(1);
+    expect(callsTo(app.api, "POST /repos/{owner}/{repo}/git/refs")).toHaveLength(1);
   });
 
   it.each(["invalid", "missing"] as const)("rejects a %s signature without authenticating or writing", async (signature) => {

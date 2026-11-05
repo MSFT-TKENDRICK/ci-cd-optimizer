@@ -121,6 +121,14 @@ never force-pushes a ref that appeared after a missing-ref preflight. A branch-o
 therefore requires operator reconciliation rather than an unsafe overwrite. Comment replays and other partial
 operations can still require reconciliation; the queue is not a transaction across GitHub and Postgres.
 
+Rebuilding an existing fix/recipe branch, or reusing an unchanged branch from a closed PR, uses GitHub GraphQL
+`updateRefs` with `beforeOid`. GitHub atomically rejects the update if the ref no longer matches the observed head,
+including when a human pushes after planning; there is no unconditional-write fallback. An explicit `recreate` may
+replace edits already observed, but not a later concurrent push. Updates keep an existing PR's actual head branch
+when the configured prefix changes. Missing ownership/head evidence protects the PR from automatic rebuild/closure,
+and labeled fork PRs are not treated as writable local branches. GitHub Enterprise deployments must support
+`updateRefs`; the App adapter uses the Enterprise `/api/graphql` endpoint.
+
 Monitor queue age and failed jobs in addition to `/ping` and process health:
 
 ```sql

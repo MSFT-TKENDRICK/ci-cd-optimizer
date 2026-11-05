@@ -83,6 +83,14 @@ describe("listManagedPullRequests", () => {
     await expect(listManagedPullRequests(client, repo, { baseBranch: "main", branchPrefix: "ci/", groups: ["hermeticity"] })).rejects.toThrow("403");
   });
 
+  it("does not adopt a labeled fork PR as a writable repository branch", async () => {
+    const client = fakeClient((route) => route.endsWith("/issues") ? [{
+      number: 7, title: "fork", state: "open", pull_request: {}, labels: ["cicd-optimizer"],
+      body: marker("fix", "group:hermeticity", { signature: "s", commit: "c" }),
+    }] : { head: { sha: "c", ref: change.branch, repo: { full_name: "fork/widgets" } } });
+    expect(await listManagedPullRequests(client, repo)).toEqual([]);
+  });
+
   it.each([999, 1000])("fails closed at the discovery limit (%s results)", async (count) => {
     const client = fakeClient((route, parameters) => {
       if (route.endsWith("/issues")) return [];
@@ -107,7 +115,7 @@ describe("listManagedPullRequests", () => {
           { number: 3, title: "issue", state: "open", body: marker("finding", "rule:x") },
           { number: 4, title: "other pr", state: "open", body: "no marker", pull_request: {} },
         ];
-      if (route.startsWith("GET /repos/{owner}/{repo}/pulls/{pull_number}")) return { head: { sha: "c2", ref: "cicd-optimizer/caching" } };
+      if (route.startsWith("GET /repos/{owner}/{repo}/pulls/{pull_number}")) return { head: { sha: "c2", ref: "cicd-optimizer/caching", repo: { full_name: "acme/widgets" } } };
       return {};
     });
     const prs = await listManagedPullRequests(client, repo);
@@ -191,6 +199,8 @@ describe("applyFixActions", () => {
 
   it("can reuse an unchanged bot branch from a closed PR for a new change", async () => {
     const client = fakeClient((route) => {
+      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
+      if (route === "POST /graphql") return { data: { updateRefs: {} } };
       if (route === "GET /repos/{owner}/{repo}/git/ref/{ref}") return { object: { sha: "old-bot" } };
       if (route === "GET /repos/{owner}/{repo}/git/commits/{commit_sha}") return { tree: { sha: "tree" } };
       if (route === "POST /repos/{owner}/{repo}/git/refs") throw httpError(422);
@@ -202,26 +212,33 @@ describe("applyFixActions", () => {
       baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [],
       existing: [managed({ state: "closed", commitSha: "old-bot" })],
     });
-    expect(client.calls.find((call) => call.route === "PATCH /repos/{owner}/{repo}/git/refs/{ref}")?.parameters)
-      .toMatchObject({ sha: "new-bot", force: true });
+    expect(client.calls.find((call) => call.route === "POST /graphql")?.parameters.variables)
+      .toMatchObject({ input: { refUpdates: [{ beforeOid: "old-bot", afterOid: "new-bot", force: true }] } });
   });
 
-  it("force-updates an existing branch and refreshes the pull request on update", async () => {
+  it("atomically updates the PR's existing branch even when the configured prefix changes", async () => {
     const client = fakeClient((route) => {
-      if (route === "POST /repos/{owner}/{repo}/git/refs") throw httpError(422);
+      if (route === "GET /repos/{owner}/{repo}") return { node_id: "repo-node" };
+      if (route === "POST /graphql") return { data: { updateRefs: {} } };
       if (route.startsWith("GET /repos/{owner}/{repo}/git/commits")) return { tree: { sha: "t" } };
       if (route.startsWith("POST /repos/{owner}/{repo}/git")) return { sha: "c3" };
       return {};
     });
-    const existing = [managed({ ignoredRules: ["hermeticity/pin-actions"] })];
-    await applyFixActions(client, repo, [{ type: "update", number: 7, change }], { baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [], existing });
-    expect(client.calls.find((call) => call.route.startsWith("PATCH /repos/{owner}/{repo}/git/refs"))?.parameters).toMatchObject({
-      ref: "heads/cicd-optimizer/hermeticity",
-      sha: "c3",
-      force: true,
+    const existing = [managed({ ignoredRules: ["hermeticity/pin-actions"], headSha: "c2" })];
+    await applyFixActions(client, repo, [{ type: "update", number: 7, change: { ...change, branch: "new-prefix/hermeticity" } }], { baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [], existing });
+    expect(client.calls.find((call) => call.route === "POST /graphql")?.parameters.variables).toMatchObject({
+      input: { refUpdates: [{ name: "refs/heads/cicd-optimizer/hermeticity", beforeOid: "c2", afterOid: "c3", force: true }] },
     });
     const patch = client.calls.find((call) => call.route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}");
     expect(parseMarker(patch?.parameters.body as string)?.attributes.ignored).toBe("hermeticity/pin-actions");
+  });
+
+  it("refuses an update without the current PR head before creating a commit", async () => {
+    const client = fakeClient();
+    await expect(applyFixActions(client, repo, [{ type: "update", number: 7, change }], {
+      baseBranch: "main", baseSha: "base", config: DEFAULT_CONFIG.fixes, rules: [], existing: [managed()],
+    })).rejects.toThrow("Missing current head");
+    expect(client.calls).toHaveLength(0);
   });
 
   it("closes stale pull requests with a comment and deletes the branch", async () => {
