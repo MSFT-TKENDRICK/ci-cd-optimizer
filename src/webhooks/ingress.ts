@@ -69,7 +69,7 @@ export async function createDurableMiddleware(
     const id = request.headers["x-github-delivery"];
     const name = request.headers["x-github-event"];
     const signature = request.headers["x-hub-signature-256"];
-    let status = 500;
+    let status: number;
     const stop = new AbortController();
     const disconnected = () => stop.abort(new IngressError(499, "Webhook client disconnected before acknowledgement"));
     let timer: ReturnType<typeof setTimeout> | undefined;

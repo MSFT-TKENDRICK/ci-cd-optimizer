@@ -216,8 +216,10 @@ try {
     docker("pause", process.env.SMOKE_DATABASE_CONTAINER);
     databasePaused = true;
     assert.equal(docker("inspect", "--format", "{{.State.Paused}}", process.env.SMOKE_DATABASE_CONTAINER), "true");
+    const unavailableStarted = Date.now();
     const unavailable = await send("pull_request", pullRequestPayload());
     assert.equal(unavailable.status, 503, "Unavailable persistence must not be acknowledged as HTTP 200/202");
+    assert.ok(Date.now() - unavailableStarted < 8000, "Persistence failure must leave margin before GitHub's ten-second deadline");
     assert.equal(github.requests.length, recoveredRequests, "No analysis may run while persistence is unavailable");
     docker("unpause", process.env.SMOKE_DATABASE_CONTAINER);
     databasePaused = false;
