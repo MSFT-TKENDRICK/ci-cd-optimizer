@@ -17253,9 +17253,50 @@ function selectHistory(snapshots, query) {
   return (query.attempts === "all" ? scoped : latestAttempts(scoped)).filter((item) => item.workflowId === query.workflowId && (query.branch === void 0 || item.branch === query.branch)).sort(byCompletion).slice(-query.limit);
 }
 
+// src/telemetry/context.ts
+import { createHash as createHash3 } from "node:crypto";
+function comparisonProblem(snapshot) {
+  if (snapshot.runAttempt !== 1) return "Reruns may execute only part of the workload or reuse warmed state.";
+  if (snapshot.conclusion !== "success") return "The workflow did not complete successfully.";
+  const provenance = snapshot.provenance;
+  if (provenance?.version !== 1 || provenance.collector !== "github-actions-rest") return "Collection provenance is unavailable or unsupported.";
+  if (!provenance.jobsComplete) return "Job collection is incomplete.";
+  if (!provenance.definitionKnown) return "The workflow job definitions are unavailable.";
+  if (snapshot.jobs.length === 0) return "No completed jobs were observed.";
+  if (snapshot.jobs.some((job) => job.conclusion !== "success")) return "Some observed jobs did not complete successfully.";
+  if (snapshot.jobs.some((job) => !job.labels?.length || job.labels.some((label) => !label.trim()))) return "Runner routing labels are unavailable.";
+  return void 0;
+}
+function comparisonKey(snapshot) {
+  if (comparisonProblem(snapshot)) return void 0;
+  const jobs = snapshot.jobs.map((job) => JSON.stringify([
+    job.key,
+    job.name,
+    [...new Set(job.needs)].sort(),
+    [...new Set(job.labels)].sort(),
+    job.runnerGroupId ?? null
+  ])).sort();
+  return createHash3("sha256").update(JSON.stringify([
+    "workload-comparison-v1",
+    snapshot.owner,
+    snapshot.repo,
+    snapshot.workflowId,
+    snapshot.branch,
+    snapshot.event,
+    jobs
+  ])).digest("hex");
+}
+function comparableHistory(history, reference) {
+  const key = comparisonKey(reference);
+  if (!key) return [];
+  return latestAttempts(history).filter(
+    (snapshot) => snapshot.runId !== reference.runId && byCompletion(snapshot, reference) < 0 && comparisonKey(snapshot) === key
+  );
+}
+
 // src/alerts/anomaly.ts
 function seriesFingerprint(series) {
-  return `duration:${series.workflowId}/${series.jobKey ?? "*"}`;
+  return `duration:${series.workflowId}${series.contextKey ? `/${series.contextKey}` : ""}/${series.jobKey ?? "*"}`;
 }
 function slowestPerKey(jobs) {
   const byKey = /* @__PURE__ */ new Map();
@@ -17267,7 +17308,7 @@ function slowestPerKey(jobs) {
   return [...byKey.values()];
 }
 function buildSeries(snapshots) {
-  const ordered = latestAttempts(snapshots).filter((snapshot) => snapshot.conclusion === "success").sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId);
+  const ordered = latestAttempts(snapshots).filter((snapshot) => snapshot.conclusion === "success").sort(byCompletion);
   const byKey = /* @__PURE__ */ new Map();
   const push = (key, base2, point) => {
     const series = byKey.get(key) ?? { ...base2, points: [] };
@@ -17275,12 +17316,14 @@ function buildSeries(snapshots) {
     byKey.set(key, series);
   };
   for (const snapshot of ordered) {
+    const contextKey = comparisonKey(snapshot);
+    if (!contextKey) continue;
     const point = { runId: snapshot.runId, completedAt: snapshot.completedAt, headSha: snapshot.headSha };
-    push(`${snapshot.workflowId}/*`, { workflowId: snapshot.workflowId, workflowName: snapshot.workflowName }, { ...point, durationMs: snapshot.durationMs });
+    push(`${contextKey}/*`, { contextKey, workflowId: snapshot.workflowId, workflowName: snapshot.workflowName }, { ...point, durationMs: snapshot.durationMs });
     for (const job of slowestPerKey(snapshot.jobs)) {
       push(
-        `${snapshot.workflowId}/${job.key}`,
-        { workflowId: snapshot.workflowId, workflowName: snapshot.workflowName, jobKey: job.key, jobName: job.name },
+        `${contextKey}/${job.key}`,
+        { contextKey, workflowId: snapshot.workflowId, workflowName: snapshot.workflowName, jobKey: job.key, jobName: job.name },
         { ...point, durationMs: job.durationMs }
       );
     }
@@ -17295,6 +17338,7 @@ function magnitude(observed, baseline, settings) {
 }
 function base(series, kind) {
   return {
+    ...series.contextKey ? { contextKey: series.contextKey } : {},
     kind,
     fingerprint: seriesFingerprint(series),
     workflowId: series.workflowId,
@@ -17481,8 +17525,8 @@ function renderAlertIssue(workflowName, alerts, context) {
 }
 
 // src/alerts/sync.ts
-function alertIssueFingerprint(workflowId) {
-  return `duration:${workflowId}`;
+function alertIssueFingerprint(workflowId, contextKey) {
+  return `duration:${workflowId}${contextKey ? `/${contextKey}` : ""}`;
 }
 function readBaselines(issue) {
   if (!issue?.attributes.baselines) return {};
@@ -17498,9 +17542,10 @@ function shapeOf(alerts) {
   return alerts.map((alert) => `${seriesKey(alert)}:${alert.kind}:${alert.severity}`).sort().join(",");
 }
 function planAlertSync(input2) {
-  const fingerprint2 = alertIssueFingerprint(input2.workflowId);
-  const seriesMap = new Map(input2.series.map((series) => [seriesFingerprint(series), series]));
-  const alerts = detectAnomalies(input2.series, input2.config);
+  const fingerprint2 = alertIssueFingerprint(input2.workflowId, input2.contextKey);
+  const scopedSeries = input2.series.filter((series) => series.workflowId === input2.workflowId && series.contextKey === input2.contextKey);
+  const seriesMap = new Map(scopedSeries.map((series) => [seriesFingerprint(series), series]));
+  const alerts = detectAnomalies(scopedSeries, input2.config);
   const history = input2.existing.filter((issue) => issue.fingerprint === fingerprint2).sort((a, b) => b.number - a.number);
   const open = history.find((issue) => issue.state === "open");
   const latestClosed = history.find((issue) => issue.state === "closed");
@@ -17511,8 +17556,12 @@ function planAlertSync(input2) {
     const baselines2 = readBaselines(open);
     const keys = Object.keys(baselines2);
     const recovered = keys.length > 0 && keys.every((key) => {
-      const series = seriesMap.get(seriesFingerprint({ workflowId: input2.workflowId, ...key === "*" ? {} : { jobKey: key } }));
-      return !series || hasRecovered(series, baselines2[key], input2.config);
+      const series = seriesMap.get(seriesFingerprint({
+        workflowId: input2.workflowId,
+        ...input2.contextKey ? { contextKey: input2.contextKey } : {},
+        ...key === "*" ? {} : { jobKey: key }
+      }));
+      return series !== void 0 && hasRecovered(series, baselines2[key], input2.config);
     });
     if (recovered) {
       actions.push({
@@ -17551,7 +17600,7 @@ function planAlertSync(input2) {
     fingerprint: fingerprint2,
     signature,
     title: rendered.title,
-    body: `${marker("alert", fingerprint2, { signature, shape, workflow: String(input2.workflowId), baselines: JSON.stringify(baselines) })}
+    body: `${marker("alert", fingerprint2, { signature, shape, workflow: String(input2.workflowId), ...input2.contextKey ? { context: input2.contextKey } : {}, baselines: JSON.stringify(baselines) })}
 ${rendered.body}`,
     labels: [.../* @__PURE__ */ new Set(["cicd-optimizer", "alert:duration", critical ? "severity:error" : "severity:warn", ...input2.config.labels])],
     assignees: input2.config.assignees,
@@ -17577,11 +17626,10 @@ ${rendered.body}`,
 
 // src/telemetry/baseline.ts
 function computeBaseline(history, snapshot, limit = 20) {
-  const runs = latestAttempts(history).filter(
-    (item) => item.runId !== snapshot.runId && item.owner === snapshot.owner && item.repo === snapshot.repo && item.workflowId === snapshot.workflowId && item.branch === snapshot.branch && item.conclusion === "success"
-  ).sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId).slice(-limit);
+  const runs = comparableHistory(history, snapshot).sort(byCompletion).slice(-limit);
   if (runs.length === 0) return void 0;
   const jobDurations = /* @__PURE__ */ new Map();
+  const queues = runs.flatMap((run3) => run3.queueMs === null ? [] : [run3.queueMs]);
   for (const run3 of runs) {
     for (const job of slowestPerKey(run3.jobs)) {
       jobDurations.set(job.key, [...jobDurations.get(job.key) ?? [], job.durationMs]);
@@ -17590,7 +17638,7 @@ function computeBaseline(history, snapshot, limit = 20) {
   return {
     sampleCount: runs.length,
     medianDurationMs: median(runs.map((item) => item.durationMs)),
-    medianQueueMs: median(runs.map((item) => item.queueMs)),
+    medianQueueMs: queues.length ? median(queues) : null,
     jobs: Object.fromEntries([...jobDurations].map(([key, values]) => [key, median(values)]))
   };
 }
@@ -17600,11 +17648,11 @@ var QUEUE_THRESHOLD_MS = 5e3;
 function createTelemetryReport(snapshot, baseline) {
   const criticalPath = calculateCriticalPath(snapshot.jobs);
   const slowest = [...snapshot.jobs].sort((a, b) => b.durationMs - a.durationMs).slice(0, 5);
-  const comparison = baseline ? compare2(snapshot.durationMs, baseline.medianDurationMs, baseline.sampleCount) : "No historical baseline exists yet; this run establishes the first snapshot.";
+  const comparison = baseline ? compare2(snapshot.durationMs, baseline.medianDurationMs, baseline.sampleCount) : comparisonProblem(snapshot) ? `Performance comparison withheld: ${comparisonProblem(snapshot)}` : "No comparable historical baseline is available in the retained/backfilled evidence window.";
   return [
     `## ${snapshot.workflowName} performance snapshot`,
     "",
-    `**Run:** ${formatDuration2(snapshot.durationMs)} \xB7 **Queue:** ${formatDuration2(snapshot.queueMs)} \xB7 **Jobs:** ${snapshot.jobs.length}`,
+    `**Run:** ${formatDuration2(snapshot.durationMs)} \xB7 **Attempt:** ${snapshot.runAttempt} \xB7 **Queue:** ${snapshot.queueMs === null || snapshot.runAttempt !== 1 ? "unavailable" : formatDuration2(snapshot.queueMs)} \xB7 **Jobs:** ${snapshot.jobs.length}`,
     "",
     comparison,
     "",
@@ -17750,7 +17798,7 @@ function recommendations(snapshot, criticalPath, baseline) {
       `- **${waits.length} job(s) waited over a minute for a runner** (worst: ${worst.name}, ${formatDuration2(worst.queueMs ?? 0)}${worst.labels ? ` on \`${worst.labels.join(", ")}\`` : ""}). Check runner pool capacity or move short jobs to a less contended label.`
     );
   }
-  if (snapshot.queueMs > 6e4) {
+  if (snapshot.runAttempt === 1 && snapshot.queueMs !== null && snapshot.queueMs > 6e4) {
     messages.push(
       `- **Runner queueing added ${formatDuration2(snapshot.queueMs)}.** Review runner concurrency, autoscaling latency, labels, and peak utilization.`
     );
@@ -17767,7 +17815,7 @@ function recommendations(snapshot, criticalPath, baseline) {
   }
   if (messages.length === 2) {
     messages.push(
-      "- No strong timing anomaly was detected. Accumulate more snapshots to improve trend confidence."
+      baseline ? "- No strong timing anomaly was detected in the comparable evidence." : "- Timing comparisons are unavailable; no recovery or optimization benefit is inferred."
     );
   }
   return messages;
@@ -17836,20 +17884,25 @@ async function listRunJobs(client, repo, runId, runAttempt = 1, maxPages = 5) {
       per_page: 100,
       page
     });
-    const batch = response.data.jobs ?? [];
+    const data = response.data;
+    if (!Array.isArray(data.jobs)) throw new Error("Actions jobs response did not contain a jobs array");
+    const batch = data.jobs;
     jobs.push(...batch);
-    if (batch.length < 100) break;
+    if (batch.length < 100 || data.total_count === jobs.length) {
+      const unique = [...new Map(jobs.map((job) => [job.id, job])).values()];
+      return { jobs: unique, complete: unique.length === jobs.length && (data.total_count === void 0 || data.total_count === jobs.length) };
+    }
   }
-  return jobs;
+  return { jobs: [...new Map(jobs.map((job) => [job.id, job])).values()], complete: false };
 }
 async function buildWorkflowSnapshot(client, repo, run3, options = {}) {
   const [jobs, definitions] = await Promise.all([
     listRunJobs(client, repo, run3.id, run3.run_attempt ?? 1),
     options.definitions ? Promise.resolve(options.definitions) : loadJobDefinitions(client, repo, run3.path, run3.head_sha)
   ]);
-  return snapshotFromRun(repo, run3, jobs, definitions);
+  return snapshotFromRun(repo, run3, jobs.jobs, definitions, jobs.complete);
 }
-function snapshotFromRun(repo, run3, apiJobs, definitions) {
+function snapshotFromRun(repo, run3, apiJobs, definitions, jobsComplete = false) {
   const jobs = apiJobs.filter((job) => job.started_at && job.completed_at).map((job) => jobSnapshot(job, definitions));
   const startedAt = run3.run_started_at ?? run3.created_at;
   const lastJob = jobs.map((job) => job.completedAt).sort().at(-1);
@@ -17869,10 +17922,17 @@ function snapshotFromRun(repo, run3, apiJobs, definitions) {
     createdAt: run3.created_at,
     startedAt,
     completedAt,
-    queueMs: elapsed(run3.created_at, startedAt),
+    queueMs: (run3.run_attempt ?? 1) === 1 ? elapsed(run3.created_at, startedAt) : null,
     durationMs: elapsed(startedAt, completedAt),
     ...run3.html_url ? { htmlUrl: run3.html_url } : {},
-    jobs
+    jobs,
+    provenance: {
+      version: 1,
+      collector: "github-actions-rest",
+      collectedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      jobsComplete,
+      definitionKnown: definitions.size > 0 && jobs.every((job) => definitions.has(job.key))
+    }
   };
 }
 function jobSnapshot(job, definitions) {
@@ -17900,6 +17960,7 @@ function jobSnapshot(job, definitions) {
     needs: key ? definitions.get(key)?.needs ?? [] : [],
     ...job.created_at ? { queuedAt: job.created_at, queueMs: elapsed(job.created_at, startedAt) } : {},
     ...job.runner_name ? { runnerName: job.runner_name } : {},
+    ...typeof job.runner_group_id === "number" ? { runnerGroupId: job.runner_group_id } : {},
     ...job.labels && job.labels.length > 0 ? { labels: job.labels } : {},
     ...steps2.length > 0 ? { steps: steps2 } : {}
   };
@@ -17930,9 +17991,9 @@ async function loadRunHistory(client, repo, options) {
   const snapshots = await mapLimit(
     runs,
     options.concurrency ?? 4,
-    async (run3) => snapshotFromRun(repo, run3, await listRunJobs(client, repo, run3.id, run3.run_attempt ?? 1, 1), options.definitions)
+    async (run3) => buildWorkflowSnapshot(client, repo, run3)
   );
-  return snapshots.sort((a, b) => a.completedAt.localeCompare(b.completedAt) || a.runId - b.runId);
+  return snapshots.sort(byCompletion);
 }
 function parseNeeds(value) {
   if (typeof value === "string") return [value];
@@ -18010,18 +18071,23 @@ async function processWorkflowRun(client, repo, run3, options = {}) {
     if (options.store && !options.dryRun) await options.store.save(snapshot);
     return { status: "skipped", reason: "The run has no completed jobs.", snapshot };
   }
-  const history = await loadHistory(client, repo, run3, snapshot, definitions, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
+  const history = await loadHistory(client, repo, run3, snapshot, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
   if (history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
     return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot };
   }
-  const prior = history.filter((item) => item.runId !== snapshot.runId);
+  const prior = comparableHistory(history, snapshot).sort(byCompletion).slice(-historyLimit(config));
   const baseline = computeBaseline(prior, snapshot);
   const report = createTelemetryReport(snapshot, baseline);
   const result = { status: "processed", snapshot, samples: prior.length, report, ...baseline ? { baseline } : {} };
-  if (options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run3, config.alerts.branches, branch)) {
+  const contextKey = comparisonKey(snapshot);
+  const newerRunObserved = history.some(
+    (item) => item.workflowId === snapshot.workflowId && item.branch === snapshot.branch && item.runId !== snapshot.runId && byCompletion(item, snapshot) > 0
+  );
+  if (contextKey && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run3, config.alerts.branches, branch)) {
     const series = buildSeries([...prior, snapshot]);
     const existing = await listManagedIssues(client, repo, "alert");
     const plan = planAlertSync({
+      contextKey,
       owner: repo.owner,
       repo: repo.repo,
       branch: run3.head_branch,
@@ -18047,26 +18113,26 @@ async function processWorkflowRun(client, repo, run3, options = {}) {
   }
   return result;
 }
-async function loadHistory(client, repo, run3, snapshot, definitions, { limit, minSamples }, options) {
-  const query = { owner: repo.owner, repo: repo.repo, workflowId: snapshot.workflowId, branch: snapshot.branch, limit: limit + 1 };
-  const backfill = () => loadRunHistory(client, repo, { workflowId: snapshot.workflowId, branch: snapshot.branch, limit, definitions, excludeRunId: run3.id });
+async function loadHistory(client, repo, run3, snapshot, { limit, minSamples }, options) {
+  const query = { owner: repo.owner, repo: repo.repo, workflowId: snapshot.workflowId, branch: snapshot.branch, limit: Math.max(200, limit + 1) };
+  const backfill = () => loadRunHistory(client, repo, { workflowId: snapshot.workflowId, branch: snapshot.branch, limit, excludeRunId: run3.id });
   const store = options.store;
-  if (!store) return merge2(await backfill(), [snapshot], limit + 1);
+  if (!store) return comparisonKey(snapshot) ? merge2(await backfill(), [snapshot], limit + 1) : [snapshot];
   if (!options.dryRun) await store.save(snapshot);
+  if (!comparisonKey(snapshot)) {
+    return latestAttempts([...await store.history({ ...query, runId: snapshot.runId, limit: 1 }), snapshot]);
+  }
   const [current, stored] = await Promise.all([
     store.history({ ...query, runId: snapshot.runId, limit: 1 }),
     store.history(query)
   ]);
   let history = stored;
-  if (history.filter((item) => item.runId !== snapshot.runId).length < minSamples) {
+  if (comparisonKey(snapshot) && comparableHistory(history, snapshot).length < minSamples) {
     const fetched = await backfill();
     if (!options.dryRun) for (const item of fetched) await store.save(item);
-    history = merge2(history, fetched, limit + 1);
+    history = merge2(history, fetched, query.limit);
   }
-  return [
-    ...merge2(history.filter((item) => item.runId !== snapshot.runId), [], limit),
-    ...latestAttempts([...current, snapshot])
-  ].sort(byCompletion);
+  return merge2(history, [...current, snapshot], query.limit + 1);
 }
 function merge2(left, right, limit) {
   return latestAttempts([...left, ...right]).sort(byCompletion).slice(-limit);
