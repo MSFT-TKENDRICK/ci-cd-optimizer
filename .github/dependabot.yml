@@ -22,6 +22,9 @@ updates:
       # Types track the Node runtime in .nvmrc (22); bump them with the Node major, not on their own.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # typescript-eslint's peer range caps TypeScript; raise both together once it supports the next major.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /

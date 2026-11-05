@@ -35,7 +35,8 @@ working.
 
 Dependabot bumps the `node` base image and `@types/node` only within the current major, because it can't update the
 distroless `nodejs22` runtime stage. Move both Dockerfile stages, `.nvmrc`, and `@types/node` to a new Node major
-together. `eslint` and `@eslint/js` share one update group, so their majors land in a single PR.
+together. `eslint` and `@eslint/js` share one update group, so their majors land in a single PR. TypeScript majors are
+ignored until `typescript-eslint`'s peer range allows them; upgrade both by hand.
 
 Under **Settings → Actions → General**, keep **Workflow permissions** at *Read repository contents and packages
 permissions*. Workflows request the write scopes they need.

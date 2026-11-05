@@ -25,6 +25,28 @@ jobs:
       - uses: ./.github/actions/setup
       - run: npm test
 
+  postgres:
+    # The hosted App's telemetry store, against a real server; skipped by `npm test` when DATABASE_URL is unset.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: npx vitest run test/telemetry/postgres-store.test.ts
+
   lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
