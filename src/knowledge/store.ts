@@ -1,5 +1,6 @@
 import { identity, snapshotIdentity, validateRevision, validateScope } from "./identity.js";
-import type { KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary } from "./types.js";
+import { runObservationSummary, validateRunObservation, validateRunObservationQuery, validateRunSource } from "./run-observation.js";
+import type { KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, RunObservation, RunObservationQuery, RunObservationSummary } from "./types.js";
 
 export function validateQuery(query: KnowledgeQuery): void {
   validateScope(query);
@@ -30,7 +31,7 @@ export function validateSnapshot(snapshot: KnowledgeSnapshot): void {
   }
 }
 
-const inScope = (snapshot: KnowledgeSnapshot, scope: KnowledgeScope) =>
+const inScope = (snapshot: { repository: KnowledgeScope }, scope: KnowledgeScope) =>
   snapshot.repository.host === scope.host && snapshot.repository.repositoryId === scope.repositoryId;
 
 export function summary(snapshot: KnowledgeSnapshot): KnowledgeSummary {
@@ -40,6 +41,7 @@ export function summary(snapshot: KnowledgeSnapshot): KnowledgeSummary {
 /** Append-only content-addressed observations. Repeated collection is not independent corroboration. */
 export class MemoryKnowledgeStore implements KnowledgeStore {
   private readonly snapshots = new Map<string, KnowledgeSnapshot>();
+  private readonly observations = new Map<string, RunObservation>();
   async initialize(): Promise<void> {}
   async save(snapshot: KnowledgeSnapshot): Promise<void> {
     validateSnapshot(snapshot);
@@ -60,5 +62,29 @@ export class MemoryKnowledgeStore implements KnowledgeStore {
         fact.technology === query.technology && (query.projectId === undefined || fact.projectId === query.projectId))),
     ).sort((a, b) => Date.parse(b.collectedAt) - Date.parse(a.collectedAt) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
       .slice(0, query.limit).map((snapshot) => structuredClone(summary(snapshot)));
+  }
+  async saveRunObservation(input: RunObservation, sourceInput?: KnowledgeSnapshot): Promise<void> {
+    const observation = structuredClone(input);
+    const source = sourceInput ? structuredClone(sourceInput) : undefined;
+    validateRunObservation(observation);
+    if (source) validateSnapshot(source);
+    validateRunSource(observation, source ?? (observation.source.status === "linked" ? this.snapshots.get(observation.source.snapshotId) : undefined));
+    if (source && !this.snapshots.has(source.id)) this.snapshots.set(source.id, source);
+    if (!this.observations.has(observation.id)) this.observations.set(observation.id, observation);
+  }
+  async loadRunObservation(scope: KnowledgeScope, id: string): Promise<RunObservation | undefined> {
+    validateScope(scope);
+    const observation = this.observations.get(id);
+    return observation && inScope(observation, scope) ? structuredClone(observation) : undefined;
+  }
+  async listRunObservations(query: RunObservationQuery): Promise<RunObservationSummary[]> {
+    validateRunObservationQuery(query);
+    return [...this.observations.values()].filter((observation) =>
+      inScope(observation, query) &&
+      (query.runId === undefined || observation.run.runId === query.runId) &&
+      (query.runAttempt === undefined || observation.run.runAttempt === query.runAttempt) &&
+      (query.revision === undefined || observation.run.headSha === query.revision),
+    ).sort((a, b) => Date.parse(b.observedAt) - Date.parse(a.observedAt) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+      .slice(0, query.limit).map((observation) => structuredClone(runObservationSummary(observation)));
   }
 }

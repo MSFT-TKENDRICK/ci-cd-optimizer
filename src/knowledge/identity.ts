@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { KnowledgeScope, KnowledgeSnapshot } from "./types.js";
+import type { LintConfig } from "../lint/config.js";
 
 export const hash = (value: string): string => createHash("sha256").update(value).digest("hex");
 
@@ -12,6 +13,9 @@ function canonical(value: unknown): unknown {
 }
 
 export const identity = (value: unknown): string => hash(JSON.stringify(canonical(value)));
+
+export const inventoryPolicyDigest = (config: Pick<LintConfig, "ignorePaths" | "limits">): string =>
+  identity(["knowledge-inventory-v1", [...new Set(config.ignorePaths)].sort(), config.limits]);
 
 export function validateScope(scope: KnowledgeScope): void {
   const host = new URL(scope.host);

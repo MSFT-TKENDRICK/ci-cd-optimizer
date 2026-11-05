@@ -11,6 +11,7 @@ import { sarif } from "../lint/formatters/index.js";
 import { allRules } from "../lint/rules/index.js";
 import type { AnalysisInput, LintResult } from "../lint/types.js";
 import { extractKnowledge } from "../knowledge/extract.js";
+import { inventoryPolicyDigest } from "../knowledge/identity.js";
 import { loadKnowledgeIdentity } from "../knowledge/repository.js";
 import type { KnowledgeSnapshot, KnowledgeStore } from "../knowledge/types.js";
 import { VERSION } from "../version.js";
@@ -33,6 +34,7 @@ export interface ScanOptions {
   knowledge?: boolean;
   /** Lazily obtain an initialized evidence store after configuration permits a scan. Not called during dry runs. */
   knowledgeStore?: () => Promise<KnowledgeStore | undefined>;
+  expectedRepositoryId?: number;
 }
 
 export interface ScanResult {
@@ -59,7 +61,7 @@ const isRecipeGroup = (group: string) => group.startsWith("recipe-");
  */
 export async function scanRepository(client: GitHubClient, repo: RepoRef, options: ScanOptions = {}): Promise<ScanResult> {
   const name = `${repo.owner}/${repo.repo}`;
-  const branch = await defaultBranch(client, repo);
+  const branch = await defaultBranch(client, repo, options.expectedRepositoryId);
   const ref = options.ref ?? branch;
   const remote = await loadRemoteConfig(client, repo, branch);
   if (remote.problems.length > 0) {
@@ -74,8 +76,8 @@ export async function scanRepository(client: GitHubClient, repo: RepoRef, option
   const knowledgeStore = options.dryRun ? undefined : await options.knowledgeStore?.();
   let knowledge: ScanResult["knowledge"];
   if (options.knowledge || knowledgeStore || (options.dryRun && options.knowledgeStore)) {
-    const evidence = extractKnowledge(await loadKnowledgeIdentity(client, repo), snapshot.sha, input, {
-      ignorePaths: config.ignorePaths, truncated: input.truncated,
+    const evidence = extractKnowledge(await loadKnowledgeIdentity(client, repo, options.expectedRepositoryId), snapshot.sha, input, {
+      ignorePaths: config.ignorePaths, truncated: input.truncated, inventoryPolicyDigest: inventoryPolicyDigest(config),
     });
     if (knowledgeStore) await knowledgeStore.save(evidence);
     knowledge = { snapshot: evidence, persistence: options.dryRun ? "dry-run" : knowledgeStore ? "saved" : "not-requested" };

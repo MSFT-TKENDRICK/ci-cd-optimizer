@@ -1,0 +1,126 @@
+import { describe, expect, it, vi } from "vitest";
+import { MemoryKnowledgeStore } from "../../src/knowledge/store.js";
+import { DEFAULT_CONFIG } from "../../src/lint/config.js";
+import { collectRunKnowledge } from "../../src/service/run-knowledge.js";
+import { processWorkflowRun } from "../../src/service/workflow-run.js";
+import { MemoryTelemetryStore } from "../../src/telemetry/store.js";
+import type { WorkflowRunPayload } from "../../src/telemetry/snapshot.js";
+import { snapshot as workflow } from "../alerts/fixtures.js";
+import { fakeApi, callsTo, TIMEOUT_ONLY, writes } from "../service/api.js";
+import { httpError } from "../experiments/fixtures.js";
+import { now, repository, revision } from "./fixtures.js";
+
+const metadata = { id: 42, html_url: "https://github.com/acme/widgets", owner: { login: "acme" }, name: "widgets" };
+const workflowFile = "name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps: [{run: make}]\n";
+const api = (extra: Parameters<typeof fakeApi>[0] = {}) => fakeApi({
+  config: TIMEOUT_ONLY, repositoryMetadata: metadata,
+  refs: {
+    main: { "package.json": '{"name":"root","devDependencies":{"nx":"20"}}' },
+    [revision]: { "package.json": '{"name":"root","devDependencies":{"turbo":"2"}}', ".github/workflows/ci.yml": workflowFile },
+  },
+  jobs: { 100: [{ id: 1, name: "build", conclusion: "success", labels: ["ubuntu-24.04"], started_at: "2026-11-01T00:00:00Z", completed_at: "2026-11-01T00:01:00Z", steps: [] }] },
+  ...extra,
+});
+const runtime = () => ({ ...workflow(100, 60, [["build", 60]]), headSha: revision });
+const payload = (values: Partial<WorkflowRunPayload> = {}): WorkflowRunPayload => ({
+  id: 100, name: "CI", path: ".github/workflows/ci.yml", workflow_id: 7, run_attempt: 1,
+  head_sha: revision, head_branch: "main", event: "push", status: "completed", conclusion: "success",
+  created_at: "2026-11-01T00:00:00Z", run_started_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:01:00Z",
+  ...values,
+});
+
+describe("run source context collection", () => {
+  it("joins exact run-revision declarations, never the current default branch", async () => {
+    const store = new MemoryKnowledgeStore();
+    const client = api();
+    const result = await collectRunKnowledge(client, repository, runtime(), DEFAULT_CONFIG, { store, expectedRepositoryId: 42, now });
+    expect(result.project?.technologies.map((fact) => fact.technology)).toEqual(["turborepo"]);
+    expect(result.project?.revision).toBe(revision);
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/commits/{ref}")[0]?.parameters.ref).toBe(revision);
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/git/blobs/{file_sha}")).toHaveLength(1);
+    expect(await store.loadRunObservation(repository, result.observation.id)).toEqual(result.observation);
+  });
+
+  it("reuses complete source only for an identical selection policy and always rechecks repository identity", async () => {
+    const store = new MemoryKnowledgeStore();
+    const client = api();
+    const first = await collectRunKnowledge(client, repository, runtime(), DEFAULT_CONFIG, { store, now });
+    client.calls.length = 0;
+    const second = await collectRunKnowledge(client, repository, { ...runtime(), runId: 101 }, DEFAULT_CONFIG, { store, now });
+    expect(second.project?.id).toBe(first.project?.id);
+    expect(callsTo(client, "GET /repos/{owner}/{repo}")).toHaveLength(1);
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/commits/{ref}")).toHaveLength(0);
+    await collectRunKnowledge(client, repository, runtime(), { ...DEFAULT_CONFIG, limits: { ...DEFAULT_CONFIG.limits, maxFiles: 1 } }, { store, now });
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/commits/{ref}")).toHaveLength(1);
+  });
+
+  it("retains a 404 as explicit unknown source but surfaces forbidden and transient failures", async () => {
+    for (const status of [404, 403, 500]) {
+      const client = api();
+      const original = client.request.bind(client);
+      vi.spyOn(client, "request").mockImplementation(async (route, parameters) => {
+        if (route === "GET /repos/{owner}/{repo}/commits/{ref}") throw httpError(status);
+        return original(route, parameters);
+      });
+      const store = new MemoryKnowledgeStore();
+      const result = collectRunKnowledge(client, repository, runtime(), DEFAULT_CONFIG, { store, now });
+      if (status === 404) {
+        expect((await result).observation.source).toEqual({ status: "unavailable", reason: "revision-unavailable" });
+        expect(await store.list({ ...repository, limit: 10 })).toEqual([]);
+        expect(await store.listRunObservations({ ...repository, limit: 10 })).toHaveLength(1);
+      } else {
+        await expect(result).rejects.toThrow();
+        expect(await store.listRunObservations({ ...repository, limit: 10 })).toEqual([]);
+      }
+    }
+  });
+
+  it("rejects repository-name reuse and a source response at the wrong commit", async () => {
+    await expect(collectRunKnowledge(api(), repository, runtime(), DEFAULT_CONFIG, { expectedRepositoryId: 43, now })).rejects.toThrow("identity changed");
+    await expect(collectRunKnowledge(api({ commitSha: "b".repeat(40) }), repository, runtime(), DEFAULT_CONFIG, { now })).rejects.toThrow("revision changed");
+  });
+
+  it("retains cancelled runs and stale attempts before report suppression", async () => {
+    const store = new MemoryKnowledgeStore();
+    const telemetry = new MemoryTelemetryStore();
+    await telemetry.save({ ...runtime(), runAttempt: 2 });
+    const client = api();
+    const stale = await processWorkflowRun(client, repository, payload(), { store: telemetry, knowledgeStore: async () => store, now });
+    expect(stale.status).toBe("skipped");
+    expect(stale.knowledge?.persistence).toBe("saved");
+    expect(writes(client)).toEqual([]);
+    const cancelled = await processWorkflowRun(api({ jobs: { 100: [] } }), repository, payload({ conclusion: "cancelled", run_attempt: 3 }), {
+      store: telemetry, knowledgeStore: async () => store, now,
+    });
+    expect(cancelled.snapshot?.jobs).toEqual([]);
+    expect(cancelled.knowledge?.observation.run.conclusion).toBe("cancelled");
+    expect(await store.listRunObservations({ ...repository, runId: 100, limit: 10 })).toHaveLength(2);
+  });
+
+  it("does not initialize persistence during dry runs or disabled/invalid configuration", async () => {
+    const provider = vi.fn(async () => new MemoryKnowledgeStore());
+    const preview = await processWorkflowRun(api(), repository, payload(), { dryRun: true, knowledgeStore: provider, now });
+    expect(preview.knowledge?.persistence).toBe("preview");
+    expect(preview.report).toContain("does not identify executed projects");
+    await processWorkflowRun(api({ config: "enabled: false\n" }), repository, payload(), { knowledgeStore: provider, now });
+    const invalid = await processWorkflowRun(api({ config: "rules:\n  unknown: error\n" }), repository, payload(), { knowledgeStore: provider, now });
+    expect(invalid.knowledgeSkipped).toBe("invalid-config");
+    expect(invalid.report).toContain("configuration is invalid");
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it("fails configured persistence before checks or alert side effects", async () => {
+    const store = new MemoryKnowledgeStore();
+    vi.spyOn(store, "saveRunObservation").mockRejectedValue(new Error("Database unavailable"));
+    const client = api();
+    await expect(processWorkflowRun(client, repository, payload(), { knowledgeStore: async () => store, now })).rejects.toThrow("Database unavailable");
+    expect(writes(client)).toEqual([]);
+  });
+
+  it("rejects stale repository identity before any telemetry or GitHub side effects even without knowledge enabled", async () => {
+    const client = api();
+    await expect(processWorkflowRun(client, repository, payload(), { expectedRepositoryId: 43 })).rejects.toThrow("identity changed");
+    expect(client.calls).toHaveLength(1);
+    expect(writes(client)).toEqual([]);
+  });
+});

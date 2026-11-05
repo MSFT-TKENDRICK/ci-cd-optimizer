@@ -72,6 +72,18 @@ For a non-persisting preview, run `ci-cd-optimizer scan --knowledge --dry-run --
 implicitly use `DATABASE_URL`; `--knowledge` adds evidence to output only. Dry runs never initialize or save a knowledge
 store. Without `--dry-run`, the scan's normal configured GitHub issue/fix behavior still applies.
 
+Completed workflow deliveries also capture immutable run/attempt observations linked to source declarations at the
+run-recorded SHA. `knowledge_run_observations` and a scoped source-reference index are added transactionally under the
+same schema lock; existing declaration snapshots remain intact. Source and runtime writes roll back together. Source
+content unavailable with HTTP 404 is retained as unknown context; other collection or persistence failures fail the
+delivery. Invalid configuration skips knowledge explicitly without initializing its store.
+
+Use `ci-cd-optimizer telemetry --run-id <id> --knowledge --dry-run --format json` for a non-persisting runtime/source
+preview (requires Contents read as well as Actions read). Repeated runs at one revision reuse only complete source
+evidence collected under the same ignore/limit policy, after rechecking repository identity. Reports distinguish source
+declarations from actual project execution. Runtime source backfill, project/task attribution, installed tool/cache
+telemetry and learned mitigation evaluation are not inferred from these links.
+
 The evidence tables are append-only observations, not a retention policy or audit-grade tamper-proof ledger. Operators
 must configure backups, database access, capacity, deletion/retention procedures and repository-removal policy before
 production rollout. No knowledge API, learned mitigation recommender, or automatic deletion on uninstall is enabled.

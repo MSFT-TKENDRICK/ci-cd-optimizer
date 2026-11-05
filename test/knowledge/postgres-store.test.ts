@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PostgresKnowledgeStore } from "../../src/knowledge/postgres-store.js";
 import { extractKnowledge } from "../../src/knowledge/extract.js";
 import { snapshotIdentity } from "../../src/knowledge/identity.js";
+import { createRunObservation, runObservationIdentity } from "../../src/knowledge/run-observation.js";
+import { snapshot as workflow } from "../alerts/fixtures.js";
 import { isolatedDatabase } from "../webhooks/database.js";
 import { input, now, repository, revision, snapshot } from "./fixtures.js";
 
@@ -76,5 +78,70 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
     first.repository.repo = "mutated";
     await saving;
     expect(await store.load(repository, first.id)).toEqual(snapshot());
+  });
+
+  it("atomically captures source and runtime context, deduplicates re-observation and preserves corrected attempts", async () => {
+    const project = snapshot();
+    const run = { ...workflow(100, 60, [["build", 60]]), headSha: revision };
+    const first = createRunObservation(repository, run, { status: "linked", snapshotId: project.id }, now);
+    await Promise.all([store.saveRunObservation(first, project), store.saveRunObservation(first, project)]);
+    const later = createRunObservation(repository, { ...run, provenance: { ...run.provenance!, collectedAt: new Date(now.getTime() + 1000).toISOString() } },
+      first.source, new Date(now.getTime() + 1000));
+    expect(later.id).toBe(first.id);
+    await store.saveRunObservation(later);
+    expect(await store.loadRunObservation(repository, first.id)).toEqual(first);
+    const corrected = createRunObservation(repository, { ...run, durationMs: 120_000 }, first.source, new Date(now.getTime() + 2000));
+    await store.saveRunObservation(corrected);
+    const retry = createRunObservation(repository, { ...run, runAttempt: 2, conclusion: "failure", jobs: [], queueMs: null },
+      { status: "unavailable", reason: "revision-unavailable" }, new Date(now.getTime() + 3000));
+    await store.saveRunObservation(retry);
+    expect(await store.listRunObservations({ ...repository, runId: 100, runAttempt: 1, limit: 10 })).toHaveLength(2);
+    expect((await store.listRunObservations({ ...repository, limit: 1 }))[0]).toMatchObject({ id: retry.id, runId: 100, workflowId: 7, runAttempt: 2 });
+    expect(runObservationIdentity((await store.loadRunObservation(repository, corrected.id))!)).toBe(corrected.id);
+    expect(await store.loadRunObservation({ ...repository, repositoryId: "43" }, first.id)).toBeUndefined();
+    expect(await store.listRunObservations({ ...repository, host: "https://github.example.com", limit: 10 })).toEqual([]);
+  });
+
+  it("rolls source and runtime back together after a runtime insertion failure", async () => {
+    const project = snapshot();
+    const first = createRunObservation(repository, { ...workflow(100, 60, []), headSha: revision }, { status: "linked", snapshotId: project.id }, now);
+    await database.sql`ALTER TABLE knowledge_run_observations ADD CONSTRAINT test_reject_run CHECK (run_id <> 100)`;
+    await expect(store.saveRunObservation(first, project)).rejects.toThrow("test_reject_run");
+    expect(await store.load(repository, project.id)).toBeUndefined();
+    expect(await store.loadRunObservation(repository, first.id)).toBeUndefined();
+    expect(await database.sql`SELECT id FROM knowledge_projects`).toHaveLength(0);
+    await database.sql`ALTER TABLE knowledge_run_observations DROP CONSTRAINT test_reject_run`;
+    await store.saveRunObservation(first, project);
+    expect(await store.loadRunObservation(repository, first.id)).toEqual(first);
+  });
+
+  it("enforces same-repository and same-revision source references in the database", async () => {
+    const project = snapshot();
+    await store.save(project);
+    const first = createRunObservation(repository, { ...workflow(100, 60, []), headSha: revision }, { status: "linked", snapshotId: project.id }, now);
+    const wrongRepo = createRunObservation({ ...repository, repositoryId: "43" }, first.run, first.source, now);
+    const wrongRevision = createRunObservation(repository, { ...first.run, headSha: "b".repeat(40) }, first.source, now);
+    await expect(store.saveRunObservation(wrongRepo)).rejects.toThrow("foreign key");
+    await expect(store.saveRunObservation(wrongRevision)).rejects.toThrow("foreign key");
+    expect(await store.listRunObservations({ ...repository, limit: 10 })).toEqual([]);
+    await store.saveRunObservation(first);
+    const next = createRunObservation(repository, { ...first.run, runId: 101 }, first.source, now);
+    const saving = store.saveRunObservation(next);
+    next.run.durationMs = 999;
+    await saving;
+    expect((await store.loadRunObservation(repository, next.id))?.run.durationMs).toBe(60_000);
+    expect((await store.listRunObservations({ ...repository, limit: 10 })).map((row) => row.runId).sort()).toEqual([100, 101]);
+  });
+
+  it("upgrades existing declaration evidence without rewriting or deleting its records", async () => {
+    const project = snapshot();
+    await store.save(project);
+    await database.sql`DROP TABLE knowledge_run_observations`;
+    await database.sql`DROP INDEX knowledge_snapshot_reference`;
+    await store.initialize();
+    expect(await store.load(repository, project.id)).toEqual(project);
+    const observation = createRunObservation(repository, { ...workflow(100, 60, []), headSha: revision }, { status: "linked", snapshotId: project.id }, now);
+    await store.saveRunObservation(observation);
+    expect(await store.loadRunObservation(repository, observation.id)).toEqual(observation);
   });
 });

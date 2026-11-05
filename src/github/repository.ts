@@ -14,9 +14,14 @@ export interface RepositorySnapshot {
   sha: string;
 }
 
-export async function defaultBranch(client: GitHubClient, repo: RepoRef): Promise<string> {
+export async function defaultBranch(client: GitHubClient, repo: RepoRef, expectedRepositoryId?: number): Promise<string> {
   const response = await client.request("GET /repos/{owner}/{repo}", { ...repo });
-  return (response.data as { default_branch: string }).default_branch;
+  const metadata = response.data as { default_branch: string; id?: unknown };
+  if (expectedRepositoryId !== undefined &&
+      (!Number.isSafeInteger(expectedRepositoryId) || expectedRepositoryId <= 0 || metadata.id !== expectedRepositoryId)) {
+    throw new Error("Repository identity changed since the event was recorded");
+  }
+  return metadata.default_branch;
 }
 
 export interface RemoteConfig {
@@ -51,13 +56,17 @@ interface TreeEntry {
 export async function loadRepositorySnapshot(
   client: GitHubClient,
   repo: RepoRef,
-  options: { ref: string; config: Pick<LintConfig, "ignorePaths" | "limits">; change?: ChangeContext; concurrency?: number },
+  options: {
+    ref: string; config: Pick<LintConfig, "ignorePaths" | "limits">; change?: ChangeContext; concurrency?: number;
+    /** Optional narrower inventory, applied before selection limits and blob reads. */
+    pathFilter?: (path: string) => boolean;
+  },
 ): Promise<RepositorySnapshot> {
   const commit = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { ...repo, ref: options.ref });
   const commitData = commit.data as { sha: string; commit: { tree: { sha: string } } };
   const tree = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { ...repo, tree_sha: commitData.commit.tree.sha, recursive: "1" });
   const treeData = tree.data as { tree: TreeEntry[]; truncated?: boolean };
-  const blobs = new Map(treeData.tree.filter((entry) => entry.type === "blob").map((entry) => [entry.path, entry]));
+  const blobs = new Map(treeData.tree.filter((entry) => entry.type === "blob" && (!options.pathFilter || options.pathFilter(entry.path))).map((entry) => [entry.path, entry]));
   const selection = selectInventory(
     [...blobs.values()].map((entry) => ({ path: entry.path, ...(entry.size !== undefined ? { size: entry.size } : {}) })),
     options.config,

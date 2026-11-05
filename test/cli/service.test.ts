@@ -151,6 +151,22 @@ async function seededStore(): Promise<string> {
 const lines = async (path: string) => (await readFile(path, "utf8")).split("\n").filter(Boolean);
 
 describe("telemetry command", () => {
+  it("previews run-linked source context without knowledge database writes", async () => {
+    const sha = "a".repeat(40);
+    const client = telemetryApi({
+      repositoryMetadata: { id: 42, html_url: "https://github.com/acme/widgets", owner: { login: "acme" }, name: "widgets" },
+      refs: { [sha]: { ".github/workflows/ci.yml": workflowFile, "package.json": '{"devDependencies":{"turbo":"2"}}' } },
+      runs: { 2000: { ...workflowRun, head_sha: sha } },
+    });
+    const session = cli(client);
+    expect(await session.run("telemetry", "--run-id", "2000", "--knowledge", "--dry-run", "--format", "json")).toBe(0);
+    expect(session.json().knowledge).toMatchObject({
+      persistence: "preview", observation: { run: { headSha: sha }, source: { status: "linked" } },
+      project: { revision: sha, technologies: [expect.objectContaining({ technology: "turborepo" })] },
+    });
+    expect(writes(client)).toEqual([]);
+  });
+
   it("requires a valid run id", async () => {
     const session = cli(telemetryApi());
     expect(await session.run("telemetry")).toBe(2);

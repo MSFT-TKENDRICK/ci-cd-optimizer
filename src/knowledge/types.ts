@@ -1,3 +1,5 @@
+import type { WorkflowSnapshot } from "../telemetry/types.js";
+
 export interface KnowledgeScope {
   /** Canonical HTTPS origin of the GitHub instance, not an organization name. */
   host: string;
@@ -62,6 +64,8 @@ export interface KnowledgeSnapshot {
   coverage: {
     scope: "configured-node-manifests-and-tool-configs";
     inventoryComplete: boolean;
+    /** Selection-policy digest; legacy observations without it cannot satisfy a reuse request. */
+    inventoryPolicyDigest?: string;
     declarationsComplete: boolean;
     ignorePaths: string[];
     truncated: string[];
@@ -81,10 +85,47 @@ export interface KnowledgeQuery extends KnowledgeScope {
 
 export type KnowledgeSummary = Pick<KnowledgeSnapshot, "id" | "repository" | "revision" | "collectedAt" | "coverage">;
 
+export type RunProjectContext =
+  | { status: "linked"; snapshotId: string }
+  | { status: "unavailable"; reason: "revision-unavailable" };
+
+export interface RunObservation {
+  version: 1;
+  id: string;
+  repository: RepositoryIdentity;
+  observedAt: string;
+  /** Measurements reported by Actions, not proof of what revision a checkout step executed. */
+  run: WorkflowSnapshot;
+  source: RunProjectContext;
+}
+
+export interface RunObservationQuery extends KnowledgeScope {
+  runId?: number;
+  /** Requires runId; all observations/corrections are retained, not just the latest attempt. */
+  runAttempt?: number;
+  revision?: string;
+  limit: number;
+}
+
+export interface RunObservationSummary {
+  id: string;
+  repository: RepositoryIdentity;
+  observedAt: string;
+  runId: number;
+  runAttempt: number;
+  workflowId: number;
+  revision: string;
+  source: RunProjectContext;
+}
+
 export interface KnowledgeStore {
   initialize(): Promise<void>;
   save(snapshot: KnowledgeSnapshot): Promise<void>;
   load(scope: KnowledgeScope, id: string): Promise<KnowledgeSnapshot | undefined>;
   list(query: KnowledgeQuery): Promise<KnowledgeSummary[]>;
+  /** Atomically save runtime evidence and, when supplied, its source declaration snapshot. */
+  saveRunObservation(observation: RunObservation, source?: KnowledgeSnapshot): Promise<void>;
+  loadRunObservation(scope: KnowledgeScope, id: string): Promise<RunObservation | undefined>;
+  listRunObservations(query: RunObservationQuery): Promise<RunObservationSummary[]>;
   close?(): Promise<void>;
 }

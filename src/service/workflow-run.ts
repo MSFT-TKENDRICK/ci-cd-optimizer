@@ -14,6 +14,8 @@ import type { TelemetryStore } from "../telemetry/store.js";
 import type { WorkflowBaseline, WorkflowSnapshot } from "../telemetry/types.js";
 import { matchesGlob } from "../utils.js";
 import { publishCheck, TELEMETRY_CHECK_PREFIX } from "./checks.js";
+import type { KnowledgeStore } from "../knowledge/types.js";
+import { collectRunKnowledge, describeRunKnowledge, type RunKnowledge } from "./run-knowledge.js";
 
 export interface WorkflowRunOptions {
   /** Persists snapshots between runs; without one, history is rebuilt from the Actions API each time. */
@@ -25,6 +27,9 @@ export interface WorkflowRunOptions {
   check?: boolean;
   /** Set false to skip duration alerting even when enabled in the configuration. */
   alerts?: boolean;
+  knowledge?: boolean;
+  knowledgeStore?: () => Promise<KnowledgeStore | undefined>;
+  expectedRepositoryId?: number;
 }
 
 export interface WorkflowRunResult {
@@ -37,6 +42,8 @@ export interface WorkflowRunResult {
   report?: string;
   alerts?: { detected: DurationAlert[]; actions: IssueAction[]; skipped: SkippedIssue[]; applied: AppliedIssueAction[] };
   checkRunId?: number;
+  knowledge?: RunKnowledge;
+  knowledgeSkipped?: "invalid-config";
 }
 
 const PULL_REQUEST_EVENTS = new Set(["pull_request", "pull_request_target"]);
@@ -61,26 +68,42 @@ function historyLimit(config: LintConfig): number {
  */
 export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, run: WorkflowRunPayload, options: WorkflowRunOptions = {}): Promise<WorkflowRunResult> {
   if (run.status && run.status !== "completed") return { status: "skipped", reason: `Run is ${run.status}.` };
-  const branch = await defaultBranch(client, repo);
+  const branch = await defaultBranch(client, repo, options.expectedRepositoryId);
   const remote = await loadRemoteConfig(client, repo, branch);
   const config = remote.config;
   if (!config.enabled) return { status: "disabled" };
 
   const definitions = await loadJobDefinitions(client, repo, run.path, run.head_sha);
   const snapshot = await buildWorkflowSnapshot(client, repo, run, { definitions });
+  const knowledgeSkipped = remote.problems.length > 0 && (options.knowledge || options.knowledgeStore) ? "invalid-config" as const : undefined;
+  let knowledge: RunKnowledge | undefined;
+  if (remote.problems.length === 0) {
+    const store = options.dryRun ? undefined : await options.knowledgeStore?.();
+    if (options.knowledge || store || (options.dryRun && options.knowledgeStore)) {
+      knowledge = await collectRunKnowledge(client, repo, snapshot, config, {
+        ...(store ? { store } : {}),
+        ...(options.expectedRepositoryId !== undefined ? { expectedRepositoryId: options.expectedRepositoryId } : {}),
+        ...(options.now ? { now: options.now } : {}),
+      });
+    }
+  }
   if (snapshot.jobs.length === 0) {
     if (options.store && !options.dryRun) await options.store.save(snapshot);
-    return { status: "skipped", reason: "The run has no completed jobs.", snapshot };
+    return { status: "skipped", reason: "The run has no completed jobs.", snapshot, ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}) };
   }
 
   const history = await loadHistory(client, repo, run, snapshot, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options);
   if (history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
-    return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot };
+    return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot, ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}) };
   }
   const prior = comparableHistory(history, snapshot).sort(byCompletion).slice(-historyLimit(config));
   const baseline = computeBaseline(prior, snapshot);
-  const report = createTelemetryReport(snapshot, baseline);
-  const result: WorkflowRunResult = { status: "processed", snapshot, samples: prior.length, report, ...(baseline ? { baseline } : {}) };
+  const report = createTelemetryReport(snapshot, baseline) + (knowledge ? describeRunKnowledge(knowledge) : "") +
+    (knowledgeSkipped ? "\n\nProject declaration collection was skipped because the repository configuration is invalid." : "");
+  const result: WorkflowRunResult = {
+    status: "processed", snapshot, samples: prior.length, report, ...(baseline ? { baseline } : {}),
+    ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}),
+  };
 
   const contextKey = comparisonKey(snapshot);
   const newerRunObserved = history.some((item) =>

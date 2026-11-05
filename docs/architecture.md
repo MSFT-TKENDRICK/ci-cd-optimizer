@@ -137,9 +137,36 @@ Inputs are copied at the persistence boundary, and loaded evidence is checked ag
 `KnowledgeStore.list` requires host and repository ID, a limit of 0-100, and optional revision/project/technology filters.
 Combined project/technology filters must match the same project. Reads never silently cross repositories or hosts;
 this scoping is not an authorization layer for exposing arbitrary user-supplied IDs. Any future user-facing retrieval
-must first establish repository access. These records are not yet joined to runtime observations or mitigation
-applications/evaluations; no causal recommendation, cross-organization learning, vector index or natural-language SQL
-interface is inferred from this foundation.
+must first establish repository access. These records also supply the run-source context below, but do not implement
+mitigation applications/evaluations. No causal recommendation, cross-organization learning, vector index or
+natural-language SQL interface is inferred from this foundation.
+
+### Run-linked source context
+
+`RunObservation` joins immutable Actions measurements to declaration evidence at the run's reported `headSha`, not
+the current branch. The App captures completed deliveries, including failures, cancellations without jobs and delayed
+attempts that are correctly withheld from report/alert publication. This does not assert that a checkout actually used
+that SHA, or assign workflow/job durations to projects; those claims require execution instrumentation.
+
+With a configured knowledge store, source and runtime evidence are saved in one transaction. The runtime row indexes
+host/repository/run/attempt/revision and references the exact source snapshot through a same-host, same-repository,
+same-revision composite foreign key. The immutable measurement payload remains JSONB; it is not a task-dependency
+table. Concurrent duplicate deliveries preserve the first captured record. Collection timestamps and array ordering
+alone do not produce another observation; corrected measurements or changed source coverage remain separate records.
+No correction automatically erases or overrules its predecessor.
+
+Source reuse requires a complete declaration snapshot at the same revision with the same versioned inventory-policy
+digest (including ignore patterns and collection limits). Partial, malformed or legacy unkeyed observations cannot
+satisfy reuse. Runtime collection reads only supported manifest/tool-config blobs, not unrelated workflow or lockfile
+contents; normal ignores/limits and whole-tree truncation still apply. Repository access/identity is rechecked before reuse, and webhook repository IDs protect against names
+being reassigned. A source-content 404 produces explicit unknown context; identity/authentication/transient failures
+fail processing. Runtime backfill for baseline analytics does not implicitly perform expensive source-tree backfill.
+
+`listRunObservations` is a bounded, scoped **raw evidence** query (0-100 records), optionally narrowed to a run, its
+attempt or a source revision. It includes retries and multiple corrections, ordered by observation time; it is not a
+latest-attempt selector or a duration baseline. Future statistical consumers must select independent runs, consider
+all superseding attempts and contradictory corrections, and apply workload-comparison eligibility before computing
+expectations. Matching a project's declaration context does not establish that the project executed or benefited.
 
 ### Workload comparison contract
 

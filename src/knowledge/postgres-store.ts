@@ -1,7 +1,8 @@
 import postgres, { type Sql } from "postgres";
 import { validateScope } from "./identity.js";
 import { validateQuery, validateSnapshot } from "./store.js";
-import type { KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, ProjectEvidence, ProjectRelationship, TechnologyEvidence } from "./types.js";
+import { validateRunObservation, validateRunObservationQuery, validateRunSource } from "./run-observation.js";
+import type { KnowledgeQuery, KnowledgeScope, KnowledgeSnapshot, KnowledgeStore, KnowledgeSummary, ProjectEvidence, ProjectRelationship, TechnologyEvidence, RunObservation, RunObservationQuery, RunObservationSummary } from "./types.js";
 
 interface Header {
   id: string;
@@ -63,40 +64,55 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
       `;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_snapshot_scope ON knowledge_snapshots (host, repository_id, revision, collected_at DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS knowledge_technology_lookup ON knowledge_technologies (snapshot_id, technology, project_id)`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS knowledge_snapshot_reference ON knowledge_snapshots (host, repository_id, revision, id)`;
+      await sql`
+        CREATE TABLE IF NOT EXISTS knowledge_run_observations (
+          id TEXT PRIMARY KEY, version INTEGER NOT NULL CHECK (version = 1),
+          host TEXT NOT NULL, repository_id TEXT NOT NULL, owner TEXT NOT NULL, repo TEXT NOT NULL,
+          revision TEXT NOT NULL, run_id BIGINT NOT NULL CHECK (run_id > 0),
+          run_attempt INTEGER NOT NULL CHECK (run_attempt > 0), workflow_id BIGINT NOT NULL CHECK (workflow_id > 0),
+          observed_at TIMESTAMPTZ NOT NULL, source_snapshot_id TEXT, observation JSONB NOT NULL,
+          FOREIGN KEY (host, repository_id, revision, source_snapshot_id)
+            REFERENCES knowledge_snapshots (host, repository_id, revision, id)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS knowledge_run_scope ON knowledge_run_observations (host, repository_id, observed_at DESC, id DESC)`;
+      await sql`CREATE INDEX IF NOT EXISTS knowledge_run_attempt ON knowledge_run_observations (host, repository_id, run_id, run_attempt)`;
     });
   }
   async save(input: KnowledgeSnapshot): Promise<void> {
     const snapshot = structuredClone(input);
     validateSnapshot(snapshot);
-    await this.sql.begin(async (sql) => {
-      const json = (value: unknown) => sql.json(JSON.parse(JSON.stringify(value)) as postgres.JSONValue);
-      const inserted = await sql`
-        INSERT INTO knowledge_snapshots (id, version, host, repository_id, owner, repo, revision, collected_at, coverage)
-        VALUES (${snapshot.id}, ${snapshot.version}, ${snapshot.repository.host}, ${snapshot.repository.repositoryId},
-          ${snapshot.repository.owner}, ${snapshot.repository.repo}, ${snapshot.revision}, ${snapshot.collectedAt}, ${json(snapshot.coverage)})
-        ON CONFLICT (id) DO NOTHING RETURNING id
-      `;
-      if (inserted.length === 0) return;
-      const projects = snapshot.projects.map((project) => ({ snapshot_id: snapshot.id, id: project.id, kind: project.kind, path: project.path, name: project.name ?? null }));
-      for (let i = 0; i < projects.length; i += 500) {
-        await sql`INSERT INTO knowledge_projects ${sql(projects.slice(i, i + 500), "snapshot_id", "id", "kind", "path", "name")}`;
-      }
-      const technologies = snapshot.technologies.map((fact) => ({
-        snapshot_id: snapshot.id, id: fact.id, project_id: fact.projectId, technology: fact.technology, basis: fact.basis,
-        source: json(fact.source), spec: fact.spec ? json(fact.spec) : null,
-      }));
-      for (let i = 0; i < technologies.length; i += 500) {
-        await sql`INSERT INTO knowledge_technologies ${sql(technologies.slice(i, i + 500), "snapshot_id", "id", "project_id", "technology", "basis", "source", "spec")}`;
-      }
-      const relationships = snapshot.relationships.map((edge) => ({
-        snapshot_id: snapshot.id, id: edge.id, kind: edge.kind, source_project_id: edge.from, target_project_id: edge.to ?? null,
-        target_name: edge.targetName ?? null, dependency_scope: edge.scope ?? null, resolution: edge.resolution ?? null,
-        source: json(edge.source), spec: edge.spec ? json(edge.spec) : null,
-      }));
-      for (let i = 0; i < relationships.length; i += 500) {
-        await sql`INSERT INTO knowledge_relationships ${sql(relationships.slice(i, i + 500), "snapshot_id", "id", "kind", "source_project_id", "target_project_id", "target_name", "dependency_scope", "resolution", "source", "spec")}`;
-      }
-    });
+    await this.sql.begin((sql) => this.insertSnapshot(sql, snapshot));
+  }
+  private async insertSnapshot(sql: postgres.TransactionSql, snapshot: KnowledgeSnapshot): Promise<void> {
+    const json = (value: unknown) => sql.json(JSON.parse(JSON.stringify(value)) as postgres.JSONValue);
+    const inserted = await sql`
+      INSERT INTO knowledge_snapshots (id, version, host, repository_id, owner, repo, revision, collected_at, coverage)
+      VALUES (${snapshot.id}, ${snapshot.version}, ${snapshot.repository.host}, ${snapshot.repository.repositoryId},
+        ${snapshot.repository.owner}, ${snapshot.repository.repo}, ${snapshot.revision}, ${snapshot.collectedAt}, ${json(snapshot.coverage)})
+      ON CONFLICT (id) DO NOTHING RETURNING id
+    `;
+    if (inserted.length === 0) return;
+    const projects = snapshot.projects.map((project) => ({ snapshot_id: snapshot.id, id: project.id, kind: project.kind, path: project.path, name: project.name ?? null }));
+    for (let i = 0; i < projects.length; i += 500) {
+      await sql`INSERT INTO knowledge_projects ${sql(projects.slice(i, i + 500), "snapshot_id", "id", "kind", "path", "name")}`;
+    }
+    const technologies = snapshot.technologies.map((fact) => ({
+      snapshot_id: snapshot.id, id: fact.id, project_id: fact.projectId, technology: fact.technology, basis: fact.basis,
+      source: json(fact.source), spec: fact.spec ? json(fact.spec) : null,
+    }));
+    for (let i = 0; i < technologies.length; i += 500) {
+      await sql`INSERT INTO knowledge_technologies ${sql(technologies.slice(i, i + 500), "snapshot_id", "id", "project_id", "technology", "basis", "source", "spec")}`;
+    }
+    const relationships = snapshot.relationships.map((edge) => ({
+      snapshot_id: snapshot.id, id: edge.id, kind: edge.kind, source_project_id: edge.from, target_project_id: edge.to ?? null,
+      target_name: edge.targetName ?? null, dependency_scope: edge.scope ?? null, resolution: edge.resolution ?? null,
+      source: json(edge.source), spec: edge.spec ? json(edge.spec) : null,
+    }));
+    for (let i = 0; i < relationships.length; i += 500) {
+      await sql`INSERT INTO knowledge_relationships ${sql(relationships.slice(i, i + 500), "snapshot_id", "id", "kind", "source_project_id", "target_project_id", "target_name", "dependency_scope", "resolution", "source", "spec")}`;
+    }
   }
   async load(scope: KnowledgeScope, id: string): Promise<KnowledgeSnapshot | undefined> {
     validateScope(scope);
@@ -146,6 +162,62 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
       ORDER BY collected_at DESC, id DESC LIMIT ${query.limit}
     `;
     return rows.map(summary);
+  }
+  async saveRunObservation(input: RunObservation, sourceInput?: KnowledgeSnapshot): Promise<void> {
+    const observation = structuredClone(input);
+    const source = sourceInput ? structuredClone(sourceInput) : undefined;
+    validateRunObservation(observation);
+    if (source) {
+      validateSnapshot(source);
+      validateRunSource(observation, source);
+    }
+    await this.sql.begin(async (sql) => {
+      if (source) await this.insertSnapshot(sql, source);
+      await sql`
+        INSERT INTO knowledge_run_observations (
+          id, version, host, repository_id, owner, repo, revision, run_id, run_attempt, workflow_id, observed_at, source_snapshot_id, observation
+        ) VALUES (
+          ${observation.id}, ${observation.version}, ${observation.repository.host}, ${observation.repository.repositoryId},
+          ${observation.repository.owner}, ${observation.repository.repo}, ${observation.run.headSha}, ${observation.run.runId},
+          ${observation.run.runAttempt}, ${observation.run.workflowId}, ${observation.observedAt},
+          ${observation.source.status === "linked" ? observation.source.snapshotId : null},
+          ${sql.json(JSON.parse(JSON.stringify(observation)) as postgres.JSONValue)}
+        ) ON CONFLICT (id) DO NOTHING
+      `;
+    });
+  }
+  async loadRunObservation(scope: KnowledgeScope, id: string): Promise<RunObservation | undefined> {
+    validateScope(scope);
+    const [row] = await this.sql<{ observation: RunObservation }[]>`
+      SELECT observation FROM knowledge_run_observations WHERE id = ${id} AND host = ${scope.host} AND repository_id = ${scope.repositoryId}
+    `;
+    if (!row) return undefined;
+    validateRunObservation(row.observation);
+    if (row.observation.id !== id || row.observation.repository.host !== scope.host || row.observation.repository.repositoryId !== scope.repositoryId) {
+      throw new Error("Stored run observation does not match its indexed identity");
+    }
+    return row.observation;
+  }
+  async listRunObservations(query: RunObservationQuery): Promise<RunObservationSummary[]> {
+    validateRunObservationQuery(query);
+    const rows = await this.sql<{
+      id: string; host: string; repository_id: string; owner: string; repo: string; revision: string;
+      run_id: string; run_attempt: number; workflow_id: string; observed_at: Date; source_snapshot_id: string | null;
+    }[]>`
+      SELECT id, host, repository_id, owner, repo, revision, run_id, run_attempt, workflow_id, observed_at, source_snapshot_id
+      FROM knowledge_run_observations
+      WHERE host = ${query.host} AND repository_id = ${query.repositoryId}
+        ${query.runId === undefined ? this.sql`` : this.sql`AND run_id = ${query.runId}`}
+        ${query.runAttempt === undefined ? this.sql`` : this.sql`AND run_attempt = ${query.runAttempt}`}
+        ${query.revision === undefined ? this.sql`` : this.sql`AND revision = ${query.revision}`}
+      ORDER BY observed_at DESC, id DESC LIMIT ${query.limit}
+    `;
+    return rows.map((row) => ({
+      id: row.id, repository: { host: row.host, repositoryId: row.repository_id, owner: row.owner, repo: row.repo },
+      observedAt: row.observed_at.toISOString(), revision: row.revision,
+      runId: Number(row.run_id), runAttempt: row.run_attempt, workflowId: Number(row.workflow_id),
+      source: row.source_snapshot_id ? { status: "linked", snapshotId: row.source_snapshot_id } : { status: "unavailable", reason: "revision-unavailable" },
+    }));
   }
   async close(): Promise<void> { await this.sql.end({ timeout: 5 }); }
 }

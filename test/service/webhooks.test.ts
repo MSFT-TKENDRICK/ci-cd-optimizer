@@ -214,6 +214,30 @@ describe("signed GitHub App HTTP delivery", () => {
     } finally { await store.close(); await database.close(); }
   });
 
+  it("records failed-run project context through signed HTTP without treating it as successful execution", async () => {
+    const store = new MemoryKnowledgeStore();
+    const sha = "a".repeat(40);
+    const app = await harness({
+      ...knowledgeState(),
+      refs: { [sha]: { "package.json": '{"name":"root","devDependencies":{"turbo":"2"}}' } },
+      jobs: { 100: [] },
+    }, undefined, async () => store);
+    const event = {
+      repository: { ...repository, id: 42 }, installation: { id: 123 }, action: "completed",
+      workflow_run: {
+        id: 100, name: "CI", workflow_id: 7, run_attempt: 2, path: ".github/workflows/ci.yml",
+        head_sha: sha, head_branch: "main", event: "push", status: "completed", conclusion: "cancelled",
+        created_at: "2026-11-01T00:00:00Z", run_started_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:01:00Z",
+      },
+    };
+    expect(await app.send("workflow_run", event)).toBe(200);
+    const [summary] = await store.listRunObservations({ ...knowledgeScope, runId: 100, limit: 10 });
+    expect(summary?.runAttempt).toBe(2);
+    expect((await store.loadRunObservation(knowledgeScope, summary!.id))?.run).toMatchObject({ conclusion: "cancelled", queueMs: null, jobs: [] });
+    expect(await app.send("workflow_run", { ...event, repository: { ...repository, id: 99 } })).toBe(500);
+    expect(await store.listRunObservations({ ...knowledgeScope, runId: 100, limit: 10 })).toHaveLength(1);
+  });
+
   it("acknowledges durable ingress without running the analysis in the request", async () => {
     const enqueue = vi.fn<DeliveryQueue["enqueue"]>().mockResolvedValue(undefined);
     const app = await harness({}, { enqueue });

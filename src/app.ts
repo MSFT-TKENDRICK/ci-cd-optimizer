@@ -136,8 +136,8 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
     const shared = { ...(copilotClient ? { copilotClient } : {}) };
     const repositoryQueue = new RepositoryQueue();
 
-    const scan = (client: GitHubClient, repo: RepoRef, log: Probot["log"]) => repositoryQueue.run(repo, async () => {
-      const result = await scanRepository(client, repo, { uploadSarif, knowledgeStore, ...shared });
+    const scan = (client: GitHubClient, repo: RepoRef, log: Probot["log"], expectedRepositoryId?: number) => repositoryQueue.run(repo, async () => {
+      const result = await scanRepository(client, repo, { uploadSarif, knowledgeStore, ...shared, ...(expectedRepositoryId !== undefined ? { expectedRepositoryId } : {}) });
       log.info({ repo: `${repo.owner}/${repo.repo}`, status: result.status }, describeScan(result));
     });
 
@@ -158,7 +158,7 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
     });
 
     probot.on(APP_EVENTS.push, async (context) => {
-      if (pushNeedsScan(context.payload)) await scan(fromOctokit(context.octokit), context.repo(), context.log);
+      if (pushNeedsScan(context.payload)) await scan(fromOctokit(context.octokit), context.repo(), context.log, context.payload.repository.id);
     });
 
     probot.on([...APP_EVENTS.installation], async (context) => {
@@ -168,7 +168,8 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
       const errors: unknown[] = [];
       for (const repo of installationRepos(repositories)) {
         try {
-          await scan(client, repo, context.log);
+          const repository = repositories?.find((candidate) => candidate.full_name === `${repo.owner}/${repo.repo}`);
+          await scan(client, repo, context.log, repository?.id);
         } catch (error) {
           context.log.error({ error, repo: `${repo.owner}/${repo.repo}` }, "Initial scan failed");
           errors.push(new Error(`Initial scan failed for ${repo.owner}/${repo.repo}`, { cause: error }));
@@ -180,6 +181,8 @@ export function createApp(options: AppOptions = {}): (probot: Probot) => void {
     probot.on(APP_EVENTS.workflowRun, (context) => repositoryQueue.run(context.repo(), async () => {
       const result = await processWorkflowRun(fromOctokit(context.octokit), context.repo(), context.payload.workflow_run as WorkflowRunPayload, {
         ...shared,
+        knowledgeStore,
+        expectedRepositoryId: context.payload.repository.id,
         ...(await store().then((value) => (value ? { store: value } : {}))),
       });
       context.log.info(

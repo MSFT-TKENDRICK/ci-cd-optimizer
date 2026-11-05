@@ -16,6 +16,12 @@ const scopes = ["dependencies", "devDependencies", "peerDependencies", "optional
 const pointer = (part: string): string => part.replaceAll("~", "~0").replaceAll("/", "~1");
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
+export function isKnowledgePath(path: string): boolean {
+  if (/(^|\/)node_modules\//.test(path)) return false;
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  return name === "package.json" || path === "pnpm-workspace.yaml" || Object.hasOwn(toolFiles, name);
+}
+
 function spec(value: string): DeclaredSpec {
   // Preserve common declarations, but never copy arbitrary URLs, credentials or local paths into knowledge.
   const simple = /^(?:[~^]?\d+(?:\.(?:\d+|x|\*)){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|[x*])$/;
@@ -38,7 +44,7 @@ export function extractKnowledge(
   repository: RepositoryIdentity,
   revision: string,
   input: AnalysisInput,
-  options: { ignorePaths?: readonly string[]; truncated?: readonly string[]; now?: Date } = {},
+  options: { ignorePaths?: readonly string[]; truncated?: readonly string[]; inventoryPolicyDigest?: string; now?: Date } = {},
 ): KnowledgeSnapshot {
   validateScope(repository);
   validateRevision(revision);
@@ -205,6 +211,7 @@ export function extractKnowledge(
     coverage: {
       scope: "configured-node-manifests-and-tool-configs",
       inventoryComplete: input.mode === "repository" && input.inventoryComplete,
+      ...(options.inventoryPolicyDigest ? { inventoryPolicyDigest: options.inventoryPolicyDigest } : {}),
       declarationsComplete: problems.length === 0 && truncated.size === 0,
       ignorePaths: [...new Set(options.ignorePaths ?? [])].sort(), truncated: [...truncated].sort(),
       problems: problems.sort((a, b) => JSON.stringify(a) < JSON.stringify(b) ? -1 : JSON.stringify(a) > JSON.stringify(b) ? 1 : 0),
