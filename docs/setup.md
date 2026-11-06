@@ -109,6 +109,12 @@ An interrupted runner can leave that temporary token valid until GitHub's expira
 The wizard checks the exact run ID returned by GitHub, its workflow, repository, branch, commit, and successful
 verification step. Queued, failed, skipped, unrelated, or stale runs cannot advance setup.
 
+If verification fails, open **View verification run** and inspect **Verify App installation**. The error distinguishes
+an App-ID mismatch, wrong installation account, suspended installation, all-repository access, unrecognized scope,
+and missing permissions. Do not change repository access based only on a generic failed-run
+status. Only an explicit all-repository error calls for changing **Repository access** to **Only select repositories**;
+the installation owner must approve that change. No verification failure automatically changes access or credentials.
+
 The workflow and `scripts/setup-app.mjs` / `scripts/verify-app.mjs` must exist on the target repository's default
 branch. This repository includes them; install them first when resuming in another repository.
 If the default branch changes while dispatching, retry verification. Resuming itself performs no writes or

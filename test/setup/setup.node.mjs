@@ -191,8 +191,24 @@ test("all-repository installation is rejected before minting credentials", async
   await f.post("/save");
   const result = await f.post("/verify");
   assert.equal(result.status, 502);
-  assert.match(await result.text(), /Only select repositories/);
+  const message = await result.text();
+  assert.match(message, /grants access to all repositories/);
+  assert.match(message, /Only select repositories/);
   assert.ok(!f.calls.some((call) => call.path.endsWith("/access_tokens")));
+});
+
+test("unknown installation scope does not incorrectly claim all-repository access", async (t) => {
+  for (const repository_selection of [undefined, null, "", "unexpected"]) {
+    const f = await fixture(t, { installation: { repository_selection } });
+    await f.callback();
+    await f.post("/save");
+    const result = await f.post("/verify");
+    assert.equal(result.status, 502);
+    const message = await result.text();
+    assert.match(message, /did not report a recognized repository selection/);
+    assert.doesNotMatch(message, /grants access to all repositories|must choose Only select repositories/);
+    assert.ok(!f.calls.some((call) => call.path.endsWith("/access_tokens")));
+  }
 });
 
 test("verification revokes its temporary token even when repository access fails", async (t) => {
@@ -430,15 +446,21 @@ test("verification runner rejects invalid or mismatched configuration before usi
 });
 
 test("wrong App, account, permissions, suspension, or failed revocation cannot advance setup", async (t) => {
-  for (const options of [
-    { installation: { app_id: 456 } }, { installation: { account: { login: "other" } } },
-    { installation: { suspended_at: "2026-01-01T00:00:00Z" } }, { installation: { permissions: { contents: "read" } } },
-    { revokeFailure: true },
+  for (const [options, expected] of [
+    [{ installation: { app_id: 456 } }, /App ID does not match CICD_OPTIMIZER_APP_ID/],
+    [{ installation: { account: { login: "other" } } }, /does not belong to the target repository/],
+    [{ installation: { suspended_at: "2026-01-01T00:00:00Z", repository_selection: "all" } }, /installation is suspended/],
+    [{ installation: { permissions: { contents: "read" } } }, /Installation is missing/],
+    [{ revokeFailure: true }, /Token revocation failed/],
   ]) {
     const f = await fixture(t, options);
     await f.callback();
     await f.post("/save");
-    assert.equal((await f.post("/verify")).status, 502);
+    const result = await f.post("/verify");
+    assert.equal(result.status, 502);
+    const message = await result.text();
+    assert.match(message, expected);
+    assert.doesNotMatch(message, /must choose Only select repositories/);
     assert.equal((await f.post("/copilot", { token: "test-user-token" })).status, 409);
     if (!options.revokeFailure) assert.ok(!f.calls.some((call) => call.path.endsWith("/access_tokens")));
   }
