@@ -168,6 +168,7 @@ export async function startSetup({ repo, organization = false, saved }, { reques
   let installed = false;
   let copilot = saved?.copilot === true;
   let verification;
+  let verificationFailed = false;
   let busy = false;
   let expired = false;
   let message = "";
@@ -178,6 +179,7 @@ export async function startSetup({ repo, organization = false, saved }, { reques
     res.end(template.replace("<!-- CONTENT -->", content));
   };
   const statusPage = (res) => {
+    if (verification && !installed && !verificationFailed) res.setHeader("Refresh", "5; url=/");
     const form = (action, label, extra = "") => `<form method="post" action="${action}"><input type="hidden" name="csrf" value="${csrf}">${extra}<button>${label}</button></form>`;
     const settings = `https://github.com/settings/personal-access-tokens/new?name=CI%2FCD%20Optimizer%20assignment&description=Assign%20optimization%20issues%20to%20Copilot&target_name=${encodeURIComponent(repo.split("/")[0])}&expires_in=30&issues=write`;
     const manifest = registrationManifest(repo, origin);
@@ -199,7 +201,7 @@ export async function startSetup({ repo, organization = false, saved }, { reques
         <p><a href="${installUrl()}">Install on GitHub</a></p>${saved ?
         `<p>Verification runs in this repository's GitHub Actions using the saved key. It checks access and creates then revokes a repository-scoped token; it does not run a scan, create findings, or assign agents. Actions usage may consume your plan's allowance.</p>
         ${verification ? `<p><a href="${escape(verification.url)}" target="_blank" rel="noreferrer">View verification run</a></p>${form("/verify-result", "Check verification result")}` : ""}
-        ${form("/verify", verification ? "Start another verification run" : "Run verification in GitHub Actions")}` : form("/verify", "Verify installation")}
+        ${!verification || installed || verificationFailed ? form("/verify", verification ? "Verify again" : "Verify installation") : "<p>Verification is running. This page checks automatically; you do not need to press another button.</p>"}` : form("/verify", "Verify installation")}
         ${installed ? "<p>Installation and repository-scoped token verified.</p>" : ""}</section>` : ""}
       ${installed ? `<section><h2>4. Authorize the coding agent</h2><p>GitHub requires a Copilot-licensed user's token to start coding agents. App installation tokens cannot do this. Create a fine-grained token limited to <strong>${escape(repo)}</strong> with <strong>Issues: read and write</strong>, and an expiry. Select this repository explicitly on GitHub.</p>
         <p><a href="${settings}" target="_blank" rel="noreferrer">Create a scoped assignment token on GitHub</a></p>
@@ -210,6 +212,13 @@ export async function startSetup({ repo, organization = false, saved }, { reques
       ${stored ? `<p>To resume after stopping or updating setup, run <code>npm run setup -- --repo ${escape(repo)} --resume-app ${escape(app.slug)}</code>. Saved credentials remain in GitHub.</p>` : ""}
       <p class="muted">This setup server listens only on 127.0.0.1 and expires after one hour. For webhook hosting and a durable database, follow docs/github-app.md.</p>`);
   };
+  async function refreshVerification() {
+    installed = false;
+    verificationFailed = false;
+    try { installed = await checkSavedAppVerification(repo, verification, command); }
+    catch (error) { verificationFailed = true; throw error; }
+    message = installed ? "Installation verified in GitHub Actions; the verification token was revoked." : "Verification is still queued or running. This page checks automatically.";
+  }
   const server = createServer((req, res) => {
     void (async () => {
       res.setHeader("Cache-Control", "no-store");
@@ -224,6 +233,10 @@ export async function startSetup({ repo, organization = false, saved }, { reques
       const authorized = cookie.includes(`optimizer_setup=${session}`);
       if (req.method === "GET" && url.pathname === "/" && (authorized || url.searchParams.get("session") === session)) {
         res.setHeader("Set-Cookie", `optimizer_setup=${session}; HttpOnly; SameSite=Lax; Path=/; Max-Age=3600`);
+        if (verification && !installed && !verificationFailed && !busy) {
+          busy = true;
+          try { await refreshVerification(); } finally { busy = false; }
+        }
         statusPage(res); return;
       }
       if (req.method === "GET" && url.pathname === "/registered") {
@@ -269,17 +282,16 @@ export async function startSetup({ repo, organization = false, saved }, { reques
           installed = false;
           if (saved) {
             verification = undefined;
+            verificationFailed = false;
             verification = await requestSavedAppVerification(repo, app, command);
-            message = "Verification requested in GitHub Actions. Use Check verification result when the run finishes.";
+            message = "Verification requested in GitHub Actions. This page checks automatically.";
           } else {
             await verifyInstallation(repo, app, request);
             installed = true;
             message = "Installation verified with a short-lived repository-scoped token, which has been revoked.";
           }
         } else if (url.pathname === "/verify-result" && saved && verification) {
-          installed = false;
-          installed = await checkSavedAppVerification(repo, verification, command);
-          message = installed ? "Installation verified in GitHub Actions; the verification token was revoked." : "Verification is still queued or running. Check the linked run and retry.";
+          await refreshVerification();
         } else if (url.pathname === "/copilot" && installed) {
           const token = body.get("token")?.trim();
           if (!token || /[\s\0]/.test(token) || token.length > 1024) throw new Error("Enter a valid user token.");

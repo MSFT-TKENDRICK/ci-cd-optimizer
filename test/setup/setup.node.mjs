@@ -364,6 +364,30 @@ test("failed rechecks and redispatches invalidate previous verification", async 
   assert.equal((await f.post("/scan")).status, 409);
 });
 
+test("one verification click automatically advances after completion and stops refresh on failure", async (t) => {
+  const options = { run: { status: "queued", conclusion: null } };
+  const f = await fixture(t, { saved, command: verificationCommand(options) });
+  assert.equal((await f.post("/verify")).status, 303);
+  const currentPage = () => fetch(f.origin, { headers: { Cookie: f.cookie } });
+  let page = await currentPage();
+  assert.equal(page.headers.get("refresh"), "5; url=/");
+  assert.match(await page.text(), /This page checks automatically/);
+  options.run = {};
+  page = await currentPage();
+  assert.equal(page.headers.get("refresh"), null);
+  assert.match(await page.text(), /Installation and repository-scoped token verified/);
+  assert.match(await f.fetchPage(), /Run scan and assign pending findings/);
+  assert.equal(f.writes.filter(({ args }) => args.includes("POST")).length, 1);
+  await f.post("/verify");
+  options.run = { conclusion: "failure" };
+  assert.equal((await currentPage()).status, 502);
+  page = await currentPage();
+  assert.equal(page.headers.get("refresh"), null);
+  assert.match(await page.text(), /App verification did not succeed/);
+  assert.match(await f.fetchPage(), /Verify again/);
+  assert.equal((await f.post("/scan")).status, 409);
+});
+
 test("verification runner rejects invalid or mismatched configuration before using the App key", async () => {
   const env = { GITHUB_REPOSITORY: "acme/widgets", APP_ID: "123", EXPECTED_APP_ID: "123", APP_PRIVATE_KEY: pem };
   for (const override of [

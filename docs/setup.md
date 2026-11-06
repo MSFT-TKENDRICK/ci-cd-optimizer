@@ -100,7 +100,8 @@ Resume reads the public App identity, the saved ID variable, and repository secr
 a mismatched App or missing key instead of replacing credentials. GitHub secrets cannot be read back; the key
 never leaves GitHub. If an assignment token is already saved, it is retained, not revalidated or overwritten.
 
-Select **Run verification in GitHub Actions**, then **Check verification result**. This explicitly dispatches
+Select **Verify installation** once. The page checks automatically every five seconds until the verification
+finishes; **Check verification result** is also available as a manual fallback. This explicitly dispatches
 the [verification-only workflow](../.github/workflows/cicd-optimizer-verify-app.yml) on the default branch,
 using the saved key on the runner. It checks the same account, selected-repository scope, permissions, and repository
 access as fresh setup, then revokes its temporary token. It does not scan, open issues or PRs, or assign agents.
