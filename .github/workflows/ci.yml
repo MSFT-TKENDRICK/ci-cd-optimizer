@@ -118,6 +118,22 @@ jobs:
           name: action-bundle-${{ github.sha }}
           path: dist-action/index.js
           retention-days: 1
+      - name: Typecheck the setup UI
+        run: npm run typecheck:ui
+      - name: Setup UI bundle is up to date
+        id: ui_check
+        run: npm run check:ui
+      - name: Regenerate setup UI for reconciliation
+        id: ui_regenerate
+        if: failure() && steps.ui_check.outcome == 'failure'
+        run: npm run build:ui
+      - name: Upload regenerated setup UI for reconciliation
+        if: failure() && steps.ui_regenerate.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: setup-ui-${{ github.sha }}
+          path: dist-setup
+          retention-days: 1
       - name: Dogfood the linter on this repository
         uses: ./
         with:

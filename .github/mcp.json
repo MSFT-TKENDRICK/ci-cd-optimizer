@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "cicd-optimizer-setup": {
+      "type": "local",
+      "command": "node",
+      "args": ["mcp/setup-server.mjs"],
+      "tools": ["*"]
+    }
+  }
+}
