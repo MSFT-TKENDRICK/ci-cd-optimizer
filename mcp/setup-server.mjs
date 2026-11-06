@@ -65,6 +65,12 @@ function progress(state) {
   return current ? `${done} of ${state.steps.length} steps complete; next: ${current.title}.` : `All ${state.steps.length} steps complete.`;
 }
 
+function panelConnection(entry) {
+  return entry.lastPanelRead
+    ? `Panel connection: authenticated state request received at ${entry.lastPanelRead}. This confirms a tool round trip, not visual rendering.`
+    : "Panel connection: not confirmed; waiting for an authenticated state request from the view.";
+}
+
 // Model-visible text. It never includes snapshot URLs, because those carry the loopback session.
 function describe(state) {
   return [
@@ -116,7 +122,8 @@ export function createSetupServer({
 
   function opened(entry, state) {
     const lines = [`${state.resumed ? "Resumed" : "Started"} CI/CD Optimizer setup for ${state.repo}. ${progress(state)}`];
-    lines.push("The interactive setup panel is showing in chat. The user completes each step there.");
+    lines.push("Setup data is ready for the host to render. The user completes each step in the panel.");
+    lines.push(panelConnection(entry));
     lines.push(`Do not ask for tokens or keys in chat. Call ${SETUP_TOOLS.status} to check progress.`);
     return { content: text(lines.join("\n")), structuredContent: { session: entry.token, state } };
   }
@@ -143,7 +150,7 @@ export function createSetupServer({
     }
     try {
       const setup = await startSetup(await prepareSetup({ repo: target, resumeApp }, command), { command, request, assets, lifetime, refreshInterval });
-      active = { key, setup, token: randomBytes(32).toString("hex") };
+      active = { key, setup, token: randomBytes(32).toString("hex"), lastPanelRead: null };
     } catch (error) {
       return failure(error instanceof SetupError ? error.status : 502, error?.message || GENERIC_ERROR);
     }
@@ -172,7 +179,8 @@ export function createSetupServer({
   }, async () => {
     const ui = `This host ${supportsApps() ? "advertises" : "does not advertise"} MCP Apps support.`;
     if (!active) return { content: text(`No setup is in progress. Call ${SETUP_TOOLS.open} to start one. ${ui}`) };
-    return { content: text(`${describe(await active.setup.getState())}\n${ui}`) };
+    const entry = active;
+    return { content: text(`${describe(await entry.setup.getState())}\n${ui}\n${panelConnection(entry)}`) };
   });
 
   const appOnly = { ui: { resourceUri: SETUP_RESOURCE_URI, visibility: ["app"] } };
@@ -197,7 +205,15 @@ export function createSetupServer({
     inputSchema: z.object({ session }),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     _meta: appOnly,
-  }, async (args) => (authorized(args.session) ? respond(active, (setup) => setup.getState()) : failure(401, NOT_AUTHORIZED)));
+  }, async (args) => {
+    if (!authorized(args.session)) return failure(401, NOT_AUTHORIZED);
+    const entry = active;
+    return respond(entry, async (setup) => {
+      const state = await setup.getState();
+      if (!state.expired) entry.lastPanelRead = new Date().toISOString();
+      return state;
+    });
+  });
 
   for (const [action, title, description] of ACTION_TOOLS) {
     registerAppTool(server, SETUP_TOOLS[action], {

@@ -27,6 +27,7 @@ const SAVE = SETUP_TOOLS["save-credentials"];
 const CHECK = SETUP_TOOLS["check-verification"];
 const SCAN = SETUP_TOOLS["run-scan"];
 const PANEL_TOOLS = [STATE, SAVE, VERIFY, CHECK, SCAN];
+const PANEL_WAITING = "Panel connection: not confirmed; waiting for an authenticated state request from the view.";
 // Strings that must never reach the model: the private key and the OAuth client secret the fake GitHub returns.
 const KEY_LINE = pem.split("\n")[1];
 
@@ -178,7 +179,8 @@ test("a fresh open boots the panel and keeps links, sessions and tokens out of t
   assert.match(state.registration.action, /^https:\/\/github\.com\/organizations\/acme\/settings\/apps\/new\?state=[a-f0-9]{64}$/);
   assert.equal(textOf(result), [
     "Started CI/CD Optimizer setup for acme/widgets. 0 of 5 steps complete; next: Register the App.",
-    "The interactive setup panel is showing in chat. The user completes each step there.",
+    "Setup data is ready for the host to render. The user completes each step in the panel.",
+    PANEL_WAITING,
     "Do not ask for tokens or keys in chat. Call cicd_optimizer_setup_status to check progress.",
   ].join("\n"));
   const { session: loopbackSession } = loopback(state);
@@ -208,6 +210,55 @@ test("a resumed open reads the saved App without writing anything", async (t) =>
     "variable get CICD_OPTIMIZER_APP_ID --repo acme/widgets",
     "secret list --repo acme/widgets --json name",
   ]);
+});
+
+test("capability negotiation, resource reads and rejected calls cannot claim a panel connection", async (t) => {
+  const h = await connect(t);
+  const { result, session, state } = await openPanel(h);
+  assert.ok(textOf(result).includes(PANEL_WAITING));
+  assert.doesNotMatch(textOf(result), /panel is showing/);
+  const before = h.gh.length;
+  await h.client.readResource({ uri: SETUP_RESOURCE_URI });
+  assertFailure(await h.call(STATE, { session: "wrong" }), 401, /not authorized/);
+  assertFailure(await h.call(VERIFY, { session, confirm: false }), 400, /Confirm this action/);
+  const waiting = await h.call(STATUS);
+  assert.ok(textOf(waiting).includes(PANEL_WAITING));
+  assert.equal(h.gh.length, before, "connection diagnostics must not write or dispatch anything");
+
+  assert.ok(!(await h.call(STATE, { session })).isError);
+  const connected = await h.call(STATUS);
+  assert.match(textOf(connected), /Panel connection: authenticated state request received at \d{4}-\d{2}-\d{2}T[\d:.]+Z\./);
+  assert.match(textOf(connected), /This confirms a tool round trip, not visual rendering\./);
+  assert.ok(!textOf(connected).includes(PANEL_WAITING));
+  assertModelSafe(connected, session, loopback(state).session);
+  assert.equal(connected.structuredContent, undefined);
+  assert.equal(h.gh.length, before);
+
+  const reopened = await openPanel(h);
+  assert.equal(reopened.session, session);
+  assert.match(textOf(reopened.result), /Panel connection: authenticated state request received at/);
+});
+
+test("panel connection evidence is scoped to the active setup and cannot be restored by a retired token", async (t) => {
+  const h = await connect(t);
+  const first = await openPanel(h, { repo: REPO });
+  await h.call(STATE, { session: first.session });
+  assert.ok(!textOf(await h.call(STATUS)).includes(PANEL_WAITING));
+
+  const second = await openPanel(h);
+  assert.notEqual(second.session, first.session);
+  assert.ok(textOf(second.result).includes(PANEL_WAITING));
+  assertFailure(await h.call(STATE, { session: first.session }), 401, /not authorized/);
+  assert.ok(textOf(await h.call(STATUS)).includes(PANEL_WAITING));
+});
+
+test("an expired state read does not confirm a panel connection", async (t) => {
+  const h = await connect(t, { lifetime: 100 });
+  const { session } = await openPanel(h);
+  await waitFor(async () => textOf(await h.call(STATUS)).includes("This setup has expired."));
+  const expired = await h.call(STATE, { session });
+  assert.equal(expired.structuredContent.state.expired, true);
+  assert.ok(textOf(await h.call(STATUS)).includes(PANEL_WAITING));
 });
 
 test("the open tool rejects malformed repositories before any GitHub call", async (t) => {
@@ -341,6 +392,7 @@ test("a resumed setup verifies, checks and scans through the panel's tools", asy
     "Last result: Scan requested. Check https://github.com/acme/widgets/actions and the issue's assignees and linked PR. A dispatch alone is not proof of assignment.",
     `Expires at ${state.expiresAt}.`,
     "This host advertises MCP Apps support.",
+    PANEL_WAITING,
   ].join("\n"));
   assertModelSafe(status, session);
 });
