@@ -89,6 +89,30 @@ The wizard guides each approval separately:
    the `copilot:ready` label alone means the handoff is pending. Other repositories must first install the
    [scan workflow](../examples/workflows/cicd-optimizer-scan.yml) and enable `issues.assignCopilot`.
 
+**Resume an existing App after a restart or update.** Once the App key and ID have been saved, use the App's slug
+(the name in `github.com/apps/SLUG`), not another registration:
+
+```sh
+npm run setup -- --repo OWNER/REPOSITORY --resume-app APP-SLUG
+```
+
+Resume reads the public App identity, the saved ID variable, and repository secret **names only**. It rejects
+a mismatched App or missing key instead of replacing credentials. GitHub secrets cannot be read back; the key
+never leaves GitHub. If an assignment token is already saved, it is retained, not revalidated or overwritten.
+
+Select **Run verification in GitHub Actions**, then **Check verification result**. This explicitly dispatches
+the [verification-only workflow](../.github/workflows/cicd-optimizer-verify-app.yml) on the default branch,
+using the saved key on the runner. It checks the same account, selected-repository scope, permissions, and repository
+access as fresh setup, then revokes its temporary token. It does not scan, open issues or PRs, or assign agents.
+An interrupted runner can leave that temporary token valid until GitHub's expiration, normally one hour.
+The wizard checks the exact run ID returned by GitHub, its workflow, repository, branch, commit, and successful
+verification step. Queued, failed, skipped, unrelated, or stale runs cannot advance setup.
+
+The workflow and `scripts/setup-app.mjs` / `scripts/verify-app.mjs` must exist on the target repository's default
+branch. This repository includes them; install them first when resuming in another repository.
+If the default branch changes while dispatching, retry verification. Resuming itself performs no writes or
+workflow dispatches. Installation and coding-agent authorization still require their separate owner actions.
+
 The setup server binds only to `127.0.0.1`, requires its unguessable session URL, validates registration state and form
 origins, and expires after one hour. Its `Referrer-Policy: same-origin` preserves the browser's `Origin` on local
 form submissions while suppressing referrers to GitHub. Missing, `null`, and foreign POST origins remain rejected.
@@ -111,6 +135,8 @@ button instead of refreshing the action URL. An older setup process using `Refer
 even valid browser forms because they send `Origin: null`; updating the checkout does not update a running process.
 Before registration, restart setup from the updated checkout. After registration, keep the process open if the key
 is unsaved: restarting discards it and requires a replacement key from GitHub App settings, not another registration.
+If the key and ID are already saved, restart with `--resume-app APP-SLUG` and use the newly printed URL. This loads
+the fixed browser policy on every page without retrieving the saved key or relying on a per-page browser workaround.
 
 **Manual fallback.** Open this prefilled registration page. Replace `<you>` with a globally unique suffix,
 or use `https://github.com/organizations/<org>/settings/apps/new?...` for an organization:

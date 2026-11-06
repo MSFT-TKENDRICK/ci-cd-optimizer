@@ -64,17 +64,110 @@ export function registrationManifest(repo, origin) {
   };
 }
 
-export async function startSetup({ repo, organization = false }, { request = githubRequest, command = gh } = {}) {
+const verificationWorkflow = "cicd-optimizer-verify-app.yml";
+const api = (path) => ["api", "--hostname", "github.com", "-H", "X-GitHub-Api-Version: 2026-03-10", path];
+
+export async function loadSavedSetup(repo, slug, command = gh) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || typeof slug !== "string" || !/^[a-z0-9-]+$/.test(slug)) throw new Error("Specify a repository and an existing App slug.");
+  const [identity, configuredId, credentials] = await Promise.all([
+    command(api(`apps/${encodeURIComponent(slug)}`)),
+    command(["variable", "get", "CICD_OPTIMIZER_APP_ID", "--repo", repo]),
+    command(["secret", "list", "--repo", repo, "--json", "name"]),
+  ]);
+  const app = JSON.parse(identity);
+  const secrets = JSON.parse(credentials);
+  if (!Number.isSafeInteger(app.id) || app.id <= 0 || app.slug !== slug || String(app.id) !== configuredId.trim()) {
+    throw new Error("The existing App does not match CICD_OPTIMIZER_APP_ID. Check the App slug and repository settings.");
+  }
+  if (!Array.isArray(secrets) || !secrets.some((secret) => secret.name === "CICD_OPTIMIZER_APP_PRIVATE_KEY")) {
+    throw new Error("CICD_OPTIMIZER_APP_PRIVATE_KEY is not saved in this repository. Finish saving it before resuming.");
+  }
+  return { app: { id: app.id, slug: app.slug }, copilot: secrets.some((secret) => secret.name === "COPILOT_ASSIGN_TOKEN") };
+}
+
+export async function verifyInstallation(repo, app, request = githubRequest) {
+  const token = appJwt(app);
+  const [owner, name] = repo.split("/");
+  const installation = await request(`/repos/${owner}/${name}/installation`, { token });
+  if (installation.app_id !== app.id || installation.account?.login?.toLowerCase() !== owner.toLowerCase() ||
+    installation.repository_selection !== "selected" || installation.suspended_at) {
+    throw new Error("Install this App on the target account using Only select repositories, then retry.");
+  }
+  for (const [permission, level] of Object.entries(APP_PERMISSIONS)) {
+    if (installation.permissions?.[permission] !== level && installation.permissions?.[permission] !== "write") {
+      throw new Error(`Installation is missing ${permission}: ${level}. Review the App's permissions.`);
+    }
+  }
+  const access = await request(`/app/installations/${installation.id}/access_tokens`, {
+    method: "POST", token, body: { repositories: [name], permissions: APP_PERMISSIONS },
+  });
+  if (typeof access.token !== "string" || !access.token) throw new Error("GitHub did not return an installation token.");
+  try {
+    const repository = await request(`/repos/${owner}/${name}`, { token: access.token });
+    if (repository.full_name?.toLowerCase() !== repo.toLowerCase()) throw new Error("Installation token cannot access the selected repository.");
+  } finally {
+    await request("/installation/token", { method: "DELETE", token: access.token });
+  }
+}
+
+export async function requestSavedAppVerification(repo, app, command = gh) {
+  const metadata = JSON.parse(await command(api(`repos/${repo}`)));
+  if (metadata.full_name?.toLowerCase() !== repo.toLowerCase() || typeof metadata.default_branch !== "string" || !metadata.default_branch) {
+    throw new Error("Cannot identify the target repository's default branch.");
+  }
+  const branch = metadata.default_branch;
+  const commit = JSON.parse(await command(api(`repos/${repo}/commits/${encodeURIComponent(branch)}`)));
+  if (!/^[a-f0-9]{40}$/.test(commit.sha)) throw new Error("Cannot identify the default branch commit.");
+  let result;
+  try {
+    result = JSON.parse(await command([
+      ...api(`repos/${repo}/actions/workflows/${verificationWorkflow}/dispatches`), "--method", "POST", "--input", "-",
+    ], JSON.stringify({ ref: branch, inputs: { app_id: String(app.id) }, return_run_details: true })));
+  } catch {
+    throw new Error(`Cannot confirm dispatch of ${verificationWorkflow}. Ensure it is installed on the default branch and inspect Actions before retrying; a run may already have started.`);
+  }
+  if (!Number.isSafeInteger(result.workflow_run_id) || result.workflow_run_id <= 0 ||
+    result.html_url?.toLowerCase() !== `https://github.com/${repo}/actions/runs/${result.workflow_run_id}`.toLowerCase()) {
+    throw new Error("GitHub did not return a verification run ID. Inspect Actions before retrying; a run may already have started.");
+  }
+  return { id: result.workflow_run_id, url: result.html_url, branch, sha: commit.sha };
+}
+
+export async function checkSavedAppVerification(repo, verification, command = gh) {
+  const run = JSON.parse(await command(api(`repos/${repo}/actions/runs/${verification.id}`)));
+  if (run.id !== verification.id || run.repository?.full_name?.toLowerCase() !== repo.toLowerCase() ||
+    run.path !== `.github/workflows/${verificationWorkflow}` || run.event !== "workflow_dispatch" ||
+    run.head_branch !== verification.branch || run.head_sha !== verification.sha) {
+    throw new Error("The verification run does not match this setup request. If the default branch changed, start another verification.");
+  }
+  if (["queued", "in_progress", "waiting", "pending", "requested"].includes(run.status)) return false;
+  if (run.status !== "completed") throw new Error("GitHub returned an unrecognized verification run status.");
+  if (run.conclusion !== "success") throw new Error("App verification did not succeed. Inspect the linked run, correct the installation or credentials, and retry.");
+  if (!Number.isSafeInteger(run.run_attempt) || run.run_attempt < 1) throw new Error("GitHub did not identify the verification attempt.");
+  const result = JSON.parse(await command(api(`repos/${repo}/actions/runs/${verification.id}/attempts/${run.run_attempt}/jobs?per_page=100`)));
+  const job = result.jobs?.find((candidate) => candidate.name === "Verify selected-repository App access");
+  if (job?.status !== "completed" || job.conclusion !== "success" ||
+    !job.steps?.some((step) => step.name === "Verify App installation" && step.status === "completed" && step.conclusion === "success")) {
+    throw new Error("The App verification step did not run successfully. A skipped verification is not proof of installation.");
+  }
+  return true;
+}
+
+export async function startSetup({ repo, organization = false, saved }, { request = githubRequest, command = gh } = {}) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error("Use --repo OWNER/REPOSITORY.");
+  if (saved && (!Number.isSafeInteger(saved.app?.id) || saved.app.id <= 0 || typeof saved.app.slug !== "string" || !/^[a-z0-9-]+$/.test(saved.app.slug))) {
+    throw new Error("Invalid saved App identity.");
+  }
   const state = nonce();
   const csrf = nonce();
   const session = nonce();
   const template = await readFile(new URL("./setup-app.html", import.meta.url), "utf8");
   let origin;
-  let app;
-  let stored = false;
+  let app = saved ? { id: saved.app.id, slug: saved.app.slug } : undefined;
+  let stored = Boolean(saved);
   let installed = false;
-  let copilot = false;
+  let copilot = saved?.copilot === true;
+  let verification;
   let busy = false;
   let expired = false;
   let message = "";
@@ -96,45 +189,27 @@ export async function startSetup({ repo, organization = false }, { request = git
       ${message ? `<p role="status">${escape(message)}</p>` : ""}
       <section><h2>1. Register the App</h2>${app ? `<p>Registered: ${escape(app.slug)} (ID ${app.id}).</p>` :
         `<p>GitHub will ask you to approve a private App with Actions read access and write access to checks, contents, issues, pull requests, security events and workflows. No account-wide user permissions.</p>
+        <p>Already saved an App? Restart with <code>--resume-app YOUR-APP-SLUG</code> instead of registering another.</p>
         <form action="${registration}?state=${state}" method="post"><input type="hidden" name="manifest" value="${escape(JSON.stringify(manifest))}"><button>Review registration on GitHub</button></form>`}</section>
-      ${app ? `<section><h2>2. Store the App key</h2><p>The generated key stays in this process until saved. It is never printed, written to disk, or returned to the browser. Closing setup before saving requires generating a replacement key in GitHub.</p>
+      ${app ? `<section><h2>2. Store the App key</h2>${saved ? "<p>Resumed from repository settings. The private key remains in GitHub; this process does not have it. No credentials were replaced.</p>" :
+        "<p>The generated key stays in this process until saved. It is never printed, written to disk, or returned to the browser. Closing setup before saving requires generating a replacement key in GitHub.</p>"}
         ${stored ? "<p>Saved CICD_OPTIMIZER_APP_PRIVATE_KEY and CICD_OPTIMIZER_APP_ID.</p>" :
         `<p>This writes or replaces CICD_OPTIMIZER_APP_PRIVATE_KEY and CICD_OPTIMIZER_APP_ID in <strong>${escape(repo)}</strong>.</p>${form("/save", "Save credentials to this repository")}`}</section>` : ""}
       ${stored ? `<section><h2>3. Install and verify</h2><p>Choose <strong>Only select repositories</strong> and select <strong>${escape(repo)}</strong>. Installation grants access; it does not authorize Copilot as you.</p>
-        <p><a href="${installUrl()}">Install on GitHub</a></p>${form("/verify", "Verify installation")}${installed ? "<p>Installation and repository-scoped token verified.</p>" : ""}</section>` : ""}
+        <p><a href="${installUrl()}">Install on GitHub</a></p>${saved ?
+        `<p>Verification runs in this repository's GitHub Actions using the saved key. It checks access and creates then revokes a repository-scoped token; it does not run a scan, create findings, or assign agents. Actions usage may consume your plan's allowance.</p>
+        ${verification ? `<p><a href="${escape(verification.url)}" target="_blank" rel="noreferrer">View verification run</a></p>${form("/verify-result", "Check verification result")}` : ""}
+        ${form("/verify", verification ? "Start another verification run" : "Run verification in GitHub Actions")}` : form("/verify", "Verify installation")}
+        ${installed ? "<p>Installation and repository-scoped token verified.</p>" : ""}</section>` : ""}
       ${installed ? `<section><h2>4. Authorize the coding agent</h2><p>GitHub requires a Copilot-licensed user's token to start coding agents. App installation tokens cannot do this. Create a fine-grained token limited to <strong>${escape(repo)}</strong> with <strong>Issues: read and write</strong>, and an expiry. Select this repository explicitly on GitHub.</p>
         <p><a href="${settings}" target="_blank" rel="noreferrer">Create a scoped assignment token on GitHub</a></p>
         <p>Paste it below to validate repository visibility and save it directly as COPILOT_ASSIGN_TOKEN. This cannot prove your Copilot license or Issues write permission until an assignment succeeds. Never paste the token into chat.</p>
         ${form("/copilot", "Validate and save assignment token", '<label>Assignment token <input required type="password" name="token" autocomplete="off" maxlength="1024"></label>')}
         ${copilot ? "<p>Assignment token stored. Existing copilot:ready findings will be retried by the next scan.</p>" : "<p>Not authorized yet: copilot:ready is a queue label, not a running agent.</p>"}</section>` : ""}
       ${installed && copilot ? `<section><h2>5. Run the first scan</h2><p>This runs the repository's existing scan workflow, including configured issue/PR writes and coding-agent assignments. Copilot usage consumes your plan's allowance.</p>${form("/scan", "Run scan and assign pending findings")}</section>` : ""}
+      ${stored ? `<p>To resume after stopping or updating setup, run <code>npm run setup -- --repo ${escape(repo)} --resume-app ${escape(app.slug)}</code>. Saved credentials remain in GitHub.</p>` : ""}
       <p class="muted">This setup server listens only on 127.0.0.1 and expires after one hour. For webhook hosting and a durable database, follow docs/github-app.md.</p>`);
   };
-  async function verify() {
-    const token = appJwt(app);
-    const [owner, name] = repo.split("/");
-    const installation = await request(`/repos/${owner}/${name}/installation`, { token });
-    if (installation.app_id !== app.id || installation.account?.login?.toLowerCase() !== owner.toLowerCase() ||
-      installation.repository_selection !== "selected" || installation.suspended_at) {
-      throw new Error("Install this App on the target account using Only select repositories, then retry.");
-    }
-    for (const [permission, level] of Object.entries(APP_PERMISSIONS)) {
-      if (installation.permissions?.[permission] !== level && installation.permissions?.[permission] !== "write") {
-        throw new Error(`Installation is missing ${permission}: ${level}. Review the App's permissions.`);
-      }
-    }
-    const access = await request(`/app/installations/${installation.id}/access_tokens`, {
-      method: "POST", token, body: { repositories: [name], permissions: APP_PERMISSIONS },
-    });
-    if (typeof access.token !== "string" || !access.token) throw new Error("GitHub did not return an installation token.");
-    try {
-      const repository = await request(`/repos/${owner}/${name}`, { token: access.token });
-      if (repository.full_name?.toLowerCase() !== repo.toLowerCase()) throw new Error("Installation token cannot access the selected repository.");
-    } finally {
-      await request("/installation/token", { method: "DELETE", token: access.token });
-    }
-    installed = true;
-  }
   const server = createServer((req, res) => {
     void (async () => {
       res.setHeader("Cache-Control", "no-store");
@@ -158,7 +233,7 @@ export async function startSetup({ repo, organization = false }, { request = git
         busy = true;
         try {
           const created = await request(`/app-manifests/${encodeURIComponent(code)}/conversions`, { method: "POST" });
-          if (!Number.isSafeInteger(created.id) || !/^[a-z0-9-]+$/.test(created.slug) || typeof created.pem !== "string") {
+          if (!Number.isSafeInteger(created.id) || created.id <= 0 || typeof created.slug !== "string" || !/^[a-z0-9-]+$/.test(created.slug) || typeof created.pem !== "string") {
             throw new Error("Invalid App credentials returned by GitHub. Inspect the registration in GitHub settings.");
           }
           createPrivateKey(created.pem);
@@ -185,14 +260,26 @@ export async function startSetup({ repo, organization = false }, { request = git
       if (busy) { page(res, "<h1>Another setup step is running</h1>", 409); return; }
       busy = true;
       try {
-        if (url.pathname === "/save" && app) {
+        if (url.pathname === "/save" && app?.pem) {
           await command(["secret", "set", "CICD_OPTIMIZER_APP_PRIVATE_KEY", "--repo", repo], app.pem);
           await command(["variable", "set", "CICD_OPTIMIZER_APP_ID", "--repo", repo, "--body", String(app.id)]);
           stored = true;
           message = "App credentials saved. Install on the selected repository next.";
         } else if (url.pathname === "/verify" && stored) {
-          await verify();
-          message = "Installation verified with a short-lived repository-scoped token, which has been revoked.";
+          installed = false;
+          if (saved) {
+            verification = undefined;
+            verification = await requestSavedAppVerification(repo, app, command);
+            message = "Verification requested in GitHub Actions. Use Check verification result when the run finishes.";
+          } else {
+            await verifyInstallation(repo, app, request);
+            installed = true;
+            message = "Installation verified with a short-lived repository-scoped token, which has been revoked.";
+          }
+        } else if (url.pathname === "/verify-result" && saved && verification) {
+          installed = false;
+          installed = await checkSavedAppVerification(repo, verification, command);
+          message = installed ? "Installation verified in GitHub Actions; the verification token was revoked." : "Verification is still queued or running. Check the linked run and retry.";
         } else if (url.pathname === "/copilot" && installed) {
           const token = body.get("token")?.trim();
           if (!token || /[\s\0]/.test(token) || token.length > 1024) throw new Error("Enter a valid user token.");
@@ -232,9 +319,9 @@ export async function startSetup({ repo, organization = false }, { request = git
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { repo: { type: "string" }, help: { type: "boolean", short: "h" } } });
+  const { values } = parseArgs({ options: { repo: { type: "string" }, "resume-app": { type: "string" }, help: { type: "boolean", short: "h" } } });
   if (values.help) {
-    console.log("Usage: npm run setup -- --repo OWNER/REPOSITORY\nRequires Node 22+ and an authenticated GitHub CLI with repository admin access. Opens a loopback-only manifest ceremony; every credential/installation step requires an explicit button.");
+    console.log("Usage: npm run setup -- --repo OWNER/REPOSITORY [--resume-app APP-SLUG]\nRequires Node 22+ and an authenticated GitHub CLI with repository admin access. Resume reuses saved credential metadata without retrieving or replacing secrets. Every credential/installation step requires an explicit button.");
     return;
   }
   const repo = values.repo ?? process.env.GITHUB_REPOSITORY;
@@ -244,7 +331,8 @@ async function main() {
   if (!metadata.permissions?.admin) throw new Error("Repository admin access is required to save setup credentials.");
   const organization = metadata.owner.type === "Organization";
   if (!organization && metadata.owner.login.toLowerCase() !== actor.login.toLowerCase()) throw new Error("Register a private App as the repository owner.");
-  const setup = await startSetup({ repo, organization });
+  const saved = values["resume-app"] ? await loadSavedSetup(repo, values["resume-app"]) : undefined;
+  const setup = await startSetup({ repo, organization, saved });
   console.log(`Open in your signed-in browser:\n${setup.url}\nNo credentials are logged. Stop with Ctrl+C after completing setup.`);
   for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { void setup.close(); });
 }
