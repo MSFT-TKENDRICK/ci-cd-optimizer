@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PostgresKnowledgeStore } from "../../src/knowledge/postgres-store.js";
 import { extractKnowledge } from "../../src/knowledge/extract.js";
 import { snapshotIdentity } from "../../src/knowledge/identity.js";
-import { createMitigationApplication, createMitigationDefinition } from "../../src/knowledge/mitigation.js";
+import { createMitigationApplication, createMitigationApplicationEvent, createMitigationDefinition } from "../../src/knowledge/mitigation.js";
 import { createRunObservation, runObservationIdentity } from "../../src/knowledge/run-observation.js";
 import { snapshot as workflow } from "../alerts/fixtures.js";
 import { isolatedDatabase } from "../webhooks/database.js";
@@ -97,6 +97,38 @@ describe.skipIf(!databaseUrl)("normalized Postgres knowledge", () => {
     expect(await store.list({ ...repository, limit: 0 })).toEqual([]);
     await expect(store.list({ ...repository, limit: 101 })).rejects.toThrow("limit");
   });
+
+  it("arbitrates every scope-reference index during concurrent idempotent evidence writes", async () => {
+    const peers = Array.from({ length: 3 }, () => new PostgresKnowledgeStore(database.url));
+    const writers = [store, ...peers];
+    const definition = await store.saveMitigationDefinition(legacyDefinition());
+    try {
+      for (let round = 1; round <= 12; round++) {
+        const sha = round.toString(16).padStart(40, "0");
+        const project = extractKnowledge(repository, sha, input(), { now });
+        await Promise.all(writers.map((writer) => writer.save(project)));
+        expect(await store.load(repository, project.id)).toEqual(project);
+        const observation = createRunObservation(repository, { ...workflow(100 + round, 60, []), headSha: sha },
+          { status: "linked", snapshotId: project.id }, now);
+        await Promise.all(writers.map((writer) => writer.saveRunObservation(observation, project)));
+        expect(await store.loadRunObservation(repository, observation.id)).toEqual(observation);
+        const application = createMitigationApplication({
+          target: repository, definitionId: definition.id, topologySnapshotId: project.id, projectIds: project.projects.map((item) => item.id),
+          change: { kind: "commit", sha }, createdAt: now.toISOString(),
+        });
+        await Promise.all(writers.map((writer) => writer.saveMitigationApplication(application)));
+        expect(await store.loadMitigationApplication(repository, application.id)).toEqual(application);
+        const event = createMitigationApplicationEvent({
+          target: repository, applicationId: application.id, state: "applied", observedAt: new Date(now.getTime() + 1000).toISOString(),
+        });
+        await Promise.all(writers.map((writer) => writer.appendMitigationApplicationEvent(event)));
+        expect(await store.listMitigationApplicationEvents(repository, application.id, 10)).toEqual([event]);
+      }
+      expect(await store.list({ ...repository, limit: 100 })).toHaveLength(12);
+      expect(await store.listRunObservations({ ...repository, limit: 100 })).toHaveLength(12);
+      expect(await store.listMitigationApplications(repository, 100)).toHaveLength(12);
+    } finally { await Promise.all(peers.map((peer) => peer.close())); }
+  }, 20_000);
 
   it("rolls back every table on a mid-write failure and permits a complete retry", async () => {
     await database.sql`ALTER TABLE knowledge_technologies ADD CONSTRAINT test_reject_nx CHECK (technology <> 'nx')`;
