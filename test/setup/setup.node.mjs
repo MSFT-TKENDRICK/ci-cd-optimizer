@@ -58,7 +58,10 @@ async function fixture(t, options = {}) {
 
 test("actions-only manifest uses the hosted manifest's permissions but no OAuth or webhook", async () => {
   const manifest = registrationManifest("acme/widgets", "http://127.0.0.1:1234");
-  assert.equal(manifest.hook_attributes.active, false);
+  assert.equal(Object.hasOwn(manifest, "hook_attributes"), false);
+  assert.equal(manifest.url, "https://github.com/acme/widgets");
+  assert.equal(manifest.redirect_url, "http://127.0.0.1:1234/registered");
+  assert.equal(manifest.setup_url, "http://127.0.0.1:1234/installed");
   assert.equal(manifest.request_oauth_on_install, false);
   assert.equal(manifest.public, false);
   assert.deepEqual(manifest.default_events, []);
@@ -66,6 +69,18 @@ test("actions-only manifest uses the hosted manifest's permissions but no OAuth 
   const permissionBlock = yaml.split("default_permissions:\n")[1].split("default_events:")[0];
   const permissions = Object.fromEntries([...permissionBlock.matchAll(/^ {2}(\w+): (read|write)$/gm)].map((match) => [match[1], match[2]]));
   assert.deepEqual(APP_PERMISSIONS, permissions);
+});
+
+test("registration form submits a webhook-free manifest with local browser callbacks", async (t) => {
+  const f = await fixture(t);
+  const encoded = f.html.match(/name="manifest" value="([^"]+)"/)[1];
+  const manifest = JSON.parse(encoded.replaceAll("&quot;", '"').replaceAll("&amp;", "&"));
+  assert.equal(Object.hasOwn(manifest, "hook_attributes"), false);
+  assert.deepEqual(manifest, registrationManifest("acme/widgets", f.origin));
+  assert.equal(manifest.redirect_url, `${f.origin}/registered`);
+  assert.equal(manifest.setup_url, `${f.origin}/installed`);
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.writes.length, 0);
 });
 
 test("App JWT is a short-lived signed RS256 credential", () => {

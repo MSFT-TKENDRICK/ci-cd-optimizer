@@ -50,12 +50,12 @@ export function gh(args, input) {
 }
 
 export function registrationManifest(repo, origin) {
+  // Omit hook_attributes entirely: GitHub validates even an inactive webhook's URL.
   return {
     name: `ci-cd-optimizer-${repo.split("/")[0].toLowerCase()}`,
     url: `https://github.com/${repo}`,
     description: "Dependabot-style CI/CD findings, telemetry, and optimization pull requests.",
     public: false,
-    hook_attributes: { url: `${origin}/unused-webhook`, active: false },
     redirect_url: `${origin}/registered`,
     setup_url: `${origin}/installed`,
     default_permissions: APP_PERMISSIONS,

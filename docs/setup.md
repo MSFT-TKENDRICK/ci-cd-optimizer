@@ -99,6 +99,11 @@ retries pending findings. Installation authorization and coding-agent user autho
 This mode uses the repository's scheduled/event-driven Actions workflows, not a webhook service. It does **not**
 deploy PostgreSQL, a webhook receiver, or a permanent OAuth refresh service.
 
+The Actions-only manifest omits `hook_attributes` entirely. GitHub validates a webhook URL even when `active` is
+`false`, so a loopback placeholder is rejected. Only the browser registration and installation callbacks use the
+local server. If GitHub reports an unreachable `127.0.0.1` hook URL, update the checkout, restart setup, and open the
+newly printed URL instead of resubmitting the old registration form.
+
 **Manual fallback.** Open this prefilled registration page. Replace `<you>` with a globally unique suffix,
 or use `https://github.com/organizations/<org>/settings/apps/new?...` for an organization:
 
