@@ -87,7 +87,7 @@ export async function startSetup({ repo, organization = false }, { request = git
   const statusPage = (res) => {
     const form = (action, label, extra = "") => `<form method="post" action="${action}"><input type="hidden" name="csrf" value="${csrf}">${extra}<button>${label}</button></form>`;
     const settings = `https://github.com/settings/personal-access-tokens/new?name=CI%2FCD%20Optimizer%20assignment&description=Assign%20optimization%20issues%20to%20Copilot&target_name=${encodeURIComponent(repo.split("/")[0])}&expires_in=30&issues=write`;
-      const manifest = registrationManifest(repo, origin);
+    const manifest = registrationManifest(repo, origin);
     const registration = organization
       ? `https://github.com/organizations/${encodeURIComponent(repo.split("/")[0])}/settings/apps/new`
       : "https://github.com/settings/apps/new";
@@ -178,6 +178,7 @@ export async function startSetup({ repo, organization = false }, { request = git
       }
       const body = new URLSearchParams(raw);
       if (body.get("csrf") !== csrf) { page(res, "<h1>Invalid form token</h1>", 403); return; }
+      if (busy) { page(res, "<h1>Another setup step is running</h1>", 409); return; }
       busy = true;
       try {
         if (url.pathname === "/save" && app) {

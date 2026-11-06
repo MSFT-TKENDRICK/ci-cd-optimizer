@@ -22089,15 +22089,37 @@ async function listManagedIssues(client, repo, kind) {
       closedAt: issue.closed_at ?? null,
       fingerprint: parsed.fingerprint,
       attributes: parsed.attributes,
+      ...issue.labels ? { copilotPending: issue.labels.some((label) => (typeof label === "string" ? label : label.name) === COPILOT_READY_LABEL) } : {},
       ...parsed.attributes.signature !== void 0 ? { signature: parsed.attributes.signature } : {}
     });
   }
   return result;
 }
+function hasCopilot(data) {
+  if (!data || typeof data !== "object" || !("assignees" in data) || !Array.isArray(data.assignees)) return false;
+  return data.assignees.some((actor) => actor !== null && typeof actor === "object" && "login" in actor && typeof actor.login === "string" && ["copilot", "copilot-swe-agent", COPILOT_LOGIN].includes(actor.login.toLowerCase()));
+}
+async function clearPending(client, repo, number2) {
+  try {
+    await client.request("DELETE /repos/{owner}/{repo}/issues/{issue_number}/labels/{name}", {
+      ...repo,
+      issue_number: number2,
+      name: COPILOT_READY_LABEL
+    });
+  } catch (error2) {
+    if (httpStatus(error2) !== 404) throw error2;
+  }
+}
 async function assignCopilot(issueClient, userClient, repo, issueNumber, assignment) {
+  const current = await issueClient.request("GET /repos/{owner}/{repo}/issues/{issue_number}", { ...repo, issue_number: issueNumber });
+  if (hasCopilot(current.data)) {
+    await clearPending(issueClient, repo, issueNumber);
+    return "assigned";
+  }
   if (userClient) {
+    let accepted = false;
     try {
-      await userClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/assignees", {
+      const response = await userClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/assignees", {
         ...repo,
         issue_number: issueNumber,
         assignees: [COPILOT_LOGIN],
@@ -22109,21 +22131,21 @@ async function assignCopilot(issueClient, userClient, repo, issueNumber, assignm
           ...assignment.model ? { model: assignment.model } : {}
         }
       });
-      return "assigned";
+      accepted = hasCopilot(response.data);
     } catch (error2) {
       if (![403, 404, 422].includes(httpStatus(error2) ?? 0)) throw error2;
     }
+    if (accepted) {
+      await clearPending(issueClient, repo, issueNumber);
+      return "assigned";
+    }
   }
-  try {
-    await issueClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", {
-      ...repo,
-      issue_number: issueNumber,
-      labels: [COPILOT_READY_LABEL]
-    });
-    return "labeled";
-  } catch {
-    return "failed";
-  }
+  await issueClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", {
+    ...repo,
+    issue_number: issueNumber,
+    labels: [COPILOT_READY_LABEL]
+  });
+  return "labeled";
 }
 async function applyIssueActions(client, repo, actions, options = {}) {
   const labels = actions.flatMap((action) => action.type === "close" ? [] : action.desired.labels);
@@ -22143,13 +22165,19 @@ async function applyIssueActions(client, repo, actions, options = {}) {
       continue;
     }
     const { desired } = action;
+    if (action.type === "assign") {
+      applied.push({ action, number: action.number, copilot: await assignCopilot(client, options.copilotClient, repo, action.number, options.copilot ?? {}) });
+      continue;
+    }
+    const handoff = desired.assignCopilot && (action.type !== "update" || action.retryCopilot === true);
     let number2;
     if (action.type === "create") {
       const response = await client.request("POST /repos/{owner}/{repo}/issues", {
         ...repo,
         title: desired.title,
         body: desired.body,
-        labels: desired.labels,
+        // Persist the handoff intent with creation, before an assignment request can fail.
+        labels: handoff ? [.../* @__PURE__ */ new Set([...desired.labels, COPILOT_READY_LABEL])] : desired.labels,
         ...desired.assignees.length > 0 ? { assignees: desired.assignees } : {}
       });
       number2 = response.data.number;
@@ -22160,7 +22188,7 @@ async function applyIssueActions(client, repo, actions, options = {}) {
         issue_number: number2,
         title: desired.title,
         body: desired.body,
-        labels: desired.labels,
+        labels: handoff ? [.../* @__PURE__ */ new Set([...desired.labels, COPILOT_READY_LABEL])] : desired.labels,
         ...action.type === "reopen" ? { state: "open" } : {}
       });
       if (action.type === "update" && action.comment) {
@@ -22168,7 +22196,7 @@ async function applyIssueActions(client, repo, actions, options = {}) {
       }
     }
     const result = { action, number: number2 };
-    if (desired.assignCopilot && action.type !== "update") {
+    if (handoff) {
       result.copilot = await assignCopilot(client, options.copilotClient, repo, number2, options.copilot ?? {});
     }
     applied.push(result);
@@ -22204,7 +22232,9 @@ function planIssueSync(existing, desired, options) {
     const current = history.find((candidate) => candidate.state === "open");
     if (current) {
       if (current.signature !== issue.signature || current.title !== issue.title) {
-        actions.push({ type: "update", number: current.number, desired: issue });
+        actions.push({ type: "update", number: current.number, desired: issue, ...current.copilotPending ? { retryCopilot: true } : {} });
+      } else if (issue.assignCopilot && current.copilotPending) {
+        actions.push({ type: "assign", number: current.number, desired: issue });
       }
       continue;
     }
@@ -23791,6 +23821,8 @@ function describeScan(scan) {
   if (scan.sarif) parts2.push(`SARIF ${scan.sarif.status}`);
   if (scan.knowledge) parts2.push(`knowledge: ${scan.knowledge.snapshot.projects.length} projects, ${scan.knowledge.snapshot.technologies.length} declarations (${scan.knowledge.persistence})`);
   if (scan.issues) parts2.push(`issues: ${tally(scan.issues.actions)}${scan.issues.skipped.length ? `, ${scan.issues.skipped.length} skipped` : ""}`);
+  const awaitingAgent = scan.issues?.applied.filter((item) => item.copilot === "labeled").length ?? 0;
+  if (awaitingAgent) parts2.push(`Copilot: ${awaitingAgent} issue(s) awaiting assignment; configure a licensed user's COPILOT_ASSIGN_TOKEN (copilot:ready is not a running agent)`);
   if (scan.fixes) parts2.push(`fix PRs: ${tally(scan.fixes.actions)}${scan.fixes.skipped.length ? `, ${scan.fixes.skipped.length} skipped` : ""}`);
   if (scan.inventoryComplete === false) parts2.push(`inventory truncated (${scan.truncated?.length ?? 0} file(s))`);
   return parts2.join(" \xB7 ");
@@ -24238,12 +24270,16 @@ ${rendered.body}`,
     actions.push({ type: "create", desired });
     return plan;
   }
-  if (open3.signature === signature2) return plan;
+  if (open3.signature === signature2) {
+    if (desired.assignCopilot && open3.copilotPending) actions.push({ type: "assign", number: open3.number, desired });
+    return plan;
+  }
   const changed = open3.attributes.shape !== shape;
   actions.push({
     type: "update",
     number: open3.number,
     desired,
+    ...open3.copilotPending ? { retryCopilot: true } : {},
     ...changed ? {
       comment: `The anomaly changed on run [#${latestRun}](https://github.com/${input2.owner}/${input2.repo}/actions/runs/${latestRun}): ${alerts.map((alert) => `${alert.jobKey === void 0 ? "workflow" : `\`${alert.jobName ?? alert.jobKey}\``} ${alert.kind} +${Math.round(alert.increasePercent)}% (${alert.severity})`).join("; ")}.`
     } : {}

@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, verify } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
+import { once } from "node:events";
 import { APP_PERMISSIONS, appJwt, registrationManifest, startSetup } from "../../scripts/setup-app.mjs";
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -30,6 +32,7 @@ async function fixture(t, options = {}) {
     },
     async command(args, input) {
       writes.push({ args, input });
+      await options.beforeWrite?.(args);
       if (options.writeFailure) throw new Error("GitHub CLI failed.");
       return "";
     },
@@ -59,9 +62,9 @@ test("actions-only manifest uses the hosted manifest's permissions but no OAuth 
   assert.equal(manifest.request_oauth_on_install, false);
   assert.equal(manifest.public, false);
   assert.deepEqual(manifest.default_events, []);
-  const yaml = await readFile(new URL("../../app.yml", import.meta.url), "utf8");
+  const yaml = (await readFile(new URL("../../app.yml", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
   const permissionBlock = yaml.split("default_permissions:\n")[1].split("default_events:")[0];
-  const permissions = Object.fromEntries([...permissionBlock.matchAll(/^  (\w+): (read|write)$/gm)].map((match) => [match[1], match[2]]));
+  const permissions = Object.fromEntries([...permissionBlock.matchAll(/^ {2}(\w+): (read|write)$/gm)].map((match) => [match[1], match[2]]));
   assert.deepEqual(APP_PERMISSIONS, permissions);
 });
 
@@ -144,4 +147,43 @@ test("secret-save failure is visible and does not advance installation", async (
   assert.equal((await f.post("/save")).status, 502);
   assert.equal((await f.post("/verify")).status, 409);
   assert.ok(!(await f.fetchPage()).includes(pem));
+});
+
+test("overlapping streamed forms cannot perform concurrent credential writes", async (t) => {
+  let release;
+  let entered;
+  let secrets = 0;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const writing = new Promise((resolve) => { entered = resolve; });
+  const f = await fixture(t, { async beforeWrite(args) {
+    if (args[0] !== "secret") return;
+    if (++secrets > 1) throw new Error("Concurrent credential write");
+    entered();
+    await gate;
+  } });
+  await f.callback();
+  const csrf = (await f.fetchPage()).match(/name="csrf" value="([^"]+)"/)[1];
+  const streamed = () => {
+    let req;
+    const result = new Promise((resolve, reject) => {
+      req = httpRequest(`${f.origin}/save`, {
+        method: "POST", headers: { Cookie: f.cookie, Origin: f.origin, Expect: "100-continue" },
+      }, (res) => { res.resume(); res.on("end", () => resolve(res.statusCode)); });
+      req.on("error", reject);
+    });
+    const ready = once(req, "continue");
+    req.flushHeaders();
+    return { req, ready, result };
+  };
+  const first = streamed();
+  const second = streamed();
+  try {
+    await Promise.all([first.ready, second.ready]);
+    first.req.end(new URLSearchParams({ csrf }).toString());
+    await writing;
+    second.req.end(new URLSearchParams({ csrf }).toString());
+    assert.equal(await second.result, 409);
+    assert.equal(secrets, 1);
+  } finally { release(); }
+  assert.equal(await first.result, 303);
 });
