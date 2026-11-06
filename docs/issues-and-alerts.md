@@ -34,10 +34,26 @@ agents:
   repository.
 - **App:** set `COPILOT_ASSIGN_TOKEN` on the server.
 
-Without such a token, or if assignment fails, the issue is labeled `copilot:ready`. A workflow that holds a user
-token can then assign it; see [examples/workflows/assign-copilot.yml](../examples/workflows/assign-copilot.yml).
-Labels added by `GITHUB_TOKEN` don't trigger workflows. This hand-off therefore needs the App, an App token in the
-scan workflow (`CICD_OPTIMIZER_APP_ID`), or a `CICD_OPTIMIZER_TOKEN` personal access token.
+Without such a token, or if GitHub refuses assignment, the issue remains labeled `copilot:ready`. **This is a pending
+handoff, not a running agent.** The scan summary reports it explicitly. Pending intent is stored with issue creation,
+so a transient assignment failure does not lose the work. Once authorization is supplied or renewed, the next scan
+retries open pending findings even when their content has not changed. The same reconciliation applies to recipe
+adaptation issues and unchanged active duration alerts.
+
+An accepted response must actually list Copilot as an assignee. Reconciliation checks live assignees before assigning,
+so an already assigned issue is not started again; successful assignment removes `copilot:ready`. Label persistence
+and unexpected API errors fail visibly. Closed/dismissed issues are not queued. Removing `copilot:ready` from an open
+issue stops retries; subsequent content updates alone do not reassign it. Reopening a resolved finding is new work.
+For an automatically reopened issue, the completed Copilot assignment is removed before reopening, so the recurrence
+can start a fresh agent. Removal is verified; a failure leaves the issue closed for a later retry.
+
+The [setup wizard](setup.md#3-github-app-owner) walks through registration, installation and the separate user token.
+Give the token an expiry and renew it before that date. Installing the App alone cannot authorize an agent session.
+
+The optional [label-triggered workflow](../examples/workflows/assign-copilot.yml) is another handoff path.
+Labels added by `GITHUB_TOKEN` don't trigger workflows, so that optional path needs the App, an App token in the scan
+workflow, or a `CICD_OPTIMIZER_TOKEN` personal access token. The scan's direct assignment and reconciliation do not
+depend on label-triggered events.
 
 Fixable findings can also become Dependabot-style pull requests directly, with no agent involved. See
 [configuration.md](configuration.md#fix-pull-requests-fixes).
@@ -101,8 +117,10 @@ duration, the statistic behind it, a duration chart, and links to the runs invol
 Contexts distinguish branches, trigger events, executed job/matrix sets, dependencies and observed runner labels/groups.
 Only successful first attempts with complete, versioned collection provenance are eligible. Partial/warmed retries,
 legacy or incomplete collection, missing runner information and failed jobs cannot open, refresh or close these alerts.
-Changed contexts have separate issue identities; existing legacy workflow-only alerts are left for human review, not
-automatically closed or repurposed. See the [comparison contract](architecture.md#workload-comparison-contract).
+Changed contexts have separate issue identities. A qualified replacement supersedes legacy workflow-only alerts and
+same-branch contexts proven absent from the bounded active-context window; unknown or still-active contexts are
+preserved. Existing dismissals continue to suppress replacement alerts during the snooze period.
+See the [comparison contract](architecture.md#workload-comparison-contract).
 
 ### Reports
 

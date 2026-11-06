@@ -47,6 +47,10 @@ npm run cli -- rules --format markdown       # rule catalog
 `command: scan` runs the full Dependabot-style pass through the API: SARIF, issues, and fix PRs.
 `command: telemetry` reports on a completed run and raises duration alerts.
 
+For App-authored fixes and coding-agent handoff from Actions, run `npm run setup -- --repo OWNER/REPOSITORY`.
+The guided browser ceremony registers and installs the App, stores its credentials, and separately authorizes the
+Copilot-licensed user token needed to launch agents. See [setup](docs/setup.md#3-github-app-owner).
+
 **GitHub App.** A Probot service that does the same without any workflow:
 - On every pull request, a check run with introduced findings.
 - On pushes to the default branch and on install, a repository scan.

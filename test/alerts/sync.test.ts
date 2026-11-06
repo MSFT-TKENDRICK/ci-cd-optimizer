@@ -134,6 +134,17 @@ describe("planAlertSync", () => {
     expect(action.comment).toContain("`build` regression");
   });
 
+  it("retries pending assignment for unchanged and refreshed alerts, but respects removed pending labels", () => {
+    const config = { ...DEFAULT_CONFIG.alerts, assignCopilot: true };
+    const first = planAlertSync(input({ series: regressed, config })).actions[0];
+    if (first?.type !== "create") throw new Error("expected create");
+    const existing = existingFrom(first.desired.body, { copilotPending: true });
+    expect(planAlertSync(input({ series: regressed, config, existing: [existing] })).actions).toMatchObject([{ type: "assign", number: 41 }]);
+    const next = regressed.map((series) => ({ ...series, points: [...series.points.slice(1), { ...series.points.at(-1)!, runId: 2000 }] }));
+    expect(planAlertSync(input({ series: next, config, existing: [existing] })).actions).toMatchObject([{ type: "update", retryCopilot: true }]);
+    expect(planAlertSync(input({ series: regressed, config, existing: [{ ...existing, copilotPending: false }] })).actions).toEqual([]);
+  });
+
   it("closes the issue only after recovery relative to the original baseline", () => {
     const first = planAlertSync(input({ series: regressed.slice(0, 1) })).actions[0];
     if (first?.type !== "create") throw new Error("expected create");

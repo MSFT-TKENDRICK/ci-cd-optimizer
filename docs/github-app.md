@@ -34,7 +34,12 @@ with the minimum permissions:
 | Security events | write | SARIF upload to code scanning. |
 | Workflows | write | Fix pull requests that edit `.github/workflows/**`. |
 
-The fastest path uses Probot's manifest flow:
+For **Actions-hosted automation without a public server**, run `npm run setup -- --repo OWNER/REPOSITORY`.
+The [guided setup](setup.md#3-github-app-owner) registers the App, stores its key, verifies a selected-repository
+installation, and separately authorizes Copilot assignment. It leaves webhooks inactive; it is not a hosted
+deployment and does not create the durable database.
+
+For the **webhook-driven hosted App**, use Probot's manifest flow:
 
 1. Set the webhook and setup URLs in `app.yml` to your deployment, replacing the `example.com` placeholders.
 2. Run `npm ci && npm run build && npm start` with no `APP_ID`.
@@ -42,7 +47,7 @@ The fastest path uses Probot's manifest flow:
 
 You can also create the App manually under **Settings → Developer settings → GitHub Apps** with the permissions and
 events above. The webhook path is `/api/github/webhooks`. For Actions-only use without hosting, the
-[setup checklist](setup.md#3-github-app-owner) has a prefilled registration link.
+[setup checklist](setup.md#3-github-app-owner) includes the guided flow and a manual fallback.
 
 ## Configure
 

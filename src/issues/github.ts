@@ -14,6 +14,7 @@ interface RawIssue {
   state_reason?: string | null;
   closed_at?: string | null;
   pull_request?: unknown;
+  labels?: Array<string | { name?: string }>;
 }
 
 export interface ManagedIssue extends ExistingIssue {
@@ -36,6 +37,7 @@ export async function listManagedIssues(client: GitHubClient, repo: RepoRef, kin
       closedAt: issue.closed_at ?? null,
       fingerprint: parsed.fingerprint,
       attributes: parsed.attributes,
+      ...(issue.labels ? { copilotPending: issue.labels.some((label) => (typeof label === "string" ? label : label.name) === COPILOT_READY_LABEL) } : {}),
       ...(parsed.attributes.signature !== undefined ? { signature: parsed.attributes.signature } : {}),
     });
   }
@@ -43,6 +45,22 @@ export async function listManagedIssues(client: GitHubClient, repo: RepoRef, kin
 }
 
 export type CopilotAssignmentResult = "assigned" | "labeled" | "failed";
+
+function hasCopilot(data: unknown): data is { assignees: unknown[]; state?: unknown } {
+  if (!data || typeof data !== "object" || !("assignees" in data) || !Array.isArray(data.assignees)) return false;
+  return data.assignees.some((actor: unknown) => actor !== null && typeof actor === "object" && "login" in actor &&
+    typeof actor.login === "string" && ["copilot", "copilot-swe-agent", COPILOT_LOGIN].includes(actor.login.toLowerCase()));
+}
+
+async function clearPending(client: GitHubClient, repo: RepoRef, number: number): Promise<void> {
+  try {
+    await client.request("DELETE /repos/{owner}/{repo}/issues/{issue_number}/labels/{name}", {
+      ...repo, issue_number: number, name: COPILOT_READY_LABEL,
+    });
+  } catch (error) {
+    if (httpStatus(error) !== 404) throw error;
+  }
+}
 
 /**
  * Assigns the Copilot coding agent. The assignment API requires a *user* token (PAT or user-to-server token of a
@@ -56,9 +74,16 @@ export async function assignCopilot(
   issueNumber: number,
   assignment: CopilotAssignment,
 ): Promise<CopilotAssignmentResult> {
+  // A retry after a lost response must not start another agent on already-assigned work.
+  const current = await issueClient.request("GET /repos/{owner}/{repo}/issues/{issue_number}", { ...repo, issue_number: issueNumber });
+  if (hasCopilot(current.data)) {
+    await clearPending(issueClient, repo, issueNumber);
+    return "assigned";
+  }
   if (userClient) {
+    let accepted = false;
     try {
-      await userClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/assignees", {
+      const response = await userClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/assignees", {
         ...repo,
         issue_number: issueNumber,
         assignees: [COPILOT_LOGIN],
@@ -70,21 +95,22 @@ export async function assignCopilot(
           ...(assignment.model ? { model: assignment.model } : {}),
         },
       });
-      return "assigned";
+      // The REST API can silently ignore an unassignable login even with a 2xx response.
+      accepted = hasCopilot(response.data);
     } catch (error) {
       if (![403, 404, 422].includes(httpStatus(error) ?? 0)) throw error;
     }
+    if (accepted) {
+      await clearPending(issueClient, repo, issueNumber);
+      return "assigned";
+    }
   }
-  try {
-    await issueClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", {
-      ...repo,
-      issue_number: issueNumber,
-      labels: [COPILOT_READY_LABEL],
-    });
-    return "labeled";
-  } catch {
-    return "failed";
-  }
+  await issueClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", {
+    ...repo,
+    issue_number: issueNumber,
+    labels: [COPILOT_READY_LABEL],
+  });
+  return "labeled";
 }
 
 export interface ApplyIssueOptions {
@@ -122,24 +148,40 @@ export async function applyIssueActions(
       continue;
     }
     const { desired } = action;
+    if (action.type === "assign") {
+      applied.push({ action, number: action.number, copilot: await assignCopilot(client, options.copilotClient, repo, action.number, options.copilot ?? {}) });
+      continue;
+    }
+    const handoff = desired.assignCopilot && (action.type !== "update" || action.retryCopilot === true);
     let number: number;
     if (action.type === "create") {
       const response = await client.request("POST /repos/{owner}/{repo}/issues", {
         ...repo,
         title: desired.title,
         body: desired.body,
-        labels: desired.labels,
+        // Persist the handoff intent with creation, before an assignment request can fail.
+        labels: handoff ? [...new Set([...desired.labels, COPILOT_READY_LABEL])] : desired.labels,
         ...(desired.assignees.length > 0 ? { assignees: desired.assignees } : {}),
       });
       number = (response.data as { number: number }).number;
     } else {
       number = action.number;
+      if (action.type === "reopen" && handoff) {
+        const current = await client.request("GET /repos/{owner}/{repo}/issues/{issue_number}", { ...repo, issue_number: number });
+        if (hasCopilot(current.data) && current.data.state === "closed") {
+          // Remove the completed session before reopening. A failed later step then remains retryable.
+          const removed = await client.request("DELETE /repos/{owner}/{repo}/issues/{issue_number}/assignees", {
+            ...repo, issue_number: number, assignees: [COPILOT_LOGIN],
+          });
+          if (hasCopilot(removed.data)) throw new Error(`GitHub did not remove the completed Copilot assignment from issue #${number}`);
+        }
+      }
       await client.request("PATCH /repos/{owner}/{repo}/issues/{issue_number}", {
         ...repo,
         issue_number: number,
         title: desired.title,
         body: desired.body,
-        labels: desired.labels,
+        labels: handoff ? [...new Set([...desired.labels, COPILOT_READY_LABEL])] : desired.labels,
         ...(action.type === "reopen" ? { state: "open" } : {}),
       });
       if (action.type === "update" && action.comment) {
@@ -147,7 +189,7 @@ export async function applyIssueActions(
       }
     }
     const result: AppliedIssueAction = { action, number };
-    if (desired.assignCopilot && action.type !== "update") {
+    if (handoff) {
       result.copilot = await assignCopilot(client, options.copilotClient, repo, number, options.copilot ?? {});
     }
     applied.push(result);

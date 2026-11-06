@@ -19,12 +19,14 @@ export interface ExistingIssue {
   stateReason?: string | null;
   closedAt?: string | null;
   title: string;
+  copilotPending?: boolean;
 }
 
 export type IssueAction =
   | { type: "create"; desired: DesiredIssue }
-  | { type: "update"; number: number; desired: DesiredIssue; comment?: string }
+  | { type: "update"; number: number; desired: DesiredIssue; comment?: string; retryCopilot?: boolean }
   | { type: "reopen"; number: number; desired: DesiredIssue }
+  | { type: "assign"; number: number; desired: DesiredIssue }
   | { type: "close"; number: number; fingerprint: string; comment: string };
 
 export interface SkippedIssue {
@@ -81,7 +83,9 @@ export function planIssueSync(existing: readonly ExistingIssue[], desired: reado
     const current = history.find((candidate) => candidate.state === "open");
     if (current) {
       if (current.signature !== issue.signature || current.title !== issue.title) {
-        actions.push({ type: "update", number: current.number, desired: issue });
+        actions.push({ type: "update", number: current.number, desired: issue, ...(current.copilotPending ? { retryCopilot: true } : {}) });
+      } else if (issue.assignCopilot && current.copilotPending) {
+        actions.push({ type: "assign", number: current.number, desired: issue });
       }
       continue;
     }

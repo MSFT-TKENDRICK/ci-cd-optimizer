@@ -27,8 +27,21 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           BASE: ${{ github.event.repository.default_branch }}
         run: |
-          gh api --method POST "repos/$REPO/issues/$ISSUE/assignees" \
-            -f 'assignees[]=copilot-swe-agent[bot]' \
-            -f "agent_assignment[target_repo]=$REPO" \
-            -f "agent_assignment[base_branch]=$BASE"
-          gh api --method DELETE "repos/$REPO/issues/$ISSUE/labels/copilot%3Aready" || true
+          set -euo pipefail
+          test -n "$GH_TOKEN" || { echo "::error::COPILOT_ASSIGN_TOKEN is required to start a coding agent"; exit 1; }
+          current="$(gh api "repos/$REPO/issues/$ISSUE")"
+          test "$(jq -r '.state' <<< "$current")" = open || exit 0
+          has_copilot() {
+            jq -e 'any(.assignees[]?; (.login | ascii_downcase) as $login | ["copilot", "copilot-swe-agent", "copilot-swe-agent[bot]"] | index($login))' >/dev/null
+          }
+          if ! has_copilot <<< "$current"; then
+            result="$(gh api --method POST "repos/$REPO/issues/$ISSUE/assignees" \
+              -f 'assignees[]=copilot-swe-agent[bot]' \
+              -f "agent_assignment[target_repo]=$REPO" \
+              -f "agent_assignment[base_branch]=$BASE")"
+            has_copilot <<< "$result" || { echo "::error::GitHub did not accept Copilot assignment; keeping copilot:ready"; exit 1; }
+          fi
+          labels="$(gh api "repos/$REPO/issues/$ISSUE/labels")"
+          if jq -e 'any(.[]; .name == "copilot:ready")' <<< "$labels" >/dev/null; then
+            gh api --method DELETE "repos/$REPO/issues/$ISSUE/labels/copilot%3Aready"
+          fi

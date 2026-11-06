@@ -65,7 +65,41 @@ The App is needed for these:
 - **Cross-repository recipe rollout.**
 - **The hosted, webhook-driven App.**
 
-**Actions only (no hosting).** Open this prefilled registration page. Replace `<you>` with a globally unique suffix,
+**Guided setup (Actions only, no hosting).** From a checkout, with Node 22+ and an authenticated
+[GitHub CLI](https://cli.github.com/) that has repository admin access:
+
+```sh
+npm run setup -- --repo OWNER/REPOSITORY
+```
+
+No `npm ci` or TypeScript build is needed for setup. Open the printed loopback URL in your signed-in browser.
+The wizard guides each approval separately:
+
+1. Register a private App through GitHub's manifest flow (personal owner or organization). Change the proposed name
+   on GitHub if it is already taken.
+2. Save the generated key directly to `CICD_OPTIMIZER_APP_PRIVATE_KEY` and the ID to `CICD_OPTIMIZER_APP_ID`.
+   The wizard explicitly confirms the target repository; saving replaces values with those names.
+3. Install on **Only select repositories**, select the target, then verify using an App-authenticated,
+   short-lived token scoped to that repository. The verification token is revoked immediately.
+4. Authorize the coding agent separately with a Copilot-licensed user's fine-grained token: only the target repository,
+   **Issues: read and write**, and an expiry. Paste it into the local password field, never into chat.
+   The wizard validates user authentication and issue visibility and saves `COPILOT_ASSIGN_TOKEN`; a real assignment
+   is still needed to verify write permission, the Copilot license, and organization policy.
+5. Dispatch the existing `cicd-optimizer-scan.yml` workflow. Confirm the issue has Copilot as an assignee and a linked PR;
+   the `copilot:ready` label alone means the handoff is pending. Other repositories must first install the
+   [scan workflow](../examples/workflows/cicd-optimizer-scan.yml) and enable `issues.assignCopilot`.
+
+The setup server binds only to `127.0.0.1`, requires its unguessable session URL, validates registration state and form
+origins, and expires after one hour. Keys and user tokens are never logged, returned to the browser, or written to
+local files. Keep setup running until the key is saved: if it exits first, generate a replacement key in GitHub App
+settings. A failed save can be retried while setup remains open. Stop it with Ctrl+C afterward.
+Renew `COPILOT_ASSIGN_TOKEN` before expiry; rerun the credential-save command below to replace it. The next scan
+retries pending findings. Installation authorization and coding-agent user authorization are different credentials.
+
+This mode uses the repository's scheduled/event-driven Actions workflows, not a webhook service. It does **not**
+deploy PostgreSQL, a webhook receiver, or a permanent OAuth refresh service.
+
+**Manual fallback.** Open this prefilled registration page. Replace `<you>` with a globally unique suffix,
 or use `https://github.com/organizations/<org>/settings/apps/new?...` for an organization:
 
 ```text
@@ -98,6 +132,14 @@ Scope fine-grained personal access tokens to the repositories that need them, an
 ```sh
 gh secret set CICD_OPTIMIZER_TOKEN
 ```
+
+To authorize or renew coding-agent assignment:
+
+```sh
+gh secret set COPILOT_ASSIGN_TOKEN --repo OWNER/REPOSITORY
+```
+
+Enter the token at the hidden prompt. Do not copy a broad GitHub CLI login credential into this secret.
 
 ## 5. Actions access (owner)
 
