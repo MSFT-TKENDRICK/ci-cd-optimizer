@@ -163,6 +163,7 @@ export async function startSetup({ repo, organization = false, saved }, { reques
   const session = nonce();
   const template = await readFile(new URL("./setup-app.html", import.meta.url), "utf8");
   let origin;
+  let sessionCookie;
   let app = saved ? { id: saved.app.id, slug: saved.app.slug } : undefined;
   let stored = Boolean(saved);
   let installed = false;
@@ -198,7 +199,7 @@ export async function startSetup({ repo, organization = false, saved }, { reques
         ${stored ? "<p>Saved CICD_OPTIMIZER_APP_PRIVATE_KEY and CICD_OPTIMIZER_APP_ID.</p>" :
         `<p>This writes or replaces CICD_OPTIMIZER_APP_PRIVATE_KEY and CICD_OPTIMIZER_APP_ID in <strong>${escape(repo)}</strong>.</p>${form("/save", "Save credentials to this repository")}`}</section>` : ""}
       ${stored ? `<section><h2>3. Install and verify</h2><p>Choose <strong>Only select repositories</strong> and select <strong>${escape(repo)}</strong>. Installation grants access; it does not authorize Copilot as you.</p>
-        <p><a href="${installUrl()}">Install on GitHub</a></p>${saved ?
+        <p><a href="${installUrl()}" target="_blank" rel="noreferrer">Install on GitHub</a> (opens a new tab). After installing, return to this setup tab and press Verify installation.</p>${saved ?
         `<p>Verification runs in this repository's GitHub Actions using the saved key. It checks access and creates then revokes a repository-scoped token; it does not run a scan, create findings, or assign agents. Actions usage may consume your plan's allowance.</p>
         ${verification ? `<p><a href="${escape(verification.url)}" target="_blank" rel="noreferrer">View verification run</a></p>${form("/verify-result", "Check verification result")}` : ""}
         ${!verification || installed || verificationFailed ? form("/verify", verification ? "Verify again" : "Verify installation") : "<p>Verification is running. This page checks automatically; you do not need to press another button.</p>"}` : form("/verify", "Verify installation")}
@@ -230,9 +231,9 @@ export async function startSetup({ repo, organization = false, saved }, { reques
       if (req.headers.host !== new URL(origin).host) { page(res, "<h1>Invalid host</h1>", 403); return; }
       const url = new URL(req.url, origin);
       const cookie = (req.headers.cookie ?? "").split(";").map((part) => part.trim());
-      const authorized = cookie.includes(`optimizer_setup=${session}`);
+      const authorized = cookie.includes(`${sessionCookie}=${session}`);
       if (req.method === "GET" && url.pathname === "/" && (authorized || url.searchParams.get("session") === session)) {
-        res.setHeader("Set-Cookie", `optimizer_setup=${session}; HttpOnly; SameSite=Lax; Path=/; Max-Age=3600`);
+        res.setHeader("Set-Cookie", `${sessionCookie}=${session}; HttpOnly; SameSite=Lax; Path=/; Max-Age=3600`);
         if (verification && !installed && !verificationFailed && !busy) {
           busy = true;
           try { await refreshVerification(); } finally { busy = false; }
@@ -279,6 +280,9 @@ export async function startSetup({ repo, organization = false, saved }, { reques
           stored = true;
           message = "App credentials saved. Install on the selected repository next.";
         } else if (url.pathname === "/verify" && stored) {
+          if (verification && !installed && !verificationFailed) {
+            page(res, '<h1>Verification already running</h1><p>No additional run was started.</p><a href="/">Return to setup</a>', 409); return;
+          }
           installed = false;
           if (saved) {
             verification = undefined;
@@ -317,6 +321,8 @@ export async function startSetup({ repo, organization = false, saved }, { reques
   server.headersTimeout = 10_000;
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   origin = `http://127.0.0.1:${server.address().port}`;
+  // Cookies are host-scoped, not port-scoped; concurrent setup servers must not overwrite each other's sessions.
+  sessionCookie = `optimizer_setup_${server.address().port}`;
   const expiry = setTimeout(() => { expired = true; app = undefined; server.close(); server.closeAllConnections(); }, 3_600_000);
   expiry.unref();
   return {

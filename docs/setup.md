@@ -113,10 +113,13 @@ The workflow and `scripts/setup-app.mjs` / `scripts/verify-app.mjs` must exist o
 branch. This repository includes them; install them first when resuming in another repository.
 If the default branch changes while dispatching, retry verification. Resuming itself performs no writes or
 workflow dispatches. Installation and coding-agent authorization still require their separate owner actions.
+Installation opens in a separate tab. Return to the current setup tab afterward, even if GitHub's old installation
+callback points at an expired local session; verification does not depend on that callback.
 
 The setup server binds only to `127.0.0.1`, requires its unguessable session URL, validates registration state and form
 origins, and expires after one hour. Its `Referrer-Policy: same-origin` preserves the browser's `Origin` on local
 form submissions while suppressing referrers to GitHub. Missing, `null`, and foreign POST origins remain rejected.
+Session cookie names are isolated by port, so opening another local setup or test tab cannot replace this session.
 Keys and user tokens are never logged, returned to the browser, or written to
 local files. Keep setup running until the key is saved: if it exits first, generate a replacement key in GitHub App
 settings. A failed save can be retried while setup remains open. Stop it with Ctrl+C afterward.

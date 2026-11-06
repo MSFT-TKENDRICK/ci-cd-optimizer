@@ -164,6 +164,18 @@ test("missing and opaque POST origins stay forbidden with a valid session and CS
   assert.equal(f.writes.length, 2);
 });
 
+test("parallel setup tabs on different ports cannot overwrite each other's session cookies", async (t) => {
+  const first = await fixture(t);
+  const second = await fixture(t);
+  assert.notEqual(first.cookie.split("=")[0], second.cookie.split("=")[0]);
+  const cookie = `${first.cookie}; ${second.cookie}`;
+  for (const f of [first, second]) {
+    assert.equal((await fetch(f.origin, { headers: { Cookie: cookie } })).status, 200);
+    assert.equal((await f.callback()).status, 303);
+    assert.equal((await f.post("/save", {}, { Cookie: cookie })).status, 303);
+  }
+});
+
 test("installation callback is not trusted and cannot bypass verification", async (t) => {
   const f = await fixture(t);
   await f.callback();
@@ -336,6 +348,8 @@ test("resumed setup requires explicit dispatch and exact successful verification
   assert.equal(f.writes.length, 0);
   assert.equal((await f.post("/verify")).status, 303);
   assert.equal(f.calls.length, 0);
+  assert.equal((await f.post("/verify")).status, 409);
+  assert.equal(f.writes.filter(({ args }) => args.includes("POST")).length, 1);
   assert.equal((await f.post("/verify-result")).status, 303);
   assert.match(await f.fetchPage(), /still queued or running/);
   assert.equal((await f.post("/scan")).status, 409);
@@ -426,9 +440,9 @@ test("wrong App, account, permissions, suspension, or failed revocation cannot a
 
 test("saved-App workflow is manual, verification-only, and keeps inputs out of shell interpolation", async () => {
   const workflow = (await readFile(new URL("../../.github/workflows/cicd-optimizer-verify-app.yml", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
-  assert.match(workflow, /on:\n  workflow_dispatch:/);
+  assert.match(workflow, /on:\n {2}workflow_dispatch:/);
   assert.ok(!/^\s+(push|pull_request|schedule|workflow_run):/m.test(workflow));
-  assert.match(workflow, /permissions:\n  contents: read/);
+  assert.match(workflow, /permissions:\n {2}contents: read/);
   assert.match(workflow, /name: Verify selected-repository App access/);
   assert.match(workflow, /name: Verify App installation\n\s+run: node scripts\/verify-app\.mjs/);
   assert.match(workflow, /EXPECTED_APP_ID: \$\{\{ inputs\.app_id \}\}/);
