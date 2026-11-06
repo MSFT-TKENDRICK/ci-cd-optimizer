@@ -55,6 +55,7 @@ interface FakeApp {
   getHostCapabilities: Mock<App["getHostCapabilities"]>;
   getHostContext: Mock<App["getHostContext"]>;
   ontoolresult?: App["ontoolresult"];
+  onteardown?: App["onteardown"];
   onhostcontextchanged?: App["onhostcontextchanged"];
 }
 
@@ -185,6 +186,20 @@ describe("McpSetup once connected", () => {
     handshake(app);
     expect(screen.getByRole("list", { name: "Setup steps" })).toBeInTheDocument();
     expect(screen.queryByText("Waiting for the setup details")).not.toBeInTheDocument();
+  });
+
+  it("stops the ceremony, and its polling, when the host tears the view down", async () => {
+    const { app } = ceremony({ state: makeState("install") });
+    const calls = app.callServerTool.mock.calls.length;
+    await act(async () => {
+      await app.onteardown?.({}, {} as never);
+    });
+    expect(screen.queryByRole("list", { name: "Setup steps" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Waiting for the setup details");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+    expect(app.callServerTool.mock.calls.length).toBe(calls);
   });
 
   it("explains an opening call that failed", () => {

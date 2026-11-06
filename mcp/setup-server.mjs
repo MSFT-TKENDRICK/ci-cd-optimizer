@@ -97,7 +97,7 @@ export function createSetupServer({
     return run;
   };
   const supportsApps = () => getUiCapability(server.server.getClientCapabilities())?.mimeTypes?.includes(RESOURCE_MIME_TYPE) === true;
-  const authorized = (given) => active !== null && typeof given === "string" && timingSafeEqual(digest(given), digest(active.token));
+  const authorized = (given) => supportsApps() && active !== null && typeof given === "string" && timingSafeEqual(digest(given), digest(active.token));
 
   async function closeSessions() {
     const entry = active;
@@ -116,9 +116,7 @@ export function createSetupServer({
 
   function opened(entry, state) {
     const lines = [`${state.resumed ? "Resumed" : "Started"} CI/CD Optimizer setup for ${state.repo}. ${progress(state)}`];
-    lines.push(supportsApps()
-      ? "The interactive setup panel is showing in chat. The user completes each step there."
-      : `This host cannot show the interactive panel. Ask the user to open ${entry.setup.url} in a browser on this machine to complete setup.`);
+    lines.push("The interactive setup panel is showing in chat. The user completes each step there.");
     lines.push(`Do not ask for tokens or keys in chat. Call ${SETUP_TOOLS.status} to check progress.`);
     return { content: text(lines.join("\n")), structuredContent: { session: entry.token, state } };
   }
@@ -126,6 +124,11 @@ export function createSetupServer({
   const open = ({ repo, resumeApp }) => exclusive(async () => {
     const target = repo ?? await detectRepo();
     if (!validRepo(target)) return failure(400, "Pass repo as OWNER/REPOSITORY.");
+    // A host that cannot render the panel gets no session, state or link a model could act on.
+    if (!supportsApps()) {
+      const resume = resumeApp ? ` --resume-app ${resumeApp}` : "";
+      return { content: text(`This host cannot show the interactive panel. Ask the user to run \`npm run setup -- --repo ${target}${resume}\` in a terminal on their machine to complete setup.\nDo not ask for tokens or keys in chat.`) };
+    }
     const key = `${target}\n${resumeApp ?? ""}`;
     if (active) {
       const current = await active.setup.getState();

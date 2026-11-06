@@ -48,7 +48,7 @@ npm run cli -- rules --format markdown       # rule catalog
 `command: telemetry` reports on a completed run and raises duration alerts.
 
 For App-authored fixes and coding-agent handoff from Actions, run `npm run setup -- --repo OWNER/REPOSITORY`, or ask
-Copilot to set up the App after `npm ci`: an MCP App renders the same ceremony inside chat (`.github/mcp.json`).
+Copilot to set up the App after `npm ci`: an MCP App renders the same ceremony inside chat on hosts that support MCP Apps (`.github/mcp.json`; not yet validated in Copilot Desktop).
 The guided ceremony registers and installs the App, stores its credentials, and separately authorizes the
 Copilot-licensed user token needed to launch agents. See [setup](docs/setup.md#3-github-app-owner).
 

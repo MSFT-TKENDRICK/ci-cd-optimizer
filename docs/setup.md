@@ -101,7 +101,7 @@ Resume reads the public App identity, the saved ID variable, and repository secr
 a mismatched App or missing key instead of replacing credentials. GitHub secrets cannot be read back; the key
 never leaves GitHub. If an assignment token is already saved, it is retained, not revalidated or overwritten.
 
-Select **Verify installation** once. The page checks automatically every five seconds until the verification
+Select **Verify installation** once. The page checks automatically every few seconds until the verification
 finishes; **Check verification result** is also available as a manual fallback. This explicitly dispatches
 the [verification-only workflow](../.github/workflows/cicd-optimizer-verify-app.yml) on the default branch,
 using the saved key on the runner. It checks the same account, selected-repository scope, permissions, and repository
@@ -161,7 +161,8 @@ surfaces behave identically and share one implementation.
    the `cicd-optimizer-setup` server, and project servers load only in a trusted folder. Its `node mcp/setup-server.mjs`
    path is relative to the working directory. A session that was already running must be restarted to load it.
 3. Ask Copilot to "set up the CI/CD Optimizer App for this repository". It calls `cicd_optimizer_setup`, optionally with
-   `repo` and `resumeApp` (the App slug, to continue an App whose key is already saved), and the panel appears in chat.
+   `repo` and `resumeApp` (the App slug, to continue an App whose key is already saved). A host that advertises MCP Apps
+   renders the panel in chat; rendering in Copilot Desktop itself has not been validated yet, only in the stand-in host below.
 
 Run `npm run mcp` to start the server by hand when debugging. It speaks the protocol on stdout and logs to stderr.
 
@@ -175,13 +176,16 @@ The panel cannot take a secret. No tool accepts a token, key or password, and **
 in chat only as a link to the local setup page, where you paste the Copilot-licensed token into a password field.
 GitHub's manifest flow redirects the browser back to the local server, so registration and installation also open
 `127.0.0.1` links (through the host's open-link capability) while the setup is running, for at most one hour.
-Hosts that do not support MCP Apps get a text result with the local setup URL instead, which is the same as the CLI output.
+Hosts that do not advertise MCP Apps support get only the instruction to run `npm run setup -- --repo OWNER/REPOSITORY`
+in a terminal: no session, state or URL is returned, and the panel-only tools reject every call.
 
 The panel's session token is generated per setup and kept out of model-visible text. It travels in the tool result's
 `structuredContent`, which the MCP Apps specification reserves for the UI. Hosts must also hide `visibility: ["app"]`
 tools from the model. A host that ignored either rule could let the model press the panel's buttons (save the credentials
 you already registered, verify, dispatch the scan). The server still rejects calls without the token, there is no tool
-for secrets, and the failure mode is bounded by those three actions.
+for secrets, and the failure mode is bounded by those three actions. `structuredContent` also carries the local setup
+page link, so a host that exposed it to a model with an HTTP tool could reach the page's token endpoint, but only if the
+model supplied a token itself, which a shell-capable model could already use directly.
 
 The MCP server and `npm run setup` are developer tools. The production container image installs only runtime
 dependencies, so it contains neither.

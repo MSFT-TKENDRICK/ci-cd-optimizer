@@ -501,18 +501,23 @@ test("a setup holding an App key that is not saved yet is never replaced", async
   assertFailure(await h.call(STATE, { session: first.session }), 401, /not authorized/);
 });
 
-test("without MCP Apps support the open tool hands over the local setup link instead of a panel", async (t) => {
+test("without MCP Apps support the open tool starts nothing and points to the CLI", async (t) => {
   const h = await connect(t, { ui: false });
-  const { result, session, state } = await openPanel(h);
+  const result = await h.call(OPEN, { repo: REPO });
   const text = textOf(result);
-  assert.ok(text.includes(state.urls.setup));
+  assert.ok(!result.isError, text);
+  assert.equal(result.structuredContent, undefined, "no session or state is handed to a host that cannot render the panel");
   assert.match(text, /This host cannot show the interactive panel\./);
-  assert.ok(!text.includes(session), "the panel token is never model-visible");
-  assert.equal((await fetch(state.urls.setup)).status, 200);
+  assert.ok(text.includes(`npm run setup -- --repo ${REPO}`));
+  assert.ok(!/https?:\/\//.test(text), "no capability URL is returned");
+  assert.match(textOf(await h.call(STATUS)), /No setup is in progress/);
+
+  const forged = await h.call(SAVE, { session: "anything", confirm: true });
+  assertFailure(forged, 401, /not authorized/);
 
   const status = textOf(await h.call(STATUS));
   assert.match(status, /This host does not advertise MCP Apps support\.$/);
-  assertModelSafe({ content: [{ text: status }] }, session);
+  assertModelSafe({ content: [{ text: status }] }, "anything");
 });
 
 test("the repository defaults from GITHUB_REPOSITORY, then the gh working directory, and is validated", async (t) => {

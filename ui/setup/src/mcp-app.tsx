@@ -22,6 +22,11 @@ export function McpSetup() {
     // Handlers go on before the handshake so the opening tool result cannot be missed.
     onAppCreated: (created) => {
       created.ontoolresult = (result) => setOutcome(parseBootResult(result));
+      // Unmounting the panel stops its polling timers when the host tears the view down.
+      created.onteardown = async () => {
+        setOutcome(null);
+        return {};
+      };
       created.onhostcontextchanged = (context) => {
         if (context.theme) applyDocumentTheme(context.theme);
       };
