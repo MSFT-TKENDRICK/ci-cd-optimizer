@@ -90,7 +90,9 @@ The wizard guides each approval separately:
    [scan workflow](../examples/workflows/cicd-optimizer-scan.yml) and enable `issues.assignCopilot`.
 
 The setup server binds only to `127.0.0.1`, requires its unguessable session URL, validates registration state and form
-origins, and expires after one hour. Keys and user tokens are never logged, returned to the browser, or written to
+origins, and expires after one hour. Its `Referrer-Policy: same-origin` preserves the browser's `Origin` on local
+form submissions while suppressing referrers to GitHub. Missing, `null`, and foreign POST origins remain rejected.
+Keys and user tokens are never logged, returned to the browser, or written to
 local files. Keep setup running until the key is saved: if it exits first, generate a replacement key in GitHub App
 settings. A failed save can be retried while setup remains open. Stop it with Ctrl+C afterward.
 Renew `COPILOT_ASSIGN_TOKEN` before expiry; rerun the credential-save command below to replace it. The next scan
@@ -103,6 +105,12 @@ The Actions-only manifest omits `hook_attributes` entirely. GitHub validates a w
 `false`, so a loopback placeholder is rejected. Only the browser registration and installation callbacks use the
 local server. If GitHub reports an unreachable `127.0.0.1` hook URL, update the checkout, restart setup, and open the
 newly printed URL instead of resubmitting the old registration form.
+
+If a local action such as `/save` shows **Forbidden**, return to the setup page in the same browser and submit its
+button instead of refreshing the action URL. An older setup process using `Referrer-Policy: no-referrer` rejects
+even valid browser forms because they send `Origin: null`; updating the checkout does not update a running process.
+Before registration, restart setup from the updated checkout. After registration, keep the process open if the key
+is unsaved: restarting discards it and requires a replacement key from GitHub App settings, not another registration.
 
 **Manual fallback.** Open this prefilled registration page. Replace `<you>` with a globally unique suffix,
 or use `https://github.com/organizations/<org>/settings/apps/new?...` for an organization:

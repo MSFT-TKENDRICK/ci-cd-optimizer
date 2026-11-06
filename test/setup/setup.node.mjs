@@ -83,6 +83,16 @@ test("registration form submits a webhook-free manifest with local browser callb
   assert.equal(f.writes.length, 0);
 });
 
+test("browser form policy preserves local origins without sending cross-origin referrers", async (t) => {
+  const f = await fixture(t);
+  const page = await fetch(f.origin, { headers: { Cookie: f.cookie } });
+  assert.equal(page.headers.get("referrer-policy"), "same-origin");
+  assert.equal((await f.callback()).headers.get("referrer-policy"), "same-origin");
+  const saved = await f.post("/save");
+  assert.equal(saved.status, 303);
+  assert.equal(saved.headers.get("referrer-policy"), "same-origin");
+});
+
 test("App JWT is a short-lived signed RS256 credential", () => {
   const jwt = appJwt({ id: 123, pem });
   const [header, payload, signature] = jwt.split(".");
@@ -126,6 +136,24 @@ test("loopback setup rejects missing cookies, invalid state, cross-origin writes
   assert.equal((await f.post("/save", { csrf: "wrong" })).status, 403);
   assert.equal(f.writes.length, 0);
   assert.equal(f.calls.length, 1);
+});
+
+test("missing and opaque POST origins stay forbidden with a valid session and CSRF token", async (t) => {
+  const f = await fixture(t);
+  await f.callback();
+  const csrf = (await f.fetchPage()).match(/name="csrf" value="([^"]+)"/)[1];
+  for (const origin of [undefined, "null"]) {
+    const result = await fetch(`${f.origin}/save`, {
+      method: "POST",
+      headers: { Cookie: f.cookie, ...(origin ? { Origin: origin } : {}) },
+      body: new URLSearchParams({ csrf }),
+    });
+    assert.equal(result.status, 403);
+    assert.match(await result.text(), /href="\/">Return to setup/);
+  }
+  assert.equal(f.writes.length, 0);
+  assert.equal((await f.post("/save")).status, 303);
+  assert.equal(f.writes.length, 2);
 });
 
 test("installation callback is not trusted and cannot bypass verification", async (t) => {
