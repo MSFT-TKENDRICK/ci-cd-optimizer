@@ -185,4 +185,37 @@ describe("applyIssueActions", () => {
     expect(client.calls.some((call) => call.route.startsWith("PATCH"))).toBe(false);
     expect(user.calls).toHaveLength(1);
   });
+
+  it("removes a completed assignment before reopening so recurrence starts a new agent", async () => {
+    let assigned = true;
+    let state = "closed";
+    const client = fakeClient((route, params) => {
+      if (route === "GET /repos/{owner}/{repo}/labels") return [];
+      if (route === "DELETE /repos/{owner}/{repo}/issues/{issue_number}/assignees") assigned = false;
+      if (route.startsWith("PATCH") && params.state === "open") state = "open";
+      return { state, assignees: assigned ? [{ login: "Copilot" }] : [] };
+    });
+    const user = fakeClient(() => ({ assignees: [{ login: "Copilot" }] }));
+    await applyIssueActions(client, repo, [{ type: "reopen", number: 13, desired: desired({ assignCopilot: true }) }], { copilotClient: user });
+    const removal = client.calls.findIndex((call) => call.route.endsWith("/assignees"));
+    const reopening = client.calls.findIndex((call) => call.route.startsWith("PATCH"));
+    expect(removal).toBeGreaterThan(-1);
+    expect(removal).toBeLessThan(reopening);
+    expect(client.calls[removal]?.parameters.assignees).toEqual([COPILOT_LOGIN]);
+    expect(user.calls).toHaveLength(1);
+  });
+
+  it("does not reopen when GitHub silently ignores removal of the completed assignment", async () => {
+    const client = fakeClient((route) => route === "GET /repos/{owner}/{repo}/labels" ? [] : { state: "closed", assignees: [{ login: "Copilot" }] });
+    await expect(applyIssueActions(client, repo, [{ type: "reopen", number: 13, desired: desired({ assignCopilot: true }) }])).rejects.toThrow("did not remove");
+    expect(client.calls.some((call) => call.route.startsWith("PATCH"))).toBe(false);
+  });
+
+  it("does not remove an agent when another scanner already reopened the issue", async () => {
+    const client = fakeClient((route) => route === "GET /repos/{owner}/{repo}/labels" ? [] : { state: "open", assignees: [{ login: "Copilot" }] });
+    const user = fakeClient();
+    await applyIssueActions(client, repo, [{ type: "reopen", number: 13, desired: desired({ assignCopilot: true }) }], { copilotClient: user });
+    expect(client.calls.some((call) => call.route.endsWith("/assignees"))).toBe(false);
+    expect(user.calls).toEqual([]);
+  });
 });

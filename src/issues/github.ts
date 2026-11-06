@@ -46,7 +46,7 @@ export async function listManagedIssues(client: GitHubClient, repo: RepoRef, kin
 
 export type CopilotAssignmentResult = "assigned" | "labeled" | "failed";
 
-function hasCopilot(data: unknown): boolean {
+function hasCopilot(data: unknown): data is { assignees: unknown[]; state?: unknown } {
   if (!data || typeof data !== "object" || !("assignees" in data) || !Array.isArray(data.assignees)) return false;
   return data.assignees.some((actor: unknown) => actor !== null && typeof actor === "object" && "login" in actor &&
     typeof actor.login === "string" && ["copilot", "copilot-swe-agent", COPILOT_LOGIN].includes(actor.login.toLowerCase()));
@@ -166,6 +166,16 @@ export async function applyIssueActions(
       number = (response.data as { number: number }).number;
     } else {
       number = action.number;
+      if (action.type === "reopen" && handoff) {
+        const current = await client.request("GET /repos/{owner}/{repo}/issues/{issue_number}", { ...repo, issue_number: number });
+        if (hasCopilot(current.data) && current.data.state === "closed") {
+          // Remove the completed session before reopening. A failed later step then remains retryable.
+          const removed = await client.request("DELETE /repos/{owner}/{repo}/issues/{issue_number}/assignees", {
+            ...repo, issue_number: number, assignees: [COPILOT_LOGIN],
+          });
+          if (hasCopilot(removed.data)) throw new Error(`GitHub did not remove the completed Copilot assignment from issue #${number}`);
+        }
+      }
       await client.request("PATCH /repos/{owner}/{repo}/issues/{issue_number}", {
         ...repo,
         issue_number: number,

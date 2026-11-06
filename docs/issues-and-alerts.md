@@ -44,6 +44,8 @@ An accepted response must actually list Copilot as an assignee. Reconciliation c
 so an already assigned issue is not started again; successful assignment removes `copilot:ready`. Label persistence
 and unexpected API errors fail visibly. Closed/dismissed issues are not queued. Removing `copilot:ready` from an open
 issue stops retries; subsequent content updates alone do not reassign it. Reopening a resolved finding is new work.
+For an automatically reopened issue, the completed Copilot assignment is removed before reopening, so the recurrence
+can start a fresh agent. Removal is verified; a failure leaves the issue closed for a later retry.
 
 The [setup wizard](setup.md#3-github-app-owner) walks through registration, installation and the separate user token.
 Give the token an expiry and renew it before that date. Installing the App alone cannot authorize an agent session.

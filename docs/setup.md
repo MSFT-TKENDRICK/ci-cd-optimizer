@@ -89,7 +89,7 @@ The wizard guides each approval separately:
    the `copilot:ready` label alone means the handoff is pending. Other repositories must first install the
    [scan workflow](../examples/workflows/cicd-optimizer-scan.yml) and enable `issues.assignCopilot`.
 
-The setup server binds only to `127.0.0.1`, requires its one-time session URL, validates registration state and form
+The setup server binds only to `127.0.0.1`, requires its unguessable session URL, validates registration state and form
 origins, and expires after one hour. Keys and user tokens are never logged, returned to the browser, or written to
 local files. Keep setup running until the key is saved: if it exits first, generate a replacement key in GitHub App
 settings. A failed save can be retried while setup remains open. Stop it with Ctrl+C afterward.
