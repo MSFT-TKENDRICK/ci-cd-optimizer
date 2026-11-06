@@ -394,7 +394,13 @@ test("one verification click automatically advances after completion and stops r
   assert.equal(f.writes.filter(({ args }) => args.includes("POST")).length, 1);
   await f.post("/verify");
   options.run = { conclusion: "failure" };
-  assert.equal((await currentPage()).status, 502);
+  const failed = await currentPage();
+  assert.equal(failed.status, 502);
+  assert.equal(failed.headers.get("refresh"), null);
+  const failedPage = await failed.text();
+  assert.match(failedPage, /App verification did not succeed/);
+  assert.match(failedPage, /View verification run/);
+  assert.match(failedPage, /Verify again/);
   page = await currentPage();
   assert.equal(page.headers.get("refresh"), null);
   assert.match(await page.text(), /App verification did not succeed/);

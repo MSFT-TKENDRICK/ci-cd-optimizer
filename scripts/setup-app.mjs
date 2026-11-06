@@ -179,7 +179,7 @@ export async function startSetup({ repo, organization = false, saved }, { reques
     res.writeHead(status, { "Content-Type": "text/html; charset=utf-8" });
     res.end(template.replace("<!-- CONTENT -->", content));
   };
-  const statusPage = (res) => {
+  const statusPage = (res, status = 200) => {
     if (verification && !installed && !verificationFailed) res.setHeader("Refresh", "5; url=/");
     const form = (action, label, extra = "") => `<form method="post" action="${action}"><input type="hidden" name="csrf" value="${csrf}">${extra}<button>${label}</button></form>`;
     const settings = `https://github.com/settings/personal-access-tokens/new?name=CI%2FCD%20Optimizer%20assignment&description=Assign%20optimization%20issues%20to%20Copilot&target_name=${encodeURIComponent(repo.split("/")[0])}&expires_in=30&issues=write`;
@@ -211,7 +211,7 @@ export async function startSetup({ repo, organization = false, saved }, { reques
         ${copilot ? "<p>Assignment token stored. Existing copilot:ready findings will be retried by the next scan.</p>" : "<p>Not authorized yet: copilot:ready is a queue label, not a running agent.</p>"}</section>` : ""}
       ${installed && copilot ? `<section><h2>5. Run the first scan</h2><p>This runs the repository's existing scan workflow, including configured issue/PR writes and coding-agent assignments. Copilot usage consumes your plan's allowance.</p>${form("/scan", "Run scan and assign pending findings")}</section>` : ""}
       ${stored ? `<p>To resume after stopping or updating setup, run <code>npm run setup -- --repo ${escape(repo)} --resume-app ${escape(app.slug)}</code>. Saved credentials remain in GitHub.</p>` : ""}
-      <p class="muted">This setup server listens only on 127.0.0.1 and expires after one hour. For webhook hosting and a durable database, follow docs/github-app.md.</p>`);
+      <p class="muted">This setup server listens only on 127.0.0.1 and expires after one hour. For webhook hosting and a durable database, follow docs/github-app.md.</p>`, status);
   };
   async function refreshVerification() {
     installed = false;
@@ -313,7 +313,8 @@ export async function startSetup({ repo, organization = false, saved }, { reques
     })().catch((error) => {
       message = error instanceof Error ? error.message : "Setup failed. Retry the current step.";
       // The dependency helpers sanitize remote errors before they reach this page.
-      if (!res.headersSent) page(res, `<h1>Setup needs attention</h1><p>${escape(message)}</p><a href="/">Return to setup</a>`, 502);
+      if (!res.headersSent && verificationFailed) statusPage(res, 502);
+      else if (!res.headersSent) page(res, `<h1>Setup needs attention</h1><p>${escape(message)}</p><a href="/">Return to setup</a>`, 502);
       else res.end();
     });
   });
