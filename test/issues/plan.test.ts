@@ -64,6 +64,16 @@ describe("planIssueSync", () => {
     ]);
   });
 
+  it("retries pending assignment even when the finding is unchanged", () => {
+    const issue = desired("a", { assignCopilot: true });
+    expect(planIssueSync([existing(13, "a", { copilotPending: true })], [issue], options).actions).toEqual([
+      { type: "assign", number: 13, desired: issue },
+    ]);
+    expect(planIssueSync([existing(13, "a", { copilotPending: false })], [issue], options).actions).toEqual([]);
+    expect(planIssueSync([existing(13, "a", { copilotPending: true })], [desired("a")], options).actions).toEqual([]);
+    expect(planIssueSync([existing(13, "a", { copilotPending: true })], [{ ...issue, signature: "new" }], options).actions.map((action) => action.type)).toEqual(["update"]);
+  });
+
   it("closes resolved issues unless closeResolved is false", () => {
     expect(planIssueSync([existing(1, "a")], [], options).actions).toMatchObject([{ type: "close", number: 1, fingerprint: "a" }]);
     expect(planIssueSync([existing(1, "a")], [], { ...options, closeResolved: false }).actions).toEqual([]);

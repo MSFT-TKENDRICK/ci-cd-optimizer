@@ -154,7 +154,7 @@ describe("applyRecipe", () => {
   });
 
   it("assigns Copilot with a user client", async () => {
-    const copilotClient = fakeClient();
+    const copilotClient = fakeClient(() => ({ assignees: [{ login: "Copilot" }] }));
     const result = await applyRecipe(server({ files: workflow(EXCESSIVE_TIMEOUT) }), target, sampleRecipe(), { copilotClient });
     expect(result.copilot).toBe("assigned");
     expect(copilotClient.calls[0]?.parameters).toMatchObject({ issue_number: 43, assignees: ["copilot-swe-agent[bot]"] });

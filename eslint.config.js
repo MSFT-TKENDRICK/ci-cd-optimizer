@@ -8,6 +8,14 @@ export default tseslint.config(
     ignores: ["dist/**", "dist-action/**", "coverage/**", "corpus/**"],
   },
   {
+    files: ["scripts/*.mjs", "test/setup/*.mjs"],
+    languageOptions: {
+      globals: Object.fromEntries([
+        "AbortSignal", "Buffer", "URL", "URLSearchParams", "clearTimeout", "console", "fetch", "process", "setTimeout",
+      ].map((name) => [name, "readonly"])),
+    },
+  },
+  {
     rules: {
       "@typescript-eslint/consistent-type-imports": "error",
       "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]

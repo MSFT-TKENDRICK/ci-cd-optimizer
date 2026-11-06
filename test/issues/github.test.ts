@@ -78,7 +78,7 @@ describe("ensureLabels", () => {
 describe("assignCopilot", () => {
   it("assigns the Copilot coding agent with a user token and agent options", async () => {
     const issueClient = fakeClient();
-    const userClient = fakeClient();
+    const userClient = fakeClient(() => ({ assignees: [{ login: "Copilot" }] }));
     const result = await assignCopilot(issueClient, userClient, repo, 5, { baseBranch: "main", customInstructions: "Keep diffs small" });
     expect(result).toBe("assigned");
     expect(userClient.calls).toEqual([
@@ -92,7 +92,10 @@ describe("assignCopilot", () => {
         },
       },
     ]);
-    expect(issueClient.calls).toEqual([]);
+    expect(issueClient.calls.map((call) => call.route)).toEqual([
+      "GET /repos/{owner}/{repo}/issues/{issue_number}",
+      "DELETE /repos/{owner}/{repo}/issues/{issue_number}/labels/{name}",
+    ]);
   });
 
   it("falls back to the copilot:ready label without a user token or when assignment is refused", async () => {
@@ -102,7 +105,7 @@ describe("assignCopilot", () => {
       throw httpError(403);
     });
     expect(await assignCopilot(issueClient, refusing, repo, 6, {})).toBe("labeled");
-    expect(issueClient.calls.map((call) => [call.route, call.parameters.issue_number, call.parameters.labels])).toEqual([
+    expect(issueClient.calls.filter((call) => call.route.startsWith("POST")).map((call) => [call.route, call.parameters.issue_number, call.parameters.labels])).toEqual([
       ["POST /repos/{owner}/{repo}/issues/{issue_number}/labels", 5, ["copilot:ready"]],
       ["POST /repos/{owner}/{repo}/issues/{issue_number}/labels", 6, ["copilot:ready"]],
     ]);
@@ -113,6 +116,26 @@ describe("assignCopilot", () => {
       throw httpError(500);
     });
     await expect(assignCopilot(fakeClient(), broken, repo, 5, {})).rejects.toThrow("HTTP 500");
+  });
+
+  it("does not mistake a successful HTTP response without Copilot for assignment", async () => {
+    expect(await assignCopilot(fakeClient(), fakeClient(() => ({ assignees: [] })), repo, 5, {})).toBe("labeled");
+  });
+
+  it("cleans up pending intent without restarting an already assigned agent", async () => {
+    const client = fakeClient(() => ({ assignees: [{ login: "Copilot" }] }));
+    const user = fakeClient();
+    expect(await assignCopilot(client, user, repo, 5, {})).toBe("assigned");
+    expect(user.calls).toEqual([]);
+    expect(client.calls.at(-1)?.parameters.name).toBe("copilot:ready");
+  });
+
+  it("surfaces failures to persist the pending handoff instead of silently abandoning it", async () => {
+    const client = fakeClient((route) => {
+      if (route.startsWith("POST")) throw httpError(500);
+      return {};
+    });
+    await expect(assignCopilot(client, undefined, repo, 5, {})).rejects.toThrow("HTTP 500");
   });
 });
 
@@ -126,13 +149,13 @@ describe("applyIssueActions", () => {
     });
     const applied = await applyIssueActions(client, repo, [
       { type: "create", desired: desired({ assignCopilot: true, assignees: ["octocat"] }) },
-      { type: "update", number: 7, desired: desired({ assignCopilot: true }), comment: "changed" },
+      { type: "update", number: 7, desired: desired({ assignCopilot: true }), comment: "changed", retryCopilot: true },
       { type: "reopen", number: 8, desired: desired() },
       { type: "close", number: 9, fingerprint: "rule:y", comment: "resolved" },
     ]);
     expect(applied.map((entry) => [entry.action.type, entry.number, entry.copilot])).toEqual([
       ["create", 100, "labeled"],
-      ["update", 7, undefined],
+      ["update", 7, "labeled"],
       ["reopen", 8, undefined],
       ["close", 9, undefined],
     ]);
@@ -142,6 +165,7 @@ describe("applyIssueActions", () => {
       ["POST /repos/{owner}/{repo}/issues/{issue_number}/labels", 100, undefined],
       ["PATCH /repos/{owner}/{repo}/issues/{issue_number}", 7, undefined],
       ["POST /repos/{owner}/{repo}/issues/{issue_number}/comments", 7, undefined],
+      ["POST /repos/{owner}/{repo}/issues/{issue_number}/labels", 7, undefined],
       ["PATCH /repos/{owner}/{repo}/issues/{issue_number}", 8, "open"],
       ["POST /repos/{owner}/{repo}/issues/{issue_number}/comments", 9, undefined],
       ["PATCH /repos/{owner}/{repo}/issues/{issue_number}", 9, "closed"],
@@ -149,5 +173,16 @@ describe("applyIssueActions", () => {
     expect(client.calls.find((call) => call.route === "POST /repos/{owner}/{repo}/issues")?.parameters.assignees).toEqual(["octocat"]);
     const createdLabels = client.calls.filter((call) => call.route === "POST /repos/{owner}/{repo}/labels").map((call) => call.parameters.name);
     expect(createdLabels).toEqual(["cicd-optimizer", "severity:error", "copilot:ready"]);
+  });
+
+  it("reconciles an unchanged pending issue without rewriting its body", async () => {
+    const client = fakeClient((route) => route === "GET /repos/{owner}/{repo}/labels" ? [] : {});
+    const user = fakeClient(() => ({ assignees: [{ login: "Copilot" }] }));
+    const result = await applyIssueActions(client, repo, [
+      { type: "assign", number: 13, desired: desired({ assignCopilot: true }) },
+    ], { copilotClient: user });
+    expect(result[0]?.copilot).toBe("assigned");
+    expect(client.calls.some((call) => call.route.startsWith("PATCH"))).toBe(false);
+    expect(user.calls).toHaveLength(1);
   });
 });

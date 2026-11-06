@@ -155,12 +155,16 @@ export function planAlertSync(input: AlertSyncInput): AlertSyncPlan {
     actions.push({ type: "create", desired });
     return plan;
   }
-  if (open.signature === signature) return plan;
+  if (open.signature === signature) {
+    if (desired.assignCopilot && open.copilotPending) actions.push({ type: "assign", number: open.number, desired });
+    return plan;
+  }
   const changed = open.attributes.shape !== shape;
   actions.push({
     type: "update",
     number: open.number,
     desired,
+    ...(open.copilotPending ? { retryCopilot: true } : {}),
     ...(changed
       ? {
           comment: `The anomaly changed on run [#${latestRun}](https://github.com/${input.owner}/${input.repo}/actions/runs/${latestRun}): ${alerts

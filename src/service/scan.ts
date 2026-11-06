@@ -155,6 +155,8 @@ export function describeScan(scan: ScanResult): string {
   if (scan.sarif) parts.push(`SARIF ${scan.sarif.status}`);
   if (scan.knowledge) parts.push(`knowledge: ${scan.knowledge.snapshot.projects.length} projects, ${scan.knowledge.snapshot.technologies.length} declarations (${scan.knowledge.persistence})`);
   if (scan.issues) parts.push(`issues: ${tally(scan.issues.actions)}${scan.issues.skipped.length ? `, ${scan.issues.skipped.length} skipped` : ""}`);
+  const awaitingAgent = scan.issues?.applied.filter((item) => item.copilot === "labeled").length ?? 0;
+  if (awaitingAgent) parts.push(`Copilot: ${awaitingAgent} issue(s) awaiting assignment; configure a licensed user's COPILOT_ASSIGN_TOKEN (copilot:ready is not a running agent)`);
   if (scan.fixes) parts.push(`fix PRs: ${tally(scan.fixes.actions)}${scan.fixes.skipped.length ? `, ${scan.fixes.skipped.length} skipped` : ""}`);
   if (scan.inventoryComplete === false) parts.push(`inventory truncated (${scan.truncated?.length ?? 0} file(s))`);
   return parts.join(" · ");
