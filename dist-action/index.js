@@ -12969,7 +12969,7 @@ var init_postgres_store = __esm({
       INSERT INTO knowledge_snapshots (id, version, host, repository_id, owner, repo, revision, collected_at, coverage)
       VALUES (${snapshot.id}, ${snapshot.version}, ${snapshot.repository.host}, ${snapshot.repository.repositoryId},
         ${snapshot.repository.owner}, ${snapshot.repository.repo}, ${snapshot.revision}, ${snapshot.collectedAt}, ${json3(snapshot.coverage)})
-      ON CONFLICT (id) DO NOTHING RETURNING id
+      ON CONFLICT DO NOTHING RETURNING id
     `;
         if (inserted.length === 0) return;
         const projects = snapshot.projects.map((project) => ({ snapshot_id: snapshot.id, id: project.id, kind: project.kind, path: project.path, name: project.name ?? null }));
@@ -13074,7 +13074,7 @@ var init_postgres_store = __esm({
           ${observation.run.runAttempt}, ${observation.run.workflowId}, ${observation.observedAt},
           ${observation.source.status === "linked" ? observation.source.snapshotId : null},
           ${sql.json(JSON.parse(JSON.stringify(observation)))}
-        ) ON CONFLICT (id) DO NOTHING
+        ) ON CONFLICT DO NOTHING
       `;
         });
       }
@@ -13371,7 +13371,7 @@ var init_postgres_store = __esm({
           ${application.definitionId}, ${application.topologySnapshotId},
           ${sql.json(JSON.parse(JSON.stringify(application.change)))},
           ${application.createdAt}, ${sql.json(JSON.parse(JSON.stringify(application)))})
-        ON CONFLICT (id) DO NOTHING RETURNING id
+        ON CONFLICT DO NOTHING RETURNING id
       `;
           if (inserted.length > 0 && application.projectIds.length > 0) {
             const projects = application.projectIds.map((projectId) => ({
@@ -13429,7 +13429,7 @@ var init_postgres_store = __esm({
       INSERT INTO mitigation_application_events (id, host, repository_id, application_id, observed_at, run_observation_id, event)
       VALUES (${event.id}, ${event.target.host}, ${event.target.repositoryId}, ${event.applicationId}, ${event.observedAt},
         ${event.runObservationId ?? null}, ${this.sql.json(JSON.parse(JSON.stringify(event)))})
-      ON CONFLICT (id) DO NOTHING
+      ON CONFLICT DO NOTHING
     `;
         const [row] = await this.sql`
       SELECT event FROM mitigation_application_events
@@ -13491,7 +13491,7 @@ var init_postgres_store = __esm({
         VALUES (${evaluation.id}, ${evaluation.version}, ${evaluation.target.host}, ${evaluation.target.repositoryId},
           ${evaluation.applicationId}, ${evaluation.evaluatedAt}, ${evaluation.outcome},
           ${sql.json(JSON.parse(JSON.stringify(evaluation)))})
-        ON CONFLICT (id) DO NOTHING RETURNING id
+        ON CONFLICT DO NOTHING RETURNING id
       `;
           if (inserted.length > 0 && ids2.length > 0) {
             const samples = [
