@@ -195,11 +195,12 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
   }
   private async insertSnapshot(sql: postgres.TransactionSql, snapshot: KnowledgeSnapshot): Promise<void> {
     const json = (value: unknown) => sql.json(JSON.parse(JSON.stringify(value)) as postgres.JSONValue);
+    // Include the redundant scope-reference indexes as arbiters for concurrent duplicate inserts.
     const inserted = await sql`
       INSERT INTO knowledge_snapshots (id, version, host, repository_id, owner, repo, revision, collected_at, coverage)
       VALUES (${snapshot.id}, ${snapshot.version}, ${snapshot.repository.host}, ${snapshot.repository.repositoryId},
         ${snapshot.repository.owner}, ${snapshot.repository.repo}, ${snapshot.revision}, ${snapshot.collectedAt}, ${json(snapshot.coverage)})
-      ON CONFLICT (id) DO NOTHING RETURNING id
+      ON CONFLICT DO NOTHING RETURNING id
     `;
     if (inserted.length === 0) return;
     const projects = snapshot.projects.map((project) => ({ snapshot_id: snapshot.id, id: project.id, kind: project.kind, path: project.path, name: project.name ?? null }));
@@ -290,7 +291,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
           ${observation.run.runAttempt}, ${observation.run.workflowId}, ${observation.observedAt},
           ${observation.source.status === "linked" ? observation.source.snapshotId : null},
           ${sql.json(JSON.parse(JSON.stringify(observation)) as postgres.JSONValue)}
-        ) ON CONFLICT (id) DO NOTHING
+        ) ON CONFLICT DO NOTHING
       `;
     });
   }
@@ -581,7 +582,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
           ${application.definitionId}, ${application.topologySnapshotId},
           ${sql.json(JSON.parse(JSON.stringify(application.change)) as postgres.JSONValue)},
           ${application.createdAt}, ${sql.json(JSON.parse(JSON.stringify(application)) as postgres.JSONValue)})
-        ON CONFLICT (id) DO NOTHING RETURNING id
+        ON CONFLICT DO NOTHING RETURNING id
       `;
       if (inserted.length > 0 && application.projectIds.length > 0) {
         const projects = application.projectIds.map((projectId) => ({
@@ -637,7 +638,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
       INSERT INTO mitigation_application_events (id, host, repository_id, application_id, observed_at, run_observation_id, event)
       VALUES (${event.id}, ${event.target.host}, ${event.target.repositoryId}, ${event.applicationId}, ${event.observedAt},
         ${event.runObservationId ?? null}, ${this.sql.json(JSON.parse(JSON.stringify(event)) as postgres.JSONValue)})
-      ON CONFLICT (id) DO NOTHING
+      ON CONFLICT DO NOTHING
     `;
     const [row] = await this.sql<{ event: MitigationApplicationEvent }[]>`
       SELECT event FROM mitigation_application_events
@@ -697,7 +698,7 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
         VALUES (${evaluation.id}, ${evaluation.version}, ${evaluation.target.host}, ${evaluation.target.repositoryId},
           ${evaluation.applicationId}, ${evaluation.evaluatedAt}, ${evaluation.outcome},
           ${sql.json(JSON.parse(JSON.stringify(evaluation)) as postgres.JSONValue)})
-        ON CONFLICT (id) DO NOTHING RETURNING id
+        ON CONFLICT DO NOTHING RETURNING id
       `;
       if (inserted.length > 0 && ids.length > 0) {
         const samples = [
