@@ -138,7 +138,8 @@ export async function startSetup({ repo, organization = false }, { request = git
   const server = createServer((req, res) => {
     void (async () => {
       res.setHeader("Cache-Control", "no-store");
-      res.setHeader("Referrer-Policy", "no-referrer");
+      // no-referrer makes native form POSTs send Origin: null; keep local origins and suppress external referrers.
+      res.setHeader("Referrer-Policy", "same-origin");
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; form-action 'self' https://github.com; base-uri 'none'; frame-ancestors 'none'");
       if (expired) { page(res, "<h1>Setup expired</h1><p>Restart npm run setup.</p>", 410); return; }
@@ -170,7 +171,10 @@ export async function startSetup({ repo, organization = false }, { request = git
         // Callback query parameters are not proof of installation; verify with App authentication.
         res.writeHead(303, { Location: "/" }); res.end(); return;
       }
-      if (req.method !== "POST" || !authorized || req.headers.origin !== origin || busy) { page(res, "<h1>Forbidden</h1>", 403); return; }
+      if (req.method !== "POST" || !authorized || req.headers.origin !== origin || busy) {
+        page(res, '<h1>Forbidden</h1><p>This request was blocked before performing any setup action. Return to the current setup page in this browser and use its button, rather than refreshing or opening an action URL.</p><a href="/">Return to setup</a>', 403);
+        return;
+      }
       let raw = "";
       for await (const chunk of req) {
         raw += chunk.toString();
