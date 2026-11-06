@@ -22183,6 +22183,17 @@ async function applyIssueActions(client, repo, actions, options = {}) {
       number2 = response.data.number;
     } else {
       number2 = action.number;
+      if (action.type === "reopen" && handoff) {
+        const current = await client.request("GET /repos/{owner}/{repo}/issues/{issue_number}", { ...repo, issue_number: number2 });
+        if (hasCopilot(current.data) && current.data.state === "closed") {
+          const removed = await client.request("DELETE /repos/{owner}/{repo}/issues/{issue_number}/assignees", {
+            ...repo,
+            issue_number: number2,
+            assignees: [COPILOT_LOGIN]
+          });
+          if (hasCopilot(removed.data)) throw new Error(`GitHub did not remove the completed Copilot assignment from issue #${number2}`);
+        }
+      }
       await client.request("PATCH /repos/{owner}/{repo}/issues/{issue_number}", {
         ...repo,
         issue_number: number2,
