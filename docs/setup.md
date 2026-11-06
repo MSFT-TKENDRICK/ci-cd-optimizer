@@ -162,7 +162,15 @@ surfaces behave identically and share one implementation.
    path is relative to the working directory. A session that was already running must be restarted to load it.
 3. Ask Copilot to "set up the CI/CD Optimizer App for this repository". It calls `cicd_optimizer_setup`, optionally with
    `repo` and `resumeApp` (the App slug, to continue an App whose key is already saved). A host that advertises MCP Apps
-   renders the panel in chat; rendering in Copilot Desktop itself has not been validated yet, only in the stand-in host below.
+   is expected to render the panel in chat; capability negotiation alone does not prove that it rendered.
+4. Keep the panel visible for at least 12 seconds, then ask Copilot to call `cicd_optimizer_setup_status`. Until the
+   view makes an authenticated state request, it reports **Panel connection: not confirmed**. A timestamped request
+   confirms a tool round trip through the host's bridge, not visual correctness. Resource prefetches, status calls,
+   rejected requests, and expired state reads do not count. The timestamp is historical, not a live heartbeat; opening
+   a new setup resets it. Copilot must not call the panel-only tools itself to manufacture this evidence.
+
+The server has been installed and its open/status tools called in Copilot Desktop. Visual rendering in Desktop
+remains unvalidated; the stand-in host below provides separate browser evidence.
 
 Run `npm run mcp` to start the server by hand when debugging. It speaks the protocol on stdout and logs to stderr.
 
