@@ -1,18 +1,38 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CI/CD Optimizer setup</title>
-<script>
+import { createHash } from "node:crypto";
+
+export const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+
+// Must stay byte-identical to the inline theme script in ui/setup/index.html; a test enforces this.
+export const THEME_SCRIPT = `
   (() => {
     const param = new URLSearchParams(window.location.search).get("scoutTheme");
     const theme =
       param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     document.documentElement.setAttribute("data-theme", theme);
   })();
-</script>
-<style>
+`;
+
+export const scriptHash = (source) => `'sha256-${createHash("sha256").update(source).digest("base64")}'`;
+
+// Static pages never run application script; the only script is the hashed theme detector.
+export function pageCsp({ forms = false } = {}) {
+  return [
+    "default-src 'none'", `script-src ${scriptHash(THEME_SCRIPT)}`, "style-src 'unsafe-inline'",
+    `form-action ${forms ? "https://github.com" : "'none'"}`, "base-uri 'none'", "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+// The SPA shell may run its own bundle and any bare inline script it ships, each pinned by hash.
+export function shellCsp(html) {
+  const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => scriptHash(match[1]));
+  return [
+    "default-src 'none'", ["script-src 'self'", ...inline].join(" "), "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:", "font-src 'self'", "connect-src 'self'", "form-action 'self' https://github.com",
+    "base-uri 'none'", "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+const PAGE_STYLE = `
 :root {
   color-scheme: light;
   --cp-bg: #f7f4ef;
@@ -66,18 +86,29 @@ html[data-theme="dark"] {
   --cp-highlight: rgba(253, 142, 161, 0.12);
 }
 body { background: var(--cp-bg); color: var(--cp-text); font: 16px/1.6 "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; }
-main { max-width: 760px; margin: 48px auto; padding: 0 24px; }
+main { max-width: 640px; margin: 48px auto; padding: 0 24px; }
 h1 { line-height: 1.2; margin-bottom: 8px; }
-h2 { font-size: 20px; margin-top: 0; }
-section { background: var(--cp-surface); border: 1px solid var(--cp-border); border-radius: 16px; margin: 24px 0; padding: 24px; }
+.card { background: var(--cp-surface); border: 1px solid var(--cp-border); border-radius: 16px; box-shadow: 0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14); margin: 24px 0; padding: 24px; }
 .muted { color: var(--cp-text-muted); }
 a { color: var(--cp-link); }
+code { font-family: Consolas, "Courier New", Courier, monospace; }
+ul { padding-left: 20px; }
 button { font: inherit; background: var(--cp-accent); color: var(--cp-accent-fg); border: 0; border-radius: 0.625rem; padding: 12px 20px; cursor: pointer; }
 button:hover { background: var(--cp-accent-hover); }
-input[type=password] { display: block; box-sizing: border-box; width: 100%; margin: 8px 0 16px; padding: 12px; border: 1px solid var(--cp-border-strong); border-radius: 0.625rem; background: var(--cp-surface-soft); color: var(--cp-text); }
 :focus-visible { outline: 3px solid var(--cp-accent); outline-offset: 4px; }
-[role=status] { border: 1px solid var(--cp-border); background: var(--cp-surface-soft); padding: 16px; overflow-wrap: anywhere; }
-</style>
+`;
+
+export function renderPage({ title, body }) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<script>${THEME_SCRIPT}</script>
+<style>${PAGE_STYLE}</style>
 </head>
-<body><main><!-- CONTENT --></main></body>
+<body><main>${body}</main></body>
 </html>
+`;
+}

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MCP Apps preview host</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--cp-bg);
+      color: var(--cp-text);
+      font: 15px/1.5 "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    code, pre { font-family: Consolas, "Courier New", Courier, monospace; font-size: 12px; }
+    pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    h2 { margin: 0 0 8px; color: var(--cp-text-muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+    p { margin: 0; }
+
+    .bar {
+      display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-start; justify-content: space-between;
+      padding: 16px 24px; border-bottom: 1px solid var(--cp-border); background: var(--cp-bg-elevated);
+    }
+    .sub { margin-top: 4px; color: var(--cp-text-muted); }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; }
+    .badge {
+      padding: 2px 10px; border: 1px solid var(--cp-border); border-radius: 999px;
+      background: var(--cp-surface); color: var(--cp-text-soft); font-size: 12px;
+    }
+    [data-tone="ok"] { --tone: var(--cp-success); }
+    [data-tone="warn"] { --tone: var(--cp-warning); }
+    [data-tone="error"] { --tone: var(--cp-danger); }
+    .badge[data-tone] { border-color: var(--tone); color: var(--tone); }
+
+    .layout {
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); gap: 16px;
+      padding: 16px 24px 32px; align-items: start;
+    }
+    @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); padding: 16px; } }
+    .stack { display: grid; gap: 16px; min-width: 0; }
+    .card {
+      background: var(--cp-surface); border: 1px solid var(--cp-border); border-radius: 16px;
+      box-shadow: 0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14); padding: 16px;
+    }
+    .card > * + * { margin-top: 12px; }
+    .muted { color: var(--cp-text-muted); }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+    .controls label { display: inline-flex; gap: 8px; align-items: center; color: var(--cp-text-muted); }
+    button, select {
+      font: inherit; color: var(--cp-text); background: var(--cp-surface);
+      border: 1px solid var(--cp-border-strong); border-radius: 10px; padding: 6px 12px; cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: var(--cp-surface-soft); }
+    button:disabled { cursor: default; opacity: 0.6; }
+    button[aria-pressed="true"] { background: var(--cp-accent-soft); border-color: var(--cp-accent); }
+    :focus-visible { outline: 2px solid var(--cp-link); outline-offset: 2px; }
+
+    .frame-wrap { max-width: 100%; margin-inline: auto; }
+    .frame-wrap[data-width="fill"] { width: 100%; }
+    iframe.view { display: block; width: 100%; height: 160px; border: 0; background: transparent; }
+    .frame-wrap[data-border="true"] iframe.view { border: 1px solid var(--cp-border); border-radius: 16px; }
+
+    ul.tools { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+    ul.tools li { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+    ul.tools a { color: var(--cp-link); overflow-wrap: anywhere; }
+    .tag {
+      padding: 0 8px; border: 1px solid var(--cp-border); border-radius: 999px;
+      color: var(--cp-text-soft); font-size: 12px;
+    }
+    .tag[data-who="app"] { border-color: var(--cp-accent); color: var(--cp-accent); }
+
+    ol.log { margin: 0; padding: 0; list-style: none; max-height: 60vh; overflow: auto; }
+    ol.log li {
+      display: grid; grid-template-columns: 48px 104px minmax(0, 1fr); gap: 8px;
+      padding: 4px 0; border-bottom: 1px solid var(--cp-border);
+    }
+    ol.log .at { color: var(--cp-text-muted); text-align: right; font-variant-numeric: tabular-nums; }
+    ol.log .kind { font-weight: 600; overflow-wrap: anywhere; }
+    ol.log li[data-tone] .kind { color: var(--tone); }
+    ol.log .detail { overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <div>
+      <h1>MCP Apps preview host</h1>
+      <p class="sub">A stand-in chat host. It renders the server's real <code>ui://</code> resource through the ext-apps AppBridge.</p>
+    </div>
+    <div class="badges" role="status" aria-live="polite">
+      <span class="badge" id="mode">Loading…</span>
+      <span class="badge" id="status">Starting…</span>
+      <span class="badge" id="csp" data-tone="ok">CSP violations: 0</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div class="stack">
+      <section class="card" aria-labelledby="call-title">
+        <h2 id="call-title">Tool call</h2>
+        <pre id="call"></pre>
+        <h2>What the model sees</h2>
+        <pre id="model-text" class="muted"></pre>
+      </section>
+
+      <section class="card controls" aria-label="Host controls">
+        <button type="button" id="theme" aria-pressed="false">Dark theme</button>
+        <label for="width">
+          Panel width
+          <select id="width">
+            <option value="360">360 px</option>
+            <option value="480">480 px</option>
+            <option value="640">640 px</option>
+            <option value="800">800 px</option>
+            <option value="0" selected>Fill</option>
+          </select>
+        </label>
+        <button type="button" id="reload">Reload panel</button>
+      </section>
+
+      <div class="frame-wrap" id="frame-wrap" data-width="fill" data-border="false"></div>
+    </div>
+
+    <aside class="stack" aria-label="Host internals">
+      <section class="card" aria-labelledby="tools-title">
+        <h2 id="tools-title">Tools</h2>
+        <ul class="tools" id="tools"></ul>
+      </section>
+      <section class="card" aria-labelledby="links-title">
+        <h2 id="links-title">Links the panel opened</h2>
+        <ul class="tools" id="links"></ul>
+        <p class="muted" id="links-empty">None yet. The host records external links and does not open them.</p>
+      </section>
+      <section class="card" aria-labelledby="log-title">
+        <h2 id="log-title">Protocol log</h2>
+        <ol class="log" id="log"></ol>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="/host.js"></script>
+</body>
+</html>

@@ -47,8 +47,9 @@ npm run cli -- rules --format markdown       # rule catalog
 `command: scan` runs the full Dependabot-style pass through the API: SARIF, issues, and fix PRs.
 `command: telemetry` reports on a completed run and raises duration alerts.
 
-For App-authored fixes and coding-agent handoff from Actions, run `npm run setup -- --repo OWNER/REPOSITORY`.
-The guided browser ceremony registers and installs the App, stores its credentials, and separately authorizes the
+For App-authored fixes and coding-agent handoff from Actions, run `npm run setup -- --repo OWNER/REPOSITORY`, or ask
+Copilot to set up the App after `npm ci`: an MCP App renders the same ceremony inside chat (`.github/mcp.json`).
+The guided ceremony registers and installs the App, stores its credentials, and separately authorizes the
 Copilot-licensed user token needed to launch agents. See [setup](docs/setup.md#3-github-app-owner).
 
 **GitHub App.** A Probot service that does the same without any workflow:
@@ -169,6 +170,8 @@ Requires Node.js 22 (see `.nvmrc`).
 npm ci
 npm run typecheck && npm run lint && npm test
 npm run bundle           # rebuild dist-action/index.js (CI fails when it is stale)
+npm run build:ui         # rebuild dist-setup/, the setup panel (CI fails when it is stale)
+npm run preview:mcp      # preview the setup panel in a stand-in MCP Apps host against a fake GitHub (docs/setup.md)
 npm run docs:rules       # regenerate docs/rules.md
 npm run cli -- experiments evaluate --engine dist/lint/api.js --corpus corpus   # benchmark
 ```

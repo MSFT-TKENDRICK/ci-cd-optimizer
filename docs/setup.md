@@ -72,7 +72,8 @@ The App is needed for these:
 npm run setup -- --repo OWNER/REPOSITORY
 ```
 
-No `npm ci` or TypeScript build is needed for setup. Open the printed loopback URL in your signed-in browser.
+No `npm ci` or build is needed: the page is a prebuilt React app committed in `dist-setup/`.
+Open the printed loopback URL in your signed-in browser.
 The wizard guides each approval separately:
 
 1. Register a private App through GitHub's manifest flow (personal owner or organization). Change the proposed name
@@ -122,7 +123,8 @@ workflow dispatches. Installation and coding-agent authorization still require t
 Installation opens in a separate tab. Return to the current setup tab afterward, even if GitHub's old installation
 callback points at an expired local session; verification does not depend on that callback.
 
-The setup server binds only to `127.0.0.1`, requires its unguessable session URL, validates registration state and form
+The setup server binds only to `127.0.0.1`, requires its unguessable session token (the page sends it in an
+`X-Setup-Session` header), validates registration state and form
 origins, and expires after one hour. Its `Referrer-Policy: same-origin` preserves the browser's `Origin` on local
 form submissions while suppressing referrers to GitHub. Missing, `null`, and foreign POST origins remain rejected.
 Session cookie names are isolated by port, so opening another local setup or test tab cannot replace this session.
@@ -140,13 +142,76 @@ The Actions-only manifest omits `hook_attributes` entirely. GitHub validates a w
 local server. If GitHub reports an unreachable `127.0.0.1` hook URL, update the checkout, restart setup, and open the
 newly printed URL instead of resubmitting the old registration form.
 
-If a local action such as `/save` shows **Forbidden**, return to the setup page in the same browser and submit its
-button instead of refreshing the action URL. An older setup process using `Referrer-Policy: no-referrer` rejects
-even valid browser forms because they send `Origin: null`; updating the checkout does not update a running process.
+If the page reports **This view is not authorized** or a local request answers **Forbidden**, open the exact URL
+printed by `npm run setup` (or the panel's link) in a fresh tab instead of refreshing an action URL. An older setup
+process using `Referrer-Policy: no-referrer` rejects even valid browser POSTs because they send `Origin: null`;
+updating the checkout does not update a running process.
 Before registration, restart setup from the updated checkout. After registration, keep the process open if the key
 is unsaved: restarting discards it and requires a replacement key from GitHub App settings, not another registration.
 If the key and ID are already saved, restart with `--resume-app APP-SLUG` and use the newly printed URL. This loads
 the fixed browser policy on every page without retrieving the saved key or relying on a per-page browser workaround.
+
+**Guided setup in Copilot chat (MCP App).** The same ceremony also renders as an interactive panel inside Copilot chat,
+as an [MCP App](https://github.com/modelcontextprotocol/ext-apps) (a `ui://` resource) served by
+[`mcp/setup-server.mjs`](../mcp/setup-server.mjs). It drives the same local state machine as `npm run setup`, so both
+surfaces behave identically and share one implementation.
+
+1. Run `npm ci`. Unlike the browser command above, the MCP server needs the dev dependencies.
+2. Start Copilot from the repository root and trust the folder. [`.github/mcp.json`](../.github/mcp.json) registers
+   the `cicd-optimizer-setup` server, and project servers load only in a trusted folder. Its `node mcp/setup-server.mjs`
+   path is relative to the working directory. A session that was already running must be restarted to load it.
+3. Ask Copilot to "set up the CI/CD Optimizer App for this repository". It calls `cicd_optimizer_setup`, optionally with
+   `repo` and `resumeApp` (the App slug, to continue an App whose key is already saved), and the panel appears in chat.
+
+Run `npm run mcp` to start the server by hand when debugging. It speaks the protocol on stdout and logs to stderr.
+
+| Tool | Model-visible | Purpose |
+|---|---|---|
+| `cicd_optimizer_setup` | yes | Opens the panel for `OWNER/REPOSITORY` (default: `GITHUB_REPOSITORY`, then the current checkout). |
+| `cicd_optimizer_setup_status` | yes | Read-only progress report. It never returns links, keys or tokens. |
+| `setup_get_state`, `setup_save_credentials`, `setup_verify`, `setup_check_verification`, `setup_run_scan` | no (`visibility: ["app"]`) | Called only by the panel. Each needs the panel's session, and each action also needs the confirmation from the panel's confirmation step. |
+
+The panel cannot take a secret. No tool accepts a token, key or password, and **Authorize the coding agent** appears
+in chat only as a link to the local setup page, where you paste the Copilot-licensed token into a password field.
+GitHub's manifest flow redirects the browser back to the local server, so registration and installation also open
+`127.0.0.1` links (through the host's open-link capability) while the setup is running, for at most one hour.
+Hosts that do not support MCP Apps get a text result with the local setup URL instead, which is the same as the CLI output.
+
+The panel's session token is generated per setup and kept out of model-visible text. It travels in the tool result's
+`structuredContent`, which the MCP Apps specification reserves for the UI. Hosts must also hide `visibility: ["app"]`
+tools from the model. A host that ignored either rule could let the model press the panel's buttons (save the credentials
+you already registered, verify, dispatch the scan). The server still rejects calls without the token, there is no tool
+for secrets, and the failure mode is bounded by those three actions.
+
+The MCP server and `npm run setup` are developer tools. The production container image installs only runtime
+dependencies, so it contains neither.
+
+**Developing the setup panel.** The panel is one React app in [`ui/setup`](../ui/setup), built with Tailwind and
+[shadcn/ui](https://ui.shadcn.com/) components. It renders both surfaces: HTTP for `npm run setup` and MCP for chat.
+esbuild bundles it into the committed `dist-setup/` files, so setup needs no build step on the user's machine.
+
+```sh
+npm run typecheck:ui                # strict TypeScript for the panel and its tests
+npm run build:ui                    # regenerate dist-setup/ after changing ui/setup
+npm run check:ui                    # what CI runs: fails when dist-setup/ is stale
+npm run test:setup                  # setup server and MCP server tests (node:test)
+npx vitest run --project setup-ui   # component and hook tests
+```
+
+**Previewing the panel without Copilot.** `npm run preview:mcp` starts a stand-in MCP Apps host and prints its URL. It
+renders the server's real `ui://` resource in a sandboxed, cross-origin iframe, bridged by the same `AppBridge` that
+`@modelcontextprotocol/ext-apps` provides for hosts. By default it uses a fake GitHub (`acme/widgets`), so nothing leaves
+your machine. It is a development aid and shows how a spec-compliant host renders the panel, not how Copilot does.
+
+```sh
+npm run preview:mcp                                                          # fake GitHub
+npm run preview:mcp -- --real --repo OWNER/REPOSITORY --resume-app APP-SLUG  # read-only view of your real setup
+```
+
+`--real` uses your `gh` login and refuses every state-changing tool unless you also pass `--allow-actions`, which lets
+the panel save credentials and dispatch workflows against the real repository. `--same-origin` serves the view from the
+host's origin so a debugger can reach into it. That removes the isolation, so use it only for debugging. The host page
+counts Content-Security-Policy violations from the view, and the count should stay at 0.
 
 **Manual fallback.** Open this prefilled registration page. Replace `<you>` with a globally unique suffix,
 or use `https://github.com/organizations/<org>/settings/apps/new?...` for an organization:

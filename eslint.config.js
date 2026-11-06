@@ -5,13 +5,13 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist/**", "dist-action/**", "coverage/**", "corpus/**"],
+    ignores: ["dist/**", "dist-action/**", "dist-setup/**", "coverage/**", "corpus/**"],
   },
   {
-    files: ["scripts/*.mjs", "test/setup/*.mjs"],
+    files: ["scripts/*.mjs", "mcp/*.mjs", "test/setup/*.mjs"],
     languageOptions: {
       globals: Object.fromEntries([
-        "AbortSignal", "Buffer", "URL", "URLSearchParams", "clearTimeout", "console", "fetch", "process", "setTimeout",
+        "AbortSignal", "Buffer", "Headers", "URL", "URLSearchParams", "clearTimeout", "console", "fetch", "process", "setTimeout",
       ].map((name) => [name, "readonly"])),
     },
   },
