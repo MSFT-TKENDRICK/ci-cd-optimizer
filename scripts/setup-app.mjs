@@ -89,9 +89,20 @@ export async function verifyInstallation(repo, app, request = githubRequest) {
   const token = appJwt(app);
   const [owner, name] = repo.split("/");
   const installation = await request(`/repos/${owner}/${name}/installation`, { token });
-  if (installation.app_id !== app.id || installation.account?.login?.toLowerCase() !== owner.toLowerCase() ||
-    installation.repository_selection !== "selected" || installation.suspended_at) {
-    throw new Error("Install this App on the target account using Only select repositories, then retry.");
+  if (installation.app_id !== app.id) {
+    throw new Error("The installed App ID does not match CICD_OPTIMIZER_APP_ID. Check the saved App configuration.");
+  }
+  if (installation.account?.login?.toLowerCase() !== owner.toLowerCase()) {
+    throw new Error("The App installation does not belong to the target repository's owner. Check the installation account.");
+  }
+  if (installation.suspended_at) {
+    throw new Error("The App installation is suspended. Its owner must resume it in GitHub App settings before verification.");
+  }
+  if (installation.repository_selection === "all") {
+    throw new Error("The App installation grants access to all repositories. Its owner must choose Only select repositories and include the target repository before verification.");
+  }
+  if (installation.repository_selection !== "selected") {
+    throw new Error("GitHub did not report a recognized repository selection for this installation. Inspect its settings before retrying.");
   }
   for (const [permission, level] of Object.entries(APP_PERMISSIONS)) {
     if (installation.permissions?.[permission] !== level && installation.permissions?.[permission] !== "write") {
