@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/blob/main/projects/schema.json",
+  "title": "CI/CD optimizer project review registration",
+  "description": "projects/<name>/project.yaml. Mirrors the validator in src/review/project.ts, which is authoritative and additionally rejects files over 8192 bytes, multiple documents, duplicate keys, YAML anchors, aliases, tags, and merge keys, and requires name to equal the directory name. See docs/review-program/README.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "main_repo", "repository_id", "primary_contact"],
+  "properties": {
+    "name": {
+      "description": "Project name; must equal the directory name.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+    },
+    "main_repo": {
+      "description": "Exactly https://github.com/<owner>/<repo>: no trailing slash, .git suffix, query, fragment, userinfo, or port.",
+      "type": "string",
+      "maxLength": 159,
+      "pattern": "^https://github\\.com/[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}/(?!\\.{1,2}$)(?![A-Za-z0-9._-]*\\.[Gg][Ii][Tt]$)[A-Za-z0-9._-]{1,100}$"
+    },
+    "repository_id": {
+      "description": "Immutable numeric id of main_repo (gh api repos/<owner>/<repo> --jq .id). Pins the project across renames and transfers.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "primary_contact": {
+      "$ref": "#/$defs/login"
+    },
+    "auto_ccs": {
+      "description": "Additional maintainers to notify. Each must also be listed in the target repository's consent file.",
+      "type": "array",
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/login" }
+    },
+    "security_contact": {
+      "description": "Where sensitive findings are reported privately: an email address or an https URL.",
+      "type": "string",
+      "maxLength": 254,
+      "anyOf": [
+        { "pattern": "^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\\.[A-Za-z0-9-]{1,63})*\\.[A-Za-z]{2,63}$" },
+        { "pattern": "^https://[\\x21-\\x7E]+$" }
+      ]
+    },
+    "language": {
+      "type": "string",
+      "pattern": "^[a-z0-9+#.-]{1,32}$"
+    },
+    "preset": {
+      "description": "Rule preset used instead of the repository's own extends list.",
+      "enum": ["recommended", "strict", "agentic", "github", "insights", "all"]
+    },
+    "paused": {
+      "description": "Skip reviews without removing the project.",
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "login": {
+      "description": "GitHub login.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$"
+    }
+  }
+}

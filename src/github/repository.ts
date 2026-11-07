@@ -46,8 +46,12 @@ interface TreeEntry {
   path: string;
   type: string;
   sha: string;
+  mode?: string;
   size?: number;
 }
+
+/** Git file mode of a symbolic link; its blob holds the link target, not file content. */
+const SYMLINK_MODE = "120000";
 
 export interface RepositoryRevision {
   sha: string;
@@ -82,7 +86,11 @@ export async function loadRepositorySnapshot(
   if (options.resolvedRevision && options.ref !== commit.sha) throw new Error("Resolved repository revision does not match the requested immutable ref");
   const tree = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { ...repo, tree_sha: commit.treeSha, recursive: "1" });
   const treeData = tree.data as { tree: TreeEntry[]; truncated?: boolean };
-  const blobs = new Map(treeData.tree.filter((entry) => entry.type === "blob" && (!options.pathFilter || options.pathFilter(entry.path))).map((entry) => [entry.path, entry]));
+  const blobs = new Map(
+    treeData.tree
+      .filter((entry) => entry.type === "blob" && entry.mode !== SYMLINK_MODE && (!options.pathFilter || options.pathFilter(entry.path)))
+      .map((entry) => [entry.path, entry]),
+  );
   const selection = selectInventory(
     [...blobs.values()].map((entry) => ({ path: entry.path, ...(entry.size !== undefined ? { size: entry.size } : {}) })),
     options.config,

@@ -11,6 +11,7 @@ import { telemetryCommand, TELEMETRY_HELP } from "./telemetry.js";
 import { knowledgeCommand, KNOWLEDGE_HELP } from "./knowledge.js";
 import { maintenanceCommand, MAINTENANCE_HELP } from "./maintenance.js";
 import { executionCommand, EXECUTION_HELP } from "./execution.js";
+import { reviewCommand, REVIEW_HELP } from "./review.js";
 
 export const HELP = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimizer for GitHub repositories
 
@@ -26,6 +27,7 @@ Commands:
   knowledge <cmd>       Authorized mitigation history: applications, runs, inspect, refresh, evaluate
   maintenance <cmd>     Operator-only knowledge retention and erasure (preview by default)
   execution <cmd>       Opt-in task capture and authorized runtime report import/inspection
+  review <cmd>          Project review program: validate, run, intake, scheduled (docs/review-program)
   help [command]        Show help
   version               Print the version
 
@@ -61,6 +63,7 @@ const COMMANDS: Record<string, { run: (args: string[], io: CliIO) => Promise<num
   knowledge: { run: knowledgeCommand, help: KNOWLEDGE_HELP },
   maintenance: { run: maintenanceCommand, help: MAINTENANCE_HELP },
   execution: { run: executionCommand, help: EXECUTION_HELP },
+  review: { run: reviewCommand, help: REVIEW_HELP },
 };
 
 /** Parses argv (without the node and script entries) and returns the exit code. Never calls process.exit. */
