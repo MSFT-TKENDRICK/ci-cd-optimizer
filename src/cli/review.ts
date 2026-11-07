@@ -3,7 +3,16 @@ import { basename, dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { DEFAULT_REGISTRY } from "../review/consent.js";
 import { escapeInline } from "../review/escape.js";
-import { INTAKE_ARTIFACT_MAX_BYTES, parseIntakeArtifact, runIntake, serializeIntakeArtifact } from "../review/intake.js";
+import {
+  INTAKE_ARTIFACT_MAX_BYTES,
+  intakeCommitStatus,
+  type IntakeRecordState,
+  parseIntakeArtifact,
+  runIntake,
+  runTrustedIntake,
+  serializeIntakeArtifact,
+  TRUSTED_STATUS_CONTEXT,
+} from "../review/intake.js";
 import { NAME_PATTERN, PROJECT_FILE, PROJECT_MAX_BYTES, parseProjectText } from "../review/project.js";
 import { buildReport, renderJson, renderMarkdown, reportExitCode, upsertReviewComment, type ReviewReport } from "../review/report.js";
 import { reviewProject } from "../review/review.js";
@@ -19,11 +28,14 @@ Commands:
   run <project.yaml>        Review one project: verify consent, lint its default branch, print the report
   intake --pr <n>           Check a submission pull request and review the project it adds or changes
   intake-artifact <file>    Validate the intake record handed from the intake run to the comment run
+  intake-status             Re-run intake from trusted code and publish the review-intake/trusted commit status
   scheduled                 Re-review every registered project (public mode) and print a summary
 
 run:              [--public] [--format markdown|json] [--author <login>] [--registry <owner/repo>] [--output <file>]
 intake:           --pr <n> [--repo <owner/repo>] [--head-sha <sha>] [--comment] [--artifact <file>] [--output <file>]
 intake-artifact:  <file> --expected-sha <sha>     (prints pr_number=… and head_sha=… lines for $GITHUB_OUTPUT)
+intake-status:    --head-sha <sha> [--pr <n>] [--record present|missing|invalid] [--repo <owner/repo>]
+                  [--comment] [--status] [--output <file>]
 scheduled:        [--dir projects] [--registry <owner/repo>] [--output <file>]
 
 Without --public, run prints every finding, including security-sensitive ones that public reports withhold.
@@ -188,6 +200,77 @@ async function intakeArtifactCommand(args: string[], io: CliIO): Promise<number>
   return 0;
 }
 
+const RECORD_STATES: readonly IntakeRecordState[] = ["present", "missing", "invalid"];
+
+function runUrl(env: CliIO["env"]): string | undefined {
+  const server = env.GITHUB_SERVER_URL;
+  const repository = env.GITHUB_REPOSITORY;
+  const runId = env.GITHUB_RUN_ID;
+  if (!server || !repository || !runId) return undefined;
+  if (!/^https:\/\/[A-Za-z0-9.-]+$/.test(server) || !/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(repository) || !/^[1-9][0-9]{0,19}$/.test(runId)) return undefined;
+  return `${server}/${repository}/actions/runs/${runId}`;
+}
+
+async function intakeStatusCommand(args: string[], io: CliIO): Promise<number> {
+  const { values } = parseArgs({
+    args,
+    strict: true,
+    options: {
+      "head-sha": { type: "string" },
+      pr: { type: "string" },
+      record: { type: "string" },
+      repo: { type: "string" },
+      registry: { type: "string" },
+      comment: { type: "boolean", default: false },
+      status: { type: "boolean", default: false },
+      output: { type: "string", short: "o" },
+      help: { type: "boolean", short: "h", default: false },
+    },
+  });
+  if (values.help) {
+    io.stdout(REVIEW_HELP);
+    return 0;
+  }
+  const headSha = values["head-sha"];
+  if (!headSha || !SHA.test(headSha)) throw new UsageError("review intake-status needs --head-sha with a full 40-character lowercase commit SHA.");
+  let pr: number | undefined;
+  if (values.pr !== undefined) {
+    pr = Number(values.pr);
+    if (!/^[1-9][0-9]{0,9}$/.test(values.pr) || !Number.isSafeInteger(pr)) throw new UsageError("--pr must be a pull request number.");
+  }
+  const record = (values.record ?? (pr === undefined ? "missing" : "present")) as IntakeRecordState;
+  if (!RECORD_STATES.includes(record)) throw new UsageError(`--record must be one of ${RECORD_STATES.join(", ")}.`);
+  if (record === "present" && pr === undefined) throw new UsageError("--record present needs the --pr named by the intake record.");
+  const repo = repoFrom(values.repo, io);
+  const registry = registryFrom(values.registry ?? `${repo.owner}/${repo.repo}`, io);
+  const client = githubClient(io);
+  const entries = await runTrustedIntake(client, repo, { headSha, record, registry, ...(pr !== undefined ? { pr } : {}) });
+  const decision = intakeCommitStatus(entries);
+  const sections = [`## Trusted review intake for ${headSha.slice(0, 12)}\n\n**${decision.state}**: ${decision.description}\n`];
+  for (const { pr: number, result } of entries) sections.push(`### Pull request #${number}\n\n${result.markdown}`);
+  await writeText(io, values.output, sections.join("\n"));
+  if (values.comment) {
+    for (const { pr: number, result } of entries) {
+      if (!result.report) continue;
+      const { action } = await upsertReviewComment(client, repo, number, result.name, result.markdown);
+      io.stderr(`review comment ${action} on #${number}`);
+    }
+  }
+  if (values.status) {
+    const targetUrl = runUrl(io.env);
+    await client.request("POST /repos/{owner}/{repo}/statuses/{sha}", {
+      ...repo,
+      sha: headSha,
+      state: decision.state,
+      context: TRUSTED_STATUS_CONTEXT,
+      description: decision.description,
+      ...(targetUrl ? { target_url: targetUrl } : {}),
+    });
+    io.stderr(`${TRUSTED_STATUS_CONTEXT} set to ${decision.state} on ${headSha.slice(0, 12)}`);
+  }
+  return decision.state === "success" ? 0 : 1;
+}
+
 async function scheduledCommand(args: string[], io: CliIO): Promise<number> {
   const { values } = parseArgs({
     args,
@@ -247,6 +330,7 @@ const COMMANDS: Record<string, (args: string[], io: CliIO) => Promise<number>> =
   run: runCommand,
   intake: intakeCommand,
   "intake-artifact": intakeArtifactCommand,
+  "intake-status": intakeStatusCommand,
   scheduled: scheduledCommand,
 };
 

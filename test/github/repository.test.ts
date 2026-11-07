@@ -61,6 +61,20 @@ describe("loadRepositorySnapshot", () => {
     expect(fake.calls.filter((call) => call.route.includes("git/blobs")).every((call) => call.parameters.file_sha !== "b3")).toBe(true);
   });
 
+  it("skips symbolic links instead of reading their targets as file content", async () => {
+    const withLink = [...tree, { path: ".github/workflows/linked.yml", type: "blob", mode: "120000", sha: "l1", size: 30 }];
+    const fake = fakeClient((route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}/commits/{ref}") return { sha: "c1", commit: { tree: { sha: "root" } } };
+      if (route === "GET /repos/{owner}/{repo}/git/trees/{tree_sha}") return { tree: withLink, truncated: false };
+      if (route === "GET /repos/{owner}/{repo}/git/blobs/{file_sha}") return { content: base64(`content of ${String(parameters.file_sha)}`), encoding: "base64" };
+      throw new Error(`unexpected ${route}`);
+    });
+    const snapshot = await loadRepositorySnapshot(fake, repo, { ref: "main", config: DEFAULT_CONFIG });
+    expect(snapshot.input.files.map((file) => file.path)).toContain(".github/workflows/ci.yml");
+    expect(snapshot.input.files.map((file) => file.path)).not.toContain(".github/workflows/linked.yml");
+    expect(fake.calls.some((call) => call.parameters.file_sha === "l1")).toBe(false);
+  });
+
   it("marks the inventory incomplete when the tree is truncated and passes change context", async () => {
     const change = { baseRef: "main", changedFiles: ["src/index.ts"] };
     const snapshot = await loadRepositorySnapshot(client(true), repo, { ref: "main", config: DEFAULT_CONFIG, change: change as never });

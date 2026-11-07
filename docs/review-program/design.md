@@ -23,10 +23,10 @@ reasoning is in the [threat model](threat-model.md), and the survey of comparabl
 | `src/review/review.ts` | Runs the existing lint engine (`loadRepositorySnapshot` + `lint`) on the pinned SHA with the target's own config, clamped limits (200 files, 200 KB per file, concurrency 4), and the project's `preset`. |
 | `src/review/report.ts` | Report model (`schemaVersion: 1`), public-mode redaction, Markdown and JSON rendering, and the marker-based comment upsert. |
 | `src/review/escape.ts` | `escapeInline`, used on every untrusted string before it reaches Markdown, plus the 60 KB comment cap. |
-| `src/review/intake.ts` | Submission PR classification, the intake flow, the per-author cap, and the intake record parser. |
-| `src/cli/review.ts` | `review validate`, `run`, `intake`, `intake-artifact`, and `scheduled` subcommands. |
-| `.github/workflows/review-intake.yml` | Unprivileged `pull_request` job: runs intake from the **base** commit and writes the job summary plus a tiny record. |
-| `.github/workflows/review-intake-comment.yml` | Privileged `workflow_run` job: validates the record, re-runs intake from the default branch, and upserts the PR comment. |
+| `src/review/intake.ts` | Submission PR classification, the intake flow, the per-author cap, the intake record parser, and the trusted status decision. |
+| `src/cli/review.ts` | `review validate`, `run`, `intake`, `intake-artifact`, `intake-status`, and `scheduled` subcommands. |
+| `.github/workflows/review-intake.yml` | Unprivileged, advisory `pull_request` job: runs intake from the **base** commit and writes the job summary plus a tiny record. |
+| `.github/workflows/review-intake-comment.yml` | Privileged `workflow_run` job: validates the record, repeats intake from the default branch, upserts the PR comment, and publishes the required `review-intake/trusted` commit status. |
 | `.github/workflows/review-scheduled.yml` | Weekly read-only re-review of every registered project; output goes to the job summary. |
 
 ## Data flow
@@ -40,36 +40,43 @@ submitter PR (fork) ──pull_request──▶ Review intake (read-only token, 
                                                        │
                      workflow_run (completed) ◀────────┘
                                │
-                 Review intake comment (pull-requests: write, default-branch code, no PR code)
+                 Review intake comment (pull-requests: write, statuses: write, default-branch code, no PR code)
                    1. artifact listing: exactly one, ≤ 4 KB      2. review intake-artifact: strict JSON,
                    3. head_sha == workflow_run.head_sha             canonical, SHA match
-                   4. review intake --pr N --head-sha SHA --comment  (re-fetches the PR; stale → no comment)
+                   4. review intake-status --head-sha SHA --record present|missing|invalid [--pr N]
+                        --comment --status
+                      - evaluates every open PR whose head is SHA (plus N), re-fetching each one
+                      - present: repeats intake for N; missing/invalid: any PR touching projects/ fails closed
+                      - sets commit status review-intake/trusted (the required check) and upserts comments
 ```
 
-The comment job does not trust anything in the intake run's output except the PR number. It accepts that number
+The trusted job does not trust anything in the intake run's output except the PR number. It accepts that number
 only after the record proves it describes the same commit that the `workflow_run` event reports, and it then
-recomputes the whole review itself with trusted code. A forged record can therefore at most trigger a fresh,
-honest review of some open pull request whose head is that commit.
+recomputes the whole review itself with trusted code. The record only selects a path: a missing, oversized, or
+malformed record makes every submission at that commit fail. A forged record can therefore at most trigger a
+fresh, honest review of some open pull request whose head is that commit, or make it fail.
 
 ## Intake rules
 
 1. The pull request's files are listed with the API. If none touch `projects/` (other than `schema.json` and
-   `README.md`), intake reports "nothing to review" and passes, so the check can be required on every PR. The
+   `README.md`), intake reports "nothing to review" and passes, so the status can be required on every PR. The
    comparison is case-insensitive, so `Projects/` cannot sidestep it.
 2. Otherwise the PR must change exactly one `projects/<name>/project.yaml`, with status `added`, `modified`, or
    `removed`. Renames, extra files, traversal or odd paths, and lists truncated by the API are rejected.
 3. The head SHA is checked against `--head-sha` before and after listing files, closing the window in which a push
    could change the file list or the blob.
 4. The author must be a `User` account. Bots and apps cannot submit.
-5. `removed` is an opt-out. It is accepted when the author is a contact of the existing entry.
+5. `removed` is an opt-out. It is accepted when the author is a contact of the existing entry. If the existing
+   entry on the base branch cannot be read or validated, the change fails closed and needs a maintainer.
 6. `modified` must keep `repository_id` and must come from a current contact.
 7. Authors may have at most 3 other open submission PRs.
 8. `project.yaml` is read with the contents API at the head SHA (falling back to the head repository for forks),
    as data, capped at 8 KB.
 9. Consent is verified and the project is reviewed in public mode.
 
-The intake check fails (exit 1) for invalid submissions and consent failures, so branch protection can block
-merging them. Lint findings themselves never fail intake.
+Intake fails (exit 1) for invalid submissions and consent failures, and the trusted job turns that into a failing
+`review-intake/trusted` status, so branch protection can block merging them. Lint findings themselves never fail
+intake.
 
 ## Consent and identity
 
@@ -130,11 +137,14 @@ Allstar, SLSA, Alpha-Omega, verify-rust-std, SV-COMP, VerifyThis, CNCF Landscape
 
 ## Deliberate choices and deviations
 
-- **No `paths:` filter on `review-intake.yml`.** The check is meant to be required, and a path-filtered required
-  check never reports on unrelated PRs and blocks them. This repository's own `affected/path-filter-required-checks`
-  rule flags that pattern. Intake exits quickly with "nothing to review" instead.
-- **`merge_group` trigger** with the job skipped, so the required check reports in merge queues
-  (`workflow/merge-group`).
+- **A commit status, not a job, is the required check.** A `pull_request` run uses the workflow file from the pull
+  request, so its job result can be faked. The `workflow_run` job always runs the default-branch workflow, so its
+  `review-intake/trusted` status is what branch protection requires.
+- **No `paths:` filter on `review-intake.yml`.** The trusted status is required, and it is only published after an
+  intake run, so intake must run on every PR. This repository's own `affected/path-filter-required-checks` rule
+  flags path-filtered required checks. Intake exits quickly with "nothing to review" instead.
+- **`merge_group` trigger** with the intake job skipped; the trusted job marks the merge group commit as passing,
+  because every pull request in it already carries a passing status (`workflow/merge-group`).
 - **Bootstrap guard.** When the base commit does not contain `src/review/intake.ts` yet (the PR that introduces
   the program), intake emits a notice and skips.
 - **Per-author cap rather than global rate limiting.** GitHub already rate-limits `GITHUB_TOKEN`, and a weekly

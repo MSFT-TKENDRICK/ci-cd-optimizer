@@ -46,28 +46,45 @@ Each threat below is followed by its mitigation and the residual risk.
   - At most 3 other open submissions per author.
 - *Residual risk:* none known. Contacts are not pinged by reports; they are only listed in YAML.
 
-**T1. Tampering: pwn request (code execution with privileges from a fork PR).**
+**T1. Tampering: pwn request, or a faked intake verdict, from a fork PR.**
 - *Mitigation:*
   - Intake runs on `pull_request` (never `pull_request_target`) with `contents: read` and `pull-requests: read`,
     no secrets, `persist-credentials: false`, and checks out the **base** SHA, so the CLI that runs is trusted code.
-  - The comment job (`workflow_run`) checks out only the default branch and never downloads PR code.
+  - A `pull_request` run uses the workflow file from the PR itself, so a PR can make the **Review intake** job pass
+    without checking anything. That job is therefore advisory and is never the required check.
+  - The required check is the commit status `review-intake/trusted`. Only the `workflow_run` job publishes it
+    (`statuses: write`), from default-branch code that never downloads or executes PR code.
+  - The trusted job evaluates every open PR whose head is the reported commit. It succeeds only if all of them pass,
+    and at least one must exist.
+  - If the intake run left no usable record, any PR at that commit that touches `projects/` gets a failing status
+    and an explanatory comment; it never passes silently.
+  - Unexpected errors set the status to `error`. A tampered or renamed intake workflow therefore produces a failing
+    status or no status at all, and both block merging.
   - No `${{ }}` expressions appear in `run:` scripts; values are passed through `env:`.
-- *Residual risk:* a PR may edit `review-intake.yml` itself. That run still has a read-only token, no secrets, and
-  only its own job summary and artifact, which the next rows treat as untrusted.
+- *Residual risk:*
+  - Anyone with write access to this repository can set commit statuses, so branch protection must pin the
+    expected source of `review-intake/trusted` to GitHub Actions. Write access already allows merging, so this
+    adds no new capability.
+  - Never enable "Send write tokens to workflows from pull requests" for forks.
+  - Another PR at the same head commit can force a failing status. A maintainer closes it and re-runs intake.
+  - A PR opened at a commit that already has a success status from another PR keeps that status until its own
+    trusted run finishes. Code Owner review of `projects/` covers that window.
+  - The status only appears once `review-intake-comment.yml` is on the default branch, because `workflow_run`
+    always uses the default-branch workflow.
 
 **T2. Tampering: forged artifact or workflow_run name spoofing.**
 A PR adds a workflow named "Review intake" or edits the real one so that it uploads a crafted `review-intake`
-artifact, aiming to make the privileged job comment on, or act on, a different PR.
+artifact, aiming to make the privileged job pass, comment on, or act on a different PR.
 - *Mitigation:*
-  - The comment job requires exactly one artifact of at most 4 KB, and the record inside it must be a regular file
-    (not a symlink) of at most 1 KB.
+  - The trusted job requires exactly one artifact of at most 4 KB, and the record inside it must be a regular file
+    (not a symlink) of at most 1 KB. Anything else is treated as an invalid record and fails closed.
   - `review intake-artifact` requires canonical JSON with exactly `pr_number` (a positive integer) and `head_sha`
     (40 lowercase hex characters), and `head_sha` must equal `github.event.workflow_run.head_sha`.
-  - `review intake --head-sha` then re-fetches the PR and requires its head to be that SHA.
-  - The whole review is recomputed with default-branch code. Only the PR number is taken from the artifact; the SHA
-    only has to match.
-- *Residual risk:* an attacker can trigger a fresh, honest review of a PR whose head is the same commit, which is
-  no worse than pushing to that PR.
+  - `review intake-status` then re-fetches every PR it evaluates and requires its head to be that SHA.
+  - The whole review is recomputed with default-branch code. The record only chooses between repeating intake for
+    the PR it names and failing closed. A PR named by the record but not at that commit fails the status.
+- *Residual risk:* an attacker can trigger a fresh, honest review of a PR whose head is the same commit, or force a
+  failing status on that commit. Neither can make a submission pass.
 
 **T3. Tampering: TOCTOU (the PR changes between checks).**
 - *Mitigation:*
@@ -144,7 +161,8 @@ artifact, aiming to make the privileged job comment on, or act on, a different P
   - The target's own config is capped at 64 KB, and it cannot raise those limits.
   - Truncated trees are reported as partial.
   - Every job has a timeout.
-  - Symlinks and submodules are rejected (the contents API type must be `file`).
+  - Symbolic links (tree mode `120000`) and submodules are skipped when the tree is listed, so a link is never
+    followed or read as file content. Files are read through the blob API.
 - *Residual risk:* a pathological regex-heavy file within those limits could slow a single job until its timeout.
 
 **D3. Denial of service: submission spam or API rate limits.**
@@ -178,8 +196,11 @@ branch) without granting anything.
 
 ## Repository settings the program relies on
 
-- Branch protection on `main` that requires the **Review intake** check and CI, and requires review from Code
-  Owners.
+- Branch protection on `main` that requires the commit status **`review-intake/trusted`** (expected source:
+  GitHub Actions) and CI, and requires review from Code Owners. Do not require the **Review intake** job itself:
+  a pull request can rewrite it.
+- CODEOWNERS covers `projects/`, the workflows, the setup action, `src/`, and the package and Node version files,
+  so changes to the code that runs in the trusted job need owner review.
 - Actions → "Require approval for all outside collaborators" for fork pull request workflows.
 - Private vulnerability reporting enabled.
 - Workflow permissions defaulting to read-only. Each workflow also declares its own minimal `permissions`.

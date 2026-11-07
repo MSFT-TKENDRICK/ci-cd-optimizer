@@ -1,11 +1,15 @@
 # Project review program intake (docs/review-program/README.md). Validates a pull request that adds, changes, or
 # removes projects/<name>/project.yaml, checks the target repository's consent, and reviews its CI/CD configuration.
-# It runs on every pull request so it can be a required check; other pull requests finish with "nothing to review".
+# It runs on every pull request and always leaves an intake record when the head commit is known, including for
+# pull requests with nothing to review.
+#
+# This job is advisory. A pull request can rewrite this workflow, so branch protection must instead require the
+# review-intake/trusted commit status, which review-intake-comment.yml publishes after repeating intake from the
+# default branch.
 #
 # Security model (docs/review-program/threat-model.md): read-only token, no secrets, and the *base* commit is checked
-# out, so the code that runs is trusted main-line code even when a pull request edits this workflow's inputs. The
-# submitted project.yaml is fetched through the API at the exact head commit and treated purely as data. The
-# comment is posted by review-intake-comment.yml, which runs from the default branch.
+# out, so the code that runs is trusted main-line code unless a pull request edits this workflow itself. The
+# submitted project.yaml is fetched through the API at the exact head commit and treated purely as data.
 name: Review intake
 
 on:

@@ -2,12 +2,30 @@ import { describe, expect, it } from "vitest";
 import {
   classifyPullFiles,
   INTAKE_ARTIFACT_MAX_BYTES,
+  intakeCommitStatus,
+  type IntakeResult,
   MAX_OPEN_SUBMISSIONS_PER_AUTHOR,
   parseIntakeArtifact,
   runIntake,
+  runTrustedIntake,
   serializeIntakeArtifact,
+  type TrustedIntakeEntry,
 } from "../../src/review/intake.js";
-import { BASE_SHA, HEAD_SHA, NEW_HEAD_SHA, PROJECT_PATH, PROJECT_YAML, pull, REGISTRY, REGISTRY_NAME, STRICT_PROJECT_YAML, submitted, TARGET_SHA, world } from "./fixtures.js";
+import type { ReviewReport } from "../../src/review/report.js";
+import {
+  HEAD_SHA,
+  NEW_HEAD_SHA,
+  onBase,
+  PROJECT_PATH,
+  PROJECT_YAML,
+  pull,
+  REGISTRY,
+  REGISTRY_NAME,
+  STRICT_PROJECT_YAML,
+  submitted,
+  TARGET_SHA,
+  world,
+} from "./fixtures.js";
 
 describe("classifyPullFiles", () => {
   it("accepts exactly one added or modified project.yaml", () => {
@@ -109,8 +127,13 @@ describe("runIntake", () => {
   });
 
   it("falls back to the fork for the head blob", async () => {
-    const { result } = intake({ registryFiles: { [`${HEAD_SHA}:${PROJECT_PATH}`]: PROJECT_YAML } });
+    // Only the fork serves the file; the registry read at the head SHA 404s.
+    const { client, result } = intake({ registryFiles: { [`octocat/ci-cd-optimizer@${HEAD_SHA}:${PROJECT_PATH}`]: PROJECT_YAML } });
     await expect(result).resolves.toMatchObject({ kind: "submission", exitCode: 0 });
+    const headReads = client.calls.filter(
+      (call) => call.route === "GET /repos/{owner}/{repo}/contents/{path}" && call.parameters.path === PROJECT_PATH && call.parameters.ref === HEAD_SHA,
+    );
+    expect(headReads.map((call) => call.parameters.owner)).toEqual([REGISTRY.owner, "octocat"]);
   });
 
   it("rejects a run whose head moved before it started", async () => {
@@ -183,7 +206,7 @@ describe("runIntake", () => {
   });
 
   describe("changes to an existing project", () => {
-    const base = { [`${BASE_SHA}:${PROJECT_PATH}`]: PROJECT_YAML };
+    const base = onBase();
 
     it("keeps repository_id immutable", async () => {
       const changed = PROJECT_YAML.replace("repository_id: 4242", "repository_id: 4243");
@@ -230,5 +253,137 @@ describe("runIntake", () => {
       expect(outcome).toMatchObject({ kind: "opt-out", exitCode: 1 });
       expect(outcome.report?.problems.join("\n")).toContain("Only the project's primary_contact or auto_ccs may remove it");
     });
+
+    it.each([
+      ["an opt-out", "removed", `${PROJECT_YAML}bogus: 1\n`],
+      ["a change", "modified", `${PROJECT_YAML}bogus: 1\n`],
+      ["an opt-out of an oversized project", "removed", `${PROJECT_YAML}# ${"x".repeat(9000)}\n`],
+      ["an opt-out of an unparsable project", "removed", "name: [widget\n"],
+    ])("fails closed on %s when the base copy does not validate", async (_label, status, baseText) => {
+      const { client, result } = intake({
+        pullFiles: [{ filename: PROJECT_PATH, status }],
+        registryFiles: { ...onBase(baseText), ...submitted() },
+      });
+      const outcome = await result;
+      expect(outcome.exitCode).toBe(1);
+      expect(outcome.report?.status).toBe("invalid");
+      expect(outcome.report?.problems.join("\n")).toContain("could not be validated");
+      expect(outcome.report?.problems.join("\n")).toContain("A registry maintainer must review it manually");
+      expect(outcome.markdown).not.toContain("Opt-out request");
+      expect(client.calls.some((call) => call.route === "GET /repositories/{repository_id}")).toBe(false);
+    });
+  });
+});
+
+const report = (status: ReviewReport["status"]): ReviewReport => ({
+  schemaVersion: 1,
+  project: "widget",
+  status,
+  problems: [],
+  notes: [],
+  findings: [],
+  redacted: { count: 0, rules: [] },
+  summary: { filesAnalyzed: 0, error: 0, warn: 0, info: 0, inventoryComplete: true },
+});
+
+const entry = (pr: number, overrides: Partial<IntakeResult> = {}): TrustedIntakeEntry => ({
+  pr,
+  result: { kind: "submission", name: "widget", headSha: HEAD_SHA, markdown: "", exitCode: 0, report: report("ok"), ...overrides },
+});
+
+/** A pull request that moved on: snapshotPull returns no report. */
+const moved: TrustedIntakeEntry = { pr: 7, result: { kind: "invalid", name: "intake", headSha: NEW_HEAD_SHA, markdown: "", exitCode: 1 } };
+
+describe("intakeCommitStatus", () => {
+  it.each<[string, TrustedIntakeEntry[], string, string]>([
+    ["no pull request", [], "failure", "No open pull request points at this commit."],
+    ["one invalid submission", [entry(7, { exitCode: 1, report: report("invalid") })], "failure", "#7: submission is invalid; see the review comment."],
+    ["failed consent", [entry(7, { exitCode: 1, report: report("consent-failed") })], "failure", "#7: consent could not be verified; see the review comment."],
+    ["a review error", [entry(7, { exitCode: 1, report: report("error") })], "failure", "#7: the review failed; see the review comment."],
+    ["a moved head", [moved], "failure", "#7: the pull request moved to a newer commit or has incomplete metadata."],
+    ["several failures", [entry(7, { exitCode: 1 }), entry(8), entry(9, { exitCode: 1 })], "failure", "2 pull requests at this commit failed intake."],
+    ["one failure among passes", [entry(7), entry(8, { exitCode: 1, report: report("invalid") })], "failure", "#8: submission is invalid; see the review comment."],
+    ["only ordinary pull requests", [entry(7, { kind: "none" }), entry(8, { kind: "none" })], "success", "No project changes to review."],
+    ["a passing submission", [entry(7), entry(8, { kind: "none" })], "success", "Intake checks passed."],
+    ["an accepted opt-out", [entry(7, { kind: "opt-out" })], "success", "Intake checks passed."],
+  ])("reports %s", (_label, entries, state, description) => {
+    expect(intakeCommitStatus(entries)).toEqual({ state, description });
+  });
+
+  it("keeps descriptions within the commit status limit", () => {
+    const { description } = intakeCommitStatus([entry(Number.MAX_SAFE_INTEGER, { exitCode: 1, report: report("consent-failed") })]);
+    expect(description.length).toBeLessThanOrEqual(140);
+  });
+});
+
+describe("runTrustedIntake", () => {
+  const trusted = (spec: Parameters<typeof world>[0], options: { record: "present" | "missing" | "invalid"; pr?: number; headSha?: string }) => {
+    const client = world({ registryFiles: submitted(), ...spec });
+    return { client, entries: runTrustedIntake(client, REGISTRY, { headSha: HEAD_SHA, registry: REGISTRY_NAME, ...options }) };
+  };
+
+  it("re-runs intake from trusted code for a valid record", async () => {
+    const entries = await trusted({ openPulls: [pull()] }, { record: "present", pr: 7 }).entries;
+    expect(entries.map((item) => item.pr)).toEqual([7]);
+    expect(entries[0]?.result).toMatchObject({ kind: "submission", exitCode: 0 });
+    expect(intakeCommitStatus(entries)).toEqual({ state: "success", description: "Intake checks passed." });
+  });
+
+  it("still fails a submission whose record is valid", async () => {
+    const entries = await trusted({ openPulls: [pull()], pulls: [pull({ user: { login: "mallory", type: "User" } })] }, { record: "present", pr: 7 }).entries;
+    expect(entries[0]?.result.report?.status).toBe("consent-failed");
+    expect(intakeCommitStatus(entries).state).toBe("failure");
+  });
+
+  it("evaluates every open pull request at the commit, not just the recorded one", async () => {
+    const other = pull({ number: 8, user: { login: "mallory", type: "User" } });
+    const entries = await trusted(
+      { openPulls: [pull(), other, pull({ number: 9, head: { sha: NEW_HEAD_SHA } })], pullsByNumber: { 8: other }, otherPullFiles: { 8: [{ filename: PROJECT_PATH, status: "added" }] } },
+      { record: "present", pr: 7 },
+    ).entries;
+    expect(entries.map((item) => item.pr)).toEqual([7, 8]);
+    expect(entries[1]?.result.report?.status).toBe("consent-failed");
+    expect(intakeCommitStatus(entries)).toEqual({ state: "failure", description: "#8: consent could not be verified; see the review comment." });
+  });
+
+  it("fails a recorded pull request that moved to a newer commit", async () => {
+    const entries = await trusted({ openPulls: [], pulls: [pull({ head: { sha: NEW_HEAD_SHA } })] }, { record: "present", pr: 7 }).entries;
+    expect(entries[0]?.result).toMatchObject({ kind: "invalid", exitCode: 1 });
+    expect(intakeCommitStatus(entries).state).toBe("failure");
+  });
+
+  it.each([
+    ["missing", "left no intake record"],
+    ["invalid", "left an invalid intake record"],
+  ] as const)("fails closed when the record is %s and the pull request touches projects/", async (record, message) => {
+    const { client, entries } = trusted({ openPulls: [pull()] }, { record });
+    const [first] = await entries;
+    expect(first?.result).toMatchObject({ kind: "submission", name: "widget", exitCode: 1 });
+    expect(first?.result.report?.problems.join("\n")).toContain(message);
+    expect(first?.result.markdown).toContain("<!-- ci-cd-optimizer-review:widget -->");
+    // Without a trusted record nothing about the target is fetched.
+    expect(client.calls.some((call) => call.route === "GET /repositories/{repository_id}")).toBe(false);
+    expect(intakeCommitStatus(await entries).state).toBe("failure");
+  });
+
+  it("ignores an unrecorded pull request that does not touch projects/", async () => {
+    const entries = await trusted({ openPulls: [pull()], pullFiles: [{ filename: "src/index.ts", status: "modified" }] }, { record: "missing" }).entries;
+    expect(entries[0]?.result).toMatchObject({ kind: "none", exitCode: 0 });
+    expect(intakeCommitStatus(entries)).toEqual({ state: "success", description: "No project changes to review." });
+  });
+
+  it("fails when no open pull request points at the commit", async () => {
+    const entries = await trusted({ openPulls: [pull({ head: { sha: NEW_HEAD_SHA } })] }, { record: "missing" }).entries;
+    expect(entries).toEqual([]);
+    expect(intakeCommitStatus(entries).state).toBe("failure");
+  });
+
+  it("ignores the record's pull request when the record is not trusted", async () => {
+    const entries = await trusted({ openPulls: [] }, { record: "invalid", pr: 7 }).entries;
+    expect(entries).toEqual([]);
+  });
+
+  it("rejects a malformed head SHA", async () => {
+    await expect(trusted({}, { record: "missing", headSha: "HEAD" }).entries).rejects.toThrow("40 lowercase hex");
   });
 });

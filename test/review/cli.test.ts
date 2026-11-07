@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { run } from "../../src/cli/index.js";
 import type { CliIO } from "../../src/cli/io.js";
 import type { GitHubClient } from "../../src/github/client.js";
-import { serializeIntakeArtifact } from "../../src/review/intake.js";
+import { serializeIntakeArtifact, TRUSTED_STATUS_CONTEXT } from "../../src/review/intake.js";
 import type { ReviewReport } from "../../src/review/report.js";
-import { HEAD_SHA, NEW_HEAD_SHA, PROJECT_YAML, REGISTRY_NAME, STRICT_PROJECT_YAML, submitted, world } from "./fixtures.js";
+import { HEAD_SHA, NEW_HEAD_SHA, PROJECT_PATH, PROJECT_YAML, pull, REGISTRY_NAME, STRICT_PROJECT_YAML, submitted, world } from "./fixtures.js";
 
 let root: string;
 
@@ -25,10 +25,10 @@ async function write(path: string, content: string): Promise<string> {
   return path;
 }
 
-function cli(client?: GitHubClient, cwd = root) {
+function cli(client?: GitHubClient, cwd = root, env: CliIO["env"] = {}) {
   const out: string[] = [];
   const err: string[] = [];
-  const io: CliIO = { cwd, env: {}, stdout: (text) => out.push(text), stderr: (text) => err.push(text), ...(client ? { github: () => client } : {}) };
+  const io: CliIO = { cwd, env, stdout: (text) => out.push(text), stderr: (text) => err.push(text), ...(client ? { github: () => client } : {}) };
   return {
     run: (...argv: string[]) => run(argv, io),
     get stdout() {
@@ -176,6 +176,71 @@ describe("review CLI", () => {
       [[]],
     ])("rejects bad options %j", async (args) => {
       expect(await cli(world()).run("review", "intake", "--repo", REGISTRY_NAME, ...args)).toBe(2);
+    });
+  });
+
+  describe("intake-status", () => {
+    const STATUS_ROUTE = "POST /repos/{owner}/{repo}/statuses/{sha}";
+    const ENV = { GITHUB_SERVER_URL: "https://github.com", GITHUB_REPOSITORY: REGISTRY_NAME, GITHUB_RUN_ID: "12345" };
+
+    it("publishes a success status for a submission that passes trusted intake", async () => {
+      const client = world({ registryFiles: submitted(), openPulls: [pull()] });
+      const c = cli(client, root, ENV);
+      expect(await c.run("review", "intake-status", "--repo", REGISTRY_NAME, "--head-sha", HEAD_SHA, "--pr", "7", "--comment", "--status")).toBe(0);
+      expect(c.stdout).toContain("**success**: Intake checks passed.");
+      const writes = client.calls.filter((call) => !call.route.startsWith("GET "));
+      expect(writes.map((call) => call.route)).toEqual(["POST /repos/{owner}/{repo}/issues/{issue_number}/comments", STATUS_ROUTE]);
+      expect(writes[1]?.parameters).toEqual({
+        owner: "MSFT-TKENDRICK",
+        repo: "ci-cd-optimizer",
+        sha: HEAD_SHA,
+        state: "success",
+        context: TRUSTED_STATUS_CONTEXT,
+        description: "Intake checks passed.",
+        target_url: `https://github.com/${REGISTRY_NAME}/actions/runs/12345`,
+      });
+    });
+
+    it("fails closed and comments when a project change left no intake record", async () => {
+      const client = world({ registryFiles: submitted(), openPulls: [pull()] });
+      const c = cli(client, root, { ...ENV, GITHUB_SERVER_URL: "https://evil.example/x" });
+      expect(await c.run("review", "intake-status", "--repo", REGISTRY_NAME, "--head-sha", HEAD_SHA, "--record", "missing", "--comment", "--status")).toBe(1);
+      expect(c.stdout).toContain("left no intake record");
+      const status = client.calls.find((call) => call.route === STATUS_ROUTE);
+      expect(status?.parameters).toMatchObject({ state: "failure", context: TRUSTED_STATUS_CONTEXT, description: "#7: submission is invalid; see the review comment." });
+      expect(status?.parameters).not.toHaveProperty("target_url");
+      expect(client.calls.some((call) => call.route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments")).toBe(true);
+    });
+
+    it("passes an ordinary pull request without a record and without commenting", async () => {
+      const client = world({ openPulls: [pull()], pullFiles: [{ filename: "README.md", status: "modified" }] });
+      expect(await cli(client).run("review", "intake-status", "--repo", REGISTRY_NAME, "--head-sha", HEAD_SHA, "--comment", "--status")).toBe(0);
+      const writes = client.calls.filter((call) => !call.route.startsWith("GET "));
+      expect(writes.map((call) => call.route)).toEqual([STATUS_ROUTE]);
+      expect(writes[0]?.parameters).toMatchObject({ state: "success", description: "No project changes to review." });
+    });
+
+    it("does not write anything without --comment and --status", async () => {
+      const client = world({ registryFiles: submitted(), openPulls: [pull()] });
+      expect(await cli(client).run("review", "intake-status", "--repo", REGISTRY_NAME, "--head-sha", HEAD_SHA, "--record", "invalid")).toBe(1);
+      expect(client.calls.some((call) => !call.route.startsWith("GET "))).toBe(false);
+    });
+
+    it("re-checks a submission whose record names it from trusted code", async () => {
+      const client = world({ registryFiles: submitted(), openPulls: [pull()], pullFiles: [{ filename: PROJECT_PATH, status: "added" }], consent: undefined });
+      expect(await cli(client).run("review", "intake-status", "--repo", REGISTRY_NAME, "--head-sha", HEAD_SHA, "--pr", "7", "--status")).toBe(1);
+      expect(client.calls.find((call) => call.route === STATUS_ROUTE)?.parameters).toMatchObject({ state: "failure", description: "#7: consent could not be verified; see the review comment." });
+    });
+
+    it.each([
+      [["--head-sha", "ABC"]],
+      [["--head-sha", "A".repeat(40)]],
+      [[]],
+      [["--head-sha", HEAD_SHA, "--record", "present"]],
+      [["--head-sha", HEAD_SHA, "--record", "maybe"]],
+      [["--head-sha", HEAD_SHA, "--pr", "0"]],
+    ])("rejects bad options %j", async (args) => {
+      expect(await cli(world()).run("review", "intake-status", "--repo", REGISTRY_NAME, ...args)).toBe(2);
     });
   });
 

@@ -171,14 +171,50 @@ function intakeReport(name: string, status: ReviewReport["status"], problems: st
   };
 }
 
+const NOTHING_TO_REVIEW = "This pull request does not change any project under projects/, so there is nothing to review.\n";
+
+type PullSnapshot =
+  | { ok: true; data: PullRequestData; headSha: string; baseSha: string; classification: FileClassification }
+  | { ok: false; result: IntakeResult };
+
+/**
+ * Reads a pull request and classifies its changed files, making sure the head did not move while the file list was
+ * fetched (the list always describes the current head).
+ */
+async function snapshotPull(client: GitHubClient, repo: RepoRef, pr: number, expectedHead: string | undefined): Promise<PullSnapshot> {
+  const { data } = (await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr })) as { data: PullRequestData };
+  const headSha = typeof data.head?.sha === "string" ? data.head.sha : "";
+  const baseSha = typeof data.base?.sha === "string" ? data.base.sha : "";
+  if (!SHA_PATTERN.test(headSha) || !SHA_PATTERN.test(baseSha)) {
+    return { ok: false, result: { kind: "invalid", name: "intake", headSha, markdown: "Pull request metadata is incomplete.\n", exitCode: 1 } };
+  }
+  const stale = (current: string): PullSnapshot => ({
+    ok: false,
+    result: {
+      kind: "invalid",
+      name: "intake",
+      headSha: current,
+      markdown: `Pull request #${pr} moved to ${current.slice(0, 12)} while it was being checked; the newer commit is reviewed by its own run.\n`,
+      exitCode: 1,
+    },
+  });
+  if (expectedHead !== undefined && expectedHead !== headSha) return stale(headSha);
+  const files = await paginate<PullFile>(client, "GET /repos/{owner}/{repo}/pulls/{pull_number}/files", { ...repo, pull_number: pr }, MAX_FILE_PAGES);
+  const { data: again } = (await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr })) as { data: PullRequestData };
+  const headAgain = typeof again.head?.sha === "string" ? again.head.sha : "";
+  if (headAgain !== headSha) return stale(SHA_PATTERN.test(headAgain) ? headAgain : "unknown");
+  const changedFiles = typeof again.changed_files === "number" ? again.changed_files : undefined;
+  return { ok: true, data, headSha, baseSha, classification: classifyPullFiles(files, changedFiles) };
+}
+
 /**
  * Validates and reviews a submission pull request without checking it out: the PR file list and the project.yaml
  * blob at the exact head commit are fetched through the API and treated purely as data.
  */
 export async function runIntake(client: GitHubClient, repo: RepoRef, options: IntakeOptions): Promise<IntakeResult> {
-  const { data } = (await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: options.pr })) as { data: PullRequestData };
-  const headSha = typeof data.head?.sha === "string" ? data.head.sha : "";
-  const baseSha = typeof data.base?.sha === "string" ? data.base.sha : "";
+  const snapshot = await snapshotPull(client, repo, options.pr, options.headSha);
+  if (!snapshot.ok) return snapshot.result;
+  const { data, headSha, baseSha, classification } = snapshot;
   const finish = (kind: IntakeResult["kind"], name: string, report: ReviewReport, extra: { statusText?: string; author?: string } = {}): IntakeResult => {
     const markdown = renderMarkdown(report, extra.statusText ? { statusText: extra.statusText } : {});
     return {
@@ -192,26 +228,8 @@ export async function runIntake(client: GitHubClient, repo: RepoRef, options: In
       ...(SHA_PATTERN.test(headSha) ? { artifact: { pr_number: options.pr, head_sha: headSha } } : {}),
     };
   };
-  if (!SHA_PATTERN.test(headSha) || !SHA_PATTERN.test(baseSha)) {
-    return { kind: "invalid", name: "intake", headSha, markdown: "Pull request metadata is incomplete.\n", exitCode: 1 };
-  }
-  const stale = (current: string): IntakeResult => ({
-    kind: "invalid",
-    name: "intake",
-    headSha: current,
-    markdown: `Pull request #${options.pr} moved to ${current.slice(0, 12)} while it was being checked; the newer commit is reviewed by its own run.\n`,
-    exitCode: 1,
-  });
-  if (options.headSha !== undefined && options.headSha !== headSha) return stale(headSha);
-  const files = await paginate<PullFile>(client, "GET /repos/{owner}/{repo}/pulls/{pull_number}/files", { ...repo, pull_number: options.pr }, MAX_FILE_PAGES);
-  // The file list always describes the current head; make sure it is still the commit whose blob will be read.
-  const { data: again } = (await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: options.pr })) as { data: PullRequestData };
-  const headAgain = typeof again.head?.sha === "string" ? again.head.sha : "";
-  if (headAgain !== headSha) return stale(SHA_PATTERN.test(headAgain) ? headAgain : "unknown");
-  const changedFiles = typeof again.changed_files === "number" ? again.changed_files : undefined;
-  const classification = classifyPullFiles(files, changedFiles);
   if (classification.kind === "none") {
-    return { kind: "none", name: "intake", headSha, markdown: "This pull request does not change any project under projects/, so there is nothing to review.\n", exitCode: 0 };
+    return { kind: "none", name: "intake", headSha, markdown: NOTHING_TO_REVIEW, exitCode: 0, artifact: { pr_number: options.pr, head_sha: headSha } };
   }
   if (classification.kind === "invalid") {
     const name = classification.name ?? "intake";
@@ -229,6 +247,12 @@ export async function runIntake(client: GitHubClient, repo: RepoRef, options: In
 
   const baseFile = await readCappedFile(client, repo, path, baseSha, PROJECT_MAX_BYTES);
   const existing = baseFile.kind === "file" ? parseProjectText(baseFile.text, name).project : undefined;
+  if (baseFile.kind !== "missing" && !existing) {
+    // Without a valid base copy there is no trustworthy contact list or repository_id to check this change against.
+    return finish(classification.kind, name, intakeReport(name, "invalid", [
+      `The existing ${path} on the base branch could not be validated, so this change cannot be checked automatically. A registry maintainer must review it manually.`,
+    ], notes), { author });
+  }
   if (classification.kind === "opt-out") {
     if (existing && !contactsOf(existing).some((contact) => sameLogin(contact, author))) {
       return finish("opt-out", name, intakeReport(name, "invalid", [
@@ -272,4 +296,103 @@ export async function runIntake(client: GitHubClient, repo: RepoRef, options: In
   const outcome = await reviewProject(client, project, { registry: options.registry, author });
   outcome.notes.unshift(...notes);
   return finish("submission", name, buildReport(outcome, { public: true }), { author });
+}
+
+/** Commit status the trusted workflow_run job publishes; branch protection requires it instead of the pull_request job. */
+export const TRUSTED_STATUS_CONTEXT = "review-intake/trusted";
+const MAX_OPEN_PULL_PAGES = 10;
+const STATUS_DESCRIPTION_MAX = 140;
+
+/** What the trusted job found when it looked for the record left by the unprivileged intake run. */
+export type IntakeRecordState = "present" | "missing" | "invalid";
+
+export interface TrustedIntakeOptions {
+  /** The commit the workflow_run event reports; every pull request evaluated must still point at it. */
+  headSha: string;
+  /** Pull request named by a validated intake record. */
+  pr?: number;
+  record: IntakeRecordState;
+  registry: string;
+}
+
+export interface TrustedIntakeEntry {
+  pr: number;
+  result: IntakeResult;
+}
+
+/** Open pull requests whose head is `sha`. Commit statuses are per commit, so all of them share the trusted result. */
+async function openPullsAt(client: GitHubClient, repo: RepoRef, sha: string): Promise<number[]> {
+  const pulls = await paginate<PullRequestData>(client, "GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open" }, MAX_OPEN_PULL_PAGES);
+  return pulls
+    .filter((pull) => pull.head?.sha === sha)
+    .map((pull) => pull.number)
+    .filter((number): number is number => typeof number === "number" && Number.isSafeInteger(number) && number > 0);
+}
+
+/** Intake for a pull request whose unprivileged run left no usable record: anything touching projects/ fails closed. */
+async function unrecordedIntake(client: GitHubClient, repo: RepoRef, pr: number, headSha: string, record: "missing" | "invalid"): Promise<IntakeResult> {
+  const snapshot = await snapshotPull(client, repo, pr, headSha);
+  if (!snapshot.ok) return snapshot.result;
+  const { classification } = snapshot;
+  if (classification.kind === "none") return { kind: "none", name: "intake", headSha, markdown: NOTHING_TO_REVIEW, exitCode: 0 };
+  const name = classification.name ?? "intake";
+  const problem =
+    record === "missing"
+      ? "The Review intake run for this commit left no intake record, so the submission could not be verified."
+      : "The Review intake run for this commit left an invalid intake record, so the submission could not be verified.";
+  const report = intakeReport(name, "invalid", [
+    `${problem} A registry maintainer must re-run Review intake. Pull requests that change the intake workflow cannot be accepted as submissions.`,
+  ]);
+  return { kind: classification.kind, name, headSha, report, markdown: renderMarkdown(report), exitCode: 1 };
+}
+
+/**
+ * Re-runs intake from trusted code for every open pull request at `headSha`, plus the one a valid record names. The
+ * unprivileged run only decides which path is taken; it can never make a submission pass.
+ */
+export async function runTrustedIntake(client: GitHubClient, repo: RepoRef, options: TrustedIntakeOptions): Promise<TrustedIntakeEntry[]> {
+  if (!SHA_PATTERN.test(options.headSha)) throw new Error("The head SHA must be 40 lowercase hex characters.");
+  const candidates = new Set(await openPullsAt(client, repo, options.headSha));
+  if (options.record === "present" && options.pr !== undefined) candidates.add(options.pr);
+  const entries: TrustedIntakeEntry[] = [];
+  for (const pr of [...candidates].sort((a, b) => a - b)) {
+    const result =
+      options.record === "present"
+        ? await runIntake(client, repo, { pr, headSha: options.headSha, registry: options.registry })
+        : await unrecordedIntake(client, repo, pr, options.headSha, options.record);
+    entries.push({ pr, result });
+  }
+  return entries;
+}
+
+export interface IntakeCommitStatus {
+  state: "success" | "failure";
+  description: string;
+}
+
+function failureReason(result: IntakeResult): string {
+  switch (result.report?.status) {
+    case "invalid":
+      return "submission is invalid; see the review comment.";
+    case "consent-failed":
+      return "consent could not be verified; see the review comment.";
+    case "error":
+      return "the review failed; see the review comment.";
+    case undefined:
+      return "the pull request moved to a newer commit or has incomplete metadata.";
+    default:
+      return "intake failed.";
+  }
+}
+
+/** Decides the trusted commit status: every pull request at the commit must pass, and at least one must exist. */
+export function intakeCommitStatus(entries: readonly TrustedIntakeEntry[]): IntakeCommitStatus {
+  const status = (state: IntakeCommitStatus["state"], description: string): IntakeCommitStatus => ({ state, description: description.slice(0, STATUS_DESCRIPTION_MAX) });
+  if (entries.length === 0) return status("failure", "No open pull request points at this commit.");
+  const failed = entries.filter((entry) => entry.result.exitCode !== 0);
+  const [first] = failed;
+  if (failed.length > 1) return status("failure", `${failed.length} pull requests at this commit failed intake.`);
+  if (first) return status("failure", `#${first.pr}: ${failureReason(first.result)}`);
+  if (entries.every((entry) => entry.result.kind === "none")) return status("success", "No project changes to review.");
+  return status("success", "Intake checks passed.");
 }

@@ -72,8 +72,10 @@ export interface World {
   commitError?: Error;
   /** Pull request responses returned in order; the last one repeats. */
   pulls?: PullData[];
+  /** Pull request responses by number, for flows that read several pull requests; overrides `pulls`. */
+  pullsByNumber?: Record<number, PullData>;
   pullFiles?: PullFile[];
-  /** Registry repository files keyed by `<ref>:<path>`. */
+  /** Files of non-target repositories (the registry and forks) keyed by `<owner>/<repo>@<ref>:<path>`. */
   registryFiles?: Record<string, string>;
   openPulls?: PullData[];
   otherPullFiles?: Record<number, PullFile[]>;
@@ -126,7 +128,8 @@ export function world(spec: World = {}) {
           if (path === ".github/ci-cd-optimizer.yml" && state.config !== undefined) return contents(state.config);
           throw httpError(404);
         }
-        const text = state.registryFiles?.[`${String(parameters.ref)}:${path}`];
+        const key = `${String(parameters.owner)}/${String(parameters.repo)}@${String(parameters.ref)}:${path}`.toLowerCase();
+        const text = Object.entries(state.registryFiles ?? {}).find(([candidate]) => candidate.toLowerCase() === key)?.[1];
         if (text === undefined) throw httpError(404);
         return contents(text);
       }
@@ -140,6 +143,8 @@ export function world(spec: World = {}) {
         return { content: Buffer.from(state.files[path] ?? "").toString("base64"), encoding: "base64" };
       }
       case "GET /repos/{owner}/{repo}/pulls/{pull_number}": {
+        const byNumber = state.pullsByNumber?.[Number(parameters.pull_number)];
+        if (byNumber) return byNumber;
         const pulls = state.pulls ?? [pull()];
         const data = pulls[Math.min(pullIndex, pulls.length - 1)];
         pullIndex += 1;
@@ -158,6 +163,8 @@ export function world(spec: World = {}) {
         return {};
       case "POST /repos/{owner}/{repo}/issues/{issue_number}/comments":
         return { id: 99 };
+      case "POST /repos/{owner}/{repo}/statuses/{sha}":
+        return {};
       default:
         throw new Error(`unexpected route ${route}`);
     }
@@ -165,4 +172,7 @@ export function world(spec: World = {}) {
 }
 
 /** Registry files for a submission at the default head SHA. */
-export const submitted = (text = PROJECT_YAML, path = PROJECT_PATH) => ({ [`${HEAD_SHA}:${path}`]: text });
+export const submitted = (text = PROJECT_YAML, path = PROJECT_PATH) => ({ [`${REGISTRY_NAME}@${HEAD_SHA}:${path}`]: text });
+
+/** Registry files on the base branch. */
+export const onBase = (text = PROJECT_YAML, path = PROJECT_PATH) => ({ [`${REGISTRY_NAME}@${BASE_SHA}:${path}`]: text });

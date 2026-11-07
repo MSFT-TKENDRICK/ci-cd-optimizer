@@ -1,8 +1,13 @@
-# Changes to the project review registry, the workflows that run with repository tokens, and the review program's
-# trust-boundary code need a code owner's approval (enable "Require review from Code Owners" on main).
+# Changes to the project review registry, the workflows that run with repository tokens, and the code and toolchain
+# those workflows execute need a code owner's approval (enable "Require review from Code Owners" on main).
 /.github/CODEOWNERS @MSFT-TKENDRICK
 /.github/workflows/ @MSFT-TKENDRICK
+/.github/actions/ @MSFT-TKENDRICK
 /.github/ci-cd-optimizer-review.yml @MSFT-TKENDRICK
 /projects/ @MSFT-TKENDRICK
+/src/ @MSFT-TKENDRICK
 /src/review/ @MSFT-TKENDRICK
 /src/cli/review.ts @MSFT-TKENDRICK
+/package.json @MSFT-TKENDRICK
+/package-lock.json @MSFT-TKENDRICK
+/.nvmrc @MSFT-TKENDRICK

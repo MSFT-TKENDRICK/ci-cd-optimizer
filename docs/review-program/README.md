@@ -56,13 +56,15 @@ The review is static analysis through the GitHub API only. The program never che
    [submission template](../../.github/PULL_REQUEST_TEMPLATE/review-submission.md) has a checklist; add
    `?template=review-submission.md` to the compare URL to use it. The **Review intake** check validates the
    submission and reviews the repository. Because you are an outside contributor, a maintainer may need to approve
-   the workflow run first. The results are then posted as a comment on the pull request.
+   the workflow run first. A trusted follow-up job then repeats the checks from the default branch, posts the
+   results as a comment on the pull request, and sets the **`review-intake/trusted`** commit status. That status is
+   the one that must pass.
 
 5. A code owner reviews and merges the pull request. After that, the project is reviewed every week.
 
 ## Acceptance criteria
 
-The intake check blocks a submission unless every one of these holds:
+The `review-intake/trusted` status blocks a submission unless every one of these holds:
 
 | Requirement | Why |
 | --- | --- |
