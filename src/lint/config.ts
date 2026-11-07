@@ -106,6 +106,8 @@ export interface LintConfig {
   ignorePaths: string[];
   failOn: ActiveSeverity | "never";
   limits: { maxFiles: number; maxFileBytes: number };
+  /** Repository-relative `.js`/`.mjs` modules exporting `local/*` rules; loaded only by the CLI with `--allow-local-rules`. */
+  localRules: string[];
   issues: IssuesConfig;
   fixes: FixesConfig;
   alerts: AlertsConfig;
@@ -128,6 +130,7 @@ export const DEFAULT_CONFIG: LintConfig = {
   ignorePaths: ["vendor/**", "node_modules/**", "**/node_modules/**", "dist/**", "build/**", ".github/workflows/*.lock.yml"],
   failOn: "error",
   limits: { maxFiles: 2000, maxFileBytes: 512_000 },
+  localRules: [],
   issues: {
     enabled: false,
     minSeverity: "error",
@@ -338,6 +341,7 @@ export function validateConfig(input: unknown, rules: AnyRule[]): ParsedConfig {
     "ignorePaths",
     "failOn",
     "limits",
+    "localRules",
     "issues",
     "fixes",
     "alerts",
@@ -351,6 +355,16 @@ export function validateConfig(input: unknown, rules: AnyRule[]): ParsedConfig {
   const ruleIds = rules.map((rule) => rule.meta.id);
   const rulesetNames = [...new Set(rules.map((rule) => rule.meta.ruleset))];
   const config = structuredClone(DEFAULT_CONFIG);
+  if (raw.localRules !== undefined) {
+    if (Array.isArray(raw.localRules) && raw.localRules.every((entry) => typeof entry === "string")) {
+      config.localRules = [...(raw.localRules as string[])];
+    } else {
+      v.problem("localRules", "Expected a list of repository-relative .js or .mjs paths.");
+    }
+  }
+  // Callers that do not load local rules (the GitHub App) skip `local/*` settings instead of rejecting the configuration.
+  const skipLocal = config.localRules.length > 0 && !rules.some((rule) => rule.meta.ruleset === "local");
+  const isSkippedLocal = (id: string) => skipLocal && id.startsWith("local/");
   config.enabled = v.boolean("enabled", raw.enabled, true);
   config.extends = v
     .strings("extends", raw.extends, DEFAULT_CONFIG.extends)
@@ -361,6 +375,7 @@ export function validateConfig(input: unknown, rules: AnyRule[]): ParsedConfig {
     }) as Preset[];
 
   for (const [name, value] of Object.entries(v.record("rulesets", raw.rulesets))) {
+    if (skipLocal && name === "local") continue;
     if (!rulesetNames.includes(name)) {
       v.problem(`rulesets.${name}`, `Unknown ruleset "${name}".${didYouMean(name, rulesetNames)}`);
       continue;
@@ -370,6 +385,7 @@ export function validateConfig(input: unknown, rules: AnyRule[]): ParsedConfig {
 
   for (const [rawId, value] of Object.entries(v.record("rules", raw.rules))) {
     const id = DEPRECATED_RULE_IDS[rawId] ?? rawId;
+    if (isSkippedLocal(id)) continue;
     if (id !== rawId) v.problem(`rules.${rawId}`, `Rule "${rawId}" is deprecated; use "${id}".`);
     const rule = rules.find((candidate) => candidate.meta.id === id);
     if (!rule) {
@@ -407,6 +423,7 @@ export function validateConfig(input: unknown, rules: AnyRule[]): ParsedConfig {
   v.unknownKeys("issues.copilot", copilot, ["baseBranch", "customInstructions", "customAgent", "model"]);
   const issueRules: Record<string, boolean> = {};
   for (const [id, value] of Object.entries(v.record("issues.rules", issues.rules))) {
+    if (isSkippedLocal(id)) continue;
     if (!ruleIds.includes(id)) v.problem(`issues.rules.${id}`, `Unknown rule "${id}".${didYouMean(id, ruleIds)}`);
     else issueRules[id] = v.boolean(`issues.rules.${id}`, value, true);
   }

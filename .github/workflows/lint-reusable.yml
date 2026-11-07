@@ -1,0 +1,77 @@
+# Reusable workflow: run the ci-cd-optimizer linter on the calling repository (docs/linter.md#reusable-workflow).
+#
+#   jobs:
+#     cicd-lint:
+#       uses: MSFT-TKENDRICK/ci-cd-optimizer/.github/workflows/lint-reusable.yml@<full commit SHA>
+#       permissions:
+#         contents: read
+#       with:
+#         tool-ref: <the same full commit SHA>
+#
+# Pin both the `uses:` ref and `tool-ref` to the same commit SHA; the default `main` follows the branch.
+# The SARIF report is uploaded as the `cicd-optimizer-sarif` artifact; a caller job with
+# `security-events: write` can forward it to code scanning (see the docs). Local rules stay disabled:
+# this workflow never passes --allow-local-rules unless the caller adds it to `args`.
+name: Lint (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      args:
+        description: Extra `cicd-lint` arguments, split on whitespace (quotes group). Not passed through a shell.
+        type: string
+        default: --format github --fail-on error
+      upload-sarif:
+        description: Upload the SARIF report as the `cicd-optimizer-sarif` artifact.
+        type: boolean
+        default: true
+      working-directory:
+        description: Directory to lint, relative to the repository root.
+        type: string
+        default: .
+      tool-ref:
+        description: Branch, tag, or (recommended) full commit SHA of MSFT-TKENDRICK/ci-cd-optimizer to run.
+        type: string
+        default: main
+    outputs:
+      exit-code:
+        description: Linter exit code (0 clean, 1 findings at or above the threshold, 2 usage or config error).
+        value: ${{ jobs.lint.outputs.exit-code }}
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      exit-code: ${{ steps.lint.outputs.exit-code }}
+    steps:
+      # The caller's code and the tool are checked out side by side so the tool's own files are never linted.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: repo
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MSFT-TKENDRICK/ci-cd-optimizer
+          ref: ${{ inputs.tool-ref }}
+          path: .cicd-optimizer
+          persist-credentials: false
+      - name: Lint
+        id: lint
+        uses: ./.cicd-optimizer
+        with:
+          command: lint
+          # Action inputs are split into argv by the action itself; nothing here is evaluated by a shell.
+          args: ${{ inputs.args }} --sarif "${{ runner.temp }}/cicd-optimizer.sarif"
+          working-directory: repo/${{ inputs.working-directory }}
+      - name: Upload SARIF report
+        if: always() && inputs.upload-sarif
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cicd-optimizer-sarif
+          path: ${{ runner.temp }}/cicd-optimizer.sarif
+          if-no-files-found: ignore
+          retention-days: 7

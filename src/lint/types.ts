@@ -110,6 +110,8 @@ export interface RuleMeta<O> {
   impact: Impact;
   fixable?: boolean;
   example?: { bad: string; good: string };
+  /** Documentation link for findings; defaults to the rule's section in docs/rules.md. */
+  docsUrl?: string;
 }
 
 export interface RuleContext<O> {
@@ -144,6 +146,14 @@ export interface ParseProblem {
   message: string;
 }
 
+/** A suppression directive, or ids within it, that suppressed nothing. Empty `ids` means a blanket directive. */
+export interface UnusedDirective {
+  path: string;
+  line: number;
+  kind: "file" | "next-line";
+  ids: string[];
+}
+
 export interface LintResult {
   diagnostics: Diagnostic[];
   skipped: SkippedRule[];
@@ -152,4 +162,6 @@ export interface LintResult {
   rulesRun: number;
   suppressed: number;
   durationMs: number;
+  /** Present when unused-directive reporting was requested. */
+  unusedDirectives?: UnusedDirective[];
 }
