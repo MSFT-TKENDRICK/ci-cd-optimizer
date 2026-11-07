@@ -5,7 +5,7 @@ import { ActionButton, ConfirmAction } from "@/components/setup/confirm-action";
 import { SetupApiError } from "@/lib/transport";
 import type { SetupState } from "@/lib/types";
 import { deferred, fakeTransport, makeState } from "./fixtures";
-import { heading, mount, pressInDialog, provide, step } from "./mount";
+import { heading, mount, panel, pressInDialog, provide } from "./mount";
 
 type Overrides = NonNullable<Parameters<typeof provide>[1]>;
 type Blocked<Props> = [reason: string, props: Props, overrides: Overrides];
@@ -298,7 +298,7 @@ describe("focus after an action", () => {
     const transport = fakeTransport({ state: makeState("credentials") });
     transport.act.mockReturnValueOnce(gate.promise);
     const { user } = mount(transport, makeState("credentials"));
-    const trigger = within(step("credentials")).getByRole("button", { name: "Save credentials to this repository" });
+    const trigger = within(panel("credentials")).getByRole("button", { name: "Save credentials to this repository" });
 
     await user.click(trigger);
     await pressInDialog(user, "Save credentials");
@@ -349,7 +349,7 @@ describe("focus after an action", () => {
     const transport = fakeTransport({ state: running });
     transport.act.mockReturnValueOnce(gate.promise);
     mount(transport, running);
-    const button = within(step("install")).getByRole("button", { name: "Check verification result" });
+    const button = within(panel("install")).getByRole("button", { name: "Check verification result" });
 
     // A browser drops focus to the page when the focused button becomes disabled, but jsdom keeps it there
     // and cannot blur a disabled control. Clicking without focusing leaves focus on the page, as a browser would.

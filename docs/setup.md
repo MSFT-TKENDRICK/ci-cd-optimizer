@@ -74,7 +74,10 @@ npm run setup -- --repo OWNER/REPOSITORY
 
 No `npm ci` or build is needed: the page is a prebuilt React app committed in `dist-setup/`.
 Open the printed loopback URL in your signed-in browser.
-The wizard guides each approval separately:
+The wizard guides each approval separately. A step list across the top shows progress, and the panel below it shows
+only the current step. When a step finishes, the panel moves on to the next one by itself. Select a completed step in
+the list to review it; **Back** and **Continue** then move between reviewed steps, and **Back to current step**
+returns to the step that needs action. Steps that are not unlocked yet cannot be opened.
 
 1. Register a private App through GitHub's manifest flow (personal owner or organization). Change the proposed name
    on GitHub if it is already taken.

@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { SetupApiError } from "@/lib/transport";
 import { fakeTransport, makeState } from "./fixtures";
-import { FAST, mount, pressInDialog, step } from "./mount";
+import { FAST, mount, panel, pressInDialog, step } from "./mount";
 
 const SAVE = "Save credentials to this repository";
 
@@ -169,7 +169,7 @@ describe("SetupApp notices", () => {
     await user.click(screen.getByRole("button", { name: SAVE }));
     await pressInDialog(user, "Save credentials");
 
-    const alert = await within(step("credentials")).findByRole("alert");
+    const alert = await within(panel("credentials")).findByRole("alert");
     expect(within(alert).getByText("Could not save the credentials")).toBeInTheDocument();
     expect(screen.getAllByText("gh: HTTP 403")).toHaveLength(1);
     expect(screen.queryByText("That did not go through")).not.toBeInTheDocument();
@@ -222,11 +222,11 @@ describe("SetupApp polling", () => {
     const transport = fakeTransport({ state: makeState("authorize") });
     mount(transport, running, FAST);
 
-    expect(within(step("install")).getByText(/^Verification is running/)).toBeInTheDocument();
+    expect(within(panel("install")).getByText(/^Verification is running/)).toBeInTheDocument();
 
     await waitFor(() => expect(step("authorize")).toHaveAttribute("aria-current", "step"));
     expect(step("install")).not.toHaveAttribute("aria-current");
     expect(within(step("install")).getByText("Installation and repository-scoped token verified.")).toBeInTheDocument();
-    expect(within(step("authorize")).getByRole("link", { name: /Create a scoped assignment token on GitHub/ })).toBeInTheDocument();
+    expect(within(panel("authorize")).getByRole("link", { name: /Create a scoped assignment token on GitHub/ })).toBeInTheDocument();
   });
 });

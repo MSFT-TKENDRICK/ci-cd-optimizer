@@ -28,11 +28,17 @@ export function SetupHeader() {
         Setting up <code className="break-all">{state.repo}</code> in Actions-hosted mode. Register once, install on this repository, and
         authorize the coding-agent handoff. No paid hosting or public webhook is needed.
       </p>
-      <Progress
-        value={total ? Math.round((done / total) * 100) : 0}
-        aria-label="Setup progress"
-        getValueLabel={() => `${done} of ${total} steps complete`}
-      />
+      <div className="flex items-center gap-3">
+        <Progress
+          value={total ? Math.round((done / total) * 100) : 0}
+          aria-label="Setup progress"
+          getValueLabel={() => `${done} of ${total} steps complete`}
+          className="h-1.5"
+        />
+        <span aria-hidden="true" className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          {done} of {total} done
+        </span>
+      </div>
     </header>
   );
 }

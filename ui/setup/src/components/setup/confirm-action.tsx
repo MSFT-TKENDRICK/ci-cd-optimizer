@@ -7,13 +7,13 @@ import { useSetup } from "./context";
 type ButtonLook = Pick<ComponentProps<typeof Button>, "variant" | "size">;
 
 // The trigger is disabled while an action runs, so focus falls to the page. Put it back once the action
-// settles, using the step heading when the trigger itself stays disabled.
+// settles, using the panel heading when the trigger itself stays disabled.
 function useRestoreFocus(running: boolean, trigger: RefObject<HTMLButtonElement | null>) {
   const wasRunning = useRef(false);
   useEffect(() => {
     if (wasRunning.current && !running && document.activeElement === document.body) {
       const button = trigger.current;
-      const target = button && !button.disabled ? button : button?.closest("li")?.querySelector<HTMLElement>("h2");
+      const target = button && !button.disabled ? button : button?.closest("[data-step-panel]")?.querySelector<HTMLElement>("h2");
       target?.focus({ preventScroll: true });
     }
     wasRunning.current = running;
