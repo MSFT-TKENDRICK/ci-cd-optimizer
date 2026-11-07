@@ -31,6 +31,9 @@ npm run cli -- lint . -f sarif -o cicd.sarif # for code scanning
 npm run cli -- rules --format markdown       # rule catalog
 ```
 
+To use it as a standalone linter (`cicd-lint`, path and stdin input, suppression comments, local rules, a reusable
+workflow, and pre-commit), see [docs/linter.md](docs/linter.md).
+
 **GitHub Action.** Runs any CLI command in a workflow; see [examples/](examples/).
 
 ```yaml

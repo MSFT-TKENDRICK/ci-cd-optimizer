@@ -4,7 +4,7 @@ import { renderRulesMarkdown } from "../lint/docs.js";
 import { VERSION } from "../version.js";
 import { experimentsCommand, EXPERIMENTS_HELP } from "./experiments.js";
 import { UsageError, writeText, type CliIO } from "./io.js";
-import { lintCommand, LINT_HELP } from "./lint.js";
+import { lintCommand, LINT_HELP, ruleListText } from "./lint.js";
 import { recipesCommand, RECIPES_HELP } from "./recipes.js";
 import { scanCommand, SCAN_HELP } from "./scan.js";
 import { telemetryCommand, TELEMETRY_HELP } from "./telemetry.js";
@@ -17,7 +17,7 @@ export const HELP = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and
 Usage: ci-cd-optimizer <command> [options]
 
 Commands:
-  lint [dir]            Lint workflows, Dockerfiles, and package manifests (default command)
+  lint [paths...]       Lint workflows, Dockerfiles, and package manifests (default command; also \`cicd-lint\`)
   rules                 List rules (--format json|markdown)
   scan                  Scan a repository via the API like the App: SARIF, finding issues, autofix PRs
   telemetry             Report on a completed workflow run (Gantt, critical path) and raise duration alerts
@@ -43,10 +43,8 @@ async function rulesCommand(args: string[], io: CliIO): Promise<number> {
   let text: string;
   if (values.format === "markdown") text = renderRulesMarkdown(allRules);
   else if (values.format === "json") text = JSON.stringify(allRules.map((rule) => rule.meta), null, 2);
-  else if (values.format === "text") {
-    const width = Math.max(...allRules.map((rule) => rule.meta.id.length));
-    text = allRules.map((rule) => `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}`).join("\n");
-  } else throw new UsageError(`Unknown format "${values.format}". Use text, json, or markdown.`);
+  else if (values.format === "text") text = ruleListText(allRules);
+  else throw new UsageError(`Unknown format "${values.format}". Use text, json, or markdown.`);
   await writeText(io, values.output, text);
   return 0;
 }

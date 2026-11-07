@@ -72,7 +72,13 @@ describe("cli", () => {
     expect(await typo.run("lnt")).toBe(2);
     expect(typo.stderr).toContain('Unknown command "lnt"');
     expect(await cli().run("lint", "--nope")).toBe(2);
-    expect(await cli().run("lint", "a", "b")).toBe(2);
+    expect(await cli().run("lint", "--stdin")).toBe(2);
+  });
+
+  it("treats several positionals as report filters rather than a usage error", async () => {
+    const c = cli();
+    expect(await c.run("lint", "a", "b")).toBe(0);
+    expect(c.stderr).toContain("No lintable files matched the given paths");
   });
 
   it("lints a directory named like a command", async () => {
