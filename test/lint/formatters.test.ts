@@ -45,6 +45,12 @@ describe("formatters", () => {
     expect(lines[1]).toMatch(/^ {2}4:3 +warning +Job has no timeout\. {2}workflow\/job-timeout \(fixable\)$/);
     expect(lines[2]).toContain("-> Add timeout-minutes: 30.");
     expect(text).toContain("bad.yml:3 parse error: oops");
+    const docs = lines.indexOf("Rule docs:");
+    expect(lines.slice(docs, docs + 3)).toEqual([
+      "Rule docs:",
+      "  hermeticity/frozen-lockfile  https://example.com/rules.md#workflow-job-timeout",
+      "  workflow/job-timeout         https://example.com/rules.md#workflow-job-timeout",
+    ]);
     expect(lines.at(-1)).toBe(
       "3 problem(s) (1 error, 1 warning, 1 info), 1 fixable with --fix; 5 rules over 2 files in 7ms; 1 rule(s) skipped; 2 suppressed",
     );

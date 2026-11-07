@@ -37,6 +37,10 @@ failOn: error
 limits:
   maxFiles: 2000        # files fetched per scan
   maxFileBytes: 512000  # larger files are skipped
+
+# Repository-relative .js/.mjs modules exporting local/* rules. The CLI loads them only with --allow-local-rules;
+# the GitHub App never loads them.
+localRules: [.github/cicd-rules/approved-runners.mjs]
 ```
 
 Presets:
@@ -52,6 +56,8 @@ Presets:
 
 Rule options and defaults are listed per rule in [rules.md](rules.md). Generated gh-aw `.lock.yml` workflows are
 ignored by default. Fix the `.md` source and recompile instead.
+
+Suppression comments, `--init`, `--print-config`, and writing local rules are covered in [linter.md](linter.md).
 
 ### Legacy keys
 

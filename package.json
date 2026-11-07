@@ -6,8 +6,16 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "ci-cd-optimizer": "dist/bin.js"
+    "ci-cd-optimizer": "dist/bin.js",
+    "cicd-lint": "dist/lint-bin.js"
   },
+  "files": [
+    "dist",
+    "action.yml",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -25,7 +33,8 @@
     "preview:mcp": "node test/setup/preview-host.mjs",
     "test:setup": "node --test test/setup/*.node.mjs",
     "test": "npm run test:setup && vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepack": "npm run build"
   },
   "engines": {
     "node": ">=22"

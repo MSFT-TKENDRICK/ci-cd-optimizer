@@ -19,6 +19,15 @@ export interface CliIO {
   now?: () => Date;
   /** Initialized, caller-owned knowledge store for embedded clients/tests. */
   knowledgeStore?: () => Promise<KnowledgeStore>;
+  /** Reads standard input (for `lint --stdin`); the bins read process.stdin and tests inject content. */
+  stdin?: () => Promise<string>;
+}
+
+/** Collects a readable stream (normally process.stdin) as UTF-8 text. */
+export async function readStream(stream: AsyncIterable<Buffer | string>): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk);
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 /** Wrong arguments or configuration (exit code 2, like ESLint). */
