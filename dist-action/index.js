@@ -21438,6 +21438,7 @@ async function loadRemoteConfig(client, repo, ref) {
   const parsed = parseConfigText("", allRules);
   return { config: parsed.config, problems: [] };
 }
+var SYMLINK_MODE = "120000";
 async function resolveRepositoryRevision(client, repo, ref) {
   const response = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { ...repo, ref });
   const data = response.data;
@@ -21451,7 +21452,9 @@ async function loadRepositorySnapshot(client, repo, options) {
   if (options.resolvedRevision && options.ref !== commit.sha) throw new Error("Resolved repository revision does not match the requested immutable ref");
   const tree = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { ...repo, tree_sha: commit.treeSha, recursive: "1" });
   const treeData = tree.data;
-  const blobs = new Map(treeData.tree.filter((entry) => entry.type === "blob" && (!options.pathFilter || options.pathFilter(entry.path))).map((entry) => [entry.path, entry]));
+  const blobs = new Map(
+    treeData.tree.filter((entry) => entry.type === "blob" && entry.mode !== SYMLINK_MODE && (!options.pathFilter || options.pathFilter(entry.path))).map((entry) => [entry.path, entry])
+  );
   const selection = selectInventory(
     [...blobs.values()].map((entry) => ({ path: entry.path, ...entry.size !== void 0 ? { size: entry.size } : {} })),
     options.config
@@ -26320,10 +26323,37 @@ function intakeReport(name, status, problems, notes = []) {
     summary: { filesAnalyzed: 0, error: 0, warn: 0, info: 0, inventoryComplete: true }
   };
 }
-async function runIntake(client, repo, options) {
-  const { data } = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: options.pr });
+var NOTHING_TO_REVIEW = "This pull request does not change any project under projects/, so there is nothing to review.\n";
+async function snapshotPull(client, repo, pr, expectedHead) {
+  const { data } = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr });
   const headSha = typeof data.head?.sha === "string" ? data.head.sha : "";
   const baseSha = typeof data.base?.sha === "string" ? data.base.sha : "";
+  if (!SHA_PATTERN2.test(headSha) || !SHA_PATTERN2.test(baseSha)) {
+    return { ok: false, result: { kind: "invalid", name: "intake", headSha, markdown: "Pull request metadata is incomplete.\n", exitCode: 1 } };
+  }
+  const stale = (current) => ({
+    ok: false,
+    result: {
+      kind: "invalid",
+      name: "intake",
+      headSha: current,
+      markdown: `Pull request #${pr} moved to ${current.slice(0, 12)} while it was being checked; the newer commit is reviewed by its own run.
+`,
+      exitCode: 1
+    }
+  });
+  if (expectedHead !== void 0 && expectedHead !== headSha) return stale(headSha);
+  const files = await paginate(client, "GET /repos/{owner}/{repo}/pulls/{pull_number}/files", { ...repo, pull_number: pr }, MAX_FILE_PAGES);
+  const { data: again } = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr });
+  const headAgain = typeof again.head?.sha === "string" ? again.head.sha : "";
+  if (headAgain !== headSha) return stale(SHA_PATTERN2.test(headAgain) ? headAgain : "unknown");
+  const changedFiles = typeof again.changed_files === "number" ? again.changed_files : void 0;
+  return { ok: true, data, headSha, baseSha, classification: classifyPullFiles(files, changedFiles) };
+}
+async function runIntake(client, repo, options) {
+  const snapshot = await snapshotPull(client, repo, options.pr, options.headSha);
+  if (!snapshot.ok) return snapshot.result;
+  const { data, headSha, baseSha, classification } = snapshot;
   const finish2 = (kind, name2, report, extra = {}) => {
     const markdown2 = renderMarkdown(report, extra.statusText ? { statusText: extra.statusText } : {});
     return {
@@ -26337,26 +26367,8 @@ async function runIntake(client, repo, options) {
       ...SHA_PATTERN2.test(headSha) ? { artifact: { pr_number: options.pr, head_sha: headSha } } : {}
     };
   };
-  if (!SHA_PATTERN2.test(headSha) || !SHA_PATTERN2.test(baseSha)) {
-    return { kind: "invalid", name: "intake", headSha, markdown: "Pull request metadata is incomplete.\n", exitCode: 1 };
-  }
-  const stale = (current) => ({
-    kind: "invalid",
-    name: "intake",
-    headSha: current,
-    markdown: `Pull request #${options.pr} moved to ${current.slice(0, 12)} while it was being checked; the newer commit is reviewed by its own run.
-`,
-    exitCode: 1
-  });
-  if (options.headSha !== void 0 && options.headSha !== headSha) return stale(headSha);
-  const files = await paginate(client, "GET /repos/{owner}/{repo}/pulls/{pull_number}/files", { ...repo, pull_number: options.pr }, MAX_FILE_PAGES);
-  const { data: again } = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: options.pr });
-  const headAgain = typeof again.head?.sha === "string" ? again.head.sha : "";
-  if (headAgain !== headSha) return stale(SHA_PATTERN2.test(headAgain) ? headAgain : "unknown");
-  const changedFiles = typeof again.changed_files === "number" ? again.changed_files : void 0;
-  const classification = classifyPullFiles(files, changedFiles);
   if (classification.kind === "none") {
-    return { kind: "none", name: "intake", headSha, markdown: "This pull request does not change any project under projects/, so there is nothing to review.\n", exitCode: 0 };
+    return { kind: "none", name: "intake", headSha, markdown: NOTHING_TO_REVIEW, exitCode: 0, artifact: { pr_number: options.pr, head_sha: headSha } };
   }
   if (classification.kind === "invalid") {
     const name2 = classification.name ?? "intake";
@@ -26372,6 +26384,11 @@ async function runIntake(client, repo, options) {
   const fallback = typeof headRepo?.owner?.login === "string" && typeof headRepo.name === "string" ? { owner: headRepo.owner.login, repo: headRepo.name } : void 0;
   const baseFile = await readCappedFile(client, repo, path, baseSha, PROJECT_MAX_BYTES);
   const existing = baseFile.kind === "file" ? parseProjectText(baseFile.text, name).project : void 0;
+  if (baseFile.kind !== "missing" && !existing) {
+    return finish2(classification.kind, name, intakeReport(name, "invalid", [
+      `The existing ${path} on the base branch could not be validated, so this change cannot be checked automatically. A registry maintainer must review it manually.`
+    ], notes), { author });
+  }
   if (classification.kind === "opt-out") {
     if (existing && !contactsOf(existing).some((contact) => sameLogin(contact, author))) {
       return finish2("opt-out", name, intakeReport(name, "invalid", [
@@ -26413,6 +26430,60 @@ async function runIntake(client, repo, options) {
   outcome2.notes.unshift(...notes);
   return finish2("submission", name, buildReport(outcome2, { public: true }), { author });
 }
+var TRUSTED_STATUS_CONTEXT = "review-intake/trusted";
+var MAX_OPEN_PULL_PAGES = 10;
+var STATUS_DESCRIPTION_MAX = 140;
+async function openPullsAt(client, repo, sha) {
+  const pulls = await paginate(client, "GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open" }, MAX_OPEN_PULL_PAGES);
+  return pulls.filter((pull) => pull.head?.sha === sha).map((pull) => pull.number).filter((number2) => typeof number2 === "number" && Number.isSafeInteger(number2) && number2 > 0);
+}
+async function unrecordedIntake(client, repo, pr, headSha, record3) {
+  const snapshot = await snapshotPull(client, repo, pr, headSha);
+  if (!snapshot.ok) return snapshot.result;
+  const { classification } = snapshot;
+  if (classification.kind === "none") return { kind: "none", name: "intake", headSha, markdown: NOTHING_TO_REVIEW, exitCode: 0 };
+  const name = classification.name ?? "intake";
+  const problem = record3 === "missing" ? "The Review intake run for this commit left no intake record, so the submission could not be verified." : "The Review intake run for this commit left an invalid intake record, so the submission could not be verified.";
+  const report = intakeReport(name, "invalid", [
+    `${problem} A registry maintainer must re-run Review intake. Pull requests that change the intake workflow cannot be accepted as submissions.`
+  ]);
+  return { kind: classification.kind, name, headSha, report, markdown: renderMarkdown(report), exitCode: 1 };
+}
+async function runTrustedIntake(client, repo, options) {
+  if (!SHA_PATTERN2.test(options.headSha)) throw new Error("The head SHA must be 40 lowercase hex characters.");
+  const candidates = new Set(await openPullsAt(client, repo, options.headSha));
+  if (options.record === "present" && options.pr !== void 0) candidates.add(options.pr);
+  const entries2 = [];
+  for (const pr of [...candidates].sort((a, b) => a - b)) {
+    const result = options.record === "present" ? await runIntake(client, repo, { pr, headSha: options.headSha, registry: options.registry }) : await unrecordedIntake(client, repo, pr, options.headSha, options.record);
+    entries2.push({ pr, result });
+  }
+  return entries2;
+}
+function failureReason(result) {
+  switch (result.report?.status) {
+    case "invalid":
+      return "submission is invalid; see the review comment.";
+    case "consent-failed":
+      return "consent could not be verified; see the review comment.";
+    case "error":
+      return "the review failed; see the review comment.";
+    case void 0:
+      return "the pull request moved to a newer commit or has incomplete metadata.";
+    default:
+      return "intake failed.";
+  }
+}
+function intakeCommitStatus(entries2) {
+  const status = (state, description) => ({ state, description: description.slice(0, STATUS_DESCRIPTION_MAX) });
+  if (entries2.length === 0) return status("failure", "No open pull request points at this commit.");
+  const failed = entries2.filter((entry) => entry.result.exitCode !== 0);
+  const [first] = failed;
+  if (failed.length > 1) return status("failure", `${failed.length} pull requests at this commit failed intake.`);
+  if (first) return status("failure", `#${first.pr}: ${failureReason(first.result)}`);
+  if (entries2.every((entry) => entry.result.kind === "none")) return status("success", "No project changes to review.");
+  return status("success", "Intake checks passed.");
+}
 
 // src/cli/review.ts
 var REVIEW_HELP = `Usage: ci-cd-optimizer review <command> [options]
@@ -26425,11 +26496,14 @@ Commands:
   run <project.yaml>        Review one project: verify consent, lint its default branch, print the report
   intake --pr <n>           Check a submission pull request and review the project it adds or changes
   intake-artifact <file>    Validate the intake record handed from the intake run to the comment run
+  intake-status             Re-run intake from trusted code and publish the review-intake/trusted commit status
   scheduled                 Re-review every registered project (public mode) and print a summary
 
 run:              [--public] [--format markdown|json] [--author <login>] [--registry <owner/repo>] [--output <file>]
 intake:           --pr <n> [--repo <owner/repo>] [--head-sha <sha>] [--comment] [--artifact <file>] [--output <file>]
 intake-artifact:  <file> --expected-sha <sha>     (prints pr_number=\u2026 and head_sha=\u2026 lines for $GITHUB_OUTPUT)
+intake-status:    --head-sha <sha> [--pr <n>] [--record present|missing|invalid] [--repo <owner/repo>]
+                  [--comment] [--status] [--output <file>]
 scheduled:        [--dir projects] [--registry <owner/repo>] [--output <file>]
 
 Without --public, run prints every finding, including security-sensitive ones that public reports withhold.
@@ -26586,6 +26660,79 @@ async function intakeArtifactCommand(args, io) {
 head_sha=${parsed.artifact.head_sha}`);
   return 0;
 }
+var RECORD_STATES = ["present", "missing", "invalid"];
+function runUrl2(env) {
+  const server = env.GITHUB_SERVER_URL;
+  const repository = env.GITHUB_REPOSITORY;
+  const runId = env.GITHUB_RUN_ID;
+  if (!server || !repository || !runId) return void 0;
+  if (!/^https:\/\/[A-Za-z0-9.-]+$/.test(server) || !/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(repository) || !/^[1-9][0-9]{0,19}$/.test(runId)) return void 0;
+  return `${server}/${repository}/actions/runs/${runId}`;
+}
+async function intakeStatusCommand(args, io) {
+  const { values: values2 } = parseArgs9({
+    args,
+    strict: true,
+    options: {
+      "head-sha": { type: "string" },
+      pr: { type: "string" },
+      record: { type: "string" },
+      repo: { type: "string" },
+      registry: { type: "string" },
+      comment: { type: "boolean", default: false },
+      status: { type: "boolean", default: false },
+      output: { type: "string", short: "o" },
+      help: { type: "boolean", short: "h", default: false }
+    }
+  });
+  if (values2.help) {
+    io.stdout(REVIEW_HELP);
+    return 0;
+  }
+  const headSha = values2["head-sha"];
+  if (!headSha || !SHA.test(headSha)) throw new UsageError("review intake-status needs --head-sha with a full 40-character lowercase commit SHA.");
+  let pr;
+  if (values2.pr !== void 0) {
+    pr = Number(values2.pr);
+    if (!/^[1-9][0-9]{0,9}$/.test(values2.pr) || !Number.isSafeInteger(pr)) throw new UsageError("--pr must be a pull request number.");
+  }
+  const record3 = values2.record ?? (pr === void 0 ? "missing" : "present");
+  if (!RECORD_STATES.includes(record3)) throw new UsageError(`--record must be one of ${RECORD_STATES.join(", ")}.`);
+  if (record3 === "present" && pr === void 0) throw new UsageError("--record present needs the --pr named by the intake record.");
+  const repo = repoFrom(values2.repo, io);
+  const registry = registryFrom(values2.registry ?? `${repo.owner}/${repo.repo}`, io);
+  const client = githubClient(io);
+  const entries2 = await runTrustedIntake(client, repo, { headSha, record: record3, registry, ...pr !== void 0 ? { pr } : {} });
+  const decision = intakeCommitStatus(entries2);
+  const sections = [`## Trusted review intake for ${headSha.slice(0, 12)}
+
+**${decision.state}**: ${decision.description}
+`];
+  for (const { pr: number2, result } of entries2) sections.push(`### Pull request #${number2}
+
+${result.markdown}`);
+  await writeText(io, values2.output, sections.join("\n"));
+  if (values2.comment) {
+    for (const { pr: number2, result } of entries2) {
+      if (!result.report) continue;
+      const { action } = await upsertReviewComment(client, repo, number2, result.name, result.markdown);
+      io.stderr(`review comment ${action} on #${number2}`);
+    }
+  }
+  if (values2.status) {
+    const targetUrl = runUrl2(io.env);
+    await client.request("POST /repos/{owner}/{repo}/statuses/{sha}", {
+      ...repo,
+      sha: headSha,
+      state: decision.state,
+      context: TRUSTED_STATUS_CONTEXT,
+      description: decision.description,
+      ...targetUrl ? { target_url: targetUrl } : {}
+    });
+    io.stderr(`${TRUSTED_STATUS_CONTEXT} set to ${decision.state} on ${headSha.slice(0, 12)}`);
+  }
+  return decision.state === "success" ? 0 : 1;
+}
 async function scheduledCommand(args, io) {
   const { values: values2 } = parseArgs9({
     args,
@@ -26649,6 +26796,7 @@ var COMMANDS3 = {
   run: runCommand,
   intake: intakeCommand,
   "intake-artifact": intakeArtifactCommand,
+  "intake-status": intakeStatusCommand,
   scheduled: scheduledCommand
 };
 async function reviewCommand(args, io) {
