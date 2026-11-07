@@ -2,8 +2,10 @@
 - id: cicd-lint
   name: ci-cd-optimizer lint
   description: Lint GitHub Actions workflows, Dockerfiles, and lockfiles for CI/CD build and release optimizations.
-  language: node
-  entry: cicd-lint
+  # pre-commit installs `language: node` hooks with `npm install -g git+file://…`, which runs only `prepare`, so the
+  # TypeScript build in dist/ would be missing. The script runs the committed Action bundle with the system Node.js.
+  language: script
+  entry: scripts/cicd-lint-hook.mjs
   # Cross-file rules need the whole repository, so the hook lints the repo instead of the staged file list.
   pass_filenames: false
   files: '(^|/)(\.github/workflows/[^/]+\.ya?ml|action\.ya?ml|([^/]*\.)?Dockerfile(\.[^/]+)?|Containerfile|package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock)$'

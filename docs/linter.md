@@ -382,8 +382,6 @@ places alerts on the right files.
 
 ```yaml
 # .pre-commit-config.yaml
-default_language_version:
-  node: "22"
 repos:
   - repo: https://github.com/MSFT-TKENDRICK/ci-cd-optimizer
     rev: <full commit SHA>
@@ -397,8 +395,12 @@ The `cicd-lint` hook in [`.pre-commit-hooks.yaml`](../.pre-commit-hooks.yaml) wo
 - It runs when a staged file is a workflow, `action.yml`, a Dockerfile or Containerfile, `package.json`,
   `package-lock.json`, `pnpm-lock.yaml`, or `yarn.lock`.
 - It lints the whole repository, not just the staged files (`pass_filenames: false`), because rules compare files.
-- pre-commit installs it with `npm install` and `npm pack`. The `prepack` script builds `dist/`, so the first run
-  takes a while.
+- It needs Node.js 22 or later on `PATH`. It is a `language: script` hook that runs the committed, self-contained
+  Action bundle (`dist-action/index.js`) through [`scripts/cicd-lint-hook.mjs`](../scripts/cicd-lint-hook.mjs), so
+  there is no `npm install` or build step. A `language: node` hook would not work: pre-commit installs those with
+  `npm install -g git+file://…`, which runs only the `prepare` script, so `dist/` would never be built.
+- Pass extra flags with `args`. The hook already runs `lint`, so `args: [--fail-on, warn]` works the same as
+  `cicd-lint --fail-on warn`.
 
 ### lefthook
 
