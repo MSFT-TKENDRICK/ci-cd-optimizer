@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -531,7 +532,7 @@ describe("packaging", () => {
 
   it("defines a pre-commit hook for the files the linter reads", async () => {
     const hooks = parseYaml(await readFile(join(REPO_ROOT, ".pre-commit-hooks.yaml"), "utf8")) as Record<string, unknown>[];
-    expect(hooks).toEqual([expect.objectContaining({ id: "cicd-lint", entry: "cicd-lint", language: "node", pass_filenames: false })]);
+    expect(hooks).toEqual([expect.objectContaining({ id: "cicd-lint", entry: "scripts/cicd-lint-hook.mjs", language: "script", pass_filenames: false })]);
     const files = new RegExp(String(hooks[0]?.files));
     for (const path of [WORKFLOW, "action.yml", "sub/action.yaml", "Dockerfile", "api.Dockerfile", "docker/Dockerfile.prod", "Containerfile", "package.json", "web/package-lock.json", "pnpm-lock.yaml", "yarn.lock"]) {
       expect(files.test(path), path).toBe(true);
@@ -539,6 +540,20 @@ describe("packaging", () => {
     for (const path of ["src/index.ts", "README.md", ".github/workflows/nested/x.yml", "docs/workflows/ci.yml"]) {
       expect(files.test(path), path).toBe(false);
     }
+  });
+
+  it("runs the pre-commit hook script as `cicd-lint` from the committed Action bundle", { timeout: 60_000 }, async () => {
+    const hook = join(REPO_ROOT, "scripts/cicd-lint-hook.mjs");
+    expect(await readFile(hook, "utf8")).toMatch(/^#!\/usr\/bin\/env node\r?\n/);
+    await write(WORKFLOW, MISSING_TIMEOUT);
+    const exec = (...args: string[]) =>
+      new Promise<{ code: number; stdout: string }>((resolve) => {
+        execFile(process.execPath, [hook, ...args], { cwd: root }, (error, stdout) => resolve({ code: error ? Number(error.code) : 0, stdout }));
+      });
+    const failing = await exec("--format", "json", "--fail-on", "warn");
+    expect(failing.code).toBe(1);
+    expect(result(failing.stdout).diagnostics.map((d) => d.ruleId)).toEqual(["workflow/job-timeout"]);
+    expect((await exec("--fail-on", "error")).code).toBe(0);
   });
 });
 
