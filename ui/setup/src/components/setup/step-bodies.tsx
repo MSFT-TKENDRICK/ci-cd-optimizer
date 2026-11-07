@@ -335,7 +335,7 @@ export const STEP_CONTENT: Record<SetupStepId, StepContent> = {
   },
   scan: {
     failureTitle: "Could not start the scan",
-    hint: "Run the scan once the steps above are done.",
+    hint: "Run the scan once the earlier steps are done.",
     summary: () => "Scan requested. A dispatch alone does not prove an agent was assigned: check the issue's assignees and its linked pull request.",
     Body: ScanBody,
     Complete: ScanComplete,

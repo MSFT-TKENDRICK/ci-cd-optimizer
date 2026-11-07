@@ -45,8 +45,15 @@ export function step(id: SetupStepId): HTMLElement {
   return item;
 }
 
+// The wizard shows one step at a time; this is the panel for the step on screen.
+export function panel(id: SetupStepId): HTMLElement {
+  const section = document.querySelector<HTMLElement>(`section[data-step-panel="${id}"]`);
+  if (!section) throw new Error(`The page has no "${id}" panel.`);
+  return section;
+}
+
 export function heading(id: SetupStepId): HTMLElement {
-  return within(step(id)).getByRole("heading", { level: 2 });
+  return within(panel(id)).getByRole("heading", { level: 2 });
 }
 
 // Presses a button inside the open confirmation panel (role "alertdialog").

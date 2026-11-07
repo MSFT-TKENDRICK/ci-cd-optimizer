@@ -11,7 +11,7 @@ import type { SetupTransport } from "@/lib/transport";
 import type { SetupState } from "@/lib/types";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  return <main className="mx-auto flex w-full max-w-2xl flex-col gap-5 p-4 sm:p-6">{children}</main>;
+  return <main className="mx-auto flex w-full max-w-xl flex-col gap-5 p-4 sm:p-6">{children}</main>;
 }
 
 export interface SetupAppProps {

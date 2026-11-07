@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { SetupApiError } from "@/lib/transport";
 import type { SetupState } from "@/lib/types";
 import { fakeTransport, makeState } from "./fixtures";
-import { mount, pressInDialog, step } from "./mount";
+import { mount, panel, pressInDialog } from "./mount";
 
 const RUN = { id: 42, url: "https://github.com/acme/widgets/actions/runs/42" };
 const TOKEN = "github_pat_example_0123456789";
@@ -23,19 +23,19 @@ describe("register step", () => {
   it("posts the manifest straight to GitHub from the browser page", () => {
     mountAt(makeState("register"));
 
-    const form = step("register").querySelector("form");
+    const form = panel("register").querySelector("form");
     expect(form).not.toBeNull();
     expect(form).toHaveAttribute("method", "post");
     expect(form).toHaveAttribute("action", "https://github.com/organizations/acme/settings/apps/new?state=nonce");
     expect(form?.querySelector<HTMLInputElement>('input[name="manifest"]')).toHaveValue('{"name":"ci-cd-optimizer-acme"}');
-    expect(within(step("register")).getByRole("button", { name: "Review registration on GitHub" })).toHaveAttribute("type", "submit");
-    expect(within(step("register")).queryByRole("link", { name: /registration page/ })).not.toBeInTheDocument();
+    expect(within(panel("register")).getByRole("button", { name: "Review registration on GitHub" })).toHaveAttribute("type", "submit");
+    expect(within(panel("register")).queryByRole("link", { name: /registration page/ })).not.toBeInTheDocument();
   });
 
   it("opens the registration page in a new tab from a chat host, where the page cannot post a form itself", () => {
     mountAt(makeState("register"), "mcp");
 
-    const section = step("register");
+    const section = panel("register");
     expect(section.querySelector("form")).toBeNull();
     const link = within(section).getByRole("link", { name: /Open the registration page/ });
     expect(link).toHaveAttribute("href", "http://127.0.0.1:4000/register?session=session-1");
@@ -46,7 +46,7 @@ describe("register step", () => {
   it("explains the permissions and the resume option", () => {
     mountAt(makeState("register"));
 
-    const section = step("register");
+    const section = panel("register");
     expect(section).toHaveTextContent("GitHub will ask you to approve a private App owned by acme.");
     expect(section).toHaveTextContent("It requests no account-wide user permissions.");
     expect(section).toHaveTextContent("Already saved an App? Restart with --resume-app YOUR-APP-SLUG instead of registering another.");
@@ -56,7 +56,7 @@ describe("register step", () => {
     const state = makeState("register");
     mountAt(makeState("register", { registration: null, urls: { ...state.urls, register: null } }));
 
-    const section = step("register");
+    const section = panel("register");
     expect(section.querySelector("form")).toBeNull();
     expect(within(section).queryByRole("link")).not.toBeInTheDocument();
   });
@@ -65,7 +65,7 @@ describe("register step", () => {
 describe("credentials step", () => {
   it("explains where the key goes and asks before saving it", async () => {
     const { transport, user } = mountAt(makeState("credentials"));
-    const section = step("credentials");
+    const section = panel("credentials");
     expect(section).toHaveTextContent("never printed, written to disk, or returned to this page");
     expect(section).toHaveTextContent("Saving writes or replaces CICD_OPTIMIZER_APP_PRIVATE_KEY and CICD_OPTIMIZER_APP_ID in acme/widgets.");
 
@@ -83,7 +83,7 @@ describe("install step", () => {
   it("links to the App's installation page and tells the user to come back", () => {
     mountAt(makeState("install"));
 
-    const section = step("install");
+    const section = panel("install");
     expect(section).toHaveTextContent("Choose Only select repositories and select acme/widgets.");
     expect(within(section).getByRole("link", { name: /Install on GitHub/ })).toHaveAttribute(
       "href",
@@ -95,13 +95,13 @@ describe("install step", () => {
   it("says view instead of tab inside a chat host", () => {
     mountAt(makeState("install"), "mcp");
 
-    expect(step("install")).toHaveTextContent("return to this setup view and press Verify installation.");
+    expect(panel("install")).toHaveTextContent("return to this setup view and press Verify installation.");
   });
 
   it("offers one verification button and nothing about a run that has not started", () => {
     mountAt(makeState("install"));
 
-    const section = step("install");
+    const section = panel("install");
     expect(within(section).getByRole("button", { name: "Verify installation" })).toBeEnabled();
     expect(within(section).queryByRole("button", { name: "Check verification result" })).not.toBeInTheDocument();
     expect(within(section).queryByRole("link", { name: /View verification run/ })).not.toBeInTheDocument();
@@ -111,7 +111,7 @@ describe("install step", () => {
   it("explains that a resumed setup verifies in Actions", () => {
     mountAt(makeState("install", { resumed: true }));
 
-    expect(step("install")).toHaveTextContent("Verification runs in this repository's GitHub Actions using the saved key.");
+    expect(panel("install")).toHaveTextContent("Verification runs in this repository's GitHub Actions using the saved key.");
   });
 
   it.each([
@@ -127,7 +127,7 @@ describe("install step", () => {
 
   it("shows a running verification as running and lets the user check on it without a confirmation", async () => {
     const { transport, user } = mountAt(makeState("install", installation("running", RUN)));
-    const section = step("install");
+    const section = panel("install");
 
     expect(within(section).getByText(/^Verification is running\./)).toBeInTheDocument();
     expect(within(section).getByRole("button", { name: "Verify installation" })).toBeDisabled();
@@ -146,7 +146,7 @@ describe("install step", () => {
         error: { step: "install", message: "The App is installed on all repositories. Choose only selected repositories." },
       }),
     );
-    const section = step("install");
+    const section = panel("install");
 
     expect(within(section).getByRole("alert")).toHaveTextContent("Verification failed");
     expect(within(section).getByRole("alert")).toHaveTextContent("The App is installed on all repositories.");
@@ -156,7 +156,8 @@ describe("install step", () => {
 
   it("keeps verification repeatable once it has passed", async () => {
     const { transport, user } = mountAt(makeState("authorize", installation("verified", RUN)));
-    const section = step("install");
+    await user.click(screen.getByRole("button", { name: "Go to step 3: Install and verify" }));
+    const section = panel("install");
 
     expect(section).toHaveTextContent("Installation and repository-scoped token verified.");
     expect(within(section).getByRole("link", { name: /View verification run/ })).toHaveAttribute("href", RUN.url);
@@ -172,7 +173,7 @@ describe("authorize step", () => {
   it("links to the scoped-token page and says a queue label is not a running agent", () => {
     mountAt(makeState("authorize"));
 
-    const section = step("authorize");
+    const section = panel("authorize");
     expect(within(section).getByRole("link", { name: /Create a scoped assignment token on GitHub/ })).toHaveAttribute(
       "href",
       "https://github.com/settings/personal-access-tokens/new",
@@ -185,7 +186,7 @@ describe("authorize step", () => {
     it("takes the token only in a password field that password managers leave alone", () => {
       mountAt(makeState("authorize"));
 
-      const input = within(step("authorize")).getByLabelText("Assignment token");
+      const input = within(panel("authorize")).getByLabelText("Assignment token");
       expect(input).toHaveAttribute("type", "password");
       expect(input).toHaveAttribute("autocomplete", "off");
       expect(input).toHaveAttribute("data-1p-ignore");
@@ -235,7 +236,7 @@ describe("authorize step", () => {
       await user.click(screen.getByRole("button", { name: SAVE_TOKEN }));
       await pressInDialog(user, "Validate and save");
 
-      const alert = await within(step("authorize")).findByRole("alert");
+      const alert = await within(panel("authorize")).findByRole("alert");
       expect(alert).toHaveTextContent("Could not authorize the coding agent");
       expect(alert).toHaveTextContent("Enter a valid user token.");
       expect(input).toHaveValue(TOKEN);
@@ -259,7 +260,7 @@ describe("authorize step", () => {
     it("never offers a place to type the token, and sends the user to the local page", () => {
       mountAt(makeState("authorize"), "mcp");
 
-      const section = step("authorize");
+      const section = panel("authorize");
       expect(section.querySelector("input")).toBeNull();
       expect(within(section).queryByRole("button", { name: SAVE_TOKEN })).not.toBeInTheDocument();
       expect(section).toHaveTextContent("For your security the token is entered only on the local setup page, never in chat.");
@@ -271,7 +272,7 @@ describe("authorize step", () => {
 describe("scan step", () => {
   it("warns about what a scan can change, then asks before running it", async () => {
     const { transport, user } = mountAt(makeState("scan"));
-    const section = step("scan");
+    const section = panel("scan");
     expect(section).toHaveTextContent("including configured issue and pull request writes and coding-agent assignments");
 
     await user.click(within(section).getByRole("button", { name: "Run scan and assign pending findings" }));
@@ -286,7 +287,7 @@ describe("scan step", () => {
   it("does not claim an agent was assigned once the scan is requested", () => {
     mountAt(makeState(null));
 
-    const section = step("scan");
+    const section = panel("scan");
     expect(section).toHaveTextContent("A dispatch alone does not prove an agent was assigned");
     expect(within(section).getByRole("link", { name: /Open Actions/ })).toHaveAttribute("href", "https://github.com/acme/widgets/actions");
     expect(within(section).getByRole("button", { name: "Run again" })).toBeEnabled();
