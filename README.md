@@ -145,6 +145,14 @@ App removal is enabled. See [runtime report usage](docs/github-app.md#optional-t
 [retention/removal procedures](docs/github-app.md#knowledge-retention-and-removal), and
 [model boundaries](docs/architecture.md#project-declaration-evidence-srcknowledge).
 
+## Project review program
+
+Open-source maintainers can ask for a recurring review of a public repository's CI/CD configuration. To do that,
+commit a consent file and open a PR that adds `projects/<name>/project.yaml`, as in
+[OSS-Fuzz](https://github.com/google/oss-fuzz). Reviews are static, API-only, and re-verify consent each time.
+Public reports redact security-sensitive findings. See [docs/review-program](docs/review-program/README.md) for how
+to submit, opt out, and how disclosure works.
+
 ## Tokens and permissions
 
 | Credential | Used by | Needed for |

@@ -16,3 +16,7 @@ If you change `ui/setup`, run `npm run build:ui` and commit the regenerated `dis
 New rules belong in `src/rules`, must include focused tests, and should only
 report a finding when they can provide concrete evidence and a practical
 remediation.
+
+To enroll a repository in the [project review program](docs/review-program/README.md), open a pull request that
+touches only `projects/<name>/project.yaml`, using the `review-submission` pull request template. Changes to
+`projects/`, `src/review/`, and the review workflows require code owner review.

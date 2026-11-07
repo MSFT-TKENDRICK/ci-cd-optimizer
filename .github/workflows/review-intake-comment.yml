@@ -1,0 +1,79 @@
+# Posts the project review intake result on the submission pull request (docs/review-program/README.md).
+#
+# Runs from the default branch with a pull-requests: write token and never checks out, builds, or executes pull
+# request code. The only input taken from the unprivileged run is a tiny {"pr_number","head_sha"} record. A pull
+# request can rewrite the workflow that produces it, so the record is size-capped, strictly parsed, required to name
+# the commit this event reports, and the live pull request must still be at that commit. The trusted CLI then repeats
+# intake itself through the API and upserts one marker comment authored by github-actions[bot].
+# Dependencies come from the default-branch npm cache scope only; caches written by pull request runs are scoped to
+# their refs/pull/* ref and are not visible here.
+name: Review intake comment
+
+on:
+  workflow_run:
+    workflows: [Review intake]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: review-intake-comment-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  comment:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion != 'cancelled' &&
+      github.event.workflow_run.conclusion != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Validate intake record
+        id: record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          size="$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" \
+            --jq '[.artifacts[] | select(.name == "review-intake" and .expired == false)] | if length == 1 then .[0].size_in_bytes else -1 end')"
+          if [ "$size" = "-1" ]; then
+            echo "::notice::The intake run left no record; nothing to post."
+            exit 0
+          fi
+          if [ "$size" -gt 4096 ]; then
+            echo "::error::The intake record artifact is $size bytes; refusing to download it."
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/intake-record"
+          gh run download "$RUN_ID" --repo "$REPO" --name review-intake --dir "$dir"
+          npm run --silent cli -- review intake-artifact "$dir/intake.json" --expected-sha "$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+
+      - name: Post review comment
+        if: steps.record.outputs.found == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.record.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.record.outputs.head_sha }}
+        run: |
+          status=0
+          npm run --silent cli -- review intake --pr "$PR_NUMBER" --head-sha "$HEAD_SHA" --comment \
+            --output "$GITHUB_STEP_SUMMARY" || status=$?
+          # Exit code 1 means the submission was rejected; the comment explains why, so only usage or runtime errors fail.
+          if [ "$status" -gt 1 ]; then exit "$status"; fi

@@ -1,0 +1,7 @@
+# Consent to reviews by the CI/CD optimizer project review program (docs/review-program/README.md).
+# Deleting this file opts the repository out. Only the logins listed under contacts may submit or change the project
+# entry, and they are the only people the program will mention.
+registry: MSFT-TKENDRICK/ci-cd-optimizer
+project: ci-cd-optimizer
+contacts:
+  - MSFT-TKENDRICK

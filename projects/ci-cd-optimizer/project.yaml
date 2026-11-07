@@ -1,0 +1,7 @@
+# yaml-language-server: $schema=../schema.json
+# This repository reviews itself through the program, as the reference example. See docs/review-program/README.md.
+name: ci-cd-optimizer
+main_repo: https://github.com/MSFT-TKENDRICK/ci-cd-optimizer
+repository_id: 1444815201
+primary_contact: MSFT-TKENDRICK
+language: typescript

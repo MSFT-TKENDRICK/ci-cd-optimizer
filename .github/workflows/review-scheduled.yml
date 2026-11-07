@@ -1,0 +1,32 @@
+# Weekly re-review of every registered project (docs/review-program/README.md). Consent is re-verified on each run,
+# so a repository that deleted its consent file, was renamed, archived, or made private is reported, not reviewed.
+# Read-only: results go to the job summary in public (redacted) form.
+name: Review scheduled
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: review-scheduled
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Re-review registered projects
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm run --silent cli -- review scheduled --dir projects --output "$GITHUB_STEP_SUMMARY"
