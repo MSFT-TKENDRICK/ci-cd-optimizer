@@ -1,10 +1,10 @@
 import { ensureLabels, graphql, httpStatus, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
-import { branchSha, commitFiles, deleteBranch, updateBranch } from "../github/git.js";
+import { branchSha, commitFiles, deleteBranch, readFileAt, updateBranch } from "../github/git.js";
 import { marker, parseMarker } from "../issues/markers.js";
 import type { SourceFile } from "../lint/types.js";
 import type { HillClimbConfig } from "./config.js";
 import { renderDecision, type Decision, type DispatchRequest } from "./decide.js";
-import { armBranch, manifestPath, parseExperimentRef, renderRubric, scoreRubric, serializeManifest, TRUNK, trunkBranch, type ExperimentManifest } from "./manifest.js";
+import { armBranch, manifestPath, parseExperimentRef, parseManifest, renderRubric, scoreRubric, serializeManifest, TRUNK, trunkBranch, type ExperimentManifest } from "./manifest.js";
 import type { BranchMeasurement, ExperimentMeasurements } from "./score.js";
 
 export const EXPERIMENT_LABEL = "experiment";
@@ -120,6 +120,23 @@ export interface CreatedExperiment {
   sha: string;
 }
 
+async function openExperimentPull(
+  client: GitHubClient, repo: RepoRef, manifest: ExperimentManifest, baseBranch: string, config: HillClimbConfig,
+): Promise<number> {
+  const pull = { ...repo, title: `experiment(${manifest.name}): ${manifest.title}`, head: trunkBranch(manifest.name), base: baseBranch, body: experimentBody(manifest, config), maintainer_can_modify: true };
+  const response = await client.request("POST /repos/{owner}/{repo}/pulls", { ...pull, draft: true });
+  const number = (response.data as { number?: unknown } | null)?.number;
+  if (!Number.isSafeInteger(number) || typeof number !== "number" || number < 1) {
+    throw new Error("GitHub did not return the experiment pull request number; inspect the branch before retrying.");
+  }
+  return number;
+}
+
+async function labelExperiment(client: GitHubClient, repo: RepoRef, number: number): Promise<void> {
+  await ensureLabels(client, repo, [EXPERIMENT_LABEL]);
+  await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: number, labels: [EXPERIMENT_LABEL] });
+}
+
 /**
  * Creates `experiments/<name>/trunk` from the base branch with the manifest (and any new benchmark cases) committed,
  * then opens the draft promotion pull request. Arms are created afterwards by the arm workflow.
@@ -143,21 +160,100 @@ export async function createExperiment(
     await client.request("POST /repos/{owner}/{repo}/git/refs", { ...repo, ref: `refs/heads/${trunk}`, sha });
   } catch (error) {
     if (httpStatus(error) === 422) throw new Error(`Experiment "${manifest.name}" already exists (${trunk}).`, { cause: error });
-    throw error;
+    throw new Error(`Cannot confirm creation of ${trunk} at ${sha}. Inspect that ref before retrying; if it exists at this commit, ` +
+      `use experiments resume --experiment ${manifest.name} --expected-head ${sha} --base ${baseBranch}. ${(error as Error).message}`, { cause: error });
   }
-  const pull = { ...repo, title: `experiment(${manifest.name}): ${manifest.title}`, head: trunk, base: baseBranch, body: experimentBody(manifest, config), maintainer_can_modify: true };
-  let response;
   try {
-    response = await client.request("POST /repos/{owner}/{repo}/pulls", { ...pull, draft: true });
+    const number = await openExperimentPull(client, repo, manifest, baseBranch, config);
+    await labelExperiment(client, repo, number);
+    return { trunk, pullRequest: number, sha };
   } catch (error) {
-    // Draft pull requests are unavailable on some plans; fall back to a regular pull request.
-    if (httpStatus(error) !== 422) throw error;
-    response = await client.request("POST /repos/{owner}/{repo}/pulls", pull);
+    throw new Error(`Experiment trunk ${trunk} was retained at ${sha}, but publication did not finish: ${(error as Error).message}. ` +
+      `After repairing access, run experiments resume --experiment ${manifest.name} --expected-head ${sha} --base ${baseBranch}.`, { cause: error });
   }
-  const number = (response.data as { number: number }).number;
-  await ensureLabels(client, repo, [EXPERIMENT_LABEL]);
-  await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: number, labels: [EXPERIMENT_LABEL] });
-  return { trunk, pullRequest: number, sha };
+}
+
+/** Repairs interrupted publication without rewriting branches or redispatching arm agents. */
+export async function resumeExperiment(
+  client: GitHubClient, repo: RepoRef,
+  options: { name: string; expectedSha: string; config: HillClimbConfig; baseBranch?: string; now?: Date; dryRun?: boolean },
+): Promise<{ trunk: string; sha: string; baseBranch: string; pullRequest?: number; created: boolean }> {
+  const { name, config } = options;
+  const expectedSha = options.expectedSha.toLowerCase();
+  const trunk = trunkBranch(name);
+  if (!parseExperimentRef(trunk) || !/^[a-f0-9]{40}$/i.test(expectedSha)) {
+    throw new Error("Recovery requires a valid experiment name and its exact 40-character commit SHA.");
+  }
+  const repository = await client.request("GET /repos/{owner}/{repo}", { ...repo });
+  const defaultBranch = (repository.data as { default_branch?: unknown } | null)?.default_branch;
+  if (typeof defaultBranch !== "string" || !defaultBranch || defaultBranch === trunk) {
+    throw new Error("Cannot safely identify the default branch for experiment recovery.");
+  }
+  const baseBranch = options.baseBranch ?? defaultBranch;
+  if (!baseBranch || baseBranch === trunk) throw new Error("An experiment cannot be its own promotion base.");
+  await branchSha(client, repo, baseBranch);
+  const checkHead = async () => {
+    if (await branchSha(client, repo, trunk) !== expectedSha) {
+      throw new Error("Experiment trunk changed; inspect its current commit before resuming.");
+    }
+  };
+  await checkHead();
+  const text = await readFileAt(client, repo, manifestPath(name), expectedSha);
+  if (text === undefined) throw new Error(`No experiment manifest at ${expectedSha}.`);
+  const parsed = parseManifest(text, { config });
+  const manifest = parsed.manifest;
+  if (!manifest || manifest.name !== name || manifest.status !== "running" || manifest.winner || manifest.evidence) {
+    throw new Error("Only a valid running experiment without a recorded outcome can be resumed.");
+  }
+  const rubric = scoreRubric(manifest.rubric.scores, config.rubric);
+  const now = (options.now ?? new Date()).getTime();
+  if (!Number.isFinite(now) || Date.parse(manifest.createdAt) > now) throw new Error("The experiment creation time is in the future or the recovery clock is invalid.");
+  if (!rubric.passed || rubric.missing.length > 0) throw new Error("The experiment no longer meets the configured proposal rubric.");
+  if (Date.parse(manifest.expiresAt) <= now || Date.parse(manifest.createdAt) + config.selection.maxAgeDays * 86_400_000 <= now) {
+    throw new Error("The experiment has expired; publication cannot be resumed.");
+  }
+  const history = await paginate<RawPull>(client, "GET /repos/{owner}/{repo}/pulls", {
+    ...repo, state: "all", head: `${repo.owner}:${trunk}`,
+  });
+  const sameRepository = `${repo.owner}/${repo.repo}`.toLowerCase();
+  const isExpectedPull = (pull: RawPull | null): boolean => {
+    const recorded = parseMarker(pull?.body ?? "");
+    return !!pull && Number.isSafeInteger(pull.number) && pull.number > 0 && pull.state === "open" && pull.draft === true && pull.merged_at === null &&
+      pull.head?.ref === trunk && pull.head.sha === expectedSha &&
+      pull.head.repo?.full_name?.toLowerCase() === sameRepository && pull.base?.ref === baseBranch &&
+      recorded?.kind === "experiment" && recorded.fingerprint === name && recorded.attributes.status === "running";
+  };
+  const matches = history.filter((pull) => pull.head?.ref === trunk);
+  if (matches.length > 1) throw new Error("Multiple promotion pull requests use this trunk; reconcile them before resuming.");
+  let number: number | undefined;
+  const existing = matches[0];
+  if (existing) {
+    if (!isExpectedPull(existing)) {
+      throw new Error("The existing promotion pull request is completed, changed, or not owned by this experiment.");
+    }
+    number = existing.number;
+  } else {
+    const open = groupExperiments(await listExperimentPullRequests(client, repo));
+    if (open.filter((experiment) => experiment.trunk?.state === "open").length >= config.selection.maxConcurrent) {
+      throw new Error("The concurrent experiment budget is already full.");
+    }
+  }
+  if (options.dryRun) return { trunk, sha: expectedSha, baseBranch, ...(number === undefined ? {} : { pullRequest: number }), created: false };
+  await checkHead();
+  const created = number === undefined;
+  number ??= await openExperimentPull(client, repo, manifest, baseBranch, config);
+  const verifyPull = async (requireLabel = false) => {
+    const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number });
+    const pull = response.data as RawPull | null;
+    if (!isExpectedPull(pull) || pull?.number !== number || (requireLabel && !pull?.labels?.some((label) => label.name === EXPERIMENT_LABEL))) {
+      throw new Error("Experiment publication is not confirmed at the expected commit; reconcile the pull request before continuing.");
+    }
+    await checkHead();
+  };
+  await verifyPull();
+  await labelExperiment(client, repo, number);
+  await verifyPull(true);
+  return { trunk, sha: expectedSha, baseBranch, pullRequest: number, created };
 }
 
 export async function dispatchRuns(client: GitHubClient, repo: RepoRef, requests: readonly DispatchRequest[], maxPerRequest = 5): Promise<number> {
@@ -266,7 +362,7 @@ const isMutationPayload = (value: unknown): value is Record<string, unknown> =>
 export async function applyDecision(
   client: GitHubClient,
   repo: RepoRef,
-  options: { manifest: ExperimentManifest; decision: Decision; state: ExperimentState; config: HillClimbConfig; measurements?: ExperimentMeasurements },
+  options: { manifest: ExperimentManifest; decision: Decision; state: ExperimentState; config: HillClimbConfig; measurements?: ExperimentMeasurements; dispatchClient?: GitHubClient },
 ): Promise<AppliedDecision> {
   const { manifest, decision, state, config } = options;
   const result: AppliedDecision = { action: decision.action, closed: [], dispatched: 0, notes: [] };
@@ -275,7 +371,7 @@ export async function applyDecision(
   if (decision.action === "skip") return result;
 
   if (decision.action === "wait") {
-    result.dispatched = await dispatchRuns(client, repo, decision.dispatch);
+    result.dispatched = await dispatchRuns(options.dispatchClient ?? client, repo, decision.dispatch);
     if (trunk) await upsertComment(client, repo, trunk.number, manifest.name, report);
     return result;
   }

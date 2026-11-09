@@ -44,7 +44,7 @@ jobs:
         if: vars.CICD_OPTIMIZER_APP_ID != ''
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
-          app-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
+          client-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
           private-key: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
 
       # The scan reads the repository through the API, so no checkout is needed.

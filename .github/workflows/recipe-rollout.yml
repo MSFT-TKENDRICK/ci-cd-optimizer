@@ -40,6 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           sparse-checkout: |
             .github
             dist-action
@@ -48,7 +49,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
-          app-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
+          client-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
           private-key: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
       - name: Roll out recipes
@@ -82,10 +83,19 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
           exit "$status"
-      - name: Publish compatibility scores
+      - name: Mint repository App token for scores
+        id: score-token
         if: always() && steps.rollout.outputs.changed == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
+          private-key: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Publish compatibility scores
+        if: always() && steps.rollout.outputs.changed == 'true' && steps.score-token.outcome == 'success'
         env:
-          GH_TOKEN: ${{ secrets.CICD_OPTIMIZER_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.score-token.outputs.token }}
         run: |
           branch="recipes/compatibility"
           git config user.name "github-actions[bot]"
@@ -93,7 +103,9 @@ jobs:
           git switch -C "$branch"
           git add recipes
           git commit -m "recipes: update compatibility scores"
-          git push --force origin "$branch"
+          remote="$(git -c credential.helper= -c 'credential.helper=!gh auth git-credential' ls-remote --heads origin "refs/heads/$branch")"
+          expected="${remote%%$'\t'*}"
+          git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push "--force-with-lease=refs/heads/$branch:$expected" origin "HEAD:refs/heads/$branch"
           if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
             gh pr create --base main --head "$branch" \
               --title "recipes: update compatibility scores" \

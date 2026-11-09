@@ -16,7 +16,8 @@ Under **Settings → Advanced Security**, turn on:
 Leave **Grouped security updates** off; [.github/dependabot.yml](../.github/dependabot.yml) already groups version updates.
 
 That file runs weekly version updates for npm, GitHub Actions, and the Dockerfile base images. The Actions updater skips
-the compiled gh-aw `*.lock.yml` files; bump their `.md` sources and run `gh aw compile` instead.
+the compiled gh-aw `*.lock.yml` files; bump their `.md` sources and
+[recompile with the pinned compiler](experiments.md#regenerating-workflows) instead.
 
 npm updates to runtime dependencies change the bundled `dist-action/index.js`, and CI fails until the bundle is rebuilt
 on the Dependabot branch:
@@ -254,7 +255,7 @@ Scope fine-grained personal access tokens to the repositories that need them, an
 
 | Secret | When | Permissions |
 |---|---|---|
-| `CICD_OPTIMIZER_TOKEN` | Instead of the App, or for gh-aw `pipeline` experiments that change workflow files | Contents, Pull requests, Issues, Actions, Workflows: read and write |
+| `CICD_OPTIMIZER_TOKEN` | Publication fallback when the App is not configured; not additionally required for pipeline experiments | Contents, Pull requests, Issues, Workflows: write; Actions: read (write for local CLI dispatch without a separate dispatch token) |
 | `COPILOT_ASSIGN_TOKEN` | Assigning finding issues to the Copilot coding agent. The token's user needs a Copilot license. | Issues: read and write |
 | `COPILOT_GITHUB_TOKEN` | gh-aw experiments on an account without an organization Copilot subscription, where `copilot-requests: write` isn't available | Copilot Requests |
 
@@ -274,10 +275,14 @@ Enter the token at the hidden prompt. Do not copy a broad GitHub CLI login crede
 
 - **Allow GitHub Actions to create and approve pull requests** (Settings → Actions → General). Turn this on only if
   `command: scan` runs with `GITHUB_TOKEN` and should open fix pull requests. Prefer the App.
-- **Experiments and recipes open pull requests too.** The experiment generator's `create` step fails with
-  `403: GitHub Actions is not permitted to create or approve pull requests` unless the setting above is on or
-  `CICD_OPTIMIZER_TOKEN` (§4) is set. Recipe rollout opens target pull requests with the App's token, but its
-  compatibility-score pull request in this repository has the same requirement.
+- **Experiments and recipes automatically use the App.** Generator/arm/grader publication, recipe publication,
+  and compatibility-score PRs mint short-lived tokens from the credentials in section 3. No Actions PR-setting change
+  or extra PAT is required with that setup. The generator and grader use their built-in Actions-write job token for
+  workflow dispatch; the App remains Actions-read. Without an App, the optional publisher token in section 4 is used;
+  only the final `GITHUB_TOKEN` fallback is subject to the PR-creation setting and does not trigger CI on its own PRs.
+- **A failed publication may leave an experiment trunk.** Repair authentication and use
+  [`experiments resume`](experiments.md#recover-interrupted-publication) with the inspected full head SHA instead of
+  deleting the branch, rerunning creation, or blindly dispatching the arms again.
 - **Using the Action from other private repositories.** While this repository is private, set Settings → Actions →
   General → **Access** to *Accessible from repositories owned by the user* (or the organization). Public
   repositories don't need this.

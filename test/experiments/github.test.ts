@@ -8,10 +8,11 @@ import {
   experimentBody,
   groupExperiments,
   listExperimentPullRequests,
+  resumeExperiment,
   type ExperimentPullRequest,
   type ExperimentState,
 } from "../../src/experiments/github.js";
-import { parseManifest } from "../../src/experiments/manifest.js";
+import { parseManifest, serializeManifest } from "../../src/experiments/manifest.js";
 import { fakeClient, httpError, repo, sampleManifest } from "./fixtures.js";
 
 const config = DEFAULT_HILL_CLIMB_CONFIG;
@@ -121,7 +122,7 @@ describe("createExperiment", () => {
     expect(client.calls.at(-1)).toMatchObject({ route: "POST /repos/{owner}/{repo}/issues/{issue_number}/labels", parameters: { issue_number: 42, labels: ["experiment"] } });
   });
 
-  it("refuses to overwrite an existing experiment and falls back from draft PRs", async () => {
+  it("refuses to overwrite an existing experiment and never downgrades a failed draft request", async () => {
     const exists = fakeClient((route) => {
       if (route === "POST /repos/{owner}/{repo}/git/refs") throw httpError(422);
       if (route.startsWith("GET /repos/{owner}/{repo}/git/ref/")) return { object: { sha: "base" } };
@@ -142,13 +143,161 @@ describe("createExperiment", () => {
       if (route === "GET /repos/{owner}/{repo}/labels") return [{ name: "experiment" }];
       return { sha: "x" };
     });
-    await expect(createExperiment(noDraft, repo, { manifest: sampleManifest(), baseBranch: "main", config })).resolves.toMatchObject({ pullRequest: 7 });
-    expect(attempts).toBe(2);
+    await expect(createExperiment(noDraft, repo, { manifest: sampleManifest(), baseBranch: "main", config })).rejects.toThrow("publication did not finish");
+    expect(attempts).toBe(1);
+  });
+
+  it("reports the exact retained trunk and recovery command when PR publication fails", async () => {
+    const client = fakeClient((route) => {
+      if (route.startsWith("GET /repos/{owner}/{repo}/git/ref/")) return { object: { sha: "base" } };
+      if (route.startsWith("GET /repos/{owner}/{repo}/git/commits/")) return { tree: { sha: "t" } };
+      if (route === "POST /repos/{owner}/{repo}/pulls") throw httpError(403);
+      return { sha: "a".repeat(40) };
+    });
+    await expect(createExperiment(client, repo, { manifest: sampleManifest(), baseBranch: "main", config }))
+      .rejects.toThrow(`resume --experiment setup-cache-yarn --expected-head ${"a".repeat(40)} --base main`);
+    expect(routes(client).some((route) => route.includes("DELETE") || route.includes("dispatches"))).toBe(false);
+  });
+});
+
+describe("resumeExperiment", () => {
+  const sha = "a".repeat(40);
+  const now = new Date("2026-11-05T00:00:00Z");
+  const options = { name: "setup-cache-yarn", expectedSha: sha, config, now };
+  const raw = () => rawPull(pull("trunk", { headSha: sha, body: experimentBody(sampleManifest(), config) }));
+
+  function fixture(settings: {
+    existing?: ReturnType<typeof raw>;
+    manifest?: ReturnType<typeof sampleManifest>;
+    head?: string;
+    full?: boolean;
+    changeAfterLabel?: boolean;
+    ignoreLabelWrite?: boolean;
+    lostCreateResponse?: boolean;
+  } = {}) {
+    let existing = settings.existing;
+    let head = settings.head ?? sha;
+    const client = fakeClient((route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}") return { default_branch: "main" };
+      if (route === "GET /repos/{owner}/{repo}/git/ref/{ref}") return { object: { sha: parameters.ref === "heads/main" ? "b".repeat(40) : head } };
+      if (route === "GET /repos/{owner}/{repo}/contents/{path}") {
+        expect(parameters.ref).toBe(sha);
+        return { encoding: "base64", content: Buffer.from(serializeManifest(settings.manifest ?? sampleManifest())).toString("base64") };
+      }
+      if (route === "GET /repos/{owner}/{repo}/pulls") {
+        if (parameters.head) return existing ? [existing] : [];
+        return settings.full ? ["alpha", "beta", "gamma"].map((name) => ({
+          ...raw(), head: { ...raw().head, ref: `experiments/${name}/trunk` },
+        })) : [];
+      }
+      if (route === "POST /repos/{owner}/{repo}/pulls") {
+        existing = { ...raw(), labels: [] };
+        if (settings.lostCreateResponse) throw httpError(408);
+        return { number: existing.number };
+      }
+      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return existing;
+      if (route === "GET /repos/{owner}/{repo}/labels") return [{ name: "experiment" }];
+      if (route === "POST /repos/{owner}/{repo}/issues/{issue_number}/labels") {
+        if (settings.changeAfterLabel) head = "c".repeat(40);
+        if (existing && !settings.ignoreLabelWrite) existing.labels = [{ name: "experiment" }];
+        return [];
+      }
+      throw new Error(`Unexpected request: ${route}`);
+    });
+    return client;
+  }
+
+  it("restores a missing promotion PR without recreating the branch or starting agents", async () => {
+    const client = fixture();
+    await expect(resumeExperiment(client, repo, options)).resolves.toEqual({
+      trunk: "experiments/setup-cache-yarn/trunk", sha, baseBranch: "main", pullRequest: 10, created: true,
+    });
+    expect(client.calls.filter((call) => !call.route.startsWith("GET")).map((call) => call.route)).toEqual([
+      "POST /repos/{owner}/{repo}/pulls",
+      "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
+    ]);
+  });
+
+  it("reuses and repairs an existing matching PR after a partial label failure", async () => {
+    const client = fixture({ existing: raw() });
+    await expect(resumeExperiment(client, repo, options)).resolves.toMatchObject({ pullRequest: 10, created: false });
+    expect(routes(client)).not.toContain("POST /repos/{owner}/{repo}/pulls");
+  });
+
+  it("recovers a lost creation response without creating a duplicate PR", async () => {
+    const client = fixture({ lostCreateResponse: true });
+    await expect(resumeExperiment(client, repo, options)).rejects.toThrow("HTTP 408");
+    await expect(resumeExperiment(client, repo, options)).resolves.toMatchObject({ pullRequest: 10, created: false });
+    expect(routes(client).filter((route) => route === "POST /repos/{owner}/{repo}/pulls")).toHaveLength(1);
+  });
+
+  it("previews recovery without writing or dispatching", async () => {
+    const client = fixture();
+    await expect(resumeExperiment(client, repo, { ...options, dryRun: true })).resolves.toMatchObject({ sha, created: false });
+    expect(routes(client).every((route) => route.startsWith("GET"))).toBe(true);
+  });
+
+  it.each([
+    ["stale", "trunk changed"], ["completed", "valid running experiment"], ["expired", "has expired"],
+    ["closed", "not owned by this experiment"], ["foreign", "not owned by this experiment"],
+    ["ready", "not owned by this experiment"],
+    ["retargeted", "not owned by this experiment"], ["unmarked", "not owned by this experiment"],
+    ["budget", "budget is already full"], ["rubric", "proposal rubric"], ["future", "creation time is in the future"],
+  ] as const)(
+    "refuses %s recovery before writing", async (scenario, error) => {
+      const current = raw();
+      const client = fixture({
+        ...(scenario === "stale" ? { head: "c".repeat(40) } : {}),
+        ...(scenario === "completed" ? { manifest: sampleManifest({ status: "rejected" }) } : {}),
+        ...(scenario === "expired" ? { manifest: sampleManifest({ expiresAt: "2026-11-04T00:00:00Z" }) } : {}),
+        ...(scenario === "closed" ? { existing: { ...current, state: "closed" } } : {}),
+        ...(scenario === "ready" ? { existing: { ...current, draft: false } } : {}),
+        ...(scenario === "foreign" ? { existing: { ...current, head: { ...current.head, repo: { full_name: "someone/else" } } } } : {}),
+        ...(scenario === "retargeted" ? { existing: { ...current, base: { ref: "release" } } } : {}),
+        ...(scenario === "unmarked" ? { existing: { ...current, body: "A human-owned pull request." } } : {}),
+        ...(scenario === "budget" ? { full: true } : {}),
+        ...(scenario === "rubric" ? { manifest: sampleManifest({ rubric: { scores: { impact: 1, evidence: 1, safety: 1, generality: 1, measurability: 1 }, rationale: "Below the bar." } }) } : {}),
+        ...(scenario === "future" ? { manifest: sampleManifest({ createdAt: "2026-11-06T00:00:00Z" }) } : {}),
+      });
+      await expect(resumeExperiment(client, repo, options)).rejects.toThrow(error);
+      expect(routes(client).every((route) => route.startsWith("GET"))).toBe(true);
+    },
+  );
+
+  it("does not claim publication succeeded when the branch moves during recovery", async () => {
+    const client = fixture({ changeAfterLabel: true });
+    await expect(resumeExperiment(client, repo, options)).rejects.toThrow("trunk changed");
+    expect(routes(client).some((route) => route.includes("dispatches") || route.includes("DELETE"))).toBe(false);
+  });
+
+  it("requires the label write to persist before confirming publication", async () => {
+    const client = fixture({ ignoreLabelWrite: true });
+    await expect(resumeExperiment(client, repo, options)).rejects.toThrow("publication is not confirmed");
+  });
+
+  it.each([{ name: "../../main" }, { expectedSha: "HEAD" }])("requires a bounded name and an exact commit", async (override) => {
+    const client = fixture();
+    await expect(resumeExperiment(client, repo, { ...options, ...override })).rejects.toThrow("exact 40-character");
+    expect(client.calls).toEqual([]);
   });
 });
 
 describe("applyDecision", () => {
   const manifest = sampleManifest();
+
+  it("uses a separate dispatch credential without sending it to PR publication", async () => {
+    const publisher = fakeClient((route) => route.endsWith("/comments") && route.startsWith("GET") ? [] : {});
+    const dispatcher = fakeClient();
+    const decision: Decision = {
+      action: "wait", reason: "Collecting samples.", scores: [],
+      dispatch: [{ ref: "experiments/setup-cache-yarn/trunk", arm: "trunk", workflow: "ci.yml", runs: 1 }],
+    };
+    const result = await applyDecision(publisher, repo, { manifest, decision, state: state(), config, dispatchClient: dispatcher });
+    expect(result.dispatched).toBe(1);
+    expect(routes(dispatcher)).toEqual(["POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches"]);
+    expect(routes(publisher).some((route) => route.includes("/actions/"))).toBe(false);
+    expect(routes(publisher)).toContain("POST /repos/{owner}/{repo}/issues/{issue_number}/comments");
+  });
 
   it("dispatches runs (capped) and keeps a single sticky grading comment while waiting", async () => {
     const client = fakeClient((route) => {

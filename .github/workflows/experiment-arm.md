@@ -55,6 +55,13 @@ steps:
       cache: npm
   - run: npm ci --no-audit --no-fund
 safe-outputs:
+  github-app:
+    client-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
+    private-key: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
+    ignore-if-missing: true
+    permissions:
+      workflows: write
+  github-token: ${{ secrets.CICD_OPTIMIZER_TOKEN || secrets.GITHUB_TOKEN }}
   create-pull-request:
     title-prefix: "[experiment] "
     labels: [experiment]
@@ -65,8 +72,6 @@ safe-outputs:
     allowed-branches: ["experiments/*/*"]
     preserve-branch-name: true
     if-no-changes: error
-    # Pipeline arms change .github/workflows, which GITHUB_TOKEN cannot push; set CICD_OPTIMIZER_TOKEN to allow it.
-    github-token: ${{ secrets.CICD_OPTIMIZER_TOKEN || secrets.GITHUB_TOKEN }}
     protected-files: request-review
 ---
 

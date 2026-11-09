@@ -29,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           sparse-checkout: |
             .github
             dist-action
@@ -51,11 +52,21 @@ jobs:
           if [ -n "$(git status --porcelain -- recipes)" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Mint repository App token
+        id: app-token
+        if: steps.publish.outputs.changed == 'true' && vars.CICD_OPTIMIZER_APP_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
+          private-key: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
       - name: Open publish pull request
         if: steps.publish.outputs.changed == 'true'
         env:
           # PRs opened with GITHUB_TOKEN do not trigger CI; an App token or PAT makes required checks run.
-          GH_TOKEN: ${{ secrets.CICD_OPTIMIZER_TOKEN || github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.CICD_OPTIMIZER_TOKEN || github.token }}
           EXPERIMENT: ${{ steps.publish.outputs.experiment }}
           SOURCE_PR: ${{ github.event.pull_request.number }}
         run: |
@@ -65,9 +76,11 @@ jobs:
           git switch -C "$branch"
           git add recipes
           git commit -m "recipe($EXPERIMENT): publish from #$SOURCE_PR"
-          git push --force-with-lease origin "$branch"
-          gh label create ci-cd-optimizer --color 1f883d --description "CI/CD Optimizer" 2>/dev/null || true
-          gh label create recipe --color 0969da --description "Reusable CI/CD fix built from a promoted experiment" 2>/dev/null || true
+          remote="$(git -c credential.helper= -c 'credential.helper=!gh auth git-credential' ls-remote --heads origin "refs/heads/$branch")"
+          expected="${remote%%$'\t'*}"
+          git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push "--force-with-lease=refs/heads/$branch:$expected" origin "HEAD:refs/heads/$branch"
+          gh label create ci-cd-optimizer --color 1f883d --description "CI/CD Optimizer" --force
+          gh label create recipe --color 0969da --description "Reusable CI/CD fix built from a promoted experiment" --force
           if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
             gh pr create --base main --head "$branch" \
               --title "recipe($EXPERIMENT): publish reusable fix" \

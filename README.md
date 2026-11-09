@@ -3,7 +3,7 @@
 CI/CD Optimizer is Dependabot for build and release performance. It lints GitHub Actions workflows, Dockerfiles,
 and package manifests against platform-engineering best practices: hermetic builds, caching, dependency layers,
 sparse checkout, affected-only testing, GHCR and GitHub Packages, and package decomposition. It then acts on the
-findings the way GitHub Advanced Security and Dependabot do. It also measures every Actions run, flags statistically
+findings the way GitHub Advanced Security and Dependabot do. It also measures configured Actions workflows, flags statistically
 significant slowdowns, and runs hill-climbing experiments with GitHub Agentic Workflows to evolve its own rules and
 your pipelines.
 
@@ -277,9 +277,9 @@ Rules and pipelines evolve through experiments on `experiments/<name>/<arm>` bra
 
    It then promotes the winner into the trunk and opens the trunk → `main` PR for human review.
 
-The generator opens pull requests, so it needs **Allow GitHub Actions to create and approve pull requests** or the
-`CICD_OPTIMIZER_TOKEN` secret ([setup › Actions access](docs/setup.md#5-actions-access-owner)). See
-[docs/experiments.md](docs/experiments.md), including the threat model.
+Publication automatically uses the configured App; workflow dispatch uses a separate built-in Actions token.
+An interrupted trunk publication can be recovered with `experiments resume --experiment NAME --expected-head SHA`.
+See [docs/experiments.md](docs/experiments.md) for credential fallbacks, guarded recovery, and the threat model.
 
 ## Recipes: reusing a winning fix elsewhere
 
@@ -336,11 +336,11 @@ What is exercised continuously in this repository, and what is not yet:
 |---|---|
 | Linter, CLI, Action, reusable workflow | Tested in CI on every push. The Action and reusable workflow lint this repository. |
 | Daily self-apply ([cicd-optimizer-daily.yml](.github/workflows/cicd-optimizer-daily.yml)) | Runs here every day: scans this repository (code scanning, finding issues, fix pull requests), re-reviews and signs every registered project, and audits this repository with every rule and for stale suppressions. The scan also runs after pushes to `main` that change CI files. |
-| `telemetry` workflow | Runs after every CI and Container run in this repository. |
+| `telemetry` workflow | Runs after CI, Container, and CI/CD Optimizer daily runs in this repository; queued updates preserve snapshot history. |
 | Container image and App service | Built in CI and smoke-tested against a synthetic GitHub API, in direct and Postgres queue modes. Pushed to `ghcr.io/msft-tkendrick/ci-cd-optimizer` on every push to `main`. |
 | Review program intake and signed daily reports | Running here, with this repository registered. `gh attestation verify` passes on published reports and rejects modified copies. |
 | pre-commit hook | The hook script has unit tests, and the hook was verified with pre-commit 4.6.2 in a consumer repository. pre-commit itself does not run in CI. |
-| Experiment generator and grader | Scheduled here but failing: the generator cannot open pull requests until the Actions pull request setting or `CICD_OPTIMIZER_TOKEN` is set, and the grader reports failure while no experiment is running. No experiment has completed end to end yet. |
+| Experiment generator and grader | Weekly proposal and daily grading, with App-backed publication, configured capacity checks, clean no-work skips, and guarded partial-publication recovery. Promotion selects among measured qualifying arms; it is not a guarantee of workload equivalence or future speed. |
 | Recipe publish and rollout | Not yet run here: no promoted pipeline experiment exists. |
 | Review intake from a fork | Designed for it (fail-closed trusted status), not yet exercised with an outside submission. |
 | MCP App setup panel | Works in the stand-in host (`npm run preview:mcp`); not yet validated in Copilot Desktop. |
@@ -352,17 +352,17 @@ What is exercised continuously in this repository, and what is not yet:
 |---|---|---|
 | `GITHUB_TOKEN` | All workflows | Lint, SARIF upload, issues, telemetry checks, review intake and daily reviews |
 | `id-token: write`, `attestations: write` | The `sign` job in review-scheduled only (the daily workflow's `review` job grants them) | Signing the daily review reports |
-| `secrets.CICD_OPTIMIZER_TOKEN` (optional App token or fine-grained PAT) | Scan, gh-aw safe outputs, recipe PRs | Pushing fixes that edit `.github/workflows` (`workflows` permission); PRs that trigger CI |
-| `vars.CICD_OPTIMIZER_APP_ID` + `secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY` | Scan, recipe rollout | Installation tokens; cross-repository recipe PRs |
+| `secrets.CICD_OPTIMIZER_TOKEN` (optional App token or fine-grained PAT) | Scan, gh-aw safe outputs, recipe publication | Fallback when no App is configured; workflow-changing fixes require `workflows: write` |
+| `vars.CICD_OPTIMIZER_APP_ID` + `secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY` | Scan, experiments, recipe publication/rollout | Short-lived installation tokens for branch and PR writes, including target-repository recipe PRs |
+| `CICD_OPTIMIZER_DISPATCH_TOKEN` (job-local, not a secret setting) | Experiment generator and grader | Built-in Actions-write job token for workflow dispatch; no increase to the App's Actions-read permission |
 | `secrets.COPILOT_ASSIGN_TOKEN` (user token) | Scan, telemetry, rollout | Assigning issues to the Copilot coding agent |
 | `secrets.CICD_OPTIMIZER_DATABASE_URL` (optional) | Recipe rollout | Protected access to the App's evidence database; never expose it to untrusted experiment arms |
 | `permissions: copilot-requests: write` | gh-aw workflows | Copilot inference without a PAT (requires an org Copilot subscription; otherwise set `COPILOT_GITHUB_TOKEN`) |
 
-> **Security review note.** `CICD_OPTIMIZER_TOKEN` is the only secret the agentic workflows add. It is used only in
-> gh-aw safe-output jobs and the grader's `decide --apply` step, never in the agent job. That is because arms that
-> change workflow files can only be pushed with a token that holds the `workflows` permission. Without the secret,
-> everything falls back to `GITHUB_TOKEN`, and workflow-changing arms are rejected. Keep the repository's default
-> workflow permissions read-only. The review program uses no secrets at all.
+> **Credential boundary.** App private keys and publication tokens are used only in isolated publishing jobs, never
+> in inference or arm evaluation. Publication prefers the App, then the optional publisher token, then `GITHUB_TOKEN`;
+> the last fallback cannot edit workflows or trigger CI on its own PRs. Workflow dispatch uses the separate built-in
+> Actions-write job token. Keep repository-default workflow permissions read-only. The review program uses no stored secrets.
 
 The App's own permissions are listed in [github-app.md](docs/github-app.md#register-the-app). The production
 checklist (repository security, GHCR, App credentials, tokens, and releases) is [docs/setup.md](docs/setup.md).

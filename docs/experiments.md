@@ -27,8 +27,9 @@ was tried.
 
 ### 1. Generator: weekly ([experiment-generator.md](../.github/workflows/experiment-generator.md))
 
-1. A pre-activation step counts open `experiments/*/trunk` pull requests. When the concurrency budget is spent, it exits
-   before any inference.
+1. `experiments capacity` counts open `experiments/*/trunk` pull requests, with pagination, and reads
+   `selection.maxConcurrent` from the configuration. When the budget is spent, a separate activation step is skipped:
+   this is a successful no-work run, not a workflow failure. API and configuration errors still fail.
 2. Before the agent starts, `experiments context` builds a briefing from the default branch:
    - the lint findings
    - the latest CI telemetry (critical path, slow jobs)
@@ -58,6 +59,8 @@ Each arm runs in parallel:
 Changes to protected files require review.
 
 ### 3. Grader: daily ([experiment-grader.md](../.github/workflows/experiment-grader.md))
+
+The same capacity check skips inference successfully when no experiment is open.
 
 1. `experiments collect` gathers CI results for each arm and the trunk.
 2. `experiments evaluate` builds every `rules` arm and the control in separate worktrees and scores them on the
@@ -207,6 +210,7 @@ status: running                       # running | promoted | rejected | expired
 ## Running it by hand
 
 ```sh
+node dist-action/index.js experiments capacity                          # running / limit / available
 node dist-action/index.js experiments context -o context.md               # the generator's briefing
 node dist-action/index.js experiments create --manifest experiment.yml --dry-run
 node dist-action/index.js experiments collect --output-dir measurements   # needs GITHUB_TOKEN
@@ -215,15 +219,67 @@ node dist-action/index.js experiments decide --measurements measurements  # prev
 node dist-action/index.js experiments evaluate --engine dist/lint/api.js --corpus corpus   # score the current build
 ```
 
+### Recover interrupted publication
+
+Creating the trunk, opening its PR, labeling it, and dispatching arms are separate GitHub operations. If PR publication
+fails, the CLI reports the retained branch and full commit SHA. It never deletes that branch or retries a failed draft
+request as a ready-for-review PR.
+
+Fix the credential problem, inspect the retained commit and any existing PR, then preview recovery:
+
+```sh
+node dist-action/index.js experiments resume --repo OWNER/REPO \
+  --experiment EXPERIMENT_NAME --expected-head FULL_INSPECTED_COMMIT_SHA --dry-run
+```
+
+Repeat without `--dry-run` to publish or repair the matching PR. Add `--base BRANCH` only when the original promotion
+target was not the repository's current default branch. Recovery reads the manifest at the supplied immutable SHA,
+requires a running, unexpired experiment that still passes the proposal rubric, checks available capacity for a new PR,
+and verifies the resulting draft PR, label, and branch head before reporting success. Changed heads, foreign/retargeted
+or already-ready PRs, ambiguous history, and closed or completed experiments are refused. Existing matching PRs are reused, including when a
+previous creation response was lost. GitHub operations are not atomic; if a later check fails, inspect the retained PR
+instead of assuming earlier writes were rolled back.
+
+Recovery **does not dispatch arms** or reset the experiment's age. Inspect arm PRs and workflow runs first; dispatch only
+missing arms, one at a time, against the trusted default branch:
+
+```sh
+gh workflow run experiment-arm.lock.yml --repo OWNER/REPO --ref TRUSTED_DEFAULT_BRANCH \
+  -f experiment=EXPERIMENT_NAME -f arm=MISSING_ARM_NAME
+```
+
 ## Tokens
 
-The loop works with `GITHUB_TOKEN` alone for `rules` experiments. `pipeline` experiments change
-`.github/workflows/*`, which `GITHUB_TOKEN` can't push or merge. Set `CICD_OPTIMIZER_TOKEN` to one of these:
+The workflows automatically use the configured App (`CICD_OPTIMIZER_APP_ID` and
+`CICD_OPTIMIZER_APP_PRIVATE_KEY`) for branch and PR publication. Short-lived tokens are scoped to this repository and
+minted only in the isolated publishing jobs, never in the agent or evaluator. Legacy numeric App IDs work with the
+token action's `client-id` input. Pipeline changes additionally require the App's **Workflows: write** permission.
 
-- a GitHub App installation token with **Contents**, **Pull requests**, **Actions**, and **Workflows** write access
-- a fine-grained personal access token with the same permissions
+The App keeps **Actions: read**. `create` arm dispatches and `decide --apply` measurement dispatches use the publishing
+job's built-in token through `CICD_OPTIMIZER_DISPATCH_TOKEN`; those jobs grant **Actions: write**. This variable is
+job-local, not an additional stored secret. For a local CLI invocation, either set it to a separate Actions-write
+credential or give the primary CLI token Actions-write access.
 
-The agent jobs use `copilot-requests: write` for inference, so no personal access token is needed for the agent.
+Without App configuration, publication falls back to `CICD_OPTIMIZER_TOKEN` (a repository-scoped App token or
+fine-grained PAT), then `GITHUB_TOKEN`. The fallback publisher needs **Contents**, **Issues**, and **Pull requests: write**,
+plus **Workflows: write** for pipeline edits. `GITHUB_TOKEN` cannot edit workflow files and cannot create PRs unless
+the repository permits it; its PRs do not trigger CI automatically. Prefer the App rather than loosening repository
+settings. Workflow dispatch still works with the separate built-in Actions token.
+
+The agent jobs use `copilot-requests: write` for inference when the account supports it; see
+[setup](setup.md#4-optional-tokens-owner) for the personal-account alternative. They never receive publication tokens.
+
+### Regenerating workflows
+
+The checked-in locks use **gh-aw v1.0.1**. Install that version (`gh extension install github/gh-aw --pin v1.0.1` for a new
+installation), confirm `gh aw --version`, then run:
+
+```sh
+gh aw compile experiment-generator experiment-arm experiment-grader --no-check-update --approve
+```
+
+Review and commit the `.md` sources and generated `.lock.yml` files together. Do not edit the locks manually or compile
+them with an older global extension; compiler versions differ in their protected-file and App-token schemas.
 
 ## Threat model
 

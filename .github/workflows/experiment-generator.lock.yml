@@ -1,5 +1,5 @@
-# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"5bfe5ead88397c60522606e9e31cf669bcae499a9a2d0510c32c91308cc6d1a2","body_hash":"9047db5dbffe3e6b5edc47343722138c7190bf605af52a1793d518095df7ae1f","compiler_version":"v1.0.1","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.103"},"agent_image_runner":"ubuntu-24.04"}
-# gh-aw-manifest: {"version":1,"secrets":["CICD_OPTIMIZER_TOKEN","GH_AW_DEFAULT_OTLP_ENDPOINT","GH_AW_DEFAULT_OTLP_HEADERS","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/download-artifact","sha":"9000827ccba6bdab643e8b6fd33ac0654aef8333","version":"v8.0.2"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"949feb2413d6458794dcd2491c4babbbce0c15c1","version":"949feb2413d6458794dcd2491c4babbbce0c15c1"},{"repo":"actions/upload-artifact","sha":"cf430e030ddbb5b0abf93d22962f4752f3646cd9","version":"v7.0.2"},{"repo":"github/gh-aw-actions/setup","sha":"221ba4f4319de6b8e809d1a15528b3ae6a818aa5","version":"v1.0.1"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.29.0","digest":"sha256:b14bd399376180b5649a9324be3b50fbfc82bfe8f0c80045840416b5a4e65b96","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.29.0@sha256:b14bd399376180b5649a9324be3b50fbfc82bfe8f0c80045840416b5a4e65b96"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.29.0","digest":"sha256:baff00b856a4bdc93bce134928c70af3d3492f2e518757115042040674d56b0b","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.29.0@sha256:baff00b856a4bdc93bce134928c70af3d3492f2e518757115042040674d56b0b"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.29.0","digest":"sha256:6e0cbf7f980beb78b5461563a8164f6439ca959bc93733d5a6b52972e523ed50","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.29.0@sha256:6e0cbf7f980beb78b5461563a8164f6439ca959bc93733d5a6b52972e523ed50"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.5.0","digest":"sha256:d3544a4222e7efeeeb38669d8a1af0c72691c55b8f6506b15aa5920f7f31b7bc","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.5.0@sha256:d3544a4222e7efeeeb38669d8a1af0c72691c55b8f6506b15aa5920f7f31b7bc"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:2c2ea524e648b91c8333ce246e3838fcf5b19ac70e45baac1a51b9207299749f","pinned_image":"ghcr.io/github/gh-aw-node@sha256:2c2ea524e648b91c8333ce246e3838fcf5b19ac70e45baac1a51b9207299749f"},{"image":"ghcr.io/github/github-mcp-server:v2.0.3","digest":"sha256:250bc6ce70788207608ef74cef4397230ff2e8481218da74d6093e4bd9101132","pinned_image":"ghcr.io/github/github-mcp-server:v2.0.3@sha256:250bc6ce70788207608ef74cef4397230ff2e8481218da74d6093e4bd9101132"}],"mcp_servers":[{"name":"github","tools":["get_commit","get_file_contents","get_latest_release","get_me","get_pull_request","get_pull_request_comments","get_pull_request_diff","get_pull_request_files","get_pull_request_review_comments","get_pull_request_reviews","get_pull_request_status","get_release_by_tag","get_tag","issue_read","list_branches","list_commits","list_issue_types","list_issues","list_pull_requests","list_releases","list_starred_repositories","list_tags","pull_request_read","search_code","search_issues","search_pull_requests","search_repositories"]},{"name":"safeoutputs","tools":["create_experiment","noop","report_incomplete","report_missing_data","report_missing_tool"]}],"threat_detection":{"mode":"enabled"},"admission":false}
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"d999268a2ac79ba21b282fde2ff3149493d6f14ddaf4a6fd42388456430ff87e","body_hash":"9047db5dbffe3e6b5edc47343722138c7190bf605af52a1793d518095df7ae1f","compiler_version":"v1.0.1","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.103"},"agent_image_runner":"ubuntu-24.04"}
+# gh-aw-manifest: {"version":1,"secrets":["CICD_OPTIMIZER_APP_PRIVATE_KEY","CICD_OPTIMIZER_TOKEN","GH_AW_DEFAULT_OTLP_ENDPOINT","GH_AW_DEFAULT_OTLP_HEADERS","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/create-github-app-token","sha":"64ab729a6294000f5aa4a4bc0b73d1f32bc45510","version":"v3.3.0"},{"repo":"actions/download-artifact","sha":"9000827ccba6bdab643e8b6fd33ac0654aef8333","version":"v8.0.2"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"949feb2413d6458794dcd2491c4babbbce0c15c1","version":"949feb2413d6458794dcd2491c4babbbce0c15c1"},{"repo":"actions/upload-artifact","sha":"cf430e030ddbb5b0abf93d22962f4752f3646cd9","version":"v7.0.2"},{"repo":"github/gh-aw-actions/setup","sha":"221ba4f4319de6b8e809d1a15528b3ae6a818aa5","version":"v1.0.1"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.29.0","digest":"sha256:b14bd399376180b5649a9324be3b50fbfc82bfe8f0c80045840416b5a4e65b96","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.29.0@sha256:b14bd399376180b5649a9324be3b50fbfc82bfe8f0c80045840416b5a4e65b96"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.29.0","digest":"sha256:baff00b856a4bdc93bce134928c70af3d3492f2e518757115042040674d56b0b","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.29.0@sha256:baff00b856a4bdc93bce134928c70af3d3492f2e518757115042040674d56b0b"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.29.0","digest":"sha256:6e0cbf7f980beb78b5461563a8164f6439ca959bc93733d5a6b52972e523ed50","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.29.0@sha256:6e0cbf7f980beb78b5461563a8164f6439ca959bc93733d5a6b52972e523ed50"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.5.0","digest":"sha256:d3544a4222e7efeeeb38669d8a1af0c72691c55b8f6506b15aa5920f7f31b7bc","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.5.0@sha256:d3544a4222e7efeeeb38669d8a1af0c72691c55b8f6506b15aa5920f7f31b7bc"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:2c2ea524e648b91c8333ce246e3838fcf5b19ac70e45baac1a51b9207299749f","pinned_image":"ghcr.io/github/gh-aw-node@sha256:2c2ea524e648b91c8333ce246e3838fcf5b19ac70e45baac1a51b9207299749f"},{"image":"ghcr.io/github/github-mcp-server:v2.0.3","digest":"sha256:250bc6ce70788207608ef74cef4397230ff2e8481218da74d6093e4bd9101132","pinned_image":"ghcr.io/github/github-mcp-server:v2.0.3@sha256:250bc6ce70788207608ef74cef4397230ff2e8481218da74d6093e4bd9101132"}],"mcp_servers":[{"name":"github","tools":["get_commit","get_file_contents","get_latest_release","get_me","get_pull_request","get_pull_request_comments","get_pull_request_diff","get_pull_request_files","get_pull_request_review_comments","get_pull_request_reviews","get_pull_request_status","get_release_by_tag","get_tag","issue_read","list_branches","list_commits","list_issue_types","list_issues","list_pull_requests","list_releases","list_starred_repositories","list_tags","pull_request_read","search_code","search_issues","search_pull_requests","search_repositories"]},{"name":"safeoutputs","tools":["create_experiment","noop","report_incomplete","report_missing_data","report_missing_tool"]}],"threat_detection":{"mode":"enabled"},"admission":false}
 # This file was automatically generated by gh-aw (v1.0.1). DO NOT EDIT. To debug this workflow, load the skill at https://github.com/github/gh-aw/blob/main/debug.md
 #
 #    ___                   _   _
@@ -26,6 +26,7 @@
 # Proposes one high-quality hill-climbing experiment per week from findings, telemetry, and past results.
 #
 # Secrets used:
+#   - CICD_OPTIMIZER_APP_PRIVATE_KEY
 #   - CICD_OPTIMIZER_TOKEN
 #   - GH_AW_DEFAULT_OTLP_ENDPOINT
 #   - GH_AW_DEFAULT_OTLP_HEADERS
@@ -36,6 +37,7 @@
 # Custom actions used:
 #   - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 #   - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+#   - actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
 #   - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
 #   - actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
 #   - actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
@@ -54,18 +56,30 @@
 name: "Hill-climbing experiment generator"
 on:
   # permissions: # Permissions applied to pre-activation job
+  # contents: read
   # pull-requests: read
   schedule:
     - cron: "36 8 * * 1"  # Friendly format: weekly on monday (scattered)
   # steps: # Steps injected into pre-activation job
+  # - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+  # with:
+  # persist-credentials: false
+  # sparse-checkout: |
+  # .github
+  # dist-action
+  # - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+  # with:
+  # node-version-file: .nvmrc
   # - env:
-  # GH_TOKEN: ${{ github.token }}
-  # id: check
+  # GITHUB_TOKEN: ${{ github.token }}
+  # id: count
   # run: |
-  # RUNNING=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json headRefName \
-  # --jq '[.[] | select(.headRefName | test("^experiments/[a-z0-9-]+/trunk$"))] | length')
-  # echo "$RUNNING experiment(s) running"
-  # [ "$RUNNING" -lt 3 ]
+  # CAPACITY=$(node dist-action/index.js experiments capacity)
+  # echo "$CAPACITY"
+  # jq -er '"running=\(.running)\nlimit=\(.limit)"' <<< "$CAPACITY" >> "$GITHUB_OUTPUT"
+  # - id: check
+  # if: fromJSON(steps.count.outputs.running) < fromJSON(steps.count.outputs.limit)
+  # run: echo "Capacity available for a proposal; the publisher enforces the configured limit."
   workflow_dispatch:
     inputs:
       aw_context:
@@ -1673,13 +1687,31 @@ jobs:
           GH_AW_JOB_CHECK_RUN_ID: ${{ job.check_run_id }}
         with:
           node-version-file: .nvmrc
-      - name: Create experiment
-        run: node dist-action/index.js experiments create --agent-output "$GH_AW_AGENT_OUTPUT" --arm-workflow experiment-arm.lock.yml
+      - name: Mint repository App token
+        id: app-token
+        if: vars.CICD_OPTIMIZER_APP_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
           GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.outputs.detection_conclusion }}
           GH_AW_JOB_CHECK_RUN_ID: ${{ job.check_run_id }}
-          GITHUB_TOKEN: ${{ secrets.CICD_OPTIMIZER_TOKEN || github.token }}
+        with:
+          client-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
+          owner: ${{ github.repository_owner }}
+          permission-actions: read
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          private-key: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+      - name: Create experiment
+        run: node dist-action/index.js experiments create --agent-output "$GH_AW_AGENT_OUTPUT" --arm-workflow experiment-arm.lock.yml
+        env:
+          CICD_OPTIMIZER_DISPATCH_TOKEN: ${{ github.token }}
+          GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
+          GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.outputs.detection_conclusion }}
+          GH_AW_JOB_CHECK_RUN_ID: ${{ job.check_run_id }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.CICD_OPTIMIZER_TOKEN || github.token }}
 
   detection:
     name: detection
@@ -2039,12 +2071,14 @@ jobs:
     # Permissions for the pre_activation job (workflow permissions default to none).
     # Includes permissions declared in on.permissions.
     permissions:
+      contents: read
       pull-requests: read
     env:
       GH_AW_RUNTIME_FEATURES: ${{ vars.GH_AW_RUNTIME_FEATURES }}
     outputs:
       activated: ${{ steps.check_membership.outputs.is_team_member == 'true' }}
       check_result: ${{ steps.check.outcome }}
+      count_result: ${{ steps.count.outcome }}
       matched_command: ''
       setup-parent-span-id: ${{ steps.setup.outputs.parent-span-id || steps.setup.outputs.span-id }}
       setup-span-id: ${{ steps.setup.outputs.span-id }}
@@ -2077,14 +2111,25 @@ jobs:
             setupGlobals(core, github, context, exec, io, getOctokit);
             const { main } = require(path.join(actionsDir, 'check_membership.cjs'));
             await main();
-      - id: check
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github
+            dist-action
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - id: count
         run: |
-          RUNNING=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json headRefName \
-            --jq '[.[] | select(.headRefName | test("^experiments/[a-z0-9-]+/trunk$"))] | length')
-          echo "$RUNNING experiment(s) running"
-          [ "$RUNNING" -lt 3 ]
+          CAPACITY=$(node dist-action/index.js experiments capacity)
+          echo "$CAPACITY"
+          jq -er '"running=\(.running)\nlimit=\(.limit)"' <<< "$CAPACITY" >> "$GITHUB_OUTPUT"
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+      - id: check
+        if: fromJSON(steps.count.outputs.running) < fromJSON(steps.count.outputs.limit)
+        run: echo "Capacity available for a proposal; the publisher enforces the configured limit."
 
   safe_outputs:
     name: safe_outputs
