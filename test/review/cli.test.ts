@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -264,6 +264,35 @@ describe("review CLI", () => {
       const c = cli(world());
       expect(await c.run("review", "scheduled", "--dir", "registry")).toBe(0);
       expect(c.stdout).toContain("1 registered project reviewed.");
+    });
+
+    it("writes one deterministic public JSON report per project for signing", async () => {
+      await write("projects/widget/project.yaml", PROJECT_YAML);
+      await write("projects/broken/project.yaml", "name: other\n");
+      await write("projects/Bad_Name/project.yaml", "name: other\n");
+      await write("projects/Worse_Name/project.yaml", "name: other\n");
+      const first = cli(world());
+      expect(await first.run("review", "scheduled", "--json-dir", "out/reports")).toBe(1);
+      const files = (await readdir(join(root, "out/reports"))).sort();
+      expect(files).toEqual(["_invalid-1.json", "_invalid-2.json", "broken.json", "widget.json"]);
+      const widget = JSON.parse(await readFile(join(root, "out/reports/widget.json"), "utf8")) as ReviewReport;
+      expect(widget).toMatchObject({ schemaVersion: 1, project: "widget", status: "ok" });
+      const broken = JSON.parse(await readFile(join(root, "out/reports/broken.json"), "utf8")) as ReviewReport;
+      expect(broken).toMatchObject({ project: "broken", status: "invalid" });
+      const invalid = JSON.parse(await readFile(join(root, "out/reports/_invalid-1.json"), "utf8")) as ReviewReport;
+      expect(invalid).toMatchObject({ project: "intake", status: "invalid" });
+      const before = await Promise.all(files.map((file) => readFile(join(root, "out/reports", file), "utf8")));
+      const second = cli(world());
+      expect(await second.run("review", "scheduled", "--json-dir", "out/reports")).toBe(1);
+      const after = await Promise.all(files.map((file) => readFile(join(root, "out/reports", file), "utf8")));
+      expect(after).toEqual(before);
+    });
+
+    it("rejects an empty --json-dir", async () => {
+      await write("projects/widget/project.yaml", PROJECT_YAML);
+      const c = cli(world());
+      expect(await c.run("review", "scheduled", "--json-dir", " ")).toBe(2);
+      expect(c.stderr).toContain("--json-dir needs a directory.");
     });
   });
 });

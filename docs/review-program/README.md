@@ -13,6 +13,7 @@ The review is static analysis through the GitHub API only. The program never che
 - [Acceptance criteria](#acceptance-criteria)
 - [The consent file](#the-consent-file)
 - [What you get](#what-you-get)
+- [Verifying signed results](#verifying-signed-results)
 - [Security-sensitive findings and disclosure](#security-sensitive-findings-and-disclosure)
 - [Changing, pausing, or leaving the program](#changing-pausing-or-leaving-the-program)
 - Background: [design](design.md), [threat model](threat-model.md), [research on comparable programs](research.md)
@@ -102,7 +103,8 @@ it.
   branch, as a table of severity, rule, location, message, and suggested fix, with links to the rule docs. Each
   new push to the pull request updates the same comment.
 - **Weekly:** the scheduled workflow re-reviews every registered project. The summary appears in the
-  [Actions tab](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/review-scheduled.yml).
+  [Actions tab](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/review-scheduled.yml), and
+  each project's public report is published as signed JSON (see [below](#verifying-signed-results)).
 - **On demand:** run the same review yourself with full detail, including the findings that public reports
   withhold:
 
@@ -116,6 +118,35 @@ it.
 The review respects your repository's own `.github/ci-cd-optimizer.yml`, including `ignorePaths`, rule settings,
 and inline suppressions. A `preset` in `project.yaml` replaces the `extends` list from that file. Each review reads
 at most 200 files of at most 200 KB each, and the report says when it covered only part of the repository.
+
+## Verifying signed results
+
+Each weekly run uploads a `review-reports` artifact with one public (redacted) JSON report per project, named
+`<project>.json`, and keeps it for 90 days. A separate job signs every report with a
+[build provenance attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations)
+through Sigstore. The attestation binds the file's SHA-256 digest to this repository, the
+`review-scheduled.yml` workflow, the commit it ran from, and a GitHub-hosted runner. Anyone can therefore check
+that a report they were given is the program's own, unmodified output and not a copy someone edited:
+
+```sh
+RUN=$(gh run list --repo MSFT-TKENDRICK/ci-cd-optimizer --workflow review-scheduled.yml \
+  --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run download "$RUN" --repo MSFT-TKENDRICK/ci-cd-optimizer -n review-reports -D reports
+gh attestation verify reports/<project>.json \
+  --repo MSFT-TKENDRICK/ci-cd-optimizer \
+  --signer-workflow MSFT-TKENDRICK/ci-cd-optimizer/.github/workflows/review-scheduled.yml \
+  --source-ref refs/heads/main \
+  --deny-self-hosted-runners
+```
+
+Verification fails if a single byte of the report changed, or if it was signed by any other workflow, branch, or
+runner. The attestation is also listed on the repository's
+[Attestations page](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/attestations). To verify offline, download
+the `review-attestation` artifact from the same run and add `--bundle <file>.jsonl`.
+
+The signature proves where a report came from, not that its findings are complete: it is still a public report,
+so sensitive findings are counts only. Submission pull request comments are not signed, because they come from
+`pull_request` runs whose workflow file the submitter controls.
 
 ## Security-sensitive findings and disclosure
 

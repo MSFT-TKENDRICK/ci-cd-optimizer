@@ -1,6 +1,8 @@
 # Weekly re-review of every registered project (docs/review-program/README.md). Consent is re-verified on each run,
 # so a repository that deleted its consent file, was renamed, archived, or made private is reported, not reviewed.
-# Read-only: results go to the job summary in public (redacted) form.
+# Results go to the job summary and to one public (redacted) JSON report per project. The sign job signs those reports
+# with a Sigstore build provenance attestation, so anyone can verify that a report came from this workflow on main
+# (docs/review-program/README.md#verifying-signed-results).
 name: Review scheduled
 
 on:
@@ -19,6 +21,8 @@ jobs:
   review:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      reports: ${{ steps.reports.outputs.present }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,4 +33,55 @@ jobs:
       - name: Re-review registered projects
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: npm run --silent cli -- review scheduled --dir projects --output "$GITHUB_STEP_SUMMARY"
+        run: npm run --silent cli -- review scheduled --dir projects --output "$GITHUB_STEP_SUMMARY" --json-dir reports
+
+      # An invalid project fails the review step but still leaves reports for every other project, so sign those.
+      - name: Check for reports
+        id: reports
+        if: ${{ !cancelled() }}
+        run: |
+          if compgen -G "reports/*.json" > /dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && steps.reports.outputs.present == 'true' }}
+        with:
+          name: review-reports
+          path: reports/*.json
+          if-no-files-found: error
+          # cicd-optimizer-disable-next-line workflow/artifact-retention -- signed weekly results are published deliverables
+          retention-days: 90
+          overwrite: true
+
+  # Holds the OIDC token, so it never checks out or runs repository code: it only signs the files the review job made.
+  sign:
+    needs: review
+    if: ${{ !cancelled() && needs.review.outputs.reports == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: review-reports
+          path: reports
+
+      - name: Sign the reports
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: reports/*.json
+
+      # The attestation is also stored by GitHub; this copy allows offline verification with gh attestation verify --bundle.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: review-attestation
+          path: ${{ steps.attest.outputs.bundle-path }}
+          if-no-files-found: error
+          # cicd-optimizer-disable-next-line workflow/artifact-retention -- kept as long as the reports it signs
+          retention-days: 90
+          overwrite: true

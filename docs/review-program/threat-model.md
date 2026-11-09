@@ -122,12 +122,35 @@ artifact, aiming to make the privileged job pass, comment on, or act on a differ
   - `npm ci` verifies lockfile integrity hashes.
 - *Residual risk:* inherited from GitHub's cache isolation model.
 
+**T7. Tampering: forged or altered review results.**
+Someone edits a downloaded weekly report, or fabricates one, and presents it as the program's verdict on a
+project.
+- *Mitigation:*
+  - The scheduled workflow attests every `reports/<project>.json` with a Sigstore build provenance attestation.
+    It binds the SHA-256 digest to this repository, `review-scheduled.yml`, the source ref and commit, and a
+    GitHub-hosted runner, and it is recorded in the public Rekor transparency log.
+  - `gh attestation verify --signer-workflow … --source-ref refs/heads/main --deny-self-hosted-runners` rejects
+    any changed byte, any other workflow or branch, and self-hosted runners.
+  - The signing job holds the only `id-token: write` permission and runs no repository code, so it signs exactly
+    what the `review` job uploaded. Workflows on pull request branches cannot pass the `--source-ref` check.
+- *Residual risk:*
+  - Anyone with write access to `main` can change what the workflow signs. Branch protection and Code Owner review
+    of `.github/workflows/` and `src/` cover this.
+  - A signature proves origin, not correctness. A bug in the review code produces a validly signed wrong result.
+  - Pull request comments are not signed; only the weekly reports are.
+
 **R1. Repudiation: who registered or changed a project.**
 - *Mitigation:*
   - Everything is a PR, with a CODEOWNERS approval and git history.
   - Consent lives in the target's own git history.
   - Reports name the reviewed SHA.
 - *Residual risk:* none significant.
+
+**R2. Repudiation: denying that the program published a result.**
+- *Mitigation:* each signed weekly report has an entry in the public Rekor log and on this repository's
+  Attestations page, tied to the workflow run that produced it.
+- *Residual risk:* artifacts expire after 90 days. The attestation outlives them, but the report itself must be
+  kept by whoever relies on it.
 
 **I1. Information disclosure: publishing exploitable CI/CD weaknesses in public comments.**
 - *Mitigation:*
@@ -203,4 +226,6 @@ branch) without granting anything.
   so changes to the code that runs in the trusted job need owner review.
 - Actions → "Require approval for all outside collaborators" for fork pull request workflows.
 - Private vulnerability reporting enabled.
-- Workflow permissions defaulting to read-only. Each workflow also declares its own minimal `permissions`.
+- Workflow permissions defaulting to read-only. Each workflow also declares its own minimal `permissions`. Signing
+  needs no extra setting: the `sign` job requests `id-token: write` and `attestations: write` itself, and artifact
+  attestations are available on public repositories.

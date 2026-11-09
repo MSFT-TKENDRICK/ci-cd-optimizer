@@ -26228,7 +26228,7 @@ async function executionCommand(args, io) {
 }
 
 // src/cli/review.ts
-import { lstat as lstat2, readdir as readdir4, readFile as readFile7 } from "node:fs/promises";
+import { lstat as lstat2, mkdir as mkdir5, readdir as readdir4, readFile as readFile7, writeFile as writeFile5 } from "node:fs/promises";
 import { basename as basename2, dirname as dirname6, join as join8 } from "node:path";
 import { parseArgs as parseArgs9 } from "node:util";
 
@@ -26974,9 +26974,11 @@ intake:           --pr <n> [--repo <owner/repo>] [--head-sha <sha>] [--comment] 
 intake-artifact:  <file> --expected-sha <sha>     (prints pr_number=\u2026 and head_sha=\u2026 lines for $GITHUB_OUTPUT)
 intake-status:    --head-sha <sha> [--pr <n>] [--record present|missing|invalid] [--repo <owner/repo>]
                   [--comment] [--status] [--output <file>]
-scheduled:        [--dir projects] [--registry <owner/repo>] [--output <file>]
+scheduled:        [--dir projects] [--registry <owner/repo>] [--output <file>] [--json-dir <dir>]
 
 Without --public, run prints every finding, including security-sensitive ones that public reports withhold.
+scheduled --json-dir also writes one public JSON report per project (<dir>/<project>.json), which the
+scheduled workflow signs with a build provenance attestation.
 The registry defaults to $GITHUB_REPOSITORY, then ${DEFAULT_REGISTRY}.
 `;
 var SHA = /^[0-9a-f]{40}$/;
@@ -27211,6 +27213,7 @@ async function scheduledCommand(args, io) {
       dir: { type: "string", default: "projects" },
       registry: { type: "string" },
       output: { type: "string", short: "o" },
+      "json-dir": { type: "string" },
       help: { type: "boolean", short: "h", default: false }
     }
   });
@@ -27220,6 +27223,9 @@ async function scheduledCommand(args, io) {
   }
   const registry = registryFrom(values2.registry, io);
   const root = resolvePath(io, values2.dir);
+  const jsonDir = values2["json-dir"];
+  if (jsonDir !== void 0 && jsonDir.trim() === "") throw new UsageError("--json-dir needs a directory.");
+  const jsonRoot = jsonDir === void 0 ? void 0 : resolvePath(io, jsonDir);
   let entries2;
   try {
     entries2 = await readdir4(root, { withFileTypes: true });
@@ -27230,6 +27236,8 @@ async function scheduledCommand(args, io) {
   const client = githubClient(io);
   const rows = [];
   const details = [];
+  let invalidNames = 0;
+  if (jsonRoot) await mkdir5(jsonRoot, { recursive: true });
   let failed = false;
   for (const directory of names) {
     let report;
@@ -27244,6 +27252,10 @@ async function scheduledCommand(args, io) {
       report = buildReport(await reviewProject(client, parsed.project, { registry }), { public: true });
     }
     if (report.status === "invalid" || report.status === "error") failed = true;
+    if (jsonRoot) {
+      const name = NAME_PATTERN.test(directory) ? directory : `_invalid-${++invalidNames}`;
+      await writeFile5(join8(jsonRoot, `${name}.json`), renderJson(report), "utf8");
+    }
     const { summary: summary3 } = report;
     rows.push(`| ${escapeInline(report.project, 63)} | ${report.status} | ${summary3.filesAnalyzed} | ${summary3.error} | ${summary3.warn} | ${summary3.info} | ${report.redacted.count} |`);
     const body = renderMarkdown(report, { heading: "####" });

@@ -24,10 +24,10 @@ reasoning is in the [threat model](threat-model.md), and the survey of comparabl
 | `src/review/report.ts` | Report model (`schemaVersion: 1`), public-mode redaction, Markdown and JSON rendering, and the marker-based comment upsert. |
 | `src/review/escape.ts` | `escapeInline`, used on every untrusted string before it reaches Markdown, plus the 60 KB comment cap. |
 | `src/review/intake.ts` | Submission PR classification, the intake flow, the per-author cap, the intake record parser, and the trusted status decision. |
-| `src/cli/review.ts` | `review validate`, `run`, `intake`, `intake-artifact`, `intake-status`, and `scheduled` subcommands. |
+| `src/cli/review.ts` | `review validate`, `run`, `intake`, `intake-artifact`, `intake-status`, and `scheduled` subcommands. `scheduled --json-dir` writes one public JSON report per project for signing. |
 | `.github/workflows/review-intake.yml` | Unprivileged, advisory `pull_request` job: runs intake from the **base** commit and writes the job summary plus a tiny record. |
 | `.github/workflows/review-intake-comment.yml` | Privileged `workflow_run` job: validates the record, repeats intake from the default branch, upserts the PR comment, and publishes the required `review-intake/trusted` commit status. |
-| `.github/workflows/review-scheduled.yml` | Weekly read-only re-review of every registered project; output goes to the job summary. |
+| `.github/workflows/review-scheduled.yml` | Weekly read-only re-review of every registered project. The `review` job writes the job summary and uploads `review-reports` (one JSON file per project). A separate `sign` job attests those files with `actions/attest` and uploads the Sigstore bundle as `review-attestation`. |
 
 ## Data flow
 
@@ -55,6 +55,23 @@ only after the record proves it describes the same commit that the `workflow_run
 recomputes the whole review itself with trusted code. The record only selects a path: a missing, oversized, or
 malformed record makes every submission at that commit fail. A forged record can therefore at most trigger a
 fresh, honest review of some open pull request whose head is that commit, or make it fail.
+
+The weekly run has a second, signed output:
+
+```
+schedule / workflow_dispatch on main
+  review job (contents: read, default-branch code)
+    review scheduled --json-dir reports ──▶ job summary
+                                       └──▶ artifact review-reports: reports/<project>.json (public, redacted)
+  sign job (id-token: write, attestations: write; no checkout, no npm, no repo code)
+    download review-reports ──▶ actions/attest (SLSA provenance, Sigstore) ──▶ attestation API + Rekor
+                                                                      └──▶ artifact review-attestation (bundle)
+```
+
+Report files are named after the project directory. A directory whose name is not a valid project name is written
+as `_invalid-<n>.json` instead, numbered in sorted order, so an untrusted name never becomes a path and two names
+cannot collide. Reports contain no timestamps, so re-running a review on unchanged inputs produces byte-identical
+files and digests.
 
 ## Intake rules
 
@@ -127,7 +144,7 @@ The whole comment is capped at 60 KB.
 | Submission | PR with `projects/<n>/project.yaml` | PR with `meta.yaml` | PR with `types/<pkg>` | none (crawl or Action) | PR with `projects/<n>/project.yaml` |
 | Consent | `primary_contact` + VCS-log check | `recipe-maintainers` | `owners` | none | consent file **in the target repo** + contacts |
 | Executes submission | yes (Docker build) | yes (build) | type-check | no | **no** (API-only lint) |
-| Results | private tracker, then public | CI logs | CI status | public score | PR comment (redacted) + local full report |
+| Results | private tracker, then public | CI logs | CI status | public score | PR comment (redacted), signed weekly JSON, and local full report |
 | Disclosure | 90 days + 14-day grace | n/a | n/a | n/a | 90 days for sensitive findings |
 | Re-review | continuous | per update PR | per PR | every CI run / weekly crawl | weekly |
 | Opt-out | PR deleting the project (implied, not documented) | not documented | not documented | stop running the Action | delete consent file, `paused`, or removal PR |
@@ -151,3 +168,14 @@ Allstar, SLSA, Alpha-Omega, verify-rust-std, SV-COMP, VerifyThis, CNCF Landscape
   sequential run keeps load predictable.
 - **No issue filing on target repositories.** Feedback stays on the submission PR, in the weekly summary, and in
   private channels, which keeps the token read-only toward targets.
+- **Signing runs in its own job.** Only the `sign` job can mint an OIDC token, and it runs no code from this
+  repository: it downloads the reports and calls a pinned `actions/attest`. A bug in the review code therefore
+  cannot sign arbitrary content, and the `review` job keeps `contents: read` only. OSS-Fuzz and SLSA use the same
+  split between the build and the provenance generator.
+- **Only scheduled results are signed.** Submission PR results come from `pull_request` runs whose workflow file the
+  submitter controls, so a signature from them would prove nothing. The trusted `workflow_run` job could sign its
+  own result in a follow-up.
+- **Only public reports are signed and published.** Private detail stays with `review run`. The JSON artifact is the
+  same redacted content as the job summary.
+- **Attestations, not detached keys.** Sigstore keyless signing ties each signature to this workflow's identity, so
+  there is no long-lived key to store, rotate, or leak, and anyone can verify with `gh attestation verify`.
