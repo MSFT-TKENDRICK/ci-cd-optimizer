@@ -1,0 +1,39 @@
+name: shorten-app-smoke-job
+title: Shorten the container smoke job that dominates CI wall-clock
+hypothesis: The `app` job is the critical path (2m22s of a 2m38s run, 90%). Its serial steps are service-container initialization (39s), docker build (39s), buildx setup (18s) and a second smoke run (26s). Overlapping or removing these serial phases should cut the job, and therefore the whole run, by 30-60s without dropping the smoke coverage.
+kind: pipeline
+metrics:
+  - ciWallClock
+rubric:
+  scores:
+    impact: 4
+    evidence: 4
+    safety: 4
+    generality: 4
+    measurability: 5
+  rationale: "Impact 4: app is the sole critical-path job and other jobs finish in under 45s, so any app saving lands directly on wall-clock. Evidence 4: the CI snapshot (run 42660931840) gives per-step durations. Safety 4: both smoke runs and the postgres durability check must remain, and the change is limited to ci.yml and is easy to revert. Generality 4: service containers that block a build and cold buildx setup are common patterns. Measurability 5: ciWallClock is directly bound to this job."
+arms:
+  - name: postgres-docker-run
+    title: Start postgres in the background instead of as a job service
+    approach: In the `app` job of .github/workflows/ci.yml, remove the `services.postgres` block. Add an early step that runs `docker run -d --name ci-postgres` with the same pinned image (postgres:17.6), env and health flags, on a user-defined network or with a published port, so the image pull and startup overlap with the buildx setup and image build. Add a step before the durable smoke run that waits for the container to become healthy (poll `docker inspect` health status). Update SMOKE_DATABASE_URL and SMOKE_DATABASE_CONTAINER accordingly, using the same connection scheme as today. Keep both smoke runs and do not touch other jobs or the Dockerfile.
+  - name: split-smoke-jobs
+    title: Split plain smoke and durable smoke into parallel jobs
+    approach: In .github/workflows/ci.yml, split `app` into two jobs that run in parallel. `app` keeps the build and the plain `node test/service/container-smoke.mjs` run with no postgres service. A new `app-durable` job has the postgres service, builds the image with the same gha cache scope (cache-from only, no cache-to, to avoid write races), and runs the durable smoke step. Keep the pinned action SHAs and timeouts. Preserve both smoke checks. If branch protection names `app`, keep that job name. Do not touch other jobs or the Dockerfile.
+  - name: docker-driver-no-buildx
+    title: Drop the separate buildx setup and use a lighter cache path
+    approach: "In the `app` job of .github/workflows/ci.yml, reduce the cost of the build phase. Remove docker/setup-buildx-action and the gha cache import and export, then build with a plain `docker build` that relies on BuildKit cache mounts already in the Dockerfile. If the cold build is slower than the saved setup time, keep the setup but add `driver: docker` and remove the cache-to export, so cache exports no longer add time to the job. Keep both smoke runs and the postgres service. Do not touch other jobs."
+createdAt: 2026-11-09T19:10:16.206Z
+expiresAt: 2026-11-23T19:10:16.206Z
+status: running
+applicability:
+  rules:
+    - caching/docker-layer-cache
+    - containers/cache-mount
+    - workflow/job-timeout
+  files:
+    - .github/workflows/*.yml
+    - Dockerfile
+  description: CI jobs that build a container image and run smoke tests against service containers.
+source:
+  findings: []
+  notes: CI run 42660931840 timeline and slowest-steps tables (app 2m22s, Initialize containers 39s, build-push 39s, setup-buildx 18s, durable smoke 26s).
