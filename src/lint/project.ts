@@ -2,6 +2,16 @@ import { matchesGlob } from "../utils.js";
 import { isDockerfilePath, parseDockerfile, type DockerfileModel } from "./parsers/dockerfile.js";
 import { isManifestPath, parseManifest, type PackageManifest } from "./parsers/manifest.js";
 import {
+  flakeInfo,
+  isFlakeLockPath,
+  isNixPath,
+  parseFlakeLock,
+  parseNix,
+  type FlakeInfo,
+  type FlakeLock,
+  type NixFile,
+} from "./parsers/nix.js";
+import {
   isActionPath,
   isWorkflowPath,
   parseWorkflow,
@@ -26,8 +36,25 @@ export interface ProjectFacts {
   workspaceGlobs: Fact<string[]>;
   workspacePackages: Fact<PackageManifest[]>;
   isMonorepo: Fact<boolean>;
+  /** Whether the repository builds with Nix (Nix files, a flake.lock, or Nix in CI). */
+  usesNix: Fact<boolean>;
   lockfiles: string[];
   dockerignoreDirs: Set<string>;
+}
+
+export interface NixFlake {
+  /** Directory containing `flake.nix` and/or `flake.lock` (`""` for the repository root). */
+  dir: string;
+  nix?: NixFile;
+  info?: FlakeInfo;
+  lock?: FlakeLock;
+}
+
+export interface NixModel {
+  /** Every parsed `*.nix` file. */
+  files: NixFile[];
+  locks: FlakeLock[];
+  flakes: NixFlake[];
 }
 
 export interface ProjectModel {
@@ -37,6 +64,7 @@ export interface ProjectModel {
   dockerfiles: DockerfileModel[];
   manifests: PackageManifest[];
   rootManifest?: PackageManifest;
+  nix: NixModel;
   facts: ProjectFacts;
   parseProblems: ParseProblem[];
   /** Resolves a local `uses: ./path` action to its parsed action.yml, if present. */
@@ -66,6 +94,34 @@ const TOOL_FILES: Record<string, MonorepoTool> = {
   "settings.gradle": "gradle",
   "settings.gradle.kts": "gradle",
 };
+
+/** Actions that install Nix on a runner. Names are `owner/repo`, lowercased. */
+export const NIX_INSTALLER_ACTIONS = new Set([
+  "cachix/install-nix-action",
+  "determinatesystems/nix-installer-action",
+  "determinatesystems/determinate-nix-action",
+  "nixbuild/nix-quick-install-action",
+]);
+
+const NIX_COMMAND = /(^|[\s;&|(`])(nix|nix-build|nix-shell|nix-store|nix-env|nix-instantiate)(\s|$)/m;
+const NIX_SHELL = /\bnix(\s+develop|-shell)\b/;
+
+function workflowUsesNix(models: WorkflowModel[]): boolean {
+  return models.some(
+    (model) =>
+      NIX_SHELL.test(model.shell ?? "") ||
+      model.jobs.some(
+        (job) =>
+          NIX_SHELL.test(job.shell ?? "") ||
+          job.steps.some(
+            (step) =>
+              NIX_INSTALLER_ACTIONS.has(step.uses?.action.name ?? "") ||
+              NIX_SHELL.test(step.shell ?? "") ||
+              NIX_COMMAND.test(step.run?.value ?? ""),
+          ),
+      ),
+  );
+}
 
 function known<T>(value: T): Fact<T> {
   return { status: "known", value };
@@ -107,6 +163,8 @@ export function buildProject(input: AnalysisInput): ProjectModel {
   const actions: WorkflowModel[] = [];
   const dockerfiles: DockerfileModel[] = [];
   const manifests: PackageManifest[] = [];
+  const nixFiles: NixFile[] = [];
+  const flakeLocks: FlakeLock[] = [];
 
   for (const file of input.files) {
     try {
@@ -121,6 +179,10 @@ export function buildProject(input: AnalysisInput): ProjectModel {
         dockerfiles.push(parseDockerfile(file.path, file.content));
       } else if (isManifestPath(file.path) && !file.path.includes("node_modules/")) {
         manifests.push(parseManifest(file.path, file.content));
+      } else if (isNixPath(file.path)) {
+        nixFiles.push(parseNix(file.path, file.content));
+      } else if (isFlakeLockPath(file.path)) {
+        flakeLocks.push(parseFlakeLock(file.path, file.content));
       }
     } catch (error) {
       parseProblems.push({
@@ -188,6 +250,30 @@ export function buildProject(input: AnalysisInput): ProjectModel {
       return [step, ...expand(nested, depth + 1, new Set([...seen, action.path]))];
     });
 
+  const flakes = new Map<string, NixFlake>();
+  const flakeAt = (dir: string): NixFlake => {
+    let flake = flakes.get(dir);
+    if (!flake) {
+      flake = { dir };
+      flakes.set(dir, flake);
+    }
+    return flake;
+  };
+  for (const file of nixFiles) {
+    if ((file.path.split("/").pop() ?? "") !== "flake.nix") continue;
+    const flake = flakeAt(file.dir);
+    flake.nix = file;
+    const info = flakeInfo(file);
+    if (info) flake.info = info;
+  }
+  for (const lock of flakeLocks) flakeAt(lock.dir).lock = lock;
+  const nix: NixModel = {
+    files: nixFiles,
+    locks: flakeLocks,
+    flakes: [...flakes.values()].sort((a, b) => a.dir.localeCompare(b.dir)),
+  };
+  const usesNix = nixFiles.length > 0 || flakeLocks.length > 0 || workflowUsesNix([...workflows, ...actions]);
+
   return {
     files,
     workflows,
@@ -195,12 +281,14 @@ export function buildProject(input: AnalysisInput): ProjectModel {
     dockerfiles,
     manifests,
     ...(rootManifest ? { rootManifest } : {}),
+    nix,
     facts: {
       packageManager: packageManager || complete ? known(packageManager) : unknown(packageManager),
       monorepoTools: complete || tools.length > 0 ? known(tools) : unknown(tools),
       workspaceGlobs: repository ? known(globs) : unknown(globs),
       workspacePackages: repository ? known(workspacePackages) : unknown(workspacePackages),
       isMonorepo: isMonorepo || repository ? known(isMonorepo) : unknown(false),
+      usesNix: usesNix || complete ? known(usesNix) : unknown(false),
       lockfiles,
       dockerignoreDirs,
     },
