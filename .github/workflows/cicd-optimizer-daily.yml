@@ -1,0 +1,69 @@
+# The daily entry point that applies CI/CD Optimizer to this repository and to every project registered in projects/.
+#   scan    Lints the default branch with .github/ci-cd-optimizer.yml, uploads SARIF to code scanning, and opens or
+#           updates finding issues and autofix pull requests (cicd-optimizer-scan.yml).
+#   review  Re-reviews every registered project, re-verifying consent, and signs the public reports
+#           (review-scheduled.yml).
+#   audit   Report only: lints this repository with every rule and lists disable comments that no longer suppress
+#           anything, in the job summary and a SARIF artifact. It never fails on findings and is not uploaded to code
+#           scanning, where it would replace the scan's results because both use the same SARIF category.
+# Recipe rollout stays weekly (recipe-rollout.yml): each canary wave needs time to collect compatibility data.
+name: CI/CD Optimizer daily
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Called workflows keep their own concurrency groups (cicd-optimizer-scan, review-scheduled); reusing this group in
+# them would deadlock the run.
+concurrency:
+  group: cicd-optimizer-daily
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  # A called workflow can only narrow these permissions, so each caller job grants what its callee's jobs request.
+  scan:
+    uses: ./.github/workflows/cicd-optimizer-scan.yml
+    permissions:
+      actions: read
+      contents: write
+      issues: write
+      pull-requests: write
+      security-events: write
+    secrets:
+      CICD_OPTIMIZER_APP_PRIVATE_KEY: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
+      CICD_OPTIMIZER_TOKEN: ${{ secrets.CICD_OPTIMIZER_TOKEN }}
+      COPILOT_ASSIGN_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
+
+  review:
+    uses: ./.github/workflows/review-scheduled.yml
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Audit with every rule
+        run: |
+          npm run --silent cli -- lint --preset all --report-unused-disable-directives warn --fail-on never \
+            --format markdown --output "$GITHUB_STEP_SUMMARY" --sarif "$RUNNER_TEMP/cicd-optimizer-audit.sarif"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cicd-optimizer-audit-sarif
+          path: ${{ runner.temp }}/cicd-optimizer-audit.sarif
+          if-no-files-found: error
+          retention-days: 7

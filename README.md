@@ -11,7 +11,7 @@ It is tuned for agentic development, where many small, agent-authored changes ma
 
 One rule engine runs behind every entry point: a standalone linter, a CLI, a GitHub Action and reusable workflow, git
 hooks, a self-hosted GitHub App, and an [OSS-Fuzz](https://github.com/google/oss-fuzz)-style review program that
-reviews other projects' CI/CD from a pull request and publishes signed weekly reports.
+reviews other projects' CI/CD from a pull request and publishes signed daily reports.
 
 | Familiar tool | CI/CD Optimizer equivalent |
 |---|---|
@@ -20,7 +20,7 @@ reviews other projects' CI/CD from a pull request and publishes signed weekly re
 | Dependabot version updates | Grouped autofix pull requests with `@cicd-optimizer rebase / recreate / ignore` commands |
 | Dependabot compatibility score | Recipes: promoted experiment fixes rolled out to other repos in waves gated by CI pass rate |
 | actionlint, hadolint, zizmor | `cicd-lint`: path and stdin input, `--base` diffs, autofix, SARIF, inline suppressions, local rules |
-| OSS-Fuzz project onboarding | [Review program](#reviewing-other-projects-oss-fuzz-style): register a public repository by pull request; weekly re-reviews with Sigstore-signed reports |
+| OSS-Fuzz project onboarding | [Review program](#reviewing-other-projects-oss-fuzz-style): register a public repository by pull request; daily re-reviews with Sigstore-signed reports |
 | — | Duration alerts: robust z-score spikes and Mann-Whitney step regressions per workflow and job |
 | — | Telemetry reports: Gantt timeline, job dependency graph, critical path, slowest steps |
 
@@ -51,7 +51,7 @@ reviews other projects' CI/CD from a pull request and publishes signed weekly re
 | **Run telemetry** | After each workflow run: a Gantt chart, critical path, and slowest steps, plus duration alerts | [cicd-optimizer-telemetry.yml](examples/workflows/cicd-optimizer-telemetry.yml) | [duration alerts](docs/issues-and-alerts.md#duration-alerts) |
 | **GitHub App** | Self-hosted Probot service: pull request checks, scans, telemetry, and `@cicd-optimizer` commands, with no workflows in target repositories | the [Dockerfile](Dockerfile) image, or `npm start` | [github-app.md](docs/github-app.md) |
 | **Guided setup** | Registers and installs the App, stores its credentials, and authorizes Copilot coding agent handoff, in a browser or as an MCP App panel in chat | `npm run setup -- --repo OWNER/REPOSITORY` | [setup.md](docs/setup.md#3-github-app-owner) |
-| **Review program** | OSS-Fuzz-style registration of a public repository, an intake review on the pull request, and signed weekly re-reviews | a pull request that adds `projects/<name>/project.yaml` | [review program](docs/review-program/README.md) |
+| **Review program** | OSS-Fuzz-style registration of a public repository, an intake review on the pull request, and signed daily re-reviews | a pull request that adds `projects/<name>/project.yaml` | [review program](docs/review-program/README.md) |
 | **Experiments and recipes** | Agentic hill climbing on rules and pipelines, and wave rollout of winning fixes to other repositories | the workflows in [.github/workflows](.github/workflows/) | [experiments.md](docs/experiments.md), [recipes.md](docs/recipes.md) |
 
 There is no public hosted App and the package is not published to npm. Run the App on your own infrastructure, and
@@ -155,7 +155,7 @@ The [project review program](docs/review-program/README.md) does for CI/CD confi
 [OSS-Fuzz](https://google.github.io/oss-fuzz/getting-started/accepting-new-projects/) does for fuzzing. A
 maintainer opens a pull request in this repository that registers a public repository. The program checks consent,
 reviews the repository's default branch, and comments on the pull request. After merge, it re-reviews the project
-every week and signs the results.
+every day and signs the results.
 
 Reviews are static analysis through the GitHub API only. The program never checks out, builds, or runs a
 registered project's code.
@@ -179,15 +179,17 @@ registered project's code.
    holds. For example, the repository must be public, not a fork, not archived, and its `repository_id` must match.
    The consent file must name this registry and project, and the pull request author must be a listed contact. An
    author can have at most 3 other open submissions.
-5. **Merge and weekly reviews.** A code owner merges. [Review scheduled](.github/workflows/review-scheduled.yml)
-   then re-reviews every registered project each Monday, and re-verifies consent every time.
+5. **Merge and daily reviews.** A code owner merges. Every day, the
+   [daily workflow](.github/workflows/cicd-optimizer-daily.yml) calls
+   [Review scheduled](.github/workflows/review-scheduled.yml), which re-reviews every registered project and
+   re-verifies consent every time.
 
 ### What the project gets
 
 | Result | Where | Signed |
 |---|---|---|
 | Findings table with suggested fixes, updated on each push | A comment on the submission pull request | No. It comes from a `pull_request` run that the submitter controls. |
-| Weekly summary | The [Review scheduled](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/review-scheduled.yml) job summary | — |
+| Daily summary | The `review` job summary of the [CI/CD Optimizer daily](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/cicd-optimizer-daily.yml) run | — |
 | Public JSON report per project | The `review-reports` artifact, kept 90 days | Yes. Build provenance attestation through Sigstore. |
 | Full detail, including withheld findings | `GITHUB_TOKEN=$(gh auth token) npm run cli -- review run projects/<name>/project.yaml` | — |
 
@@ -196,7 +198,7 @@ Anyone can check that a report is the program's own unmodified output:
 ```sh
 gh attestation verify reports/<project>.json \
   --repo MSFT-TKENDRICK/ci-cd-optimizer \
-  --signer-workflow MSFT-TKENDRICK/ci-cd-optimizer/.github/workflows/review-scheduled.yml \
+  --signer-workflow MSFT-TKENDRICK/ci-cd-optimizer/.github/workflows/review-scheduled.yml@refs/heads/main \
   --source-ref refs/heads/main \
   --deny-self-hosted-runners
 ```
@@ -333,9 +335,10 @@ What is exercised continuously in this repository, and what is not yet:
 | Area | Status |
 |---|---|
 | Linter, CLI, Action, reusable workflow | Tested in CI on every push. The Action and reusable workflow lint this repository. |
-| `scan` and `telemetry` workflows | Run daily and after every CI run in this repository. |
+| Daily self-apply ([cicd-optimizer-daily.yml](.github/workflows/cicd-optimizer-daily.yml)) | Runs here every day: scans this repository (code scanning, finding issues, fix pull requests), re-reviews and signs every registered project, and audits this repository with every rule and for stale suppressions. The scan also runs after pushes to `main` that change CI files. |
+| `telemetry` workflow | Runs after every CI and Container run in this repository. |
 | Container image and App service | Built in CI and smoke-tested against a synthetic GitHub API, in direct and Postgres queue modes. Pushed to `ghcr.io/msft-tkendrick/ci-cd-optimizer` on every push to `main`. |
-| Review program intake and signed weekly reports | Running here, with this repository registered. `gh attestation verify` passes on published reports and rejects modified copies. |
+| Review program intake and signed daily reports | Running here, with this repository registered. `gh attestation verify` passes on published reports and rejects modified copies. |
 | pre-commit hook | The hook script has unit tests, and the hook was verified with pre-commit 4.6.2 in a consumer repository. pre-commit itself does not run in CI. |
 | Experiment generator and grader | Scheduled here but failing: the generator cannot open pull requests until the Actions pull request setting or `CICD_OPTIMIZER_TOKEN` is set, and the grader reports failure while no experiment is running. No experiment has completed end to end yet. |
 | Recipe publish and rollout | Not yet run here: no promoted pipeline experiment exists. |
@@ -347,8 +350,8 @@ What is exercised continuously in this repository, and what is not yet:
 
 | Credential | Used by | Needed for |
 |---|---|---|
-| `GITHUB_TOKEN` | All workflows | Lint, SARIF upload, issues, telemetry checks, review intake and weekly reviews |
-| `id-token: write`, `attestations: write` | The `sign` job in review-scheduled only | Signing the weekly review reports |
+| `GITHUB_TOKEN` | All workflows | Lint, SARIF upload, issues, telemetry checks, review intake and daily reviews |
+| `id-token: write`, `attestations: write` | The `sign` job in review-scheduled only (the daily workflow's `review` job grants them) | Signing the daily review reports |
 | `secrets.CICD_OPTIMIZER_TOKEN` (optional App token or fine-grained PAT) | Scan, gh-aw safe outputs, recipe PRs | Pushing fixes that edit `.github/workflows` (`workflows` permission); PRs that trigger CI |
 | `vars.CICD_OPTIMIZER_APP_ID` + `secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY` | Scan, recipe rollout | Installation tokens; cross-repository recipe PRs |
 | `secrets.COPILOT_ASSIGN_TOKEN` (user token) | Scan, telemetry, rollout | Assigning issues to the Copilot coding agent |

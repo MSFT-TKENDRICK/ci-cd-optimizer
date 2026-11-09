@@ -5,7 +5,7 @@ in the spirit of [OSS-Fuzz](https://google.github.io/oss-fuzz/getting-started/ac
 GitHub Actions workflows, Dockerfiles, lockfiles, and related build and release files. A maintainer opens a pull
 request here that registers the repository. The program checks that the repository consents, lints its default
 branch through the GitHub API, and posts the results on the pull request. Registered projects are then re-reviewed
-every week.
+every day.
 
 The review is static analysis through the GitHub API only. The program never checks out, builds, or runs your code.
 
@@ -61,7 +61,7 @@ The review is static analysis through the GitHub API only. The program never che
    results as a comment on the pull request, and sets the **`review-intake/trusted`** commit status. That status is
    the one that must pass.
 
-5. A code owner reviews and merges the pull request. After that, the project is reviewed every week.
+5. A code owner reviews and merges the pull request. After that, the project is reviewed every day.
 
 ## Acceptance criteria
 
@@ -84,7 +84,7 @@ activity, or repositories without CI/CD configuration to review.
 
 `.github/ci-cd-optimizer-review.yml` must be at most 4 KB and is parsed with the same strict rules as
 `project.yaml`. It is read again at the default branch's current commit **on every review**, including the
-weekly re-reviews.
+daily re-reviews.
 
 | Key | Meaning |
 | --- | --- |
@@ -102,8 +102,9 @@ it.
 - **On the submission pull request:** a comment with the review status and the CI/CD findings from your default
   branch, as a table of severity, rule, location, message, and suggested fix, with links to the rule docs. Each
   new push to the pull request updates the same comment.
-- **Weekly:** the scheduled workflow re-reviews every registered project. The summary appears in the
-  [Actions tab](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/review-scheduled.yml), and
+- **Daily:** the [daily workflow](../../.github/workflows/cicd-optimizer-daily.yml) re-reviews every registered
+  project. The summary appears in the
+  [Actions tab](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/cicd-optimizer-daily.yml), and
   each project's public report is published as signed JSON (see [below](#verifying-signed-results)).
 - **On demand:** run the same review yourself with full detail, including the findings that public reports
   withhold:
@@ -121,26 +122,31 @@ at most 200 files of at most 200 KB each, and the report says when it covered on
 
 ## Verifying signed results
 
-Each weekly run uploads a `review-reports` artifact with one public (redacted) JSON report per project, named
+Each daily run uploads a `review-reports` artifact with one public (redacted) JSON report per project, named
 `<project>.json`, and keeps it for 90 days. A separate job signs every report with a
 [build provenance attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations)
 through Sigstore. The attestation binds the file's SHA-256 digest to this repository, the
-`review-scheduled.yml` workflow, the commit it ran from, and a GitHub-hosted runner. Anyone can therefore check
+`review-scheduled.yml` workflow (the signer even when the daily workflow calls it), the commit it ran from, and a
+GitHub-hosted runner. Anyone can therefore check
 that a report they were given is the program's own, unmodified output and not a copy someone edited:
 
 ```sh
-RUN=$(gh run list --repo MSFT-TKENDRICK/ci-cd-optimizer --workflow review-scheduled.yml \
-  --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+# The newest run on main that signed its reports, even if another job in that run failed.
+RUN=$(gh api "repos/MSFT-TKENDRICK/ci-cd-optimizer/actions/artifacts?name=review-attestation&per_page=100" --jq '
+  [.artifacts[] | select((.expired | not) and .workflow_run.head_branch == "main"
+    and .workflow_run.head_repository_id == .workflow_run.repository_id)]
+  | max_by(.created_at) | .workflow_run.id')
 gh run download "$RUN" --repo MSFT-TKENDRICK/ci-cd-optimizer -n review-reports -D reports
 gh attestation verify reports/<project>.json \
   --repo MSFT-TKENDRICK/ci-cd-optimizer \
-  --signer-workflow MSFT-TKENDRICK/ci-cd-optimizer/.github/workflows/review-scheduled.yml \
+  --signer-workflow MSFT-TKENDRICK/ci-cd-optimizer/.github/workflows/review-scheduled.yml@refs/heads/main \
   --source-ref refs/heads/main \
   --deny-self-hosted-runners
 ```
 
-Verification fails if a single byte of the report changed, or if it was signed by any other workflow, branch, or
-runner. The attestation is also listed on the repository's
+The signer workflow's `@refs/heads/main` pins the reusable workflow's branch; `--source-ref` independently pins
+the caller's source branch. Verification fails if a single byte of the report changed, either branch differs,
+the signing workflow differs, or the runner is self-hosted. The attestation is also listed on the repository's
 [Attestations page](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/attestations). To verify offline, download
 the `review-attestation` artifact from the same run and add `--bundle <file>.jsonl`.
 
