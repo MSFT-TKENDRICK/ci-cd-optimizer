@@ -90,6 +90,14 @@ jobs:
       - uses: ./.github/actions/setup
       - run: npm run lint
 
+  lint-reusable:
+    # Dogfoods the reusable linter workflow at this commit; callers pin `uses:` and `tool-ref` to a SHA.
+    uses: ./.github/workflows/lint-reusable.yml
+    permissions:
+      contents: read
+    with:
+      tool-ref: ${{ github.sha }}
+
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

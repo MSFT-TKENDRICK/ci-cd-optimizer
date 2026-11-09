@@ -69,6 +69,77 @@ jobs:
       const rule = makeRule("demo/a", (report) => report({ path: "Dockerfile", line: 2, message: "unpinned" }));
       expect(lint(input({ Dockerfile: dockerfile }), { config: config(), rules: [rule] }).diagnostics).toEqual([]);
     });
+
+    it("records each directive separately, keeping the existing line and file maps", () => {
+      const text = "# cicd-optimizer-disable-file demo/a\n# cicd-optimizer-disable-next-line demo/b, demo/c -- why\non: push\n# cicd-optimizer-disable-next-line\njobs: {}\n";
+      const entry = collectSuppressions({ path: WORKFLOW, content: text });
+      expect(entry.file).toEqual(new Set(["demo/a"]));
+      expect(entry.lines.get(3)).toEqual(new Set(["demo/b", "demo/c"]));
+      expect(entry.lines.get(5)).toBe("all");
+      expect(entry.directives.map(({ line, kind, target, ids }) => ({ line, kind, target, ids }))).toEqual([
+        { line: 1, kind: "file", target: undefined, ids: ["demo/a"] },
+        { line: 2, kind: "next-line", target: 3, ids: ["demo/b", "demo/c"] },
+        { line: 4, kind: "next-line", target: 5, ids: "all" },
+      ]);
+    });
+  });
+
+  describe("unused directives", () => {
+    const run = (text: string, rules: ReturnType<typeof makeRule>[], extra: Parameters<typeof input>[1] = {}, overrides: Parameters<typeof config>[0] = {}) =>
+      lint(input({ [WORKFLOW]: text }, extra), { config: config(overrides), rules, reportUnusedDirectives: true });
+
+    it("is omitted unless requested", () => {
+      const result = lint(input({ [WORKFLOW]: WORKFLOW_TEXT }), { config: config(), rules: [makeRule("demo/a")] });
+      expect(result.unusedDirectives).toBeUndefined();
+    });
+
+    it("reports nothing for directives that suppressed a finding", () => {
+      expect(run(WORKFLOW_TEXT, [makeRule("demo/a", at(7))]).unusedDirectives).toEqual([]);
+    });
+
+    it("reports a directive whose rule found nothing, including rules disabled by configuration", () => {
+      expect(run(WORKFLOW_TEXT, [makeRule("demo/a")]).unusedDirectives).toEqual([{ path: WORKFLOW, line: 4, kind: "next-line", ids: ["demo/a"] }]);
+      const disabled = run(WORKFLOW_TEXT, [makeRule("demo/a", at(7))], {}, { rules: { "demo/a": "off" } });
+      expect(disabled.unusedDirectives).toEqual([{ path: WORKFLOW, line: 4, kind: "next-line", ids: ["demo/a"] }]);
+    });
+
+    it("reports only the unused ids of a multi-id directive, and unknown ids", () => {
+      const text = WORKFLOW_TEXT.replace("demo/a -- known slow runner", "demo/a demo/b,nope/x");
+      const result = run(text, [makeRule("demo/a", at(7)), makeRule("demo/b")]);
+      expect(result.unusedDirectives).toEqual([{ path: WORKFLOW, line: 4, kind: "next-line", ids: ["demo/b", "nope/x"] }]);
+    });
+
+    it("marks every directive that covers a suppressed finding", () => {
+      const text = `on: push\n# cicd-optimizer-disable-next-line demo/a\n# cicd-optimizer-disable-next-line demo/a\njobs: {}\n`;
+      const result = run(text, [makeRule("demo/a", at(4))]);
+      expect(result.unusedDirectives).toEqual([]);
+      expect(result.suppressed).toBe(1);
+    });
+
+    it("reports blanket and file directives that suppressed nothing", () => {
+      const text = `# cicd-optimizer-disable-file demo\non: push\n# cicd-optimizer-disable-next-line\njobs: {}\n`;
+      expect(run(text, [makeRule("demo/a", at(2))]).unusedDirectives).toEqual([{ path: WORKFLOW, line: 3, kind: "next-line", ids: [] }]);
+      expect(run(text, [makeRule("other/a", at(4))]).unusedDirectives).toEqual([{ path: WORKFLOW, line: 1, kind: "file", ids: ["demo"] }]);
+    });
+
+    it("keeps directives naming skipped or crashed rules, and blanket directives when any rule was skipped", () => {
+      const text = `on: push\n# cicd-optimizer-disable-next-line demo/change, demo\n# cicd-optimizer-disable-next-line crash/a\njobs: {}\n# cicd-optimizer-disable-file\n`;
+      const rules = [
+        makeRule("demo/change", at(4), { requires: ["change-set"] }),
+        makeRule("crash/a", () => {
+          throw new Error("boom");
+        }),
+      ];
+      const result = run(text, rules);
+      expect(result.skipped.map((skip) => skip.ruleId).sort()).toEqual(["crash/a", "demo/change"]);
+      expect(result.unusedDirectives).toEqual([]);
+    });
+
+    it("reports nothing for a partial inventory, a disabled configuration, or a file that failed to parse", () => {
+      expect(run(WORKFLOW_TEXT, [makeRule("demo/a")], { inventoryComplete: false }).unusedDirectives).toEqual([]);
+      expect(run(WORKFLOW_TEXT, [makeRule("demo/a")], {}, { enabled: false }).unusedDirectives).toEqual([]);
+      expect(run(`${WORKFLOW_TEXT}jobs: [\n`, [makeRule("demo/a")]).unusedDirectives).toEqual([]);
+    });
   });
 
   describe("fingerprints", () => {

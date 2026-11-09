@@ -22,6 +22,14 @@ export function stylish(result: LintResult): string {
     lines.push("");
   }
   for (const problem of result.parseProblems) lines.push(`${problem.path}:${problem.line} parse error: ${problem.message}`);
+  const docs = new Map<string, string>();
+  for (const diagnostic of result.diagnostics) docs.set(diagnostic.ruleId, diagnostic.docsUrl);
+  if (docs.size > 0) {
+    const width = Math.max(...[...docs.keys()].map((id) => id.length));
+    lines.push("Rule docs:");
+    for (const id of [...docs.keys()].sort()) lines.push(`  ${id.padEnd(width)}  ${docs.get(id) ?? ""}`);
+    lines.push("");
+  }
   const count = (severity: Diagnostic["severity"]) => result.diagnostics.filter((d) => d.severity === severity).length;
   const fixable = result.diagnostics.filter((d) => d.fix).length;
   lines.push(

@@ -8488,10 +8488,10 @@ function part(before, x, o, after2 = "") {
     o.dynamic = true;
   return isFragment(x) && x.strings === joinStrings ? joined(x.args[0], o, before, after2) : x instanceof Join ? joined(x, o, "", "") : x instanceof Builder ? helper(before, x, o) : isFragment(x) ? fragment(x, o) : x instanceof Identifier ? x.value : Array.isArray(x) && isFragment(x[0]) ? x.reduce((acc, x2) => acc + " " + fragment(x2, o), "") : value(x, o);
 }
-function joined(join8, o, before, after2) {
+function joined(join9, o, before, after2) {
   let text4 = "";
-  join8.items.forEach((item, i) => {
-    i > 0 && (text4 = spaced(text4, fragment(join8.separator, o)));
+  join9.items.forEach((item, i) => {
+    i > 0 && (text4 = spaced(text4, fragment(join9.separator, o)));
     text4 = spaced(text4, part("", item, o));
   });
   before && text4 && !/\s$/.test(before) && !/^\s/.test(text4) && (text4 = " " + text4);
@@ -9929,8 +9929,8 @@ function pgpass(file, host, port, database, user) {
     return null;
   let text4;
   try {
-    const stat5 = fs.statSync(file);
-    if (!stat5.isFile() || process.platform !== "win32" && stat5.mode & 63)
+    const stat7 = fs.statSync(file);
+    if (!stat7.isFile() || process.platform !== "win32" && stat7.mode & 63)
       return null;
     text4 = fs.readFileSync(file, "utf8");
   } catch (_) {
@@ -18453,6 +18453,7 @@ var DEFAULT_CONFIG = {
   ignorePaths: ["vendor/**", "node_modules/**", "**/node_modules/**", "dist/**", "build/**", ".github/workflows/*.lock.yml"],
   failOn: "error",
   limits: { maxFiles: 2e3, maxFileBytes: 512e3 },
+  localRules: [],
   issues: {
     enabled: false,
     minSeverity: "error",
@@ -18638,6 +18639,7 @@ function validateConfig(input2, rules9) {
     "ignorePaths",
     "failOn",
     "limits",
+    "localRules",
     "issues",
     "fixes",
     "alerts",
@@ -18650,6 +18652,15 @@ function validateConfig(input2, rules9) {
   const ruleIds = rules9.map((rule) => rule.meta.id);
   const rulesetNames = [...new Set(rules9.map((rule) => rule.meta.ruleset))];
   const config = structuredClone(DEFAULT_CONFIG);
+  if (raw.localRules !== void 0) {
+    if (Array.isArray(raw.localRules) && raw.localRules.every((entry) => typeof entry === "string")) {
+      config.localRules = [...raw.localRules];
+    } else {
+      v.problem("localRules", "Expected a list of repository-relative .js or .mjs paths.");
+    }
+  }
+  const skipLocal = config.localRules.length > 0 && !rules9.some((rule) => rule.meta.ruleset === "local");
+  const isSkippedLocal = (id) => skipLocal && id.startsWith("local/");
   config.enabled = v.boolean("enabled", raw.enabled, true);
   config.extends = v.strings("extends", raw.extends, DEFAULT_CONFIG.extends).filter((preset, index) => {
     if (PRESETS.includes(preset)) return true;
@@ -18657,6 +18668,7 @@ function validateConfig(input2, rules9) {
     return false;
   });
   for (const [name, value2] of Object.entries(v.record("rulesets", raw.rulesets))) {
+    if (skipLocal && name === "local") continue;
     if (!rulesetNames.includes(name)) {
       v.problem(`rulesets.${name}`, `Unknown ruleset "${name}".${didYouMean(name, rulesetNames)}`);
       continue;
@@ -18665,6 +18677,7 @@ function validateConfig(input2, rules9) {
   }
   for (const [rawId, value2] of Object.entries(v.record("rules", raw.rules))) {
     const id = DEPRECATED_RULE_IDS[rawId] ?? rawId;
+    if (isSkippedLocal(id)) continue;
     if (id !== rawId) v.problem(`rules.${rawId}`, `Rule "${rawId}" is deprecated; use "${id}".`);
     const rule = rules9.find((candidate) => candidate.meta.id === id);
     if (!rule) {
@@ -18699,6 +18712,7 @@ function validateConfig(input2, rules9) {
   v.unknownKeys("issues.copilot", copilot, ["baseBranch", "customInstructions", "customAgent", "model"]);
   const issueRules = {};
   for (const [id, value2] of Object.entries(v.record("issues.rules", issues.rules))) {
+    if (isSkippedLocal(id)) continue;
     if (!ruleIds.includes(id)) v.problem(`issues.rules.${id}`, `Unknown rule "${id}".${didYouMean(id, ruleIds)}`);
     else issueRules[id] = v.boolean(`issues.rules.${id}`, value2, true);
   }
@@ -19095,7 +19109,7 @@ function merge(existing, next) {
   return /* @__PURE__ */ new Set([...existing ?? [], ...next]);
 }
 function collectSuppressions(file) {
-  const result = { file: void 0, lines: /* @__PURE__ */ new Map() };
+  const result = { file: void 0, lines: /* @__PURE__ */ new Map(), directives: [] };
   if (!file.content.includes("cicd-optimizer-disable")) return result;
   const isYaml = /\.ya?ml$/i.test(file.path);
   const blocks = isYaml ? parseYaml(file.path, file.content).blockScalarLines : [];
@@ -19108,6 +19122,14 @@ function collectSuppressions(file) {
     const match2 = DIRECTIVE.exec(trimmed);
     if (!match2) return;
     const ids2 = parseIds(match2[2] ?? "");
+    const directive = {
+      line: lineNumber,
+      kind: match2[1] === "file" ? "file" : "next-line",
+      ids: ids2 === "all" ? "all" : [...ids2],
+      used: /* @__PURE__ */ new Set(),
+      usedAll: false
+    };
+    result.directives.push(directive);
     if (match2[1] === "file") {
       result.file = merge(result.file, ids2);
       return;
@@ -19118,13 +19140,44 @@ function collectSuppressions(file) {
       if (candidate !== "" && !candidate.startsWith("#")) break;
       target += 1;
     }
+    directive.target = target;
     result.lines.set(target, merge(result.lines.get(target), ids2));
   });
   return result;
 }
-function suppressed(entry, diagnostic) {
-  if (entry === void 0) return false;
-  return entry === "all" || entry.has(diagnostic.ruleId) || entry.has(diagnostic.ruleset);
+function suppress(entry, diagnostic) {
+  let hit = false;
+  for (const directive of entry.directives) {
+    if (directive.kind === "next-line" && directive.target !== diagnostic.line) continue;
+    if (directive.ids === "all") {
+      directive.usedAll = true;
+      hit = true;
+      continue;
+    }
+    for (const id of directive.ids) {
+      if (id === diagnostic.ruleId || id === diagnostic.ruleset) {
+        directive.used.add(id);
+        hit = true;
+      }
+    }
+  }
+  return hit;
+}
+function unusedDirectives(suppressionsFor, paths, skipped, rules9) {
+  const skippedIds = new Set(skipped.map((skip2) => skip2.ruleId));
+  const skippedRulesets = new Set(rules9.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
+  const result = [];
+  for (const path of paths) {
+    for (const directive of suppressionsFor(path)?.directives ?? []) {
+      if (directive.ids === "all") {
+        if (!directive.usedAll && skipped.length === 0) result.push({ path, line: directive.line, kind: directive.kind, ids: [] });
+        continue;
+      }
+      const ids2 = [...new Set(directive.ids)].filter((id) => !directive.used.has(id) && !skippedIds.has(id) && !skippedRulesets.has(id));
+      if (ids2.length > 0) result.push({ path, line: directive.line, kind: directive.kind, ids: ids2 });
+    }
+  }
+  return result;
 }
 function unmet(requires, input2) {
   return requires.find((capability) => {
@@ -19180,7 +19233,7 @@ function lint(rawInput, options) {
         impact: descriptor.impact ?? rule.meta.impact,
         confidence: descriptor.confidence ?? "high",
         fingerprint: "",
-        docsUrl: docsUrl(rule.meta.id),
+        docsUrl: rule.meta.docsUrl ?? docsUrl(rule.meta.id),
         discriminator: descriptor.key ?? descriptor.message,
         ...descriptor.suggestion !== void 0 ? { suggestion: descriptor.suggestion } : {},
         ...descriptor.related ? { related: descriptor.related } : {},
@@ -19217,7 +19270,7 @@ function lint(rawInput, options) {
     seen.add(dedupeKey);
     const { discriminator, ...diagnostic } = item;
     const directives = suppressionsFor(diagnostic.path);
-    if (directives && (suppressed(directives.file, diagnostic) || suppressed(directives.lines.get(diagnostic.line), diagnostic))) {
+    if (directives && suppress(directives, diagnostic)) {
       suppressedCount += 1;
       continue;
     }
@@ -19241,6 +19294,8 @@ function lint(rawInput, options) {
   diagnostics.sort(
     (left, right) => left.path.localeCompare(right.path) || left.line - right.line || left.column - right.column || left.ruleId.localeCompare(right.ruleId)
   );
+  const reportUnused = options.reportUnusedDirectives === true && options.config.enabled && input2.inventoryComplete;
+  const unparsed = new Set(project.parseProblems.map((problem) => problem.path));
   return {
     diagnostics,
     skipped,
@@ -19248,7 +19303,15 @@ function lint(rawInput, options) {
     filesAnalyzed: input2.files.filter((file) => isRelevant(file.path)).length,
     rulesRun,
     suppressed: suppressedCount,
-    durationMs: Math.round(performance.now() - started)
+    durationMs: Math.round(performance.now() - started),
+    ...options.reportUnusedDirectives ? {
+      unusedDirectives: reportUnused ? unusedDirectives(
+        suppressionsFor,
+        input2.files.map((file) => file.path).filter((path) => !unparsed.has(path)),
+        skipped,
+        options.rules
+      ) : []
+    } : {}
   };
 }
 function exceedsThreshold(diagnostics, failOn) {
@@ -19311,8 +19374,8 @@ var VERSION = "0.2.0";
 
 // src/cli/experiments.ts
 var import_yaml20 = __toESM(require_dist(), 1);
-import { appendFile, readdir as readdir3, readFile as readFile4, stat as stat3 } from "node:fs/promises";
-import { join as join6 } from "node:path";
+import { appendFile, readdir as readdir3, readFile as readFile4, stat as stat5 } from "node:fs/promises";
+import { join as join7 } from "node:path";
 import { parseArgs as parseArgs2 } from "node:util";
 
 // src/github/client.ts
@@ -19996,8 +20059,8 @@ async function loadCorpus(directory) {
   );
 }
 async function loadEngine(modulePath, expectedVersion) {
-  const { pathToFileURL } = await import("node:url");
-  const engine = await import(pathToFileURL(modulePath).href);
+  const { pathToFileURL: pathToFileURL2 } = await import("node:url");
+  const engine = await import(pathToFileURL2(modulePath).href);
   if (engine.ENGINE_API_VERSION !== expectedVersion) {
     throw new Error(`Engine at ${modulePath} speaks API v${String(engine.ENGINE_API_VERSION)}; the evaluator expects v${expectedVersion}.`);
   }
@@ -20764,8 +20827,8 @@ async function changedSince(root, base2) {
 }
 
 // src/cli/lint.ts
-import { readFile as readFile3, writeFile as writeFile2 } from "node:fs/promises";
-import { join as join5 } from "node:path";
+import { mkdir as mkdir2, readFile as readFile3, stat as stat4, writeFile as writeFile2 } from "node:fs/promises";
+import { dirname as dirname2, isAbsolute as isAbsolute4, join as join6, posix as posix3, relative as relative5 } from "node:path";
 import { parseArgs } from "node:util";
 
 // src/lint/formatters/index.ts
@@ -20788,6 +20851,14 @@ function stylish(result) {
     lines.push("");
   }
   for (const problem of result.parseProblems) lines.push(`${problem.path}:${problem.line} parse error: ${problem.message}`);
+  const docs = /* @__PURE__ */ new Map();
+  for (const diagnostic of result.diagnostics) docs.set(diagnostic.ruleId, diagnostic.docsUrl);
+  if (docs.size > 0) {
+    const width = Math.max(...[...docs.keys()].map((id) => id.length));
+    lines.push("Rule docs:");
+    for (const id of [...docs.keys()].sort()) lines.push(`  ${id.padEnd(width)}  ${docs.get(id) ?? ""}`);
+    lines.push("");
+  }
   const count = (severity) => result.diagnostics.filter((d2) => d2.severity === severity).length;
   const fixable = result.diagnostics.filter((d2) => d2.fix).length;
   lines.push(
@@ -20901,13 +20972,117 @@ function format(name, result, rules9, version) {
   }
 }
 
+// src/cli/local-rules.ts
+import { realpath, stat as stat3 } from "node:fs/promises";
+import { isAbsolute as isAbsolute3, join as join5, posix as posix2, relative as relative4, win32 } from "node:path";
+import { pathToFileURL } from "node:url";
+var LOCAL_RULE_ID = /^local\/[a-z0-9][a-z0-9-]*$/;
+var SCHEME = /^[a-z][a-z0-9+.-]{1,}:/i;
+var SEVERITIES2 = ["info", "warn", "error"];
+var KINDS = ["practice", "policy", "insight"];
+var IMPACTS2 = ["high", "medium", "low"];
+var CAPABILITIES = ["repository", "complete-inventory", "change-set"];
+var isRecord2 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
+var escapes = (path) => path === ".." || path.startsWith("../") || path.startsWith("..\\") || isAbsolute3(path);
+async function resolveModule(root, entry) {
+  const fail = (reason) => new UsageError(`localRules: "${entry}" ${reason}`);
+  if (SCHEME.test(entry)) throw fail("must be a repository-relative path, not a URL.");
+  if (isAbsolute3(entry) || win32.isAbsolute(entry) || posix2.isAbsolute(entry) || /^[\\/]/.test(entry)) {
+    throw fail("must be a repository-relative path, not an absolute path.");
+  }
+  if (entry.includes(":")) throw fail("must be a repository-relative path without drive letters or colons.");
+  const normalized = posix2.normalize(entry.replace(/\\/g, "/"));
+  if (normalized === ".." || normalized.startsWith("../")) throw fail("must stay inside the repository.");
+  if (!/\.(m?js)$/.test(normalized)) throw fail("must be a .js or .mjs file.");
+  const file = join5(root, normalized);
+  const info = await stat3(file).catch(() => void 0);
+  if (!info?.isFile()) throw fail("does not exist.");
+  const [realRoot, realFile] = await Promise.all([realpath(root), realpath(file)]);
+  if (escapes(relative4(realRoot, realFile))) throw fail("resolves outside the repository (symbolic link).");
+  return realFile;
+}
+function validateRule(entry, value2) {
+  const fail = (reason) => new UsageError(`localRules: "${entry}" exports an invalid rule: ${reason}`);
+  if (!isRecord2(value2) || !isRecord2(value2.meta)) throw fail("expected an object with `meta` and `check`.");
+  const meta = value2.meta;
+  const id = typeof meta.id === "string" ? meta.id : "";
+  if (!LOCAL_RULE_ID.test(id)) throw fail(`meta.id must match ${LOCAL_RULE_ID.source} (got ${JSON.stringify(meta.id)}).`);
+  const where = `${id}: `;
+  if (meta.ruleset !== "local") throw fail(`${where}meta.ruleset must be "local".`);
+  if (typeof meta.description !== "string" || meta.description.trim() === "") throw fail(`${where}meta.description must be a non-empty string.`);
+  if (!SEVERITIES2.includes(meta.defaultSeverity)) throw fail(`${where}meta.defaultSeverity must be one of ${SEVERITIES2.join(", ")}.`);
+  if (!KINDS.includes(meta.kind)) throw fail(`${where}meta.kind must be one of ${KINDS.join(", ")}.`);
+  const presets = meta.presets ?? [];
+  if (!Array.isArray(presets) || !presets.every((preset) => PRESETS.includes(preset))) {
+    throw fail(`${where}meta.presets must be a list of ${PRESETS.join(", ")}.`);
+  }
+  const requires = meta.requires ?? [];
+  if (!Array.isArray(requires) || !requires.every((capability) => CAPABILITIES.includes(capability))) {
+    throw fail(`${where}meta.requires must be a list of ${CAPABILITIES.join(", ")}.`);
+  }
+  if (meta.impact !== void 0 && !IMPACTS2.includes(meta.impact)) throw fail(`${where}meta.impact must be one of ${IMPACTS2.join(", ")}.`);
+  if (meta.rationale !== void 0 && typeof meta.rationale !== "string") throw fail(`${where}meta.rationale must be a string.`);
+  if (meta.references !== void 0 && !(Array.isArray(meta.references) && meta.references.every((ref) => typeof ref === "string"))) {
+    throw fail(`${where}meta.references must be a list of strings.`);
+  }
+  if (meta.defaultOptions !== void 0 && !isRecord2(meta.defaultOptions)) throw fail(`${where}meta.defaultOptions must be an object.`);
+  if (meta.validateOptions !== void 0 && typeof meta.validateOptions !== "function") throw fail(`${where}meta.validateOptions must be a function.`);
+  if (meta.docsUrl !== void 0 && typeof meta.docsUrl !== "string") throw fail(`${where}meta.docsUrl must be a string.`);
+  if (typeof value2.check !== "function") throw fail(`${where}check must be a function.`);
+  const check = value2.check;
+  return {
+    meta: {
+      ...meta,
+      id,
+      ruleset: "local",
+      presets: [...presets],
+      requires: [...requires],
+      rationale: meta.rationale ?? "",
+      references: [...meta.references ?? []],
+      impact: meta.impact ?? "medium",
+      defaultOptions: meta.defaultOptions ?? {}
+    },
+    check: (context3) => check.call(value2, context3)
+  };
+}
+async function loadLocalRules(root, entries2, builtins) {
+  const loaded = [];
+  const builtinIds = new Set(builtins.map((rule) => rule.meta.id));
+  for (const entry of entries2) {
+    const real = await resolveModule(root, entry);
+    let module;
+    try {
+      module = await import(pathToFileURL(real).href);
+    } catch (error2) {
+      throw new UsageError(`localRules: "${entry}" failed to load: ${error2 instanceof Error ? error2.message : String(error2)}`);
+    }
+    const exported = module.rules ?? module.default;
+    const candidates = Array.isArray(exported) ? exported : exported === void 0 ? [] : [exported];
+    if (candidates.length === 0) throw new UsageError(`localRules: "${entry}" must export \`rules\` (an array) or a default rule or array of rules.`);
+    for (const candidate of candidates) {
+      const rule = validateRule(entry, candidate);
+      if (builtinIds.has(rule.meta.id) || loaded.some((other) => other.meta.id === rule.meta.id)) {
+        throw new UsageError(`localRules: "${entry}" defines duplicate rule id "${rule.meta.id}".`);
+      }
+      loaded.push(rule);
+    }
+  }
+  return loaded;
+}
+
 // src/cli/lint.ts
-var LINT_HELP = `Usage: ci-cd-optimizer lint [dir] [options]
+var LINT_HELP = `Usage: ci-cd-optimizer lint [paths...] [options]
+       cicd-lint [paths...] [options]
 
 Lints GitHub Actions workflows, Dockerfiles, and package manifests for CI/CD performance and hermeticity.
 
+With no paths the current directory is the lint root, and a single directory argument becomes the root. Any other
+paths are files, directories, or globs relative to the root (--root, default: the current directory). They filter
+the report only: the whole root is still analyzed, because many rules compare files with each other.
+
 Options:
-  -c, --config <file>       Configuration file (default: .github/ci-cd-optimizer.yml in dir)
+  -c, --config <file>       Configuration file (default: .github/ci-cd-optimizer.yml under the root)
+      --root <dir>          Lint root when paths are given (default: the current directory)
   -f, --format <name>       ${FORMATS.join(" | ")} (default: stylish)
   -o, --output <file>       Write the report to a file instead of stdout
       --sarif <file>        Also write a SARIF 2.1.0 report (for code scanning)
@@ -20920,19 +21095,121 @@ Options:
       --scope <scope>       all | changed | introduced (default: introduced with --base, else all)
       --fix                 Apply safe autofixes in place, then report what remains
   -q, --quiet               Report errors only
+      --stdin               Lint standard input in place of the file named by --stdin-filename
+      --stdin-filename <p>  Root-relative path of the --stdin content (decides which rules apply)
+      --report-unused-disable-directives [warn|error|off]
+                            Report cicd-optimizer-disable comments that suppressed nothing (off unless given;
+                            the flag alone means warn)
+      --allow-local-rules   Load the configuration's localRules modules (runs repository code: trusted repos only)
+      --list-rules          List rules (id, default severity, fixable, description) and exit
+      --explain <rule-id>   Explain a rule (rationale, example, effective severity, docs) and exit
+      --print-config        Print the effective configuration and rule severities as JSON and exit
+      --init                Create a starter configuration file (at -c <file> if given) and exit
+  -h, --help                Show this help
+
+Exit codes: 0 nothing at or above --fail-on, 1 findings at or above --fail-on (default: error) or more than
+--max-warnings warnings, 2 usage or configuration error.
 `;
-var SEVERITIES2 = ["off", "info", "warn", "error"];
+var SEVERITIES3 = ["off", "info", "warn", "error"];
 var RANK = { info: 1, warn: 2, error: 3 };
+var UNUSED_FLAG = "--report-unused-disable-directives";
+var UNUSED_DIRECTIVE_RULE_ID = "cicd-optimizer/unused-disable-directive";
+var UNUSED_DIRECTIVE_RULE = {
+  meta: {
+    id: UNUSED_DIRECTIVE_RULE_ID,
+    ruleset: "meta",
+    description: "Suppression comments should still suppress something.",
+    rationale: "A cicd-optimizer-disable comment that no longer matches any finding is stale: the problem it excused is gone, and the comment will silently hide the next regression on that line or in that file.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: [],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://eslint.org/docs/latest/use/command-line-interface#--report-unused-disable-directives"],
+    impact: "low",
+    docsUrl: "https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/blob/main/docs/linter.md#suppressions"
+  },
+  check() {
+  }
+};
+var STARTER_CONFIG = `# ci-cd-optimizer configuration.
+# Reference: https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/blob/main/docs/configuration.md
+# \`cicd-lint --print-config\` shows the effective rules, \`cicd-lint --list-rules\` lists every rule id,
+# and \`cicd-lint --explain <rule-id>\` explains one.
+schemaVersion: 1
+
+# Presets: ${PRESETS.join(", ")}.
+extends:
+  - recommended
+
+# Exit 1 when a finding is at or above this severity: info | warn | error | never.
+failOn: error
+
+# Per-rule severity (off | info | warn | error), or [severity, { options }].
+# rules:
+#   workflow/job-timeout: error
+#   caching/setup-cache: "off"
+
+# Per-ruleset severity.
+# rulesets:
+#   hermeticity: warn
+
+# Globs to skip. Setting this replaces the defaults (vendor, node_modules, dist, build, gh-aw .lock.yml files).
+# ignorePaths:
+#   - vendor/**
+#   - examples/**
+
+# Repository-local rules: JavaScript modules exporting \`local/*\` rules. They run repository code, so they load
+# only with --allow-local-rules. See docs/linter.md#custom-local-rules.
+# localRules:
+#   - .github/cicd-rules/no-latest-tag.mjs
+
+# Suppress findings in workflows and Dockerfiles with comments:
+#   # cicd-optimizer-disable-next-line workflow/job-timeout -- release job is bounded by its environment
+#   # cicd-optimizer-disable-file hermeticity
+`;
 function parseOverride(flag, value2, known2) {
   const index = Math.max(value2.lastIndexOf("="), value2.lastIndexOf(":"));
   const id = index === -1 ? value2 : value2.slice(0, index);
   const severity = index === -1 ? "error" : value2.slice(index + 1);
-  if (!SEVERITIES2.includes(severity)) throw new UsageError(`--${flag} ${value2}: severity must be one of ${SEVERITIES2.join(", ")}`);
+  if (!SEVERITIES3.includes(severity)) throw new UsageError(`--${flag} ${value2}: severity must be one of ${SEVERITIES3.join(", ")}`);
   if (!known2.includes(id)) throw new UsageError(`--${flag} ${value2}: unknown ${flag}.${didYouMean(id, known2)}`);
   return [id, severity];
 }
-async function loadLintConfig(io, root, explicit) {
-  const candidates = explicit ? [resolvePath(io, explicit)] : CONFIG_PATHS.map((path) => join5(root, path));
+function extractUnusedFlag(args) {
+  const rest = [];
+  let severity;
+  const valid = (value2) => value2 === "warn" || value2 === "error" || value2 === "off";
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--") {
+      rest.push(...args.slice(index));
+      break;
+    }
+    if (arg === UNUSED_FLAG) {
+      const next = args[index + 1];
+      if (valid(next)) {
+        severity = next;
+        index += 1;
+      } else severity = "warn";
+    } else if (arg.startsWith(`${UNUSED_FLAG}=`)) {
+      const value2 = arg.slice(UNUSED_FLAG.length + 1);
+      if (!valid(value2)) throw new UsageError(`${UNUSED_FLAG} must be warn, error, or off.`);
+      severity = value2;
+    } else rest.push(arg);
+  }
+  return { args: rest, severity: severity === "off" ? void 0 : severity };
+}
+function ruleListText(rules9) {
+  const width = Math.max(...rules9.map((rule) => rule.meta.id.length));
+  return rules9.map((rule) => `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}`).join("\n");
+}
+function invalidConfig(path, problems) {
+  return new UsageError(`Invalid configuration ${path}:
+${problems.map((problem) => `  ${problem.path || "(root)"}: ${problem.message}`).join("\n")}`);
+}
+async function loadLintConfig(io, root, explicit, options = {}) {
+  const candidates = explicit ? [resolvePath(io, explicit)] : CONFIG_PATHS.map((path) => join6(root, path));
   for (const path of candidates) {
     const text4 = await readFile3(path, "utf8").catch((error2) => {
       if (error2.code === "ENOENT" && !explicit) return void 0;
@@ -20940,27 +21217,141 @@ async function loadLintConfig(io, root, explicit) {
     });
     if (text4 === void 0) continue;
     const parsed = parseConfigText(text4, allRules, path);
-    if (parsed.problems.length > 0) {
-      throw new UsageError(`Invalid configuration ${path}:
-${parsed.problems.map((problem) => `  ${problem.path || "(root)"}: ${problem.message}`).join("\n")}`);
-    }
+    if (parsed.problems.length > 0) throw invalidConfig(path, parsed.problems);
     if (parsed.migrated) io.stderr(`${path}: legacy configuration keys were migrated; run with --format json to inspect the effective rules.`);
-    return { config: parsed.config, path };
+    if (!options.localRules || parsed.config.localRules.length === 0) return { config: parsed.config, path, rules: allRules };
+    if (!options.allowLocalRules) {
+      throw new UsageError(`${path} lists localRules, which run JavaScript from the repository. Pass --allow-local-rules to load them (trusted repositories only).`);
+    }
+    const rules9 = [...allRules, ...await loadLocalRules(root, parsed.config.localRules, allRules)];
+    const strict = parseConfigText(text4, rules9, path);
+    if (strict.problems.length > 0) throw invalidConfig(path, strict.problems);
+    return { config: strict.config, path, rules: rules9 };
   }
-  return { config: structuredClone(DEFAULT_CONFIG) };
+  return { config: structuredClone(DEFAULT_CONFIG), rules: allRules };
 }
 function inScope2(diagnostic, scope2) {
   if (scope2 === "all" || diagnostic.scope === void 0) return true;
   if (scope2 === "introduced") return diagnostic.scope === "introduced";
   return diagnostic.scope === "introduced" || diagnostic.scope === "changed-file";
 }
-async function lintCommand(args, io) {
+var isDirectory = (path) => stat4(path).then((info) => info.isDirectory(), () => false);
+async function resolveTarget(io, rootFlag, positionals2) {
+  if (rootFlag !== void 0) {
+    const root = resolvePath(io, rootFlag);
+    if (!await isDirectory(root)) throw new UsageError(`--root ${rootFlag}: not a directory.`);
+    return { root, paths: positionals2 };
+  }
+  const [only] = positionals2;
+  if (positionals2.length === 1 && only !== void 0 && await isDirectory(resolvePath(io, only))) return { root: resolvePath(io, only), paths: [] };
+  return { root: resolvePath(io, "."), paths: positionals2 };
+}
+function toSelector(root, value2, label) {
+  const raw = isAbsolute4(value2) ? relative5(root, value2) : value2;
+  const path = posix3.normalize(raw.replace(/\\/g, "/")).replace(/\/+$/, "");
+  if (path === "." || path === "") return "";
+  if (path === ".." || path.startsWith("../") || posix3.isAbsolute(path) || isAbsolute4(path)) {
+    throw new UsageError(`${label} "${value2}" is outside the lint root ${root}; pass --root <dir>.`);
+  }
+  return path;
+}
+var isGlob = (selector) => /[*?]/.test(selector);
+function selects(selector, path) {
+  if (selector === "") return true;
+  if (isGlob(selector)) return matchesGlob(path, selector) || matchesGlob(path, `${selector}/**`);
+  return path === selector || path.startsWith(`${selector}/`);
+}
+async function missReason(root, selector, config, inventoryComplete) {
+  if (isGlob(selector)) return "no lintable files match";
+  const info = await stat4(join6(root, selector)).catch(() => void 0);
+  if (!info) return "no such file or directory";
+  if (info.isDirectory()) return "no lintable files in this directory";
+  if (!isInventoryPath(selector)) return "not a file type ci-cd-optimizer lints";
+  if (config.ignorePaths.some((glob) => matchesGlob(selector, glob) || matchesGlob(selector, `${glob}/**`))) return "excluded by ignorePaths";
+  return inventoryComplete ? "not analyzed (inside a directory the inventory skips, such as node_modules or .git)" : "not analyzed: the inventory hit limits.maxFiles or limits.maxFileBytes";
+}
+function withFile(input2, file, limits) {
+  const oversized = Buffer.byteLength(file.content, "utf8") > limits.maxFileBytes;
+  if (oversized && !isLockfile(file.path)) throw new UsageError(`--stdin content exceeds limits.maxFileBytes (${limits.maxFileBytes} bytes).`);
+  const replacement = oversized ? { path: file.path, content: truncateContent(file.content) } : file;
+  const files = [...input2.files.filter((existing) => existing.path !== file.path), replacement].sort((left, right) => left.path.localeCompare(right.path));
+  const truncated = input2.truncated.filter((path) => path !== file.path);
+  return { ...input2, files, truncated: oversized ? [...truncated, file.path] : truncated };
+}
+function effectiveSeverities(config, rules9, presets) {
+  const severities = new Map(rules9.map((rule) => [rule.meta.id, "off"]));
+  for (const { rule, severity } of resolveRules(config, rules9, presets)) severities.set(rule.meta.id, severity);
+  return severities;
+}
+function explainRule(id, rules9, severities) {
+  const rule = rules9.find((candidate) => candidate.meta.id === id);
+  if (!rule) throw new UsageError(`--explain: unknown rule "${id}".${didYouMean(id, rules9.map((candidate) => candidate.meta.id))}`);
+  const { meta } = rule;
+  const indent = (text4) => text4.replace(/\n$/, "").split("\n").map((line) => `    ${line}`).join("\n");
+  const lines = [
+    meta.id,
+    "",
+    `  Ruleset:   ${meta.ruleset}`,
+    `  Kind:      ${meta.kind}`,
+    `  Severity:  ${severities.get(meta.id) ?? "off"} (default: ${meta.defaultSeverity})`,
+    `  Presets:   ${meta.presets.length > 0 ? meta.presets.join(", ") : "(none)"}`,
+    `  Fixable:   ${meta.fixable ? "yes" : "no"}`,
+    `  Impact:    ${meta.impact}`,
+    ...meta.requires.length > 0 ? [`  Requires:  ${meta.requires.join(", ")}`] : [],
+    "",
+    meta.description
+  ];
+  if (meta.rationale) lines.push("", meta.rationale);
+  if (meta.example) lines.push("", "  Before:", indent(meta.example.bad), "", "  After:", indent(meta.example.good));
+  if (meta.references.length > 0) lines.push("", "References:", ...meta.references.map((reference) => `  ${reference}`));
+  lines.push("", `Docs: ${meta.docsUrl ?? docsUrl(meta.id)}`);
+  return lines.join("\n");
+}
+async function initConfig(io, root, explicit) {
+  const target = explicit ? resolvePath(io, explicit) : join6(root, ".github/ci-cd-optimizer.yml");
+  const existing = explicit ? [target] : CONFIG_PATHS.map((path) => join6(root, path));
+  for (const path of existing) {
+    if (await stat4(path).then(() => true, () => false)) {
+      throw new UsageError(`${path} already exists; not overwriting it. Run --print-config to see the effective configuration.`);
+    }
+  }
+  await mkdir2(dirname2(target), { recursive: true });
+  await writeFile2(target, STARTER_CONFIG, { encoding: "utf8", flag: "wx" });
+  io.stdout(`Created ${target}`);
+  return 0;
+}
+function unusedDirectiveDiagnostics(unused, severity, known2) {
+  return unused.map((directive) => {
+    const name = `cicd-optimizer-disable-${directive.kind}`;
+    const unknown3 = directive.ids.filter((id) => !known2.includes(id)).map((id) => ` "${id}" is not a known rule or ruleset.${didYouMean(id, known2)}`).join("");
+    const message = directive.ids.length === 0 ? `Unused ${name} directive: it suppressed no problems.` : `Unused ${name} directive for ${directive.ids.map((id) => `"${id}"`).join(", ")}: no matching problems were suppressed.${unknown3}`;
+    return {
+      ruleId: UNUSED_DIRECTIVE_RULE_ID,
+      ruleset: "meta",
+      severity,
+      message,
+      path: directive.path,
+      line: directive.line,
+      column: 1,
+      suggestion: directive.ids.length === 0 ? "Remove the directive." : "Remove the unused ids (or the whole directive) so it cannot hide future problems.",
+      impact: "low",
+      confidence: "high",
+      fingerprint: fingerprint(UNUSED_DIRECTIVE_RULE_ID, directive.path, `${directive.line}:${directive.kind}:${directive.ids.join(",")}`),
+      docsUrl: UNUSED_DIRECTIVE_RULE.meta.docsUrl ?? docsUrl(UNUSED_DIRECTIVE_RULE_ID),
+      kind: "practice"
+    };
+  });
+}
+var compareDiagnostics = (left, right) => left.path.localeCompare(right.path) || left.line - right.line || left.column - right.column || left.ruleId.localeCompare(right.ruleId);
+async function lintCommand(rawArgs, io) {
+  const { args, severity: unusedSeverity } = extractUnusedFlag(rawArgs);
   const { values: values2, positionals: positionals2 } = parseArgs({
     args,
     allowPositionals: true,
     strict: true,
     options: {
       config: { type: "string", short: "c" },
+      root: { type: "string" },
       format: { type: "string", short: "f", default: "stylish" },
       output: { type: "string", short: "o" },
       sarif: { type: "string" },
@@ -20973,6 +21364,13 @@ async function lintCommand(args, io) {
       scope: { type: "string" },
       fix: { type: "boolean", default: false },
       quiet: { type: "boolean", short: "q", default: false },
+      stdin: { type: "boolean", default: false },
+      "stdin-filename": { type: "string" },
+      "allow-local-rules": { type: "boolean", default: false },
+      "list-rules": { type: "boolean", default: false },
+      explain: { type: "string" },
+      "print-config": { type: "boolean", default: false },
+      init: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false }
     }
   });
@@ -20980,7 +21378,8 @@ async function lintCommand(args, io) {
     io.stdout(LINT_HELP);
     return 0;
   }
-  if (positionals2.length > 1) throw new UsageError("lint accepts a single directory.");
+  const actions = [values2.init && "--init", values2["list-rules"] && "--list-rules", values2.explain !== void 0 && "--explain", values2["print-config"] && "--print-config"].filter(Boolean);
+  if (actions.length > 1) throw new UsageError(`${actions.join(" and ")} cannot be combined.`);
   const formatName = values2.format;
   if (!FORMATS.includes(formatName)) throw new UsageError(`--format must be one of ${FORMATS.join(", ")}.${didYouMean(values2.format ?? "", FORMATS)}`);
   const scope2 = values2.scope ?? (values2.base ? "introduced" : "all");
@@ -20988,14 +21387,23 @@ async function lintCommand(args, io) {
   if (scope2 !== "all" && !values2.base) throw new UsageError(`--scope ${scope2} needs --base to know what changed.`);
   const maxWarnings = values2["max-warnings"] === void 0 ? void 0 : Number(values2["max-warnings"]);
   if (maxWarnings !== void 0 && (!Number.isInteger(maxWarnings) || maxWarnings < 0)) throw new UsageError("--max-warnings must be a non-negative integer.");
-  const root = resolvePath(io, positionals2[0] ?? ".");
-  const { config } = await loadLintConfig(io, root, values2.config);
+  const stdinFilename = values2["stdin-filename"];
+  if (stdinFilename !== void 0 && !values2.stdin) throw new UsageError("--stdin-filename only applies with --stdin.");
+  if (values2.stdin) {
+    if (stdinFilename === void 0) throw new UsageError("--stdin needs --stdin-filename <path> to decide which rules apply.");
+    if (positionals2.length > 0) throw new UsageError("--stdin lints only --stdin-filename; use --root <dir> instead of a path argument.");
+    if (values2.fix) throw new UsageError("--fix cannot be combined with --stdin.");
+  }
+  const { root, paths } = await resolveTarget(io, values2.root, positionals2);
+  if (values2.init) return await initConfig(io, root, values2.config);
+  const loaded = await loadLintConfig(io, root, values2.config, { localRules: true, allowLocalRules: values2["allow-local-rules"] });
+  const { config, rules: rules9 } = loaded;
   const presets = values2.preset?.map((preset) => {
     if (!PRESETS.includes(preset)) throw new UsageError(`--preset ${preset}: unknown preset.${didYouMean(preset, PRESETS)}`);
     return preset;
   });
-  const ruleIds = allRules.map((rule) => rule.meta.id);
-  const rulesets = [...new Set(allRules.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules9.map((rule) => rule.meta.id);
+  const rulesets = [...new Set(rules9.map((rule) => rule.meta.ruleset))];
   for (const value2 of values2.ruleset ?? []) {
     const [id, severity] = parseOverride("ruleset", value2, rulesets);
     config.rulesets = { ...config.rulesets, [id]: severity };
@@ -21008,43 +21416,105 @@ async function lintCommand(args, io) {
     if (!["info", "warn", "error", "never"].includes(values2["fail-on"])) throw new UsageError("--fail-on must be info, warn, error, or never.");
     config.failOn = values2["fail-on"];
   }
-  const request = { config, ...presets ? { presets } : {} };
+  if (values2["list-rules"]) {
+    await writeText(io, values2.output, ruleListText(rules9));
+    return 0;
+  }
+  const severities = effectiveSeverities(config, rules9, presets);
+  if (values2.explain !== void 0) {
+    const withMeta = new Map(severities).set(UNUSED_DIRECTIVE_RULE_ID, unusedSeverity ?? "off");
+    await writeText(io, values2.output, explainRule(values2.explain, [...rules9, UNUSED_DIRECTIVE_RULE], withMeta));
+    return 0;
+  }
+  if (values2["print-config"]) {
+    const effective = presets ? { ...config, extends: presets } : config;
+    await writeText(io, values2.output, JSON.stringify({ configPath: loaded.path ?? null, config: effective, rules: Object.fromEntries(severities) }, null, 2));
+    return 0;
+  }
+  let selectors = paths.map((path) => toSelector(root, path, "Path"));
+  let stdinFile;
+  if (values2.stdin && stdinFilename !== void 0) {
+    if (!io.stdin) throw new UsageError("--stdin is not available in this environment.");
+    const path = toSelector(root, stdinFilename, "--stdin-filename");
+    if (path === "" || isGlob(path)) throw new UsageError("--stdin-filename must name a file, not a directory or glob.");
+    stdinFile = { path, content: await io.stdin() };
+    selectors = [path];
+  }
+  const selected = (path) => selectors.length === 0 || selectors.some((selector) => selects(selector, path));
   let baseFingerprints;
   let change;
   if (values2.base) {
     try {
       change = await changedSince(root, values2.base);
       const baseInput = await loadGitRevision(root, change.baseSha ?? values2.base, config);
-      baseFingerprints = new Set(lint2({ ...request, input: baseInput }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
+      baseFingerprints = new Set(lint(baseInput, { config, rules: rules9, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
     } catch (error2) {
       throw new UsageError(`--base ${values2.base}: ${error2.message.split("\n")[0]}`);
     }
   }
-  let input2 = await loadDirectory(root, config, change);
-  let result = lint2({ ...request, input: input2, ...baseFingerprints ? { baseFingerprints } : {} });
+  const options = {
+    config,
+    rules: rules9,
+    ...presets ? { presets } : {},
+    ...baseFingerprints ? { baseFingerprints } : {},
+    reportUnusedDirectives: unusedSeverity !== void 0
+  };
+  const load = async () => {
+    const onDisk = await loadDirectory(root, config, change);
+    return stdinFile ? withFile(onDisk, stdinFile, config.limits) : onDisk;
+  };
+  let input2 = await load();
+  let result = lint(input2, options);
   if (values2.fix) {
     const truncated = new Set(input2.truncated);
-    const fixable = result.diagnostics.filter((diagnostic) => diagnostic.fix && !truncated.has(diagnostic.path) && inScope2(diagnostic, scope2));
+    const fixable = result.diagnostics.filter((diagnostic) => diagnostic.fix && !truncated.has(diagnostic.path) && inScope2(diagnostic, scope2) && selected(diagnostic.path));
     if (fixable.length > 0) {
       const fixed = applyFixes(input2.files, fixable);
       const original = new Map(input2.files.map((file) => [file.path, file.content]));
       let written = 0;
       for (const [path, content] of fixed.files) {
         if (original.get(path) === content || truncated.has(path)) continue;
-        await writeFile2(join5(root, path), content, "utf8");
+        await writeFile2(join6(root, path), content, "utf8");
         written += 1;
       }
       io.stderr(`Applied ${fixed.applied.length} fix(es) to ${written} file(s)${fixed.conflicts.length ? `; ${fixed.conflicts.length} overlapping fix(es) skipped, run --fix again` : ""}.`);
-      input2 = await loadDirectory(root, config, change);
-      result = lint2({ ...request, input: input2, ...baseFingerprints ? { baseFingerprints } : {} });
+      input2 = await load();
+      result = lint(input2, options);
     }
   }
+  if (stdinFile && stdinFilename !== void 0) {
+    if (!isInventoryPath(stdinFile.path)) io.stderr(`${stdinFilename}: not a file type ci-cd-optimizer lints; nothing to report.`);
+    else if (!filterInput(input2, config.ignorePaths).files.some((file) => file.path === stdinFile.path)) io.stderr(`${stdinFilename}: excluded by ignorePaths; nothing to report.`);
+  } else if (selectors.length > 0) {
+    const analyzed = filterInput(input2, config.ignorePaths).files.map((file) => file.path);
+    let matchedAny = false;
+    for (const [index, selector] of selectors.entries()) {
+      if (analyzed.some((path) => selects(selector, path))) matchedAny = true;
+      else io.stderr(`${paths[index] ?? selector}: ${await missReason(root, selector, config, input2.inventoryComplete)}.`);
+    }
+    if (!matchedAny) io.stderr("No lintable files matched the given paths; nothing to report.");
+  }
   const minimum = values2.quiet ? "error" : "info";
-  const diagnostics = result.diagnostics.filter((diagnostic) => inScope2(diagnostic, scope2) && RANK[diagnostic.severity] >= RANK[minimum]);
-  const shown = { ...result, diagnostics };
+  const visible = (diagnostic) => RANK[diagnostic.severity] >= RANK[minimum] && selected(diagnostic.path);
+  const diagnostics = result.diagnostics.filter((diagnostic) => inScope2(diagnostic, scope2) && visible(diagnostic));
+  let unusedDirectives2 = result.unusedDirectives?.filter((directive) => selected(directive.path));
+  if (unusedSeverity !== void 0 && unusedDirectives2) {
+    const changed = scope2 !== "all" && change ? new Set(change.changedPaths) : void 0;
+    if (changed) unusedDirectives2 = unusedDirectives2.filter((directive) => changed.has(directive.path));
+    const known2 = [...ruleIds, ...rulesets];
+    diagnostics.push(...unusedDirectiveDiagnostics(unusedDirectives2, unusedSeverity, known2).filter(visible));
+    diagnostics.sort(compareDiagnostics);
+  }
+  const shown = {
+    ...result,
+    diagnostics,
+    parseProblems: result.parseProblems.filter((problem) => selected(problem.path)),
+    ...unusedDirectives2 ? { unusedDirectives: unusedDirectives2 } : {}
+  };
   if (!input2.inventoryComplete) io.stderr("Inventory was truncated by limits; rules that check for missing files were skipped.");
-  await writeText(io, values2.output, format(formatName, shown, allRules, VERSION));
-  if (values2.sarif) await writeText(io, values2.sarif, sarif(shown, allRules, VERSION));
+  const reportRules = [...rules9, UNUSED_DIRECTIVE_RULE];
+  await writeText(io, values2.output, format(formatName, shown, reportRules, VERSION));
+  if (values2.sarif) await writeText(io, values2.sarif, sarif(shown, reportRules, VERSION));
   const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "warn").length;
   if (exceedsThreshold(diagnostics, config.failOn)) return 1;
   if (maxWarnings !== void 0 && warnings > maxWarnings) {
@@ -21141,10 +21611,10 @@ function structured(value2) {
 }
 async function measurementFiles(io, path) {
   const target = resolvePath(io, path);
-  const info = await stat3(target).catch(() => void 0);
+  const info = await stat5(target).catch(() => void 0);
   if (!info) throw new UsageError(`${path} does not exist.`);
   if (!info.isDirectory()) return [target];
-  return (await readdir3(target)).filter((name) => name.endsWith(".json")).sort().map((name) => join6(target, name));
+  return (await readdir3(target)).filter((name) => name.endsWith(".json")).sort().map((name) => join7(target, name));
 }
 var CASE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 var MAX_CASES = 10;
@@ -21161,7 +21631,7 @@ async function caseFiles(io, raw, config) {
     const item = entry ?? {};
     const id = String(item.id ?? "");
     if (!CASE_ID.test(id)) throw new Error(`cases[${index}].id must be lowercase kebab-case`);
-    const exists = await stat3(resolvePath(io, join6(config.evaluation.corpus, id))).then(() => true, () => false);
+    const exists = await stat5(resolvePath(io, join7(config.evaluation.corpus, id))).then(() => true, () => false);
     if (exists) throw new Error(`cases[${index}]: corpus case "${id}" already exists; existing cases are immutable`);
     const caseText = typeof item.case === "string" ? item.case : JSON.stringify(item.case ?? {});
     const contents = item.files ?? {};
@@ -21304,7 +21774,7 @@ async function collectCommand(args, io) {
       ...await collectMeasurements(client, repo, { manifest, state, config, now: now2 }),
       needsCorpus: metricsFor(manifest, config).some((metric) => metric.source === "corpus")
     };
-    const target = values2.output ?? join6(values2["output-dir"], `${manifest.name}.json`);
+    const target = values2.output ?? join7(values2["output-dir"], `${manifest.name}.json`);
     await writeText(io, target, JSON.stringify(measurements, null, 2));
     io.stderr(`Collected ${manifest.name}: control + ${measurements.arms.length} arm(s) -> ${target}`);
   }
@@ -22397,7 +22867,7 @@ function buildRecipe(options) {
 function serializeRecipe(recipe) {
   return (0, import_yaml21.stringify)(recipe, { lineWidth: 0 });
 }
-var isRecord2 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
+var isRecord3 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 var strings = (value2) => Array.isArray(value2) ? value2.filter((item) => typeof item === "string") : [];
 var num = (value2) => typeof value2 === "number" && Number.isFinite(value2) ? value2 : void 0;
 function parseRecipe(text4) {
@@ -22407,14 +22877,14 @@ function parseRecipe(text4) {
   } catch (error2) {
     return { problems: [`Invalid YAML: ${error2.message}`] };
   }
-  if (!isRecord2(raw)) return { problems: ["A recipe must be a mapping."] };
+  if (!isRecord3(raw)) return { problems: ["A recipe must be a mapping."] };
   const problems = [];
   if (raw.schemaVersion !== 1) problems.push("schemaVersion must be 1.");
   const id = typeof raw.id === "string" ? raw.id : "";
   if (!RECIPE_ID.test(id)) problems.push("id must be lowercase letters, digits and dashes.");
   for (const key2 of ["title", "summary", "instructions"]) if (typeof raw[key2] !== "string" || !raw[key2]) problems.push(`${key2} is required.`);
   if (!RECIPE_RISKS.includes(raw.risk)) problems.push(`risk must be one of ${RECIPE_RISKS.join(", ")}.`);
-  const source = isRecord2(raw.source) ? raw.source : {};
+  const source = isRecord3(raw.source) ? raw.source : {};
   if (typeof source.repository !== "string" || typeof source.experiment !== "string" || typeof source.arm !== "string") {
     problems.push("source.repository, source.experiment and source.arm are required.");
   }
@@ -22422,8 +22892,8 @@ function parseRecipe(text4) {
   const files = strings(raw.files);
   if (rules9.length === 0 && files.length === 0) problems.push("A recipe needs rules or files to decide where it applies.");
   if (problems.length > 0) return { problems };
-  const evidence2 = isRecord2(raw.evidence) ? raw.evidence : {};
-  const compatibility2 = isRecord2(raw.compatibility) ? raw.compatibility : {};
+  const evidence2 = isRecord3(raw.evidence) ? raw.evidence : {};
+  const compatibility2 = isRecord3(raw.compatibility) ? raw.compatibility : {};
   const pullRequest = num(source.pullRequest);
   return {
     problems,
@@ -22440,7 +22910,7 @@ function parseRecipe(text4) {
       instructions: raw.instructions,
       evidence: {
         improvement: num(evidence2.improvement) ?? 0,
-        metrics: (Array.isArray(evidence2.metrics) ? evidence2.metrics : []).filter(isRecord2).map((metric) => ({
+        metrics: (Array.isArray(evidence2.metrics) ? evidence2.metrics : []).filter(isRecord3).map((metric) => ({
           metric: String(metric.metric ?? ""),
           delta: num(metric.delta) ?? 0,
           ...num(metric.control) !== void 0 ? { control: num(metric.control) } : {},
@@ -23947,8 +24417,8 @@ async function scanCommand(args, io) {
 }
 
 // src/cli/telemetry.ts
-import { appendFile as appendFile2, mkdir as mkdir3 } from "node:fs/promises";
-import { dirname as dirname3 } from "node:path";
+import { appendFile as appendFile2, mkdir as mkdir4 } from "node:fs/promises";
+import { dirname as dirname4 } from "node:path";
 import { parseArgs as parseArgs5 } from "node:util";
 
 // src/alerts/anomaly.ts
@@ -24543,10 +25013,10 @@ function parseJobDefinitions(text4) {
   } catch {
     return /* @__PURE__ */ new Map();
   }
-  if (!isRecord3(document) || !isRecord3(document.jobs)) return /* @__PURE__ */ new Map();
+  if (!isRecord4(document) || !isRecord4(document.jobs)) return /* @__PURE__ */ new Map();
   const definitions = /* @__PURE__ */ new Map();
   for (const [key2, value2] of Object.entries(document.jobs)) {
-    if (!isRecord3(value2)) continue;
+    if (!isRecord4(value2)) continue;
     definitions.set(key2, { ...typeof value2.name === "string" ? { name: value2.name } : {}, needs: parseNeeds(value2.needs) });
   }
   return definitions;
@@ -24726,7 +25196,7 @@ function parseNeeds(value2) {
 function elapsed(start2, end) {
   return Math.max(0, Date.parse(end) - Date.parse(start2));
 }
-function isRecord3(value2) {
+function isRecord4(value2) {
   return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 }
 
@@ -25124,8 +25594,8 @@ function headline(snapshot, baseline) {
 
 // src/telemetry/store.ts
 init_history();
-import { mkdir as mkdir2, readFile as readFile6, rename, writeFile as writeFile3 } from "node:fs/promises";
-import { dirname as dirname2 } from "node:path";
+import { mkdir as mkdir3, readFile as readFile6, rename, writeFile as writeFile3 } from "node:fs/promises";
+import { dirname as dirname3 } from "node:path";
 var FileTelemetryStore = class {
   constructor(path, retain = 200) {
     this.path = path;
@@ -25149,7 +25619,7 @@ var FileTelemetryStore = class {
     }
     const retained = new Set([...groups.values()].flatMap((items2) => items2.sort(byCompletion).slice(-this.retain)).map(runIdentity));
     const next = all.filter((item) => retained.has(runIdentity(item))).sort(byCompletion);
-    await mkdir2(dirname2(this.path), { recursive: true });
+    await mkdir3(dirname3(this.path), { recursive: true });
     const temporary = `${this.path}.${process.pid}.tmp`;
     await writeFile3(temporary, next.map((item) => `${JSON.stringify(item)}
 `).join(""), "utf8");
@@ -25272,7 +25742,7 @@ async function telemetryCommand(args, io) {
   const summaryPath = values2.summary ?? io.env.GITHUB_STEP_SUMMARY;
   if (summaryPath && summaryPath !== "-" && result.report) {
     const target = resolvePath(io, summaryPath);
-    await mkdir3(dirname3(target), { recursive: true });
+    await mkdir4(dirname4(target), { recursive: true });
     await appendFile2(target, `${result.report}
 `, "utf8");
   }
@@ -25551,8 +26021,8 @@ import { parseArgs as parseArgs8 } from "node:util";
 // src/telemetry/execution-capture.ts
 init_execution();
 import { execFile as execFile2, spawn as spawn2 } from "node:child_process";
-import { lstat, open as open2, realpath, stat as stat4, writeFile as writeFile4 } from "node:fs/promises";
-import { dirname as dirname4, isAbsolute as isAbsolute3, relative as relative4, resolve as resolve3 } from "node:path";
+import { lstat, open as open2, realpath as realpath2, stat as stat6, writeFile as writeFile4 } from "node:fs/promises";
+import { dirname as dirname5, isAbsolute as isAbsolute5, relative as relative6, resolve as resolve3 } from "node:path";
 import { promisify as promisify2 } from "node:util";
 var exec = promisify2(execFile2);
 async function readExecutionJson(path) {
@@ -25575,9 +26045,9 @@ async function readExecutionJson(path) {
 async function captureExecution(io, options, command) {
   if (!command[0]) throw new Error("Execution capture requires an executable after --");
   executionProjectPath(options.project);
-  const root = await realpath(io.cwd);
+  const root = await realpath2(io.cwd);
   const output2 = resolve3(root, options.output);
-  if (!(await stat4(dirname4(output2))).isDirectory()) throw new Error("Execution output parent must be an existing directory");
+  if (!(await stat6(dirname5(output2))).isDirectory()) throw new Error("Execution output parent must be an existing directory");
   try {
     await lstat(output2);
     throw new Error("Execution output already exists");
@@ -25586,10 +26056,10 @@ async function captureExecution(io, options, command) {
   }
   const env = { ...process.env, ...io.env };
   const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd: root, env, maxBuffer: 4096 });
-  if (await realpath(top.stdout.trim()) !== root) throw new Error("Run execution capture from the repository root");
-  const directory = await realpath(resolve3(root, options.project));
-  const path = relative4(root, directory);
-  if (isAbsolute3(path) || path === ".." || path.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
+  if (await realpath2(top.stdout.trim()) !== root) throw new Error("Run execution capture from the repository root");
+  const directory = await realpath2(resolve3(root, options.project));
+  const path = relative6(root, directory);
+  if (isAbsolute5(path) || path === ".." || path.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) {
     throw new Error("Execution project resolves outside the repository");
   }
   const checkout = await exec("git", ["rev-parse", "--verify", "HEAD"], { cwd: root, env, maxBuffer: 4096 });
@@ -25759,7 +26229,7 @@ async function executionCommand(args, io) {
 
 // src/cli/review.ts
 import { lstat as lstat2, readdir as readdir4, readFile as readFile7 } from "node:fs/promises";
-import { basename as basename2, dirname as dirname5, join as join7 } from "node:path";
+import { basename as basename2, dirname as dirname6, join as join8 } from "node:path";
 import { parseArgs as parseArgs9 } from "node:util";
 
 // src/review/escape.ts
@@ -26529,7 +26999,7 @@ async function readProjectFile(io, path) {
     if (error2 instanceof UsageError) throw error2;
     throw new UsageError(`Cannot read ${path}: ${error2.message}`);
   }
-  const directory = basename2(dirname5(target));
+  const directory = basename2(dirname6(target));
   if (size > PROJECT_MAX_BYTES) return { text: "x".repeat(PROJECT_MAX_BYTES + 1), directory };
   return { text: await readFile7(target, "utf8"), directory };
 }
@@ -26763,7 +27233,7 @@ async function scheduledCommand(args, io) {
   let failed = false;
   for (const directory of names) {
     let report;
-    const file = join7(root, directory, PROJECT_FILE);
+    const file = join8(root, directory, PROJECT_FILE);
     const exists = await lstat2(file).then((info) => info.isFile(), () => false);
     if (!exists) continue;
     const { text: text5 } = await readProjectFile(io, file);
@@ -26816,7 +27286,7 @@ var HELP2 = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimiz
 Usage: ci-cd-optimizer <command> [options]
 
 Commands:
-  lint [dir]            Lint workflows, Dockerfiles, and package manifests (default command)
+  lint [paths...]       Lint workflows, Dockerfiles, and package manifests (default command; also \`cicd-lint\`)
   rules                 List rules (--format json|markdown)
   scan                  Scan a repository via the API like the App: SARIF, finding issues, autofix PRs
   telemetry             Report on a completed workflow run (Gantt, critical path) and raise duration alerts
@@ -26841,10 +27311,8 @@ async function rulesCommand(args, io) {
   let text4;
   if (values2.format === "markdown") text4 = renderRulesMarkdown(allRules);
   else if (values2.format === "json") text4 = JSON.stringify(allRules.map((rule) => rule.meta), null, 2);
-  else if (values2.format === "text") {
-    const width = Math.max(...allRules.map((rule) => rule.meta.id.length));
-    text4 = allRules.map((rule) => `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}`).join("\n");
-  } else throw new UsageError(`Unknown format "${values2.format}". Use text, json, or markdown.`);
+  else if (values2.format === "text") text4 = ruleListText(allRules);
+  else throw new UsageError(`Unknown format "${values2.format}". Use text, json, or markdown.`);
   await writeText(io, values2.output, text4);
   return 0;
 }
@@ -26874,7 +27342,7 @@ async function run3(argv, io) {
     }
     const command = first ? COMMANDS4[first] : void 0;
     if (command) return await command.run(rest, io);
-    if (first && !first.startsWith("-") && /^[a-z]+$/.test(first) && !await isDirectory(io, first)) {
+    if (first && !first.startsWith("-") && /^[a-z]+$/.test(first) && !await isDirectory2(io, first)) {
       throw new UsageError(`Unknown command "${first}". Commands: ${Object.keys(COMMANDS4).join(", ")}, help, version.`);
     }
     return await lintCommand(argv, io);
@@ -26891,10 +27359,10 @@ function isArgError(error2) {
   const code2 = error2?.code;
   return typeof code2 === "string" && code2.startsWith("ERR_PARSE_ARGS");
 }
-async function isDirectory(io, path) {
-  const { stat: stat5 } = await import("node:fs/promises");
+async function isDirectory2(io, path) {
+  const { stat: stat7 } = await import("node:fs/promises");
   const { resolve: resolve4 } = await import("node:path");
-  return stat5(resolve4(io.cwd, path)).then((info) => info.isDirectory(), () => false);
+  return stat7(resolve4(io.cwd, path)).then((info) => info.isDirectory(), () => false);
 }
 
 // src/action.ts

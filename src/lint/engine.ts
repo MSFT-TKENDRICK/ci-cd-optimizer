@@ -16,6 +16,7 @@ import type {
   ResolvedRule,
   SkippedRule,
   SourceFile,
+  UnusedDirective,
 } from "./types.js";
 
 export const DOCS_BASE = "https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/blob/main/docs/rules.md";
@@ -36,11 +37,25 @@ export interface LintOptions {
   presets?: Preset[];
   /** Fingerprints present on the base revision; enables `introduced` scoping. */
   baseFingerprints?: ReadonlySet<string>;
+  /** Populate `LintResult.unusedDirectives` with suppression directives that suppressed nothing. */
+  reportUnusedDirectives?: boolean;
 }
 
-interface Suppressions {
+/** One `cicd-optimizer-disable-*` comment; `used`/`usedAll` record what it actually suppressed. */
+export interface SuppressionDirective {
+  line: number;
+  kind: "file" | "next-line";
+  /** Line a `next-line` directive applies to. */
+  target?: number;
+  ids: string[] | "all";
+  used: Set<string>;
+  usedAll: boolean;
+}
+
+export interface Suppressions {
   file: Set<string> | "all" | undefined;
   lines: Map<number, Set<string> | "all">;
+  directives: SuppressionDirective[];
 }
 
 function parseIds(text: string): Set<string> | "all" {
@@ -55,7 +70,7 @@ function merge(existing: Set<string> | "all" | undefined, next: Set<string> | "a
 }
 
 export function collectSuppressions(file: SourceFile): Suppressions {
-  const result: Suppressions = { file: undefined, lines: new Map() };
+  const result: Suppressions = { file: undefined, lines: new Map(), directives: [] };
   if (!file.content.includes("cicd-optimizer-disable")) return result;
   const isYaml = /\.ya?ml$/i.test(file.path);
   const blocks = isYaml ? parseYaml(file.path, file.content).blockScalarLines : [];
@@ -68,6 +83,14 @@ export function collectSuppressions(file: SourceFile): Suppressions {
     const match = DIRECTIVE.exec(trimmed);
     if (!match) return;
     const ids = parseIds(match[2] ?? "");
+    const directive: SuppressionDirective = {
+      line: lineNumber,
+      kind: match[1] === "file" ? "file" : "next-line",
+      ids: ids === "all" ? "all" : [...ids],
+      used: new Set(),
+      usedAll: false,
+    };
+    result.directives.push(directive);
     if (match[1] === "file") {
       result.file = merge(result.file, ids);
       return;
@@ -78,14 +101,57 @@ export function collectSuppressions(file: SourceFile): Suppressions {
       if (candidate !== "" && !candidate.startsWith("#")) break;
       target += 1;
     }
+    directive.target = target;
     result.lines.set(target, merge(result.lines.get(target), ids));
   });
   return result;
 }
 
-function suppressed(entry: Set<string> | "all" | undefined, diagnostic: Diagnostic): boolean {
-  if (entry === undefined) return false;
-  return entry === "all" || entry.has(diagnostic.ruleId) || entry.has(diagnostic.ruleset);
+/** Applies every directive covering the diagnostic and records which directive (and id) suppressed it. */
+function suppress(entry: Suppressions, diagnostic: Diagnostic): boolean {
+  let hit = false;
+  for (const directive of entry.directives) {
+    if (directive.kind === "next-line" && directive.target !== diagnostic.line) continue;
+    if (directive.ids === "all") {
+      directive.usedAll = true;
+      hit = true;
+      continue;
+    }
+    for (const id of directive.ids) {
+      if (id === diagnostic.ruleId || id === diagnostic.ruleset) {
+        directive.used.add(id);
+        hit = true;
+      }
+    }
+  }
+  return hit;
+}
+
+/**
+ * Directives (or ids within them) that suppressed nothing. Conservative: nothing is reported for a partial inventory or a
+ * disabled configuration, ids naming a skipped or crashed rule (or its ruleset) are kept, and blanket directives are
+ * kept whenever any rule was skipped.
+ */
+function unusedDirectives(
+  suppressionsFor: (path: string) => Suppressions | undefined,
+  paths: string[],
+  skipped: SkippedRule[],
+  rules: AnyRule[],
+): UnusedDirective[] {
+  const skippedIds = new Set(skipped.map((skip) => skip.ruleId));
+  const skippedRulesets = new Set(rules.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
+  const result: UnusedDirective[] = [];
+  for (const path of paths) {
+    for (const directive of suppressionsFor(path)?.directives ?? []) {
+      if (directive.ids === "all") {
+        if (!directive.usedAll && skipped.length === 0) result.push({ path, line: directive.line, kind: directive.kind, ids: [] });
+        continue;
+      }
+      const ids = [...new Set(directive.ids)].filter((id) => !directive.used.has(id) && !skippedIds.has(id) && !skippedRulesets.has(id));
+      if (ids.length > 0) result.push({ path, line: directive.line, kind: directive.kind, ids });
+    }
+  }
+  return result;
 }
 
 function unmet(requires: Capability[], input: AnalysisInput): Capability | undefined {
@@ -156,7 +222,7 @@ export function lint(rawInput: AnalysisInput, options: LintOptions): LintResult 
         impact: descriptor.impact ?? rule.meta.impact,
         confidence: descriptor.confidence ?? "high",
         fingerprint: "",
-        docsUrl: docsUrl(rule.meta.id),
+        docsUrl: rule.meta.docsUrl ?? docsUrl(rule.meta.id),
         discriminator: descriptor.key ?? descriptor.message,
         ...(descriptor.suggestion !== undefined ? { suggestion: descriptor.suggestion } : {}),
         ...(descriptor.related ? { related: descriptor.related } : {}),
@@ -195,7 +261,7 @@ export function lint(rawInput: AnalysisInput, options: LintOptions): LintResult 
     seen.add(dedupeKey);
     const { discriminator, ...diagnostic } = item;
     const directives = suppressionsFor(diagnostic.path);
-    if (directives && (suppressed(directives.file, diagnostic) || suppressed(directives.lines.get(diagnostic.line), diagnostic))) {
+    if (directives && suppress(directives, diagnostic)) {
       suppressedCount += 1;
       continue;
     }
@@ -226,6 +292,9 @@ export function lint(rawInput: AnalysisInput, options: LintOptions): LintResult 
       left.ruleId.localeCompare(right.ruleId),
   );
 
+  const reportUnused = options.reportUnusedDirectives === true && options.config.enabled && input.inventoryComplete;
+  // Rules cannot see into a file that failed to parse, so its directives are never reported as unused.
+  const unparsed = new Set(project.parseProblems.map((problem) => problem.path));
   return {
     diagnostics,
     skipped,
@@ -234,6 +303,18 @@ export function lint(rawInput: AnalysisInput, options: LintOptions): LintResult 
     rulesRun,
     suppressed: suppressedCount,
     durationMs: Math.round(performance.now() - started),
+    ...(options.reportUnusedDirectives
+      ? {
+          unusedDirectives: reportUnused
+            ? unusedDirectives(
+                suppressionsFor,
+                input.files.map((file) => file.path).filter((path) => !unparsed.has(path)),
+                skipped,
+                options.rules,
+              )
+            : [],
+        }
+      : {}),
   };
 }
 
