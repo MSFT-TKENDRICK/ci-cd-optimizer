@@ -123,21 +123,22 @@ artifact, aiming to make the privileged job pass, comment on, or act on a differ
 - *Residual risk:* inherited from GitHub's cache isolation model.
 
 **T7. Tampering: forged or altered review results.**
-Someone edits a downloaded weekly report, or fabricates one, and presents it as the program's verdict on a
+Someone edits a downloaded daily report, or fabricates one, and presents it as the program's verdict on a
 project.
 - *Mitigation:*
   - The scheduled workflow attests every `reports/<project>.json` with a Sigstore build provenance attestation.
     It binds the SHA-256 digest to this repository, `review-scheduled.yml`, the source ref and commit, and a
     GitHub-hosted runner, and it is recorded in the public Rekor transparency log.
-  - `gh attestation verify --signer-workflow … --source-ref refs/heads/main --deny-self-hosted-runners` rejects
-    any changed byte, any other workflow or branch, and self-hosted runners.
+  - `gh attestation verify --signer-workflow …/review-scheduled.yml@refs/heads/main --source-ref refs/heads/main
+    --deny-self-hosted-runners` rejects any changed byte, any other signer workflow or branch, any other caller
+    source branch, and self-hosted runners.
   - The signing job holds the only `id-token: write` permission and runs no repository code, so it signs exactly
     what the `review` job uploaded. Workflows on pull request branches cannot pass the `--source-ref` check.
 - *Residual risk:*
   - Anyone with write access to `main` can change what the workflow signs. Branch protection and Code Owner review
     of `.github/workflows/` and `src/` cover this.
   - A signature proves origin, not correctness. A bug in the review code produces a validly signed wrong result.
-  - Pull request comments are not signed; only the weekly reports are.
+  - Pull request comments are not signed; only the daily reports are.
 
 **R1. Repudiation: who registered or changed a project.**
 - *Mitigation:*
@@ -147,7 +148,7 @@ project.
 - *Residual risk:* none significant.
 
 **R2. Repudiation: denying that the program published a result.**
-- *Mitigation:* each signed weekly report has an entry in the public Rekor log and on this repository's
+- *Mitigation:* each signed daily report has an entry in the public Rekor log and on this repository's
   Attestations page, tied to the workflow run that produced it.
 - *Residual risk:* artifacts expire after 90 days. The attestation outlives them, but the report itself must be
   kept by whoever relies on it.
@@ -193,7 +194,7 @@ project.
   - Each author may have at most 3 other open submission PRs.
   - First-time contributor workflow runs need maintainer approval (a repository setting).
   - Concurrency groups cancel superseded runs.
-  - The weekly scheduled review runs sequentially.
+  - The daily scheduled review runs sequentially.
 - *Residual risk:* many accounts could still open PRs, but the runs stay unprivileged.
 
 **E1. Elevation of privilege: malicious target content.**

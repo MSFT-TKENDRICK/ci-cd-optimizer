@@ -1,5 +1,6 @@
 # Dependabot-style scan without installing the GitHub App: lints the default branch through the API, uploads
 # SARIF to code scanning, and syncs finding issues and autofix pull requests per .github/ci-cd-optimizer.yml.
+# Runs daily through cicd-optimizer-daily.yml, after pushes to main that change CI files, and on manual dispatch.
 #
 # Tokens (all optional):
 #   vars.CICD_OPTIMIZER_APP_ID + secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY  GitHub App installation token. Pull requests
@@ -9,8 +10,18 @@
 name: CI/CD Optimizer scan
 
 on:
-  schedule:
-    - cron: "23 5 * * *"
+  # A caller must grant the scan job's permissions and pass these secrets explicitly.
+  workflow_call:
+    secrets:
+      CICD_OPTIMIZER_APP_PRIVATE_KEY:
+        description: GitHub App private key, used with vars.CICD_OPTIMIZER_APP_ID.
+        required: false
+      CICD_OPTIMIZER_TOKEN:
+        description: Fine-grained PAT alternative to the App.
+        required: false
+      COPILOT_ASSIGN_TOKEN:
+        description: A Copilot-licensed user's token for assigning finding issues to the Copilot coding agent.
+        required: false
   push:
     branches: [main]
     paths:
@@ -28,6 +39,7 @@ permissions:
 concurrency:
   group: cicd-optimizer-scan
   cancel-in-progress: false
+  queue: max
 
 jobs:
   scan:

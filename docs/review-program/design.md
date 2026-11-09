@@ -7,7 +7,7 @@ reasoning is in the [threat model](threat-model.md), and the survey of comparabl
 ## Goals and non-goals
 
 - **Goals:** a self-service, PR-based registry, like OSS-Fuzz `projects/<name>/project.yaml`; explicit consent from
-  the target repository; useful public feedback on the submission PR; weekly re-review; first-class opt-out; no
+  the target repository; useful public feedback on the submission PR; daily re-review; first-class opt-out; no
   secrets, and no write access to target repositories.
 - **Non-goals:** executing or building target code (unlike OSS-Fuzz or Homebrew, which build submissions); opening
   issues or pull requests against target repositories; scoring or ranking projects; a hosted service. Everything
@@ -27,7 +27,7 @@ reasoning is in the [threat model](threat-model.md), and the survey of comparabl
 | `src/cli/review.ts` | `review validate`, `run`, `intake`, `intake-artifact`, `intake-status`, and `scheduled` subcommands. `scheduled --json-dir` writes one public JSON report per project for signing. |
 | `.github/workflows/review-intake.yml` | Unprivileged, advisory `pull_request` job: runs intake from the **base** commit and writes the job summary plus a tiny record. |
 | `.github/workflows/review-intake-comment.yml` | Privileged `workflow_run` job: validates the record, repeats intake from the default branch, upserts the PR comment, and publishes the required `review-intake/trusted` commit status. |
-| `.github/workflows/review-scheduled.yml` | Weekly read-only re-review of every registered project. The `review` job writes the job summary and uploads `review-reports` (one JSON file per project). A separate `sign` job attests those files with `actions/attest` and uploads the Sigstore bundle as `review-attestation`. |
+| `.github/workflows/review-scheduled.yml` | Daily read-only re-review of every registered project, called by `cicd-optimizer-daily.yml`. The `review` job writes the job summary and uploads `review-reports` (one JSON file per project). A separate `sign` job attests those files with `actions/attest` and uploads the Sigstore bundle as `review-attestation`. |
 
 ## Data flow
 
@@ -56,10 +56,10 @@ recomputes the whole review itself with trusted code. The record only selects a 
 malformed record makes every submission at that commit fail. A forged record can therefore at most trigger a
 fresh, honest review of some open pull request whose head is that commit, or make it fail.
 
-The weekly run has a second, signed output:
+The daily run has a second, signed output:
 
 ```
-schedule / workflow_dispatch on main
+schedule / workflow_dispatch on main (cicd-optimizer-daily.yml calls review-scheduled.yml)
   review job (contents: read, default-branch code)
     review scheduled --json-dir reports ──▶ job summary
                                        └──▶ artifact review-reports: reports/<project>.json (public, redacted)
@@ -144,9 +144,9 @@ The whole comment is capped at 60 KB.
 | Submission | PR with `projects/<n>/project.yaml` | PR with `meta.yaml` | PR with `types/<pkg>` | none (crawl or Action) | PR with `projects/<n>/project.yaml` |
 | Consent | `primary_contact` + VCS-log check | `recipe-maintainers` | `owners` | none | consent file **in the target repo** + contacts |
 | Executes submission | yes (Docker build) | yes (build) | type-check | no | **no** (API-only lint) |
-| Results | private tracker, then public | CI logs | CI status | public score | PR comment (redacted), signed weekly JSON, and local full report |
+| Results | private tracker, then public | CI logs | CI status | public score | PR comment (redacted), signed daily JSON, and local full report |
 | Disclosure | 90 days + 14-day grace | n/a | n/a | n/a | 90 days for sensitive findings |
-| Re-review | continuous | per update PR | per PR | every CI run / weekly crawl | weekly |
+| Re-review | continuous | per update PR | per PR | every CI run / weekly crawl | daily |
 | Opt-out | PR deleting the project (implied, not documented) | not documented | not documented | stop running the Action | delete consent file, `paused`, or removal PR |
 
 See [research.md](research.md) for sources and the other programs surveyed (ClusterFuzzLite, Best Practices Badge,
@@ -164,9 +164,9 @@ Allstar, SLSA, Alpha-Omega, verify-rust-std, SV-COMP, VerifyThis, CNCF Landscape
   because every pull request in it already carries a passing status (`workflow/merge-group`).
 - **Bootstrap guard.** When the base commit does not contain `src/review/intake.ts` yet (the PR that introduces
   the program), intake emits a notice and skips.
-- **Per-author cap rather than global rate limiting.** GitHub already rate-limits `GITHUB_TOKEN`, and a weekly
+- **Per-author cap rather than global rate limiting.** GitHub already rate-limits `GITHUB_TOKEN`, and a daily
   sequential run keeps load predictable.
-- **No issue filing on target repositories.** Feedback stays on the submission PR, in the weekly summary, and in
+- **No issue filing on target repositories.** Feedback stays on the submission PR, in the daily summary, and in
   private channels, which keeps the token read-only toward targets.
 - **Signing runs in its own job.** Only the `sign` job can mint an OIDC token, and it runs no code from this
   repository: it downloads the reports and calls a pinned `actions/attest`. A bug in the review code therefore

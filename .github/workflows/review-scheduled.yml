@@ -1,13 +1,14 @@
-# Weekly re-review of every registered project (docs/review-program/README.md). Consent is re-verified on each run,
-# so a repository that deleted its consent file, was renamed, archived, or made private is reported, not reviewed.
-# Results go to the job summary and to one public (redacted) JSON report per project. The sign job signs those reports
-# with a Sigstore build provenance attestation, so anyone can verify that a report came from this workflow on main
-# (docs/review-program/README.md#verifying-signed-results).
+# Daily re-review of every registered project (docs/review-program/README.md), called by cicd-optimizer-daily.yml.
+# Consent is re-verified on each run, so a repository that deleted its consent file, was renamed, archived, or made
+# private is reported, not reviewed. Results go to the job summary and to one public (redacted) JSON report per
+# project. The sign job signs those reports with a Sigstore build provenance attestation, so anyone can verify that a
+# report came from this workflow on main (docs/review-program/README.md#verifying-signed-results). The attestation
+# names this file as its signer even when another workflow calls it.
 name: Review scheduled
 
 on:
-  schedule:
-    - cron: "17 6 * * 1"
+  # The caller grants contents: read, id-token: write, and attestations: write; only the sign job uses the last two.
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -16,6 +17,7 @@ permissions:
 concurrency:
   group: review-scheduled
   cancel-in-progress: false
+  queue: max
 
 jobs:
   review:
@@ -50,7 +52,7 @@ jobs:
           name: review-reports
           path: reports/*.json
           if-no-files-found: error
-          # cicd-optimizer-disable-next-line workflow/artifact-retention -- signed weekly results are published deliverables
+          # cicd-optimizer-disable-next-line workflow/artifact-retention -- signed review results are published deliverables
           retention-days: 90
           overwrite: true
 
