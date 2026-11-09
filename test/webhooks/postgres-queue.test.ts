@@ -230,7 +230,14 @@ describe.skipIf(!databaseUrl)("durable Postgres webhook queue", () => {
       child.kill("SIGKILL");
       await exited;
       const handler = vi.fn(async () => undefined);
-      expect(await worker.processNext(handler)).toMatchObject({ status: "completed", id: event.id, attempts: 2 });
+      // The server keeps the killed backend's lock until it notices the closed socket, so SKIP LOCKED briefly sees nothing.
+      const deadline = Date.now() + 5000;
+      let result = await worker.processNext(handler);
+      while (result.status === "idle" && Date.now() < deadline) {
+        await setTimeout(50);
+        result = await worker.processNext(handler);
+      }
+      expect(result).toMatchObject({ status: "completed", id: event.id, attempts: 2 });
       expect(handler).toHaveBeenCalledWith(event);
     } finally {
       if (child.exitCode === null && child.signalCode === null) {
