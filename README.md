@@ -218,7 +218,7 @@ registers itself as the reference example in [projects/ci-cd-optimizer](projects
 
 ## What it finds
 
-33 rules in 8 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
+62 rules in 12 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
 suppressions.
 
 | Ruleset | Examples |
@@ -231,6 +231,10 @@ suppressions.
 | `containers` | Dependency layer before source, multi-stage builds, BuildKit cache mounts, `.dockerignore`, shared base images |
 | `packages` | Monolith decomposition signals, `exports` maps, `files` allowlists, version drift across a monorepo |
 | `registries` | Publishing images to GHCR and packages to the GitHub npm registry for org-wide reuse |
+| `triggers` | Draft pull request gating, noisy `pull_request` types, over-frequent schedules, `workflow_run` chains, serialized matrices |
+| `redundancy` | Duplicate setup steps and commands, the same build repeated per job, toolchain version drift, shadowed `env` |
+| `testing` | Playwright browser caching, incremental tool caches, watch mode in CI, masked failures, fixed sleeps |
+| `security` | Expression injection, untrusted checkouts in privileged triggers, cache poisoning, excessive token permissions, persisted credentials |
 
 Presets are `recommended` (default), `strict`, `agentic`, `github`, `insights`, and `all`. The full catalog with
 rationale, examples, and references is in [docs/rules.md](docs/rules.md). Configuration is covered in

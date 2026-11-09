@@ -5,10 +5,14 @@ import { rules as checkout } from "./checkout/index.js";
 import { rules as containers } from "./containers/index.js";
 import { rules as hermeticity } from "./hermeticity/index.js";
 import { rules as packages } from "./packages/index.js";
+import { rules as redundancy } from "./redundancy/index.js";
 import { rules as registries } from "./registries/index.js";
+import { rules as security } from "./security/index.js";
+import { rules as testing } from "./testing/index.js";
+import { rules as triggers } from "./triggers/index.js";
 import { rules as workflow } from "./workflow/index.js";
 
-export const RULESETS = ["workflow", "checkout", "affected", "caching", "hermeticity", "containers", "packages", "registries"] as const;
+export const RULESETS = ["workflow", "checkout", "affected", "caching", "hermeticity", "containers", "packages", "registries", "security", "triggers", "redundancy", "testing"] as const;
 
 export const allRules: AnyRule[] = [
   ...workflow,
@@ -19,4 +23,8 @@ export const allRules: AnyRule[] = [
   ...containers,
   ...packages,
   ...registries,
+  ...security,
+  ...triggers,
+  ...redundancy,
+  ...testing,
 ];

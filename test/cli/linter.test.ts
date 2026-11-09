@@ -33,6 +33,7 @@ function workflow(options: { name?: string; timeout?: boolean; before?: string; 
     "    steps:",
     ...(options.beforeStep ? [`      ${options.beforeStep}`] : []),
     "      - run: echo hi",
+    "    permissions: {}",
     "",
   ].join("\n");
 }
