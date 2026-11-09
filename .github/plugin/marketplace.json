@@ -1,0 +1,17 @@
+{
+  "name": "ci-cd-optimizer",
+  "owner": {
+    "name": "MSFT-TKENDRICK"
+  },
+  "metadata": {
+    "description": "Agent plugins for the CI/CD Optimizer: lint and speed up GitHub Actions, Docker, and package setup."
+  },
+  "plugins": [
+    {
+      "name": "ci-cd-optimizer",
+      "source": "./plugins/ci-cd-optimizer",
+      "description": "MCP server, skills, and a custom agent that find and fix slow, wasteful, or risky CI/CD setup, read-only.",
+      "version": "0.2.0"
+    }
+  ]
+}

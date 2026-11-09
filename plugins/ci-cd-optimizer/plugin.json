@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "ci-cd-optimizer",
+  "version": "0.2.0",
+  "description": "Find and fix slow, wasteful, or risky CI/CD setup (caching, hermetic builds, container layers, GitHub Packages, workflow structure) with the CI/CD Optimizer linter and run reports, read-only.",
+  "author": {
+    "name": "MSFT-TKENDRICK",
+    "url": "https://github.com/MSFT-TKENDRICK"
+  },
+  "homepage": "https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/blob/main/docs/agents.md",
+  "repository": "https://github.com/MSFT-TKENDRICK/ci-cd-optimizer",
+  "license": "MIT",
+  "keywords": ["ci", "cd", "github-actions", "build-performance", "caching", "linter", "mcp"]
+}
