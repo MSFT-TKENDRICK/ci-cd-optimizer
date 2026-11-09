@@ -60,9 +60,9 @@ var require_identity = __commonJS({
     var NODE_TYPE = /* @__PURE__ */ Symbol.for("yaml.node.type");
     var isAlias4 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === ALIAS;
     var isDocument = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === DOC;
-    var isMap4 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
+    var isMap5 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
     var isPair3 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === PAIR;
-    var isScalar6 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR;
+    var isScalar7 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR;
     var isSeq4 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
     function isCollection(node) {
       if (node && typeof node === "object")
@@ -84,7 +84,7 @@ var require_identity = __commonJS({
         }
       return false;
     }
-    var hasAnchor = (node) => (isScalar6(node) || isCollection(node)) && !!node.anchor;
+    var hasAnchor = (node) => (isScalar7(node) || isCollection(node)) && !!node.anchor;
     exports.ALIAS = ALIAS;
     exports.DOC = DOC;
     exports.MAP = MAP;
@@ -96,10 +96,10 @@ var require_identity = __commonJS({
     exports.isAlias = isAlias4;
     exports.isCollection = isCollection;
     exports.isDocument = isDocument;
-    exports.isMap = isMap4;
+    exports.isMap = isMap5;
     exports.isNode = isNode;
     exports.isPair = isPair3;
-    exports.isScalar = isScalar6;
+    exports.isScalar = isScalar7;
     exports.isSeq = isSeq4;
   }
 });
@@ -112,7 +112,7 @@ var require_visit = __commonJS({
     var BREAK = /* @__PURE__ */ Symbol("break visit");
     var SKIP = /* @__PURE__ */ Symbol("skip children");
     var REMOVE = /* @__PURE__ */ Symbol("remove node");
-    function visit2(node, visitor) {
+    function visit3(node, visitor) {
       const visitor_ = initVisitor(visitor);
       if (identity3.isDocument(node)) {
         const cd = visit_(null, node.contents, visitor_, Object.freeze([node]));
@@ -121,9 +121,9 @@ var require_visit = __commonJS({
       } else
         visit_(null, node, visitor_, Object.freeze([]));
     }
-    visit2.BREAK = BREAK;
-    visit2.SKIP = SKIP;
-    visit2.REMOVE = REMOVE;
+    visit3.BREAK = BREAK;
+    visit3.SKIP = SKIP;
+    visit3.REMOVE = REMOVE;
     function visit_(key2, node, visitor, path) {
       const ctrl = callVisitor(key2, node, visitor, path);
       if (identity3.isNode(ctrl) || identity3.isPair(ctrl)) {
@@ -257,7 +257,7 @@ var require_visit = __commonJS({
         throw new Error(`Cannot replace node with ${pt} parent`);
       }
     }
-    exports.visit = visit2;
+    exports.visit = visit3;
     exports.visitAsync = visitAsync;
   }
 });
@@ -267,7 +267,7 @@ var require_directives = __commonJS({
   "node_modules/yaml/dist/doc/directives.js"(exports) {
     "use strict";
     var identity3 = require_identity();
-    var visit2 = require_visit();
+    var visit3 = require_visit();
     var escapeChars = {
       "!": "%21",
       ",": "%2C",
@@ -411,7 +411,7 @@ var require_directives = __commonJS({
         let tagNames;
         if (doc && tagEntries.length > 0 && identity3.isNode(doc.contents)) {
           const tags = {};
-          visit2.visit(doc.contents, (_key, node) => {
+          visit3.visit(doc.contents, (_key, node) => {
             if (identity3.isNode(node) && node.tag)
               tags[node.tag] = true;
           });
@@ -438,7 +438,7 @@ var require_anchors = __commonJS({
   "node_modules/yaml/dist/doc/anchors.js"(exports) {
     "use strict";
     var identity3 = require_identity();
-    var visit2 = require_visit();
+    var visit3 = require_visit();
     function anchorIsValid(anchor) {
       if (/[\x00-\x19\s,[\]{}]/.test(anchor)) {
         const sa = JSON.stringify(anchor);
@@ -449,7 +449,7 @@ var require_anchors = __commonJS({
     }
     function anchorNames(root) {
       const anchors = /* @__PURE__ */ new Set();
-      visit2.visit(root, {
+      visit3.visit(root, {
         Value(_key, node) {
           if (node.anchor)
             anchors.add(node.anchor);
@@ -629,7 +629,7 @@ var require_Alias = __commonJS({
   "node_modules/yaml/dist/nodes/Alias.js"(exports) {
     "use strict";
     var anchors = require_anchors();
-    var visit2 = require_visit();
+    var visit3 = require_visit();
     var identity3 = require_identity();
     var Node = require_Node();
     var toJS2 = require_toJS();
@@ -655,7 +655,7 @@ var require_Alias = __commonJS({
           nodes = ctx.aliasResolveCache;
         } else {
           nodes = [];
-          visit2.visit(doc, {
+          visit3.visit(doc, {
             Node: (_key, node) => {
               if (identity3.isAlias(node) || identity3.hasAnchor(node))
                 nodes.push(node);
@@ -4208,9 +4208,9 @@ var require_resolve_flow_collection = __commonJS({
     var blockMsg = "Block collections are not allowed within flow collections";
     var isBlock = (token) => token && (token.type === "block-map" || token.type === "block-seq");
     function resolveFlowCollection({ composeNode, composeEmptyNode }, ctx, fc, onError, tag) {
-      const isMap4 = fc.start.source === "{";
-      const fcName = isMap4 ? "flow map" : "flow sequence";
-      const NodeClass = tag?.nodeClass ?? (isMap4 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
+      const isMap5 = fc.start.source === "{";
+      const fcName = isMap5 ? "flow map" : "flow sequence";
+      const NodeClass = tag?.nodeClass ?? (isMap5 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
       const coll = new NodeClass(ctx.schema);
       coll.flow = true;
       const atRoot = ctx.atRoot;
@@ -4246,7 +4246,7 @@ var require_resolve_flow_collection = __commonJS({
             offset = props.end;
             continue;
           }
-          if (!isMap4 && ctx.options.strict && utilContainsNewline.containsNewline(key2))
+          if (!isMap5 && ctx.options.strict && utilContainsNewline.containsNewline(key2))
             onError(
               key2,
               // checked by containsNewline()
@@ -4286,7 +4286,7 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap4 && !sep3 && !props.found) {
+        if (!isMap5 && !sep3 && !props.found) {
           const valueNode = value2 ? composeNode(ctx, value2, props, onError) : composeEmptyNode(ctx, props.end, sep3, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
@@ -4309,7 +4309,7 @@ var require_resolve_flow_collection = __commonJS({
             startOnNewline: false
           });
           if (valueProps.found) {
-            if (!isMap4 && !props.found && ctx.options.strict) {
+            if (!isMap5 && !props.found && ctx.options.strict) {
               if (sep3)
                 for (const st of sep3) {
                   if (st === valueProps.found)
@@ -4341,7 +4341,7 @@ var require_resolve_flow_collection = __commonJS({
           const pair = new Pair.Pair(keyNode, valueNode);
           if (ctx.options.keepSourceTokens)
             pair.srcToken = collItem;
-          if (isMap4) {
+          if (isMap5) {
             const map = coll;
             if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
               onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
@@ -4357,7 +4357,7 @@ var require_resolve_flow_collection = __commonJS({
           offset = valueNode ? valueNode.range[2] : valueProps.end;
         }
       }
-      const expectedEnd = isMap4 ? "}" : "]";
+      const expectedEnd = isMap5 ? "}" : "]";
       const [ce, ...ee] = fc.end;
       let cePos = offset;
       if (ce?.source === expectedEnd)
@@ -5577,15 +5577,15 @@ var require_cst_visit = __commonJS({
     var BREAK = /* @__PURE__ */ Symbol("break visit");
     var SKIP = /* @__PURE__ */ Symbol("skip children");
     var REMOVE = /* @__PURE__ */ Symbol("remove item");
-    function visit2(cst, visitor) {
+    function visit3(cst, visitor) {
       if ("type" in cst && cst.type === "document")
         cst = { start: cst.start, value: cst.value };
       _visit(Object.freeze([]), cst, visitor);
     }
-    visit2.BREAK = BREAK;
-    visit2.SKIP = SKIP;
-    visit2.REMOVE = REMOVE;
-    visit2.itemAtPath = (cst, path) => {
+    visit3.BREAK = BREAK;
+    visit3.SKIP = SKIP;
+    visit3.REMOVE = REMOVE;
+    visit3.itemAtPath = (cst, path) => {
       let item = cst;
       for (const [field3, index] of path) {
         const tok = item?.[field3];
@@ -5596,8 +5596,8 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit2.parentCollection = (cst, path) => {
-      const parent = visit2.itemAtPath(cst, path.slice(0, -1));
+    visit3.parentCollection = (cst, path) => {
+      const parent = visit3.itemAtPath(cst, path.slice(0, -1));
       const field3 = path[path.length - 1][0];
       const coll = parent?.[field3];
       if (coll && "items" in coll)
@@ -5628,7 +5628,7 @@ var require_cst_visit = __commonJS({
       }
       return typeof ctrl === "function" ? ctrl(item, path) : ctrl;
     }
-    exports.visit = visit2;
+    exports.visit = visit3;
   }
 });
 
@@ -5644,7 +5644,7 @@ var require_cst = __commonJS({
     var FLOW_END = "";
     var SCALAR = "";
     var isCollection = (token) => !!token && "items" in token;
-    var isScalar6 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
+    var isScalar7 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
     function prettyToken(token) {
       switch (token) {
         case BOM:
@@ -5728,7 +5728,7 @@ var require_cst = __commonJS({
     exports.FLOW_END = FLOW_END;
     exports.SCALAR = SCALAR;
     exports.isCollection = isCollection;
-    exports.isScalar = isScalar6;
+    exports.isScalar = isScalar7;
     exports.prettyToken = prettyToken;
     exports.tokenType = tokenType;
   }
@@ -7244,7 +7244,7 @@ var require_public_api = __commonJS({
       const lineCounter$1 = options.lineCounter || prettyErrors && new lineCounter.LineCounter() || null;
       return { lineCounter: lineCounter$1, prettyErrors };
     }
-    function parseAllDocuments(source, options = {}) {
+    function parseAllDocuments2(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions2(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -7319,7 +7319,7 @@ var require_public_api = __commonJS({
       return new Document.Document(value2, _replacer, options).toString(options);
     }
     exports.parse = parse11;
-    exports.parseAllDocuments = parseAllDocuments;
+    exports.parseAllDocuments = parseAllDocuments2;
     exports.parseDocument = parseDocument3;
     exports.stringify = stringify4;
   }
@@ -7344,7 +7344,7 @@ var require_dist = __commonJS({
     var lineCounter = require_line_counter();
     var parser = require_parser();
     var publicApi = require_public_api();
-    var visit2 = require_visit();
+    var visit3 = require_visit();
     exports.Composer = composer.Composer;
     exports.Document = Document.Document;
     exports.Schema = Schema.Schema;
@@ -7372,8 +7372,8 @@ var require_dist = __commonJS({
     exports.parseAllDocuments = publicApi.parseAllDocuments;
     exports.parseDocument = publicApi.parseDocument;
     exports.stringify = publicApi.stringify;
-    exports.visit = visit2.visit;
-    exports.visitAsync = visit2.visitAsync;
+    exports.visit = visit3.visit;
+    exports.visitAsync = visit3.visitAsync;
   }
 });
 
@@ -8488,10 +8488,10 @@ function part(before, x, o, after2 = "") {
     o.dynamic = true;
   return isFragment(x) && x.strings === joinStrings ? joined(x.args[0], o, before, after2) : x instanceof Join ? joined(x, o, "", "") : x instanceof Builder ? helper(before, x, o) : isFragment(x) ? fragment(x, o) : x instanceof Identifier ? x.value : Array.isArray(x) && isFragment(x[0]) ? x.reduce((acc, x2) => acc + " " + fragment(x2, o), "") : value(x, o);
 }
-function joined(join7, o, before, after2) {
+function joined(join8, o, before, after2) {
   let text4 = "";
-  join7.items.forEach((item, i) => {
-    i > 0 && (text4 = spaced(text4, fragment(join7.separator, o)));
+  join8.items.forEach((item, i) => {
+    i > 0 && (text4 = spaced(text4, fragment(join8.separator, o)));
     text4 = spaced(text4, part("", item, o));
   });
   before && text4 && !/\s$/.test(before) && !/^\s/.test(text4) && (text4 = " " + text4);
@@ -13695,7 +13695,7 @@ function actionInvocation(argv, env, processCwd) {
 }
 
 // src/cli/index.ts
-import { parseArgs as parseArgs9 } from "node:util";
+import { parseArgs as parseArgs10 } from "node:util";
 
 // src/lint/parsers/workflow.ts
 var import_yaml2 = __toESM(require_dist(), 1);
@@ -14523,14 +14523,14 @@ var test_selection_default = defineRule({
         if (skipsPullRequests(job)) continue;
         for (const entry of jobCommands(project, workflow, job)) {
           if (skipsPullRequests(entry.owner) || skipsPullRequests(entry.step)) continue;
-          const finding = detect(project, entry.command);
-          if (!finding) continue;
+          const finding2 = detect(project, entry.command);
+          if (!finding2) continue;
           report({
             path: entry.path,
             line: entry.line,
-            key: `${entry.owner.key}:${finding.tool}`,
-            message: `\`${finding.tool}\` runs ${finding.what} on every pull request instead of only what the change affects.`,
-            suggestion: finding.suggestion
+            key: `${entry.owner.key}:${finding2.tool}`,
+            message: `\`${finding2.tool}\` runs ${finding2.what} on every pull request instead of only what the change affects.`,
+            suggestion: finding2.suggestion
           });
         }
       }
@@ -15251,21 +15251,21 @@ var setup_cache_default = defineRule({
         const all = project.expandedSteps(job);
         for (const step of job.steps) {
           const before = all.slice(0, Math.max(0, all.indexOf(step)));
-          let finding;
-          if (usesAction(step, "actions/setup-node")) finding = checkNode(project, step, before, all, file);
-          else if (usesAction(step, "actions/setup-python")) finding = checkPython(project, step, before, all);
-          else if (usesAction(step, "actions/setup-java")) finding = checkJava(project, step, all);
-          else if (usesAction(step, "actions/setup-go")) finding = checkGo(step, all);
-          else if (usesAction(step, "actions/setup-dotnet")) finding = checkDotnet(project, step, all);
-          if (!finding) continue;
-          const autofix = finding.fixValue ? cacheFix(file, step, finding.fixValue) : void 0;
+          let finding2;
+          if (usesAction(step, "actions/setup-node")) finding2 = checkNode(project, step, before, all, file);
+          else if (usesAction(step, "actions/setup-python")) finding2 = checkPython(project, step, before, all);
+          else if (usesAction(step, "actions/setup-java")) finding2 = checkJava(project, step, all);
+          else if (usesAction(step, "actions/setup-go")) finding2 = checkGo(step, all);
+          else if (usesAction(step, "actions/setup-dotnet")) finding2 = checkDotnet(project, step, all);
+          if (!finding2) continue;
+          const autofix = finding2.fixValue ? cacheFix(file, step, finding2.fixValue) : void 0;
           report({
             path: workflow.path,
-            line: finding.line ?? step.uses?.line ?? step.line,
+            line: finding2.line ?? step.uses?.line ?? step.line,
             key: `${step.key}:no-cache`,
-            message: finding.message,
-            suggestion: finding.suggestion,
-            ...finding.impact ? { impact: finding.impact } : {},
+            message: finding2.message,
+            suggestion: finding2.suggestion,
+            ...finding2.impact ? { impact: finding2.impact } : {},
             ...autofix ? { fix: autofix } : {}
           });
         }
@@ -19859,7 +19859,7 @@ function match(diagnostics, expected) {
   const unmatched = [];
   for (const diagnostic of diagnostics) {
     const index = remaining.findIndex(
-      (finding) => finding.rule === diagnostic.ruleId && finding.path === diagnostic.path && (finding.line === void 0 || finding.line === diagnostic.line)
+      (finding2) => finding2.rule === diagnostic.ruleId && finding2.path === diagnostic.path && (finding2.line === void 0 || finding2.line === diagnostic.line)
     );
     if (index === -1) unmatched.push(diagnostic);
     else {
@@ -19962,7 +19962,7 @@ function parseCase(id, text4, files) {
     return { rule: item.rule, path: item.path, ...typeof item.line === "number" ? { line: item.line } : {} };
   }) : [];
   const declared = Array.isArray(raw.rules) ? raw.rules.filter((rule) => typeof rule === "string") : [];
-  const rules9 = [.../* @__PURE__ */ new Set([...declared, ...expected.map((finding) => finding.rule)])];
+  const rules9 = [.../* @__PURE__ */ new Set([...declared, ...expected.map((finding2) => finding2.rule)])];
   const change = raw.change;
   return {
     id,
@@ -20815,8 +20815,8 @@ function markdown(result, options = {}) {
   } else {
     lines.push("| Severity | Rule | Location | Finding |", "| --- | --- | --- | --- |");
     for (const d2 of result.diagnostics.slice(0, limit3)) {
-      const finding = `${d2.message}${d2.suggestion ? `<br>**Fix:** ${d2.suggestion}` : ""}`.replace(/\|/g, "\\|");
-      lines.push(`| ${d2.severity} | [\`${d2.ruleId}\`](${d2.docsUrl}) | \`${d2.path}:${d2.line}\` | ${finding} |`);
+      const finding2 = `${d2.message}${d2.suggestion ? `<br>**Fix:** ${d2.suggestion}` : ""}`.replace(/\|/g, "\\|");
+      lines.push(`| ${d2.severity} | [\`${d2.ruleId}\`](${d2.docsUrl}) | \`${d2.path}:${d2.line}\` | ${finding2} |`);
     }
     if (result.diagnostics.length > limit3) lines.push("", `_${result.diagnostics.length - limit3} more finding(s) omitted._`);
   }
@@ -21438,6 +21438,7 @@ async function loadRemoteConfig(client, repo, ref) {
   const parsed = parseConfigText("", allRules);
   return { config: parsed.config, problems: [] };
 }
+var SYMLINK_MODE = "120000";
 async function resolveRepositoryRevision(client, repo, ref) {
   const response = await client.request("GET /repos/{owner}/{repo}/commits/{ref}", { ...repo, ref });
   const data = response.data;
@@ -21451,7 +21452,9 @@ async function loadRepositorySnapshot(client, repo, options) {
   if (options.resolvedRevision && options.ref !== commit.sha) throw new Error("Resolved repository revision does not match the requested immutable ref");
   const tree = await client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", { ...repo, tree_sha: commit.treeSha, recursive: "1" });
   const treeData = tree.data;
-  const blobs = new Map(treeData.tree.filter((entry) => entry.type === "blob" && (!options.pathFilter || options.pathFilter(entry.path))).map((entry) => [entry.path, entry]));
+  const blobs = new Map(
+    treeData.tree.filter((entry) => entry.type === "blob" && entry.mode !== SYMLINK_MODE && (!options.pathFilter || options.pathFilter(entry.path))).map((entry) => [entry.path, entry])
+  );
   const selection = selectInventory(
     [...blobs.values()].map((entry) => ({ path: entry.path, ...entry.size !== void 0 ? { size: entry.size } : {} })),
     options.config
@@ -22839,8 +22842,8 @@ function extractKnowledge(repository, revision, input2, options = {}) {
     if (limited) break;
     if (/(^|\/)node_modules\//.test(file.path)) continue;
     const slash = file.path.lastIndexOf("/");
-    const basename2 = file.path.slice(slash + 1);
-    const tool2 = Object.hasOwn(toolFiles, basename2) ? toolFiles[basename2] : void 0;
+    const basename3 = file.path.slice(slash + 1);
+    const tool2 = Object.hasOwn(toolFiles, basename3) ? toolFiles[basename3] : void 0;
     if (!tool2) continue;
     const dir = slash < 0 ? "" : file.path.slice(0, slash);
     let project = dir === "" ? rootPackage : projects.find((project2) => project2.path === dir);
@@ -24365,13 +24368,13 @@ function calculateCriticalPath(jobs) {
   const byKey = new Map(jobs.map((job) => [job.key, job]));
   const memo = /* @__PURE__ */ new Map();
   const visiting = /* @__PURE__ */ new Set();
-  function visit2(key2) {
+  function visit3(key2) {
     const cached = memo.get(key2);
     if (cached) return cached;
     const job = byKey.get(key2);
     if (!job || visiting.has(key2)) return { durationMs: 0, jobKeys: [] };
     visiting.add(key2);
-    const parentPaths = job.needs.map(visit2);
+    const parentPaths = job.needs.map(visit3);
     const longestParent = parentPaths.reduce(
       (longest, candidate) => candidate.durationMs > longest.durationMs ? candidate : longest,
       { durationMs: 0, jobKeys: [] }
@@ -24386,7 +24389,7 @@ function calculateCriticalPath(jobs) {
   }
   return jobs.reduce(
     (longest, job) => {
-      const candidate = visit2(job.key);
+      const candidate = visit3(job.key);
       return candidate.durationMs > longest.durationMs ? candidate : longest;
     },
     { durationMs: 0, jobKeys: [] }
@@ -25754,6 +25757,1059 @@ async function executionCommand(args, io) {
   return 0;
 }
 
+// src/cli/review.ts
+import { lstat as lstat2, readdir as readdir4, readFile as readFile7 } from "node:fs/promises";
+import { basename as basename2, dirname as dirname5, join as join7 } from "node:path";
+import { parseArgs as parseArgs9 } from "node:util";
+
+// src/review/escape.ts
+var ZWSP = "\u200B";
+var LINE_BREAKS = /[\r\n\t\v\f\u0085\u2028\u2029]+/g;
+var INVISIBLE = /[\u0000-\u001F\u007F-\u009F\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]|[\u{E0000}-\u{E007F}]/gu;
+var MAX_INLINE_LENGTH = 300;
+var MAX_COMMENT_LENGTH = 6e4;
+function sanitizeText(value2) {
+  return String(value2).replace(LINE_BREAKS, " ").replace(INVISIBLE, "").replace(/ {2,}/g, " ").trim();
+}
+function truncate2(value2, max2) {
+  const characters = Array.from(value2);
+  return characters.length > max2 ? `${characters.slice(0, Math.max(0, max2 - 1)).join("")}\u2026` : value2;
+}
+function describeValue(value2, max2 = 80) {
+  if (typeof value2 === "string") return JSON.stringify(truncate2(sanitizeText(value2), max2));
+  if (value2 === null || typeof value2 === "number" || typeof value2 === "boolean") return String(value2);
+  if (Array.isArray(value2)) return "a list";
+  return typeof value2 === "object" ? "a mapping" : typeof value2;
+}
+function escapeInline(value2, max2 = MAX_INLINE_LENGTH) {
+  const text4 = truncate2(sanitizeText(value2), max2).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/[@#\uFF20\uFF03]/g, (character) => `${character}${ZWSP}`).replace(/:(?=[:/])/g, `:${ZWSP}`).replace(/\b(www|gh)([.-])/gi, `$1${ZWSP}$2`);
+  return text4.replace(/(&(?:amp|lt|gt);)|[\\`*_{}[\]()#+\-.!|~^=$"']/g, (match2, entity) => entity ?? `\\${match2}`);
+}
+function capComment(body, max2 = MAX_COMMENT_LENGTH) {
+  if (body.length <= max2) return body;
+  const notice = "\n\n_Report truncated to fit the comment size limit. Run the review locally for the full report._\n";
+  const room = max2 - notice.length;
+  const cut = body.lastIndexOf("\n", room);
+  return `${body.slice(0, cut > 0 ? cut : room)}${notice}`;
+}
+
+// src/review/project.ts
+var import_yaml25 = __toESM(require_dist(), 1);
+var PROJECT_FILE = "project.yaml";
+var PROJECT_MAX_BYTES = 8 * 1024;
+var NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
+var LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+var REPO_NAME_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
+var LANGUAGE_PATTERN = /^[a-z0-9+#.-]{1,32}$/;
+var EMAIL_PATTERN = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,63}$/;
+var GITHUB_PREFIX = "https://github.com/";
+var MAX_AUTO_CCS = 10;
+function parseStrictYaml(text4, maxBytes, label) {
+  const bytes = Buffer.byteLength(text4, "utf8");
+  if (bytes > maxBytes) return { problems: [`${label} is ${bytes} bytes; the limit is ${maxBytes} bytes.`] };
+  if (/^%/m.test(text4)) return { problems: [`${label} must not contain YAML directives (lines starting with %).`] };
+  let documents;
+  try {
+    documents = (0, import_yaml25.parseAllDocuments)(text4, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+  } catch (error2) {
+    return { problems: [`${label} is not valid YAML (${describeValue(error2 instanceof Error ? error2.message : String(error2))}).`] };
+  }
+  if (!Array.isArray(documents) || documents.length !== 1) {
+    return { problems: [`${label} must contain exactly one YAML document.`] };
+  }
+  const document = documents[0];
+  if (!document) return { problems: [`${label} must contain exactly one YAML document.`] };
+  const problems = [];
+  for (const issue of [...document.errors, ...document.warnings]) {
+    problems.push(`${label} is not valid YAML: ${issue.code} at line ${issue.linePos?.[0]?.line ?? "?"}.`);
+  }
+  if (!(0, import_yaml25.isMap)(document.contents)) problems.push(`${label} must be a YAML mapping at the top level.`);
+  (0, import_yaml25.visit)(document, {
+    Alias() {
+      problems.push(`${label} must not use YAML aliases (*name).`);
+      return import_yaml25.visit.BREAK;
+    },
+    Node(_key, node) {
+      if (node.anchor) problems.push(`${label} must not use YAML anchors (&name).`);
+      if (node.tag) problems.push(`${label} must not use YAML tags (${describeValue(node.tag)}).`);
+    },
+    Pair(_key, pair) {
+      if (!(0, import_yaml25.isScalar)(pair.key) || typeof pair.key.value !== "string") {
+        problems.push(`${label} keys must be plain strings.`);
+        return import_yaml25.visit.SKIP;
+      }
+      if (pair.key.value === "<<") problems.push(`${label} must not use YAML merge keys (<<).`);
+      return void 0;
+    }
+  });
+  if (problems.length > 0) return { problems: [...new Set(problems)] };
+  const value2 = document.toJS({ maxAliasCount: 0 });
+  if (value2 === null || typeof value2 !== "object" || Array.isArray(value2)) return { problems: [`${label} must be a YAML mapping at the top level.`] };
+  return { value: value2, problems: [] };
+}
+function parseMainRepo(value2) {
+  if (typeof value2 !== "string" || value2.length > GITHUB_PREFIX.length + 140) return void 0;
+  if (!/^[\x21-\x7E]+$/.test(value2) || !value2.startsWith(GITHUB_PREFIX)) return void 0;
+  const segments = value2.slice(GITHUB_PREFIX.length).split("/");
+  if (segments.length !== 2) return void 0;
+  const [owner = "", repo = ""] = segments;
+  if (!LOGIN_PATTERN.test(owner) || !REPO_NAME_PATTERN.test(repo)) return void 0;
+  if (repo === "." || repo === ".." || repo.toLowerCase().endsWith(".git")) return void 0;
+  return { owner, repo, fullName: `${owner}/${repo}` };
+}
+function isLogin(value2) {
+  return typeof value2 === "string" && LOGIN_PATTERN.test(value2);
+}
+function sameLogin(left, right) {
+  return left.toLowerCase() === right.toLowerCase();
+}
+function isSecurityContact(value2) {
+  if (typeof value2 !== "string" || value2.length > 254 || !/^[\x21-\x7E]+$/.test(value2)) return false;
+  if (EMAIL_PATTERN.test(value2)) return true;
+  if (!value2.startsWith("https://")) return false;
+  try {
+    const url = new URL(value2);
+    return url.protocol === "https:" && url.username === "" && url.password === "" && url.port === "" && url.hostname.includes(".");
+  } catch {
+    return false;
+  }
+}
+var KNOWN_KEYS = /* @__PURE__ */ new Set(["name", "main_repo", "repository_id", "primary_contact", "auto_ccs", "security_contact", "language", "preset", "paused"]);
+function validateProject(raw, directory) {
+  const problems = [];
+  for (const key2 of Object.keys(raw)) {
+    if (!KNOWN_KEYS.has(key2)) problems.push(`Unknown key ${describeValue(key2, 40)}. Allowed keys: ${[...KNOWN_KEYS].join(", ")}.`);
+  }
+  const { name } = raw;
+  if (typeof name !== "string" || !NAME_PATTERN.test(name)) {
+    problems.push("name is required and must match ^[a-z0-9][a-z0-9-]{0,62}$ (lowercase letters, digits, hyphens).");
+  } else if (directory !== void 0 && name !== directory) {
+    problems.push(`name ${describeValue(name)} must equal its directory name ${describeValue(directory)}.`);
+  }
+  const mainRepo = parseMainRepo(raw.main_repo);
+  if (!mainRepo) {
+    problems.push(`main_repo must be exactly https://github.com/<owner>/<repo> (no trailing slash, .git suffix, query, fragment, credentials, or port); got ${describeValue(raw.main_repo)}.`);
+  }
+  const repositoryId = raw.repository_id;
+  if (typeof repositoryId !== "number" || !Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
+    problems.push("repository_id is required and must be the repository's positive numeric id (gh api repos/<owner>/<repo> --jq .id).");
+  }
+  if (!isLogin(raw.primary_contact)) problems.push("primary_contact is required and must be a GitHub login.");
+  let autoCcs = [];
+  if (raw.auto_ccs !== void 0) {
+    if (!Array.isArray(raw.auto_ccs) || raw.auto_ccs.length > MAX_AUTO_CCS || !raw.auto_ccs.every(isLogin)) {
+      problems.push(`auto_ccs must be a list of at most ${MAX_AUTO_CCS} GitHub logins.`);
+    } else {
+      autoCcs = raw.auto_ccs;
+      if (new Set(autoCcs.map((login) => login.toLowerCase())).size !== autoCcs.length) problems.push("auto_ccs must not contain duplicates.");
+    }
+  }
+  if (raw.security_contact !== void 0 && !isSecurityContact(raw.security_contact)) {
+    problems.push("security_contact must be an email address or an https:// URL.");
+  }
+  if (raw.language !== void 0 && (typeof raw.language !== "string" || !LANGUAGE_PATTERN.test(raw.language))) {
+    problems.push("language must match ^[a-z0-9+#.-]{1,32}$.");
+  }
+  if (raw.preset !== void 0 && !PRESETS.includes(raw.preset)) {
+    problems.push(`preset must be one of ${PRESETS.join(", ")}.`);
+  }
+  if (raw.paused !== void 0 && typeof raw.paused !== "boolean") problems.push("paused must be true or false.");
+  if (problems.length > 0) return { problems };
+  return {
+    project: {
+      name,
+      mainRepo,
+      repositoryId,
+      primaryContact: raw.primary_contact,
+      autoCcs,
+      ...raw.security_contact !== void 0 ? { securityContact: raw.security_contact } : {},
+      ...raw.language !== void 0 ? { language: raw.language } : {},
+      ...raw.preset !== void 0 ? { preset: raw.preset } : {},
+      paused: raw.paused === true
+    },
+    problems: []
+  };
+}
+function parseProjectText(text4, directory) {
+  const parsed = parseStrictYaml(text4, PROJECT_MAX_BYTES, PROJECT_FILE);
+  if (!parsed.value) return { problems: parsed.problems };
+  return validateProject(parsed.value, directory);
+}
+
+// src/review/consent.ts
+var CONSENT_PATH = ".github/ci-cd-optimizer-review.yml";
+var CONSENT_MAX_BYTES = 4 * 1024;
+var MAX_CONSENT_CONTACTS = 50;
+var DEFAULT_REGISTRY = "MSFT-TKENDRICK/ci-cd-optimizer";
+async function readCappedFile(client, repo, path, ref, maxBytes) {
+  let data;
+  try {
+    ({ data } = await client.request("GET /repos/{owner}/{repo}/contents/{path}", { ...repo, path, ref }));
+  } catch (error2) {
+    if (httpStatus(error2) === 404) return { kind: "missing" };
+    throw error2;
+  }
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return { kind: "rejected", reason: `${path} is not a regular file.` };
+  const file = data;
+  if (file.type !== "file") return { kind: "rejected", reason: `${path} is not a regular file.` };
+  if (typeof file.size !== "number" || file.size > maxBytes) return { kind: "rejected", reason: `${path} is larger than ${maxBytes} bytes.` };
+  if (file.encoding !== "base64" || typeof file.content !== "string") return { kind: "rejected", reason: `${path} could not be read as base64 content.` };
+  const bytes = Buffer.from(file.content, "base64");
+  if (bytes.length > maxBytes) return { kind: "rejected", reason: `${path} is larger than ${maxBytes} bytes.` };
+  return { kind: "file", text: bytes.toString("utf8") };
+}
+function parseConsentText(text4) {
+  const parsed = parseStrictYaml(text4, CONSENT_MAX_BYTES, CONSENT_PATH);
+  if (!parsed.value) return { problems: parsed.problems };
+  const raw = parsed.value;
+  const problems = [];
+  for (const key2 of Object.keys(raw)) {
+    if (!["registry", "project", "contacts"].includes(key2)) problems.push(`${CONSENT_PATH} has unknown key ${describeValue(key2, 40)}.`);
+  }
+  if (typeof raw.registry !== "string" || !/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(raw.registry)) {
+    problems.push(`${CONSENT_PATH} registry must be <owner>/<repo> of the review registry (${DEFAULT_REGISTRY}).`);
+  }
+  if (typeof raw.project !== "string" || raw.project.length === 0 || raw.project.length > 63) problems.push(`${CONSENT_PATH} project must be the project name.`);
+  const contacts = raw.contacts;
+  if (!Array.isArray(contacts) || contacts.length === 0 || contacts.length > MAX_CONSENT_CONTACTS || !contacts.every(isLogin)) {
+    problems.push(`${CONSENT_PATH} contacts must be a list of 1-${MAX_CONSENT_CONTACTS} GitHub logins.`);
+  } else if (new Set(contacts.map((login) => login.toLowerCase())).size !== contacts.length) {
+    problems.push(`${CONSENT_PATH} contacts must not contain duplicates.`);
+  }
+  if (problems.length > 0) return { problems };
+  return { consent: { registry: raw.registry, project: raw.project, contacts }, problems: [] };
+}
+async function verifyConsent(client, project, options) {
+  let metadata;
+  try {
+    ({ data: metadata } = await client.request("GET /repositories/{repository_id}", { repository_id: project.repositoryId }));
+  } catch (error2) {
+    const status = httpStatus(error2);
+    if (status === 404 || status === 403 || status === 451) {
+      return { ok: false, problems: [`Repository id ${project.repositoryId} was not found or is not public.`] };
+    }
+    throw error2;
+  }
+  const problems = [];
+  if (metadata.id !== project.repositoryId) problems.push(`Repository id ${project.repositoryId} did not resolve to the same repository.`);
+  const fullName = typeof metadata.full_name === "string" ? metadata.full_name : "";
+  if (fullName.toLowerCase() !== project.mainRepo.fullName.toLowerCase()) {
+    problems.push(`repository_id ${project.repositoryId} is now ${describeValue(fullName)}, not ${describeValue(project.mainRepo.fullName)}. If the repository was renamed or transferred, update main_repo in a new pull request.`);
+  }
+  if (metadata.private !== false || metadata.visibility !== void 0 && metadata.visibility !== "public") problems.push("The repository must be public.");
+  if (metadata.fork !== false) problems.push("The repository must not be a fork; submit the upstream repository.");
+  if (metadata.archived === true) problems.push("The repository is archived.");
+  if (metadata.disabled === true) problems.push("The repository is disabled.");
+  const defaultBranch2 = typeof metadata.default_branch === "string" ? metadata.default_branch : "";
+  if (!defaultBranch2) problems.push("The repository has no default branch.");
+  if (problems.length > 0) return { ok: false, problems };
+  const [owner = "", repo = ""] = fullName.split("/");
+  const target = { owner, repo };
+  const revision = await resolveRepositoryRevision(client, target, defaultBranch2);
+  const repository = { id: project.repositoryId, fullName, owner, repo, defaultBranch: defaultBranch2, sha: revision.sha, treeSha: revision.treeSha };
+  const file = await readCappedFile(client, target, CONSENT_PATH, revision.sha, CONSENT_MAX_BYTES);
+  if (file.kind === "missing") {
+    return { ok: false, repository, problems: [`${CONSENT_PATH} was not found on the default branch. Maintainers must commit it to consent to reviews; deleting it opts out.`] };
+  }
+  if (file.kind === "rejected") return { ok: false, repository, problems: [file.reason] };
+  const parsed = parseConsentText(file.text);
+  if (!parsed.consent) return { ok: false, repository, problems: parsed.problems };
+  const { consent } = parsed;
+  if (consent.registry.toLowerCase() !== options.registry.toLowerCase()) {
+    problems.push(`${CONSENT_PATH} registry is ${describeValue(consent.registry)}; expected ${describeValue(options.registry)}.`);
+  }
+  if (consent.project !== project.name) problems.push(`${CONSENT_PATH} project is ${describeValue(consent.project)}; expected ${describeValue(project.name)}.`);
+  const listed = (login) => consent.contacts.some((contact) => sameLogin(contact, login));
+  if (!listed(project.primaryContact)) problems.push(`primary_contact ${describeValue(project.primaryContact)} is not listed in ${CONSENT_PATH} contacts.`);
+  for (const cc of project.autoCcs) {
+    if (!listed(cc)) problems.push(`auto_ccs entry ${describeValue(cc)} is not listed in ${CONSENT_PATH} contacts.`);
+  }
+  if (options.author !== void 0 && !listed(options.author)) {
+    problems.push(`Submitter ${describeValue(options.author)} is not listed in ${CONSENT_PATH} contacts.`);
+  }
+  return { ok: problems.length === 0, repository, problems };
+}
+
+// src/review/report.ts
+var SENSITIVE_RULES = /* @__PURE__ */ new Set([
+  "hermeticity/pin-actions",
+  "hermeticity/pin-container-images",
+  "hermeticity/docker-base-digest",
+  "affected/trusted-change-detection"
+]);
+var SENSITIVE_TEXT = /pull_request_target|permissions|secret|token|injection|untrusted/i;
+var MAX_REPORT_FINDINGS = 500;
+var MAX_MARKDOWN_FINDINGS = 100;
+var REVIEW_BOT_LOGIN = "github-actions[bot]";
+function isSensitive(diagnostic) {
+  return SENSITIVE_RULES.has(diagnostic.ruleId) || SENSITIVE_TEXT.test(diagnostic.message) || SENSITIVE_TEXT.test(diagnostic.suggestion ?? "");
+}
+var SEVERITY_ORDER = { error: 0, warn: 1, info: 2 };
+function finding(diagnostic) {
+  return {
+    ruleId: diagnostic.ruleId,
+    severity: diagnostic.severity,
+    path: diagnostic.path,
+    line: diagnostic.line,
+    column: diagnostic.column,
+    message: diagnostic.message,
+    ...diagnostic.suggestion ? { suggestion: diagnostic.suggestion } : {},
+    docsUrl: diagnostic.docsUrl
+  };
+}
+function buildReport(outcome2, options) {
+  const diagnostics = outcome2.status === "ok" ? outcome2.diagnostics : [];
+  const shown = [];
+  const hidden = [];
+  for (const diagnostic of diagnostics) (options.public && isSensitive(diagnostic) ? hidden : shown).push(diagnostic);
+  shown.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.path.localeCompare(b.path) || a.line - b.line || a.ruleId.localeCompare(b.ruleId));
+  const count = (severity) => diagnostics.filter((diagnostic) => diagnostic.severity === severity).length;
+  const repository = outcome2.repository;
+  return {
+    schemaVersion: 1,
+    project: outcome2.project,
+    ...repository ? { repository: { fullName: repository.fullName, id: repository.id, sha: repository.sha } } : {},
+    status: outcome2.status,
+    problems: [...outcome2.problems],
+    notes: [...outcome2.notes],
+    findings: shown.slice(0, MAX_REPORT_FINDINGS).map(finding),
+    redacted: { count: hidden.length, rules: [...new Set(hidden.map((diagnostic) => diagnostic.ruleId))].sort() },
+    summary: { filesAnalyzed: outcome2.status === "ok" ? outcome2.filesAnalyzed : 0, error: count("error"), warn: count("warn"), info: count("info"), inventoryComplete: outcome2.inventoryComplete }
+  };
+}
+function reportExitCode(report) {
+  return report.status === "ok" || report.status === "paused" ? 0 : 1;
+}
+var safeName = (name) => NAME_PATTERN.test(name) ? name : "intake";
+function reviewMarker(name) {
+  return `<!-- ci-cd-optimizer-review:${safeName(name)} -->`;
+}
+var STATUS_TEXT = {
+  ok: "Reviewed",
+  invalid: "Submission is invalid",
+  "consent-failed": "Consent could not be verified",
+  paused: "Paused",
+  error: "Review failed"
+};
+function plural(count, word) {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+function bullets(title, items2) {
+  if (items2.length === 0) return [];
+  return ["", `**${title}**`, "", ...items2.slice(0, 50).map((item) => `- ${escapeInline(item)}`), ...items2.length > 50 ? [`- \u2026and ${items2.length - 50} more`] : []];
+}
+function renderMarkdown(report, options = {}) {
+  const name = safeName(report.project);
+  const lines = [reviewMarker(report.project), `${options.heading ?? "###"} CI/CD optimizer review: ${escapeInline(report.project, 63)}`, ""];
+  const status = `**Status:** ${options.statusText ?? STATUS_TEXT[report.status]}`;
+  const repository = report.repository;
+  if (repository && /^[0-9a-f]{40}$/.test(repository.sha)) {
+    lines.push(`${status} \xB7 ${escapeInline(repository.fullName, 140)} (repository id ${repository.id}) at commit \`${repository.sha.slice(0, 12)}\``);
+  } else {
+    lines.push(status);
+  }
+  lines.push(...bullets("Problems", report.problems));
+  if (report.status === "ok" && repository) {
+    const { summary: summary3 } = report;
+    lines.push("", `Analyzed ${plural(summary3.filesAnalyzed, "file")}: ${summary3.error} error, ${summary3.warn} warn, ${summary3.info} info${summary3.inventoryComplete ? "" : " (partial inventory)"}.`);
+    if (report.findings.length > 0) {
+      lines.push("", "| Severity | Rule | Location | Finding |", "| --- | --- | --- | --- |");
+      for (const item of report.findings.slice(0, MAX_MARKDOWN_FINDINGS)) {
+        const message = item.suggestion ? `${item.message} Suggestion: ${item.suggestion}` : item.message;
+        lines.push(`| ${item.severity} | ${escapeInline(item.ruleId, 80)} | ${escapeInline(`${item.path}:${item.line}`, 160)} | ${escapeInline(message)} |`);
+      }
+      const omitted = summary3.error + summary3.warn + summary3.info - report.redacted.count - Math.min(report.findings.length, MAX_MARKDOWN_FINDINGS);
+      if (omitted > 0) lines.push("", `_${plural(omitted, "more finding")} not shown._`);
+    }
+    if (report.redacted.count > 0) {
+      lines.push("", `${plural(report.redacted.count, "security-sensitive finding")} from ${plural(report.redacted.rules.length, "rule")} withheld from this public report.`);
+    }
+  }
+  lines.push(...bullets("Notes", report.notes));
+  lines.push(
+    "",
+    `<sub>Static analysis through the GitHub API only; no repository code was executed. Maintainers can see every finding, including withheld ones, by running \`npm run cli -- review run projects/${name}/project.yaml\` in a checkout of the registry, or can ask for details through private vulnerability reporting.</sub>`
+  );
+  return capComment(`${lines.join("\n")}
+`);
+}
+function renderJson(report) {
+  return `${JSON.stringify(report, null, 2)}
+`;
+}
+async function upsertReviewComment(client, repo, issue, name, body, bot = REVIEW_BOT_LOGIN) {
+  const marker2 = reviewMarker(name);
+  const comments = await paginate(client, "GET /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: issue }, 3);
+  const existing = comments.find((comment) => comment.user?.login === bot && comment.user.type === "Bot" && (comment.body ?? "").split("\n", 1)[0] === marker2);
+  const text4 = body.startsWith(`${marker2}
+`) ? body : `${marker2}
+${body}`;
+  if (existing) {
+    await client.request("PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}", { ...repo, comment_id: existing.id, body: text4 });
+    return { action: "updated", id: existing.id };
+  }
+  const response = await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: issue, body: text4 });
+  const id = response.data?.id;
+  return typeof id === "number" ? { action: "created", id } : { action: "created" };
+}
+
+// src/review/review.ts
+var REVIEW_LIMITS = { maxFiles: 200, maxFileBytes: 2e5 };
+var REVIEW_CONCURRENCY = 4;
+var TARGET_CONFIG_MAX_BYTES = 64 * 1024;
+async function loadTargetConfig(client, repo, sha) {
+  for (const path of CONFIG_PATHS) {
+    const file = await readCappedFile(client, repo, path, sha, TARGET_CONFIG_MAX_BYTES);
+    if (file.kind === "missing") continue;
+    if (file.kind === "rejected") return { config: parseConfigText("", allRules).config, notes: [`${file.reason} Using the default configuration.`] };
+    const parsed = parseConfigText(file.text, allRules, path);
+    return { config: parsed.config, notes: parsed.problems.map((problem) => `${path}: ${problem.path} ${problem.message}`) };
+  }
+  return { config: parseConfigText("", allRules).config, notes: [] };
+}
+function clampConfig(config, project) {
+  return {
+    ...config,
+    ...project.preset ? { extends: [project.preset] } : {},
+    limits: {
+      maxFiles: Math.min(config.limits.maxFiles, REVIEW_LIMITS.maxFiles),
+      maxFileBytes: Math.min(config.limits.maxFileBytes, REVIEW_LIMITS.maxFileBytes)
+    }
+  };
+}
+function errorMessage(error2) {
+  return truncate2(sanitizeText(error2 instanceof Error ? error2.message : String(error2)), 200);
+}
+async function reviewProject(client, project, options) {
+  const outcome2 = { project: project.name, status: "ok", problems: [], notes: [], diagnostics: [], filesAnalyzed: 0, inventoryComplete: true };
+  if (project.paused) {
+    outcome2.status = "paused";
+    outcome2.notes.push("Reviews are paused for this project (paused: true).");
+    return outcome2;
+  }
+  try {
+    const consent = await verifyConsent(client, project, { registry: options.registry, ...options.author !== void 0 ? { author: options.author } : {} });
+    if (consent.repository) outcome2.repository = consent.repository;
+    if (!consent.ok || !consent.repository) {
+      outcome2.status = "consent-failed";
+      outcome2.problems.push(...consent.problems);
+      return outcome2;
+    }
+    const repository = consent.repository;
+    const target = { owner: repository.owner, repo: repository.repo };
+    const loaded = await loadTargetConfig(client, target, repository.sha);
+    outcome2.notes.push(...loaded.notes);
+    if (!loaded.config.enabled) {
+      outcome2.notes.push("The repository's .github/ci-cd-optimizer.yml sets enabled: false, so no rules ran.");
+      return outcome2;
+    }
+    const config = clampConfig(loaded.config, project);
+    const snapshot = await loadRepositorySnapshot(client, target, {
+      ref: repository.sha,
+      config: { ignorePaths: config.ignorePaths, limits: config.limits },
+      resolvedRevision: { sha: repository.sha, treeSha: repository.treeSha },
+      concurrency: REVIEW_CONCURRENCY
+    });
+    const result = lint2({ input: snapshot.input, config });
+    outcome2.diagnostics = result.diagnostics;
+    outcome2.filesAnalyzed = result.filesAnalyzed;
+    outcome2.inventoryComplete = snapshot.input.inventoryComplete;
+    if (!snapshot.input.inventoryComplete) {
+      outcome2.notes.push(`Only part of the repository was reviewed (limits: ${REVIEW_LIMITS.maxFiles} files, ${REVIEW_LIMITS.maxFileBytes} bytes per file).`);
+    }
+    if (result.parseProblems.length > 0) outcome2.notes.push(`${result.parseProblems.length} file(s) could not be parsed and were skipped.`);
+    return outcome2;
+  } catch (error2) {
+    outcome2.status = "error";
+    outcome2.problems.push(`The review could not complete: ${errorMessage(error2)}`);
+    return outcome2;
+  }
+}
+
+// src/review/intake.ts
+var META_FILES = /* @__PURE__ */ new Set(["projects/schema.json", "projects/README.md"]);
+var SUBMISSION_PATH = /^projects\/([a-z0-9][a-z0-9-]{0,62})\/project\.yaml$/;
+var MAX_OPEN_SUBMISSIONS_PER_AUTHOR = 3;
+var MAX_FILE_PAGES = 30;
+var MAX_AUTHOR_PULLS_INSPECTED = 20;
+var INTAKE_ARTIFACT_MAX_BYTES = 1024;
+var SHA_PATTERN2 = /^[0-9a-f]{40}$/;
+function touchesProjects(path) {
+  return path !== void 0 && path.toLowerCase().startsWith("projects/") && !META_FILES.has(path);
+}
+function classifyPullFiles(files, changedFiles) {
+  const projectFiles = files.filter((file2) => touchesProjects(file2.filename) || touchesProjects(file2.previous_filename));
+  if (projectFiles.length === 0) {
+    if (changedFiles !== void 0 && changedFiles > files.length) {
+      return { kind: "invalid", problems: [`The pull request changes ${changedFiles} files but only ${files.length} could be listed, so intake cannot rule out a submission.`] };
+    }
+    return { kind: "none" };
+  }
+  const problems = [];
+  const total = Math.max(files.length, changedFiles ?? 0);
+  if (projectFiles.length > 1 || total > 1) {
+    problems.push("A submission pull request must change exactly one file, projects/<name>/project.yaml, and nothing else. Split other changes into a separate pull request.");
+  }
+  const [file] = projectFiles;
+  if (!file) return { kind: "invalid", problems };
+  const match2 = SUBMISSION_PATH.exec(file.filename);
+  const name = match2?.[1];
+  if (!match2 || !name) {
+    problems.push(`${describeValue(file.filename, 120)} is not a valid submission path. Use projects/<name>/project.yaml where <name> matches ^[a-z0-9][a-z0-9-]{0,62}$.`);
+  }
+  if (file.status === "renamed" || file.previous_filename !== void 0) {
+    problems.push("Renaming a project is not supported. Remove the old project and submit the new one in separate pull requests.");
+  } else if (!["added", "modified", "removed"].includes(file.status)) {
+    problems.push(`Unsupported change type ${describeValue(file.status, 20)} for ${describeValue(file.filename, 120)}.`);
+  }
+  if (problems.length > 0 || !name) return { kind: "invalid", problems, ...name ? { name } : {} };
+  if (file.status === "removed") return { kind: "opt-out", name, path: file.filename };
+  return { kind: "submission", name, path: file.filename, status: file.status === "added" ? "added" : "modified" };
+}
+function parseIntakeArtifact(text4, expectedSha) {
+  if (Buffer.byteLength(text4, "utf8") > INTAKE_ARTIFACT_MAX_BYTES) return { problems: [`The intake record is larger than ${INTAKE_ARTIFACT_MAX_BYTES} bytes.`] };
+  if (!SHA_PATTERN2.test(expectedSha)) return { problems: ["The expected head SHA must be 40 lowercase hex characters."] };
+  let value2;
+  try {
+    value2 = JSON.parse(text4);
+  } catch {
+    return { problems: ["The intake record is not valid JSON."] };
+  }
+  if (value2 === null || typeof value2 !== "object" || Array.isArray(value2)) return { problems: ["The intake record must be a JSON object."] };
+  const record3 = value2;
+  const keys = Object.keys(record3);
+  const problems = [];
+  if (keys.length !== 2 || !keys.includes("pr_number") || !keys.includes("head_sha")) problems.push("The intake record must contain exactly pr_number and head_sha.");
+  const prNumber = record3.pr_number;
+  if (typeof prNumber !== "number" || !Number.isSafeInteger(prNumber) || prNumber <= 0) problems.push("pr_number must be a positive integer.");
+  const headSha = record3.head_sha;
+  if (typeof headSha !== "string" || !SHA_PATTERN2.test(headSha)) problems.push("head_sha must be 40 lowercase hex characters.");
+  if (problems.length > 0) return { problems };
+  const artifact = { pr_number: prNumber, head_sha: headSha };
+  if (JSON.stringify(artifact) !== text4.trim()) return { problems: ["The intake record is not in canonical form."] };
+  if (artifact.head_sha !== expectedSha) return { problems: ["The intake record names a different commit than the workflow run."] };
+  return { artifact, problems: [] };
+}
+function serializeIntakeArtifact(artifact) {
+  return JSON.stringify({ pr_number: artifact.pr_number, head_sha: artifact.head_sha });
+}
+async function readProjectAt(client, repo, fallback, path, sha) {
+  const file = await readCappedFile(client, repo, path, sha, PROJECT_MAX_BYTES);
+  if (file.kind !== "missing" || !fallback) return file;
+  return readCappedFile(client, fallback, path, sha, PROJECT_MAX_BYTES);
+}
+async function openSubmissionsBy(client, repo, author, current) {
+  const pulls = await paginate(client, "GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open" }, 3);
+  const mine = pulls.filter((pull) => pull.number !== current && typeof pull.user?.login === "string" && sameLogin(pull.user.login, author));
+  let count = 0;
+  for (const pull of mine.slice(0, MAX_AUTHOR_PULLS_INSPECTED)) {
+    const files = await paginate(client, "GET /repos/{owner}/{repo}/pulls/{pull_number}/files", { ...repo, pull_number: pull.number }, 1);
+    if (files.some((file) => touchesProjects(file.filename) || touchesProjects(file.previous_filename))) count += 1;
+  }
+  return count;
+}
+function contactsOf(project) {
+  return [project.primaryContact, ...project.autoCcs];
+}
+function intakeReport(name, status, problems, notes = []) {
+  return {
+    schemaVersion: 1,
+    project: name,
+    status,
+    problems,
+    notes,
+    findings: [],
+    redacted: { count: 0, rules: [] },
+    summary: { filesAnalyzed: 0, error: 0, warn: 0, info: 0, inventoryComplete: true }
+  };
+}
+var NOTHING_TO_REVIEW = "This pull request does not change any project under projects/, so there is nothing to review.\n";
+async function snapshotPull(client, repo, pr, expectedHead) {
+  const { data } = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr });
+  const headSha = typeof data.head?.sha === "string" ? data.head.sha : "";
+  const baseSha = typeof data.base?.sha === "string" ? data.base.sha : "";
+  if (!SHA_PATTERN2.test(headSha) || !SHA_PATTERN2.test(baseSha)) {
+    return { ok: false, result: { kind: "invalid", name: "intake", headSha, markdown: "Pull request metadata is incomplete.\n", exitCode: 1 } };
+  }
+  const stale = (current) => ({
+    ok: false,
+    result: {
+      kind: "invalid",
+      name: "intake",
+      headSha: current,
+      markdown: `Pull request #${pr} moved to ${current.slice(0, 12)} while it was being checked; the newer commit is reviewed by its own run.
+`,
+      exitCode: 1
+    }
+  });
+  if (expectedHead !== void 0 && expectedHead !== headSha) return stale(headSha);
+  const files = await paginate(client, "GET /repos/{owner}/{repo}/pulls/{pull_number}/files", { ...repo, pull_number: pr }, MAX_FILE_PAGES);
+  const { data: again } = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: pr });
+  const headAgain = typeof again.head?.sha === "string" ? again.head.sha : "";
+  if (headAgain !== headSha) return stale(SHA_PATTERN2.test(headAgain) ? headAgain : "unknown");
+  const changedFiles = typeof again.changed_files === "number" ? again.changed_files : void 0;
+  return { ok: true, data, headSha, baseSha, classification: classifyPullFiles(files, changedFiles) };
+}
+async function runIntake(client, repo, options) {
+  const snapshot = await snapshotPull(client, repo, options.pr, options.headSha);
+  if (!snapshot.ok) return snapshot.result;
+  const { data, headSha, baseSha, classification } = snapshot;
+  const finish2 = (kind, name2, report, extra = {}) => {
+    const markdown2 = renderMarkdown(report, extra.statusText ? { statusText: extra.statusText } : {});
+    return {
+      kind,
+      name: name2,
+      headSha,
+      ...extra.author ? { author: extra.author } : {},
+      report,
+      markdown: markdown2,
+      exitCode: reportExitCode(report),
+      ...SHA_PATTERN2.test(headSha) ? { artifact: { pr_number: options.pr, head_sha: headSha } } : {}
+    };
+  };
+  if (classification.kind === "none") {
+    return { kind: "none", name: "intake", headSha, markdown: NOTHING_TO_REVIEW, exitCode: 0, artifact: { pr_number: options.pr, head_sha: headSha } };
+  }
+  if (classification.kind === "invalid") {
+    const name2 = classification.name ?? "intake";
+    return finish2("invalid", name2, intakeReport(name2, "invalid", classification.problems));
+  }
+  const { name, path } = classification;
+  const author = typeof data.user?.login === "string" ? data.user.login : "";
+  const notes = data.state === "open" ? [] : [`Pull request #${options.pr} is not open.`];
+  if (!isLogin(author) || data.user?.type !== "User") {
+    return finish2(classification.kind, name, intakeReport(name, "invalid", ["Submissions must be opened by a GitHub user account listed in the project's consent file."], notes));
+  }
+  const headRepo = data.head?.repo;
+  const fallback = typeof headRepo?.owner?.login === "string" && typeof headRepo.name === "string" ? { owner: headRepo.owner.login, repo: headRepo.name } : void 0;
+  const baseFile = await readCappedFile(client, repo, path, baseSha, PROJECT_MAX_BYTES);
+  const existing = baseFile.kind === "file" ? parseProjectText(baseFile.text, name).project : void 0;
+  if (baseFile.kind !== "missing" && !existing) {
+    return finish2(classification.kind, name, intakeReport(name, "invalid", [
+      `The existing ${path} on the base branch could not be validated, so this change cannot be checked automatically. A registry maintainer must review it manually.`
+    ], notes), { author });
+  }
+  if (classification.kind === "opt-out") {
+    if (existing && !contactsOf(existing).some((contact) => sameLogin(contact, author))) {
+      return finish2("opt-out", name, intakeReport(name, "invalid", [
+        `Only the project's primary_contact or auto_ccs may remove it. Maintainers can also opt out at any time by deleting .github/ci-cd-optimizer-review.yml from their repository.`
+      ], notes), { author });
+    }
+    return finish2("opt-out", name, intakeReport(name, "ok", [], [...notes, `This pull request removes ${path}, which opts the project out of reviews once merged.`]), {
+      statusText: "Opt-out request",
+      author
+    });
+  }
+  const others = await openSubmissionsBy(client, repo, author, options.pr);
+  const limit3 = options.maxOpenPerAuthor ?? MAX_OPEN_SUBMISSIONS_PER_AUTHOR;
+  if (others >= limit3) {
+    return finish2("submission", name, intakeReport(name, "invalid", [`${describeValue(author)} already has ${others} other open submission pull requests; the limit is ${limit3}. Close or finish those first.`], notes), { author });
+  }
+  let file;
+  try {
+    file = await readProjectAt(client, repo, fallback, path, headSha);
+  } catch (error2) {
+    const status = httpStatus(error2);
+    if (status === void 0) throw error2;
+    file = { kind: "rejected", reason: `${path} could not be read at the pull request head (HTTP ${status}).` };
+  }
+  if (file.kind !== "file") {
+    const reason = file.kind === "missing" ? `${path} was not found at the pull request head.` : file.reason;
+    return finish2("submission", name, intakeReport(name, "invalid", [reason], notes), { author });
+  }
+  const parsed = parseProjectText(file.text, name);
+  if (!parsed.project) return finish2("submission", name, intakeReport(name, "invalid", parsed.problems, notes), { author });
+  const project = parsed.project;
+  if (existing) {
+    const problems = [];
+    if (existing.repositoryId !== project.repositoryId) problems.push("repository_id is immutable. Remove the project and submit a new one to point it at a different repository.");
+    if (!contactsOf(existing).some((contact) => sameLogin(contact, author))) problems.push("Only the project's current primary_contact or auto_ccs may change an existing project.");
+    if (problems.length > 0) return finish2("submission", name, intakeReport(name, "invalid", problems, notes), { author });
+  }
+  const outcome2 = await reviewProject(client, project, { registry: options.registry, author });
+  outcome2.notes.unshift(...notes);
+  return finish2("submission", name, buildReport(outcome2, { public: true }), { author });
+}
+var TRUSTED_STATUS_CONTEXT = "review-intake/trusted";
+var MAX_OPEN_PULL_PAGES = 10;
+var STATUS_DESCRIPTION_MAX = 140;
+async function openPullsAt(client, repo, sha) {
+  const pulls = await paginate(client, "GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open" }, MAX_OPEN_PULL_PAGES);
+  return pulls.filter((pull) => pull.head?.sha === sha).map((pull) => pull.number).filter((number2) => typeof number2 === "number" && Number.isSafeInteger(number2) && number2 > 0);
+}
+async function unrecordedIntake(client, repo, pr, headSha, record3) {
+  const snapshot = await snapshotPull(client, repo, pr, headSha);
+  if (!snapshot.ok) return snapshot.result;
+  const { classification } = snapshot;
+  if (classification.kind === "none") return { kind: "none", name: "intake", headSha, markdown: NOTHING_TO_REVIEW, exitCode: 0 };
+  const name = classification.name ?? "intake";
+  const problem = record3 === "missing" ? "The Review intake run for this commit left no intake record, so the submission could not be verified." : "The Review intake run for this commit left an invalid intake record, so the submission could not be verified.";
+  const report = intakeReport(name, "invalid", [
+    `${problem} A registry maintainer must re-run Review intake. Pull requests that change the intake workflow cannot be accepted as submissions.`
+  ]);
+  return { kind: classification.kind, name, headSha, report, markdown: renderMarkdown(report), exitCode: 1 };
+}
+async function runTrustedIntake(client, repo, options) {
+  if (!SHA_PATTERN2.test(options.headSha)) throw new Error("The head SHA must be 40 lowercase hex characters.");
+  const candidates = new Set(await openPullsAt(client, repo, options.headSha));
+  if (options.record === "present" && options.pr !== void 0) candidates.add(options.pr);
+  const entries2 = [];
+  for (const pr of [...candidates].sort((a, b) => a - b)) {
+    const result = options.record === "present" ? await runIntake(client, repo, { pr, headSha: options.headSha, registry: options.registry }) : await unrecordedIntake(client, repo, pr, options.headSha, options.record);
+    entries2.push({ pr, result });
+  }
+  return entries2;
+}
+function failureReason(result) {
+  switch (result.report?.status) {
+    case "invalid":
+      return "submission is invalid; see the review comment.";
+    case "consent-failed":
+      return "consent could not be verified; see the review comment.";
+    case "error":
+      return "the review failed; see the review comment.";
+    case void 0:
+      return "the pull request moved to a newer commit or has incomplete metadata.";
+    default:
+      return "intake failed.";
+  }
+}
+function intakeCommitStatus(entries2) {
+  const status = (state, description) => ({ state, description: description.slice(0, STATUS_DESCRIPTION_MAX) });
+  if (entries2.length === 0) return status("failure", "No open pull request points at this commit.");
+  const failed = entries2.filter((entry) => entry.result.exitCode !== 0);
+  const [first] = failed;
+  if (failed.length > 1) return status("failure", `${failed.length} pull requests at this commit failed intake.`);
+  if (first) return status("failure", `#${first.pr}: ${failureReason(first.result)}`);
+  if (entries2.every((entry) => entry.result.kind === "none")) return status("success", "No project changes to review.");
+  return status("success", "Intake checks passed.");
+}
+
+// src/cli/review.ts
+var REVIEW_HELP = `Usage: ci-cd-optimizer review <command> [options]
+
+The project review program (see docs/review-program/README.md): repositories registered under
+projects/<name>/project.yaml are linted through the GitHub API after their maintainers consent.
+
+Commands:
+  validate <file...>        Validate project.yaml files offline (schema and directory name)
+  run <project.yaml>        Review one project: verify consent, lint its default branch, print the report
+  intake --pr <n>           Check a submission pull request and review the project it adds or changes
+  intake-artifact <file>    Validate the intake record handed from the intake run to the comment run
+  intake-status             Re-run intake from trusted code and publish the review-intake/trusted commit status
+  scheduled                 Re-review every registered project (public mode) and print a summary
+
+run:              [--public] [--format markdown|json] [--author <login>] [--registry <owner/repo>] [--output <file>]
+intake:           --pr <n> [--repo <owner/repo>] [--head-sha <sha>] [--comment] [--artifact <file>] [--output <file>]
+intake-artifact:  <file> --expected-sha <sha>     (prints pr_number=\u2026 and head_sha=\u2026 lines for $GITHUB_OUTPUT)
+intake-status:    --head-sha <sha> [--pr <n>] [--record present|missing|invalid] [--repo <owner/repo>]
+                  [--comment] [--status] [--output <file>]
+scheduled:        [--dir projects] [--registry <owner/repo>] [--output <file>]
+
+Without --public, run prints every finding, including security-sensitive ones that public reports withhold.
+The registry defaults to $GITHUB_REPOSITORY, then ${DEFAULT_REGISTRY}.
+`;
+var SHA = /^[0-9a-f]{40}$/;
+var SCHEDULED_MAX_BYTES = 900 * 1024;
+var SCHEDULED_PROJECT_MAX_BYTES = 30 * 1024;
+function registryFrom(value2, io) {
+  const registry = value2 ?? io.env.GITHUB_REPOSITORY ?? DEFAULT_REGISTRY;
+  if (!/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(registry)) throw new UsageError(`Invalid registry "${registry}". Use owner/repo.`);
+  return registry;
+}
+async function readProjectFile(io, path) {
+  if (basename2(path) !== PROJECT_FILE) throw new UsageError(`${path}: project files must be named ${PROJECT_FILE}.`);
+  const target = resolvePath(io, path);
+  let size;
+  try {
+    const info = await lstat2(target);
+    if (!info.isFile()) throw new UsageError(`${path}: not a regular file.`);
+    size = info.size;
+  } catch (error2) {
+    if (error2 instanceof UsageError) throw error2;
+    throw new UsageError(`Cannot read ${path}: ${error2.message}`);
+  }
+  const directory = basename2(dirname5(target));
+  if (size > PROJECT_MAX_BYTES) return { text: "x".repeat(PROJECT_MAX_BYTES + 1), directory };
+  return { text: await readFile7(target, "utf8"), directory };
+}
+async function validateCommand(args, io) {
+  const { values: values2, positionals: positionals2 } = parseArgs9({ args, strict: true, allowPositionals: true, options: { help: { type: "boolean", short: "h", default: false } } });
+  if (values2.help) {
+    io.stdout(REVIEW_HELP);
+    return 0;
+  }
+  if (positionals2.length === 0) throw new UsageError("review validate needs at least one project.yaml file.");
+  let failed = false;
+  for (const path of positionals2) {
+    const { text: text4, directory } = await readProjectFile(io, path);
+    const parsed = parseProjectText(text4, directory);
+    if (parsed.project) {
+      io.stdout(`${path}: ok`);
+    } else {
+      failed = true;
+      io.stdout(`${path}: invalid`);
+      for (const problem of parsed.problems) io.stdout(`  - ${problem}`);
+    }
+  }
+  return failed ? 1 : 0;
+}
+async function runCommand(args, io) {
+  const { values: values2, positionals: positionals2 } = parseArgs9({
+    args,
+    strict: true,
+    allowPositionals: true,
+    options: {
+      public: { type: "boolean", default: false },
+      format: { type: "string", short: "f", default: "markdown" },
+      author: { type: "string" },
+      registry: { type: "string" },
+      output: { type: "string", short: "o" },
+      help: { type: "boolean", short: "h", default: false }
+    }
+  });
+  if (values2.help) {
+    io.stdout(REVIEW_HELP);
+    return 0;
+  }
+  if (values2.format !== "markdown" && values2.format !== "json") throw new UsageError(`Unknown format "${values2.format}". Use markdown or json.`);
+  const [path, ...extra] = positionals2;
+  if (!path || extra.length > 0) throw new UsageError("review run needs exactly one project.yaml file.");
+  const registry = registryFrom(values2.registry, io);
+  const { text: text4, directory } = await readProjectFile(io, path);
+  const parsed = parseProjectText(text4, directory);
+  let report;
+  if (!parsed.project) {
+    report = buildReport(
+      { project: NAME_PATTERN.test(directory) ? directory : "intake", status: "invalid", problems: parsed.problems, notes: [], diagnostics: [], filesAnalyzed: 0, inventoryComplete: true },
+      { public: values2.public }
+    );
+  } else {
+    const outcome2 = await reviewProject(githubClient(io), parsed.project, { registry, ...values2.author !== void 0 ? { author: values2.author } : {} });
+    report = buildReport(outcome2, { public: values2.public });
+  }
+  await writeText(io, values2.output, values2.format === "json" ? renderJson(report) : renderMarkdown(report));
+  return reportExitCode(report);
+}
+async function intakeCommand(args, io) {
+  const { values: values2 } = parseArgs9({
+    args,
+    strict: true,
+    options: {
+      pr: { type: "string" },
+      repo: { type: "string" },
+      "head-sha": { type: "string" },
+      registry: { type: "string" },
+      comment: { type: "boolean", default: false },
+      artifact: { type: "string" },
+      output: { type: "string", short: "o" },
+      help: { type: "boolean", short: "h", default: false }
+    }
+  });
+  if (values2.help) {
+    io.stdout(REVIEW_HELP);
+    return 0;
+  }
+  const pr = Number(values2.pr);
+  if (!values2.pr || !/^[1-9][0-9]{0,9}$/.test(values2.pr) || !Number.isSafeInteger(pr)) throw new UsageError("review intake needs --pr <number>.");
+  const headSha = values2["head-sha"];
+  if (headSha !== void 0 && !SHA.test(headSha)) throw new UsageError("--head-sha must be a full 40-character lowercase commit SHA.");
+  const repo = repoFrom(values2.repo, io);
+  const registry = registryFrom(values2.registry ?? `${repo.owner}/${repo.repo}`, io);
+  const client = githubClient(io);
+  const result = await runIntake(client, repo, { pr, registry, ...headSha !== void 0 ? { headSha } : {} });
+  if (values2.artifact && result.artifact) await writeText(io, values2.artifact, serializeIntakeArtifact(result.artifact));
+  await writeText(io, values2.output, result.markdown);
+  if (values2.comment && result.report) {
+    const { action } = await upsertReviewComment(client, repo, pr, result.name, result.markdown);
+    io.stderr(`review comment ${action} on #${pr}`);
+  }
+  return result.exitCode;
+}
+async function intakeArtifactCommand(args, io) {
+  const { values: values2, positionals: positionals2 } = parseArgs9({
+    args,
+    strict: true,
+    allowPositionals: true,
+    options: { "expected-sha": { type: "string" }, help: { type: "boolean", short: "h", default: false } }
+  });
+  if (values2.help) {
+    io.stdout(REVIEW_HELP);
+    return 0;
+  }
+  const [path, ...extra] = positionals2;
+  if (!path || extra.length > 0) throw new UsageError("review intake-artifact needs exactly one file.");
+  const expected = values2["expected-sha"];
+  if (!expected) throw new UsageError("review intake-artifact needs --expected-sha <sha>.");
+  const target = resolvePath(io, path);
+  const info = await lstat2(target).catch(() => void 0);
+  if (!info?.isFile()) {
+    io.stderr(`${path}: the intake record is missing or is not a regular file.`);
+    return 1;
+  }
+  if (info.size > INTAKE_ARTIFACT_MAX_BYTES) {
+    io.stderr(`${path}: the intake record is larger than ${INTAKE_ARTIFACT_MAX_BYTES} bytes.`);
+    return 1;
+  }
+  const parsed = parseIntakeArtifact(await readFile7(target, "utf8"), expected);
+  if (!parsed.artifact) {
+    for (const problem of parsed.problems) io.stderr(`${path}: ${problem}`);
+    return 1;
+  }
+  io.stdout(`pr_number=${parsed.artifact.pr_number}
+head_sha=${parsed.artifact.head_sha}`);
+  return 0;
+}
+var RECORD_STATES = ["present", "missing", "invalid"];
+function runUrl2(env) {
+  const server = env.GITHUB_SERVER_URL;
+  const repository = env.GITHUB_REPOSITORY;
+  const runId = env.GITHUB_RUN_ID;
+  if (!server || !repository || !runId) return void 0;
+  if (!/^https:\/\/[A-Za-z0-9.-]+$/.test(server) || !/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(repository) || !/^[1-9][0-9]{0,19}$/.test(runId)) return void 0;
+  return `${server}/${repository}/actions/runs/${runId}`;
+}
+async function intakeStatusCommand(args, io) {
+  const { values: values2 } = parseArgs9({
+    args,
+    strict: true,
+    options: {
+      "head-sha": { type: "string" },
+      pr: { type: "string" },
+      record: { type: "string" },
+      repo: { type: "string" },
+      registry: { type: "string" },
+      comment: { type: "boolean", default: false },
+      status: { type: "boolean", default: false },
+      output: { type: "string", short: "o" },
+      help: { type: "boolean", short: "h", default: false }
+    }
+  });
+  if (values2.help) {
+    io.stdout(REVIEW_HELP);
+    return 0;
+  }
+  const headSha = values2["head-sha"];
+  if (!headSha || !SHA.test(headSha)) throw new UsageError("review intake-status needs --head-sha with a full 40-character lowercase commit SHA.");
+  let pr;
+  if (values2.pr !== void 0) {
+    pr = Number(values2.pr);
+    if (!/^[1-9][0-9]{0,9}$/.test(values2.pr) || !Number.isSafeInteger(pr)) throw new UsageError("--pr must be a pull request number.");
+  }
+  const record3 = values2.record ?? (pr === void 0 ? "missing" : "present");
+  if (!RECORD_STATES.includes(record3)) throw new UsageError(`--record must be one of ${RECORD_STATES.join(", ")}.`);
+  if (record3 === "present" && pr === void 0) throw new UsageError("--record present needs the --pr named by the intake record.");
+  const repo = repoFrom(values2.repo, io);
+  const registry = registryFrom(values2.registry ?? `${repo.owner}/${repo.repo}`, io);
+  const client = githubClient(io);
+  const entries2 = await runTrustedIntake(client, repo, { headSha, record: record3, registry, ...pr !== void 0 ? { pr } : {} });
+  const decision = intakeCommitStatus(entries2);
+  const sections = [`## Trusted review intake for ${headSha.slice(0, 12)}
+
+**${decision.state}**: ${decision.description}
+`];
+  for (const { pr: number2, result } of entries2) sections.push(`### Pull request #${number2}
+
+${result.markdown}`);
+  await writeText(io, values2.output, sections.join("\n"));
+  if (values2.comment) {
+    for (const { pr: number2, result } of entries2) {
+      if (!result.report) continue;
+      const { action } = await upsertReviewComment(client, repo, number2, result.name, result.markdown);
+      io.stderr(`review comment ${action} on #${number2}`);
+    }
+  }
+  if (values2.status) {
+    const targetUrl = runUrl2(io.env);
+    await client.request("POST /repos/{owner}/{repo}/statuses/{sha}", {
+      ...repo,
+      sha: headSha,
+      state: decision.state,
+      context: TRUSTED_STATUS_CONTEXT,
+      description: decision.description,
+      ...targetUrl ? { target_url: targetUrl } : {}
+    });
+    io.stderr(`${TRUSTED_STATUS_CONTEXT} set to ${decision.state} on ${headSha.slice(0, 12)}`);
+  }
+  return decision.state === "success" ? 0 : 1;
+}
+async function scheduledCommand(args, io) {
+  const { values: values2 } = parseArgs9({
+    args,
+    strict: true,
+    options: {
+      dir: { type: "string", default: "projects" },
+      registry: { type: "string" },
+      output: { type: "string", short: "o" },
+      help: { type: "boolean", short: "h", default: false }
+    }
+  });
+  if (values2.help) {
+    io.stdout(REVIEW_HELP);
+    return 0;
+  }
+  const registry = registryFrom(values2.registry, io);
+  const root = resolvePath(io, values2.dir);
+  let entries2;
+  try {
+    entries2 = await readdir4(root, { withFileTypes: true });
+  } catch (error2) {
+    throw new UsageError(`Cannot read ${values2.dir}: ${error2.message}`);
+  }
+  const names = entries2.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  const client = githubClient(io);
+  const rows = [];
+  const details = [];
+  let failed = false;
+  for (const directory of names) {
+    let report;
+    const file = join7(root, directory, PROJECT_FILE);
+    const exists = await lstat2(file).then((info) => info.isFile(), () => false);
+    if (!exists) continue;
+    const { text: text5 } = await readProjectFile(io, file);
+    const parsed = parseProjectText(text5, directory);
+    if (!parsed.project) {
+      report = buildReport({ project: NAME_PATTERN.test(directory) ? directory : "intake", status: "invalid", problems: parsed.problems, notes: [], diagnostics: [], filesAnalyzed: 0, inventoryComplete: true }, { public: true });
+    } else {
+      report = buildReport(await reviewProject(client, parsed.project, { registry }), { public: true });
+    }
+    if (report.status === "invalid" || report.status === "error") failed = true;
+    const { summary: summary3 } = report;
+    rows.push(`| ${escapeInline(report.project, 63)} | ${report.status} | ${summary3.filesAnalyzed} | ${summary3.error} | ${summary3.warn} | ${summary3.info} | ${report.redacted.count} |`);
+    const body = renderMarkdown(report, { heading: "####" });
+    details.push("<details>", `<summary>${escapeInline(report.project, 63)}: ${report.status}</summary>`, "", body.length > SCHEDULED_PROJECT_MAX_BYTES ? `${body.slice(0, SCHEDULED_PROJECT_MAX_BYTES)}
+
+_Report truncated._` : body, "</details>", "");
+  }
+  const lines = ["### Scheduled project reviews", "", `${rows.length === 0 ? "No" : rows.length} registered project${rows.length === 1 ? "" : "s"} reviewed.`, ""];
+  if (rows.length > 0) lines.push("| Project | Status | Files | Error | Warn | Info | Withheld |", "| --- | --- | --- | --- | --- | --- | --- |", ...rows, "", ...details);
+  let text4 = lines.join("\n");
+  if (text4.length > SCHEDULED_MAX_BYTES) text4 = `${text4.slice(0, SCHEDULED_MAX_BYTES)}
+
+_Summary truncated._
+`;
+  await writeText(io, values2.output, text4);
+  return failed ? 1 : 0;
+}
+var COMMANDS3 = {
+  validate: validateCommand,
+  run: runCommand,
+  intake: intakeCommand,
+  "intake-artifact": intakeArtifactCommand,
+  "intake-status": intakeStatusCommand,
+  scheduled: scheduledCommand
+};
+async function reviewCommand(args, io) {
+  const [command, ...rest] = args;
+  if (!command || command === "--help" || command === "-h") {
+    io.stdout(REVIEW_HELP);
+    return 0;
+  }
+  const handler = COMMANDS3[command];
+  if (!handler) throw new UsageError(`Unknown review command "${command}". Commands: ${Object.keys(COMMANDS3).join(", ")}.`);
+  return handler(rest, io);
+}
+
 // src/cli/index.ts
 var HELP2 = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimizer for GitHub repositories
 
@@ -25769,6 +26825,7 @@ Commands:
   knowledge <cmd>       Authorized mitigation history: applications, runs, inspect, refresh, evaluate
   maintenance <cmd>     Operator-only knowledge retention and erasure (preview by default)
   execution <cmd>       Opt-in task capture and authorized runtime report import/inspection
+  review <cmd>          Project review program: validate, run, intake, scheduled (docs/review-program)
   help [command]        Show help
   version               Print the version
 
@@ -25776,7 +26833,7 @@ Exit codes: 0 success, 1 findings at or above --fail-on (or a failed operation),
 `;
 var RULES_HELP = `Usage: ci-cd-optimizer rules [--format text|json|markdown] [--output <file>]`;
 async function rulesCommand(args, io) {
-  const { values: values2 } = parseArgs9({ args, strict: true, options: { format: { type: "string", short: "f", default: "text" }, output: { type: "string", short: "o" }, help: { type: "boolean", short: "h", default: false } } });
+  const { values: values2 } = parseArgs10({ args, strict: true, options: { format: { type: "string", short: "f", default: "text" }, output: { type: "string", short: "o" }, help: { type: "boolean", short: "h", default: false } } });
   if (values2.help) {
     io.stdout(RULES_HELP);
     return 0;
@@ -25791,7 +26848,7 @@ async function rulesCommand(args, io) {
   await writeText(io, values2.output, text4);
   return 0;
 }
-var COMMANDS3 = {
+var COMMANDS4 = {
   lint: { run: lintCommand, help: LINT_HELP },
   rules: { run: rulesCommand, help: RULES_HELP },
   experiments: { run: experimentsCommand, help: EXPERIMENTS_HELP },
@@ -25800,7 +26857,8 @@ var COMMANDS3 = {
   telemetry: { run: telemetryCommand, help: TELEMETRY_HELP },
   knowledge: { run: knowledgeCommand, help: KNOWLEDGE_HELP },
   maintenance: { run: maintenanceCommand, help: MAINTENANCE_HELP },
-  execution: { run: executionCommand, help: EXECUTION_HELP }
+  execution: { run: executionCommand, help: EXECUTION_HELP },
+  review: { run: reviewCommand, help: REVIEW_HELP }
 };
 async function run3(argv, io) {
   const [first, ...rest] = argv;
@@ -25810,14 +26868,14 @@ async function run3(argv, io) {
       return 0;
     }
     if (first === "help" || first === "--help" || first === "-h") {
-      const topic = rest[0] ? COMMANDS3[rest[0]] : void 0;
+      const topic = rest[0] ? COMMANDS4[rest[0]] : void 0;
       io.stdout(topic?.help ?? HELP2);
       return 0;
     }
-    const command = first ? COMMANDS3[first] : void 0;
+    const command = first ? COMMANDS4[first] : void 0;
     if (command) return await command.run(rest, io);
     if (first && !first.startsWith("-") && /^[a-z]+$/.test(first) && !await isDirectory(io, first)) {
-      throw new UsageError(`Unknown command "${first}". Commands: ${Object.keys(COMMANDS3).join(", ")}, help, version.`);
+      throw new UsageError(`Unknown command "${first}". Commands: ${Object.keys(COMMANDS4).join(", ")}, help, version.`);
     }
     return await lintCommand(argv, io);
   } catch (error2) {

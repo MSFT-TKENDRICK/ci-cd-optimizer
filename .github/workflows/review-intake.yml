@@ -1,0 +1,72 @@
+# Project review program intake (docs/review-program/README.md). Validates a pull request that adds, changes, or
+# removes projects/<name>/project.yaml, checks the target repository's consent, and reviews its CI/CD configuration.
+# It runs on every pull request and always leaves an intake record when the head commit is known, including for
+# pull requests with nothing to review.
+#
+# This job is advisory. A pull request can rewrite this workflow, so branch protection must instead require the
+# review-intake/trusted commit status, which review-intake-comment.yml publishes after repeating intake from the
+# default branch.
+#
+# Security model (docs/review-program/threat-model.md): read-only token, no secrets, and the *base* commit is checked
+# out, so the code that runs is trusted main-line code unless a pull request edits this workflow itself. The
+# submitted project.yaml is fetched through the API at the exact head commit and treated purely as data.
+name: Review intake
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: review-intake-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  intake:
+    # Submissions are reviewed on the pull request; the merge queue has nothing new to check.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Base commit has the review program
+        id: guard
+        run: |
+          if [ -f src/review/intake.ts ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::The base commit predates the project review program; skipping intake."
+          fi
+
+      - if: steps.guard.outputs.enabled == 'true'
+        uses: ./.github/actions/setup
+
+      - name: Review submission
+        if: steps.guard.outputs.enabled == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/review-intake"
+          npm run --silent cli -- review intake --pr "$PR_NUMBER" --head-sha "$HEAD_SHA" \
+            --artifact "$RUNNER_TEMP/review-intake/intake.json" --output "$GITHUB_STEP_SUMMARY"
+
+      # Only {"pr_number","head_sha"} crosses into the privileged comment workflow, which re-derives everything else.
+      - name: Upload intake record
+        if: ${{ !cancelled() && steps.guard.outputs.enabled == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: review-intake
+          path: ${{ runner.temp }}/review-intake/intake.json
+          retention-days: 1
+          if-no-files-found: ignore
