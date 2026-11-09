@@ -274,6 +274,10 @@ Enter the token at the hidden prompt. Do not copy a broad GitHub CLI login crede
 
 - **Allow GitHub Actions to create and approve pull requests** (Settings → Actions → General). Turn this on only if
   `command: scan` runs with `GITHUB_TOKEN` and should open fix pull requests. Prefer the App.
+- **Experiments and recipes open pull requests too.** The experiment generator's `create` step fails with
+  `403: GitHub Actions is not permitted to create or approve pull requests` unless the setting above is on or
+  `CICD_OPTIMIZER_TOKEN` (§4) is set. Recipe rollout opens target pull requests with the App's token, but its
+  compatibility-score pull request in this repository has the same requirement.
 - **Using the Action from other private repositories.** While this repository is private, set Settings → Actions →
   General → **Access** to *Accessible from repositories owned by the user* (or the organization). Public
   repositories don't need this.
