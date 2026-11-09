@@ -15,7 +15,7 @@ Action, the App, and the hill-climbing workflows all behave the same way.
                          ┌───────────┬──────────┼───────────┬──────────────┬───────────────┐
  domain           issues/     fixes/     alerts/     telemetry/    experiments/    recipes/
                          └───────────┴──────────┼───────────┴──────────────┴───────────────┘
- core                       lint/  (engine · config · parsers · project model · 33 rules · formatters)
+ core                       lint/  (engine · config · parsers · project model · 62 rules · formatters)
  I/O                        github/  (REST client, repository snapshot, git, code scanning)
 ```
 
@@ -30,8 +30,8 @@ The MVP and the foundation of everything else. It is modeled on ESLint.
    steps, `uses` references, setup actions, caches, workspaces, packages, images, and the change context.
 3. **Rules.** Each rule is a `RuleModule { meta, check(context) }` that reports diagnostics with impact, confidence, a
    suggestion, a stable fingerprint, and optional text-edit fixes. It never executes repository code or expands
-   expressions. There are 33 rules in 8 rulesets: `workflow`, `checkout`, `affected`, `caching`, `hermeticity`,
-   `containers`, `packages`, and `registries` ([catalog](rules.md)).
+   expressions. There are 62 rules in 12 rulesets: `workflow`, `checkout`, `affected`, `caching`, `hermeticity`,
+   `containers`, `packages`, `registries`, `triggers`, `redundancy`, `testing`, and `security` ([catalog](rules.md)).
 4. **Configuration.** Presets, ruleset- and rule-level severities, options, and ignores ([configuration](configuration.md)).
    Rules are tested with an ESLint-style `RuleTester` (valid, invalid, and autofix-output cases).
 5. **Change awareness.** `--base` lints the base revision too and keeps only **introduced** findings, so pull requests

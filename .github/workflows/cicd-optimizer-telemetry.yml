@@ -33,7 +33,8 @@ jobs:
             dist-action
 
       - name: Restore snapshot store
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        # cicd-optimizer-disable-next-line security/privileged-cache-restore -- the store is JSON data, never executed, and only default-branch runs write this scope
+        uses:  actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cicd-telemetry
           key: cicd-telemetry-${{ github.run_id }}
@@ -48,6 +49,7 @@ jobs:
       # Each run saves a new immutable entry; restore-keys picks the newest, and old entries age out of the cache.
       - name: Save snapshot store
         if: always()
+        # cicd-optimizer-disable-next-line security/privileged-cache-restore -- see the restore step above
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cicd-telemetry
