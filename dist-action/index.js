@@ -21531,11 +21531,17 @@ function matchesGlob(path, glob) {
 async function mapLimit(items2, limit3, fn) {
   const results = new Array(items2.length);
   let next = 0;
+  let stopped = false;
   const worker = async () => {
-    while (next < items2.length) {
+    while (!stopped && next < items2.length) {
       const index = next;
       next += 1;
-      results[index] = await fn(items2[index]);
+      try {
+        results[index] = await fn(items2[index]);
+      } catch (error2) {
+        stopped = true;
+        throw error2;
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit3, items2.length) }, worker));
