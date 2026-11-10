@@ -21,7 +21,7 @@ ruleTester(rule, {
   invalid: [
     {
       files: wf("      - run: npm ci\n      - run: npx playwright install --with-deps\n      - run: npx playwright test\n"),
-      errors: [{ line: 7, messageIncludes: "without a cache" }],
+      errors: [{ line: 7, messageIncludes: "No browser cache or Playwright container image was detected" }],
     },
     {
       name: "through pnpm exec",

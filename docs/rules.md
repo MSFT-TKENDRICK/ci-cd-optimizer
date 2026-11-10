@@ -56,7 +56,7 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | [`containers/pnpm-fetch-docker-layer`](#containers-pnpm-fetch-docker-layer) | practice | info | strict |  | A pnpm-workspace Dockerfile copies every workspace package.json before `pnpm install` instead of warming the store with `pnpm fetch`. |
 | [`containers/qemu-emulated-multiarch`](#containers-qemu-emulated-multiarch) | insight | info | strict |  | Potentially emulated multi-platform builds are candidates for measured native-runner or cross-compilation alternatives. |
 | [`containers/runtime-tool-install-vs-container`](#containers-runtime-tool-install-vs-container) | insight | info | insights |  | The same tools are installed at runtime in several jobs instead of being baked into a job container image. |
-| [`containers/shared-base`](#containers-shared-base) | insight | info | insights |  | Dockerfiles that repeat the same base image and toolchain preamble should share a base image published to GHCR. |
+| [`containers/shared-base`](#containers-shared-base) | insight | info | insights |  | Review repeated base-image and toolchain preambles for possible shared-base reuse. |
 | [`containers/sleep-polling-health-check`](#containers-sleep-polling-health-check) | insight | info | recommended, agentic, strict |  | A job with service containers waits for them with a fixed `sleep` instead of a `--health-cmd` health check. |
 | [`packages/exports-map`](#packages-exports-map) | practice | info | strict, agentic |  | Library packages should declare an `exports` map, and ESM libraries a `sideEffects` field. |
 | [`packages/files-allowlist`](#packages-files-allowlist) | practice | warn | recommended, agentic |  | Publishable packages should declare a `files` allowlist (or an `.npmignore`) so the tarball only ships build output. |
@@ -80,18 +80,18 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | [`triggers/frequent-schedule`](#triggers-frequent-schedule) | practice | warn | recommended, agentic, strict |  | Avoid scheduled workflows that run more often than every 15 minutes. |
 | [`triggers/shard-fail-fast`](#triggers-shard-fail-fast) | practice | info | agentic, strict |  | Let sharded pull request test matrices stop early when one shard fails. |
 | [`triggers/missing-job-condition-matrix`](#triggers-missing-job-condition-matrix) | practice | info | agentic, strict |  | Gate matrix jobs on the workflow's existing change-detection job. |
-| [`redundancy/duplicate-setup-step`](#redundancy-duplicate-setup-step) | practice | warn | recommended, agentic, strict |  | A job should not run the same toolchain setup action twice with the same inputs. |
+| [`redundancy/duplicate-setup-step`](#redundancy-duplicate-setup-step) | practice | warn | recommended, agentic, strict |  | Review repeated toolchain setup declarations with matching visible inputs. |
 | [`redundancy/repeated-job-setup`](#redundancy-repeated-job-setup) | insight | info | insights |  | Jobs that repeat the same leading setup steps could share a composite action. |
 | [`redundancy/rebuild-per-job`](#redundancy-rebuild-per-job) | practice | warn | agentic, strict |  | Several jobs in a workflow should not each rebuild the same project from scratch. |
-| [`redundancy/duplicate-command`](#redundancy-duplicate-command) | practice | info | strict |  | A job should not run the same non-trivial shell command more than once. |
+| [`redundancy/duplicate-command`](#redundancy-duplicate-command) | practice | info | strict |  | Review repeated non-trivial shell commands for potentially redundant work. |
 | [`redundancy/shadowed-env`](#redundancy-shadowed-env) | practice | info | recommended, strict | yes | A job or step should not redefine an environment variable to the value it already inherits. |
 | [`redundancy/toolchain-version-drift`](#redundancy-toolchain-version-drift) | practice | warn | agentic, strict |  | Workflows should agree on the toolchain version they install with each setup action. |
-| [`testing/playwright-browser-cache`](#testing-playwright-browser-cache) | practice | warn | recommended, agentic, strict |  | Jobs that download Playwright browsers should cache them or run in the Playwright container image. |
+| [`testing/playwright-browser-cache`](#testing-playwright-browser-cache) | practice | warn | recommended, agentic, strict |  | Evaluate browser reuse when Playwright downloads are a measured bottleneck. |
 | [`testing/tool-incremental-cache`](#testing-tool-incremental-cache) | practice | info | agentic, strict |  | ESLint, tsc and Jest should keep their incremental caches between CI runs. |
 | [`testing/watch-mode-in-ci`](#testing-watch-mode-in-ci) | practice | warn | recommended, agentic, strict |  | Test runners and compilers in CI should run once instead of in watch mode. |
 | [`testing/unconditional-debug-upload`](#testing-unconditional-debug-upload) | practice | info | agentic, strict | yes | Consider failure-only uploads for test artifacts used solely for debugging. |
 | [`testing/masked-failures`](#testing-masked-failures) | practice | warn | recommended, agentic, strict |  | Test failures should fail the job, not be silenced by `continue-on-error: true` or `\|\| true`. |
-| [`testing/cache-disabled-install`](#testing-cache-disabled-install) | practice | info | agentic, strict |  | Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps. |
+| [`testing/cache-disabled-install`](#testing-cache-disabled-install) | practice | info | agentic, strict |  | Review installs that appear to clear or bypass a configured package-manager cache. |
 | [`testing/fixed-sleep`](#testing-fixed-sleep) | practice | warn | recommended, agentic, strict |  | Run steps should wait for services to become ready instead of sleeping for a fixed time. |
 | [`nix/accept-flake-config-untrusted`](#nix-accept-flake-config-untrusted) | policy | error | recommended, agentic, strict |  | Nix accepts `nixConfig` from flakes that a pull request can modify. |
 | [`nix/builtins-fetchurl-unverified`](#nix-builtins-fetchurl-unverified) | practice | warn | recommended, agentic, strict |  | `builtins.fetchurl` downloads at evaluation time without an integrity check; pin it with `sha256` or use the `pkgs.fetchurl` fixed-output fetcher. |
@@ -401,7 +401,7 @@ References:
 
 Well-known actions should use their current major version, and local JavaScript actions should run on node24.
 
-**Why:** Old majors of the official setup, cache, checkout, and artifact actions miss performance work (faster caching backends, parallel artifact uploads) and, below the node24 releases, target Node 20, which GitHub Actions runners removed on 2026-09-23: they now force those actions onto Node 24, which their authors never tested, and warn on every run (self-hosted runners on unsupported platforms cannot run them at all). Agents copy existing workflow snippets, so one stale pin spreads quickly.
+**Why:** The maintained major/runtime table identifies releases to review for runtime support, security and performance changes. Newer majors can introduce breaking changes and are not guaranteed faster. Check the pinned action's source and release notes, target runner requirements and GitHub Enterprise Server support before upgrading; the table does not establish how an arbitrary pinned release was tested or executed.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
@@ -1745,9 +1745,9 @@ References:
 
 ### containers/shared-base
 
-Dockerfiles that repeat the same base image and toolchain preamble should share a base image published to GHCR.
+Review repeated base-image and toolchain preambles for possible shared-base reuse.
 
-**Why:** When several services start from the same image and install the same toolchain, every service build and every runner repeats that work and stores its own copy of the layer. Publishing the preamble once as a shared base image (referenced by digest) builds it once, lets every service and agent sandbox pull the identical cached layer, and turns toolchain upgrades into a single reviewed digest bump.
+**Why:** A published shared base can move repeated toolchain installation into a separate build, but existing layer caches may already reuse that work. Compare build savings with publication and image-pull costs, preserve platform and per-service requirements, and maintain reviewed digest updates. Matching preamble text alone does not prove equivalent execution or a speedup.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
@@ -2686,9 +2686,9 @@ References:
 
 ### redundancy/duplicate-setup-step
 
-A job should not run the same toolchain setup action twice with the same inputs.
+Review repeated toolchain setup declarations with matching visible inputs.
 
-**Why:** Running a setup action a second time with identical inputs reinstalls the same toolchain, adds download and cache-restore time to every run, and usually signals a copy-paste mistake that hides which configuration is authoritative.
+**Why:** Repeated setup declarations may add avoidable work, but tool caches can avoid downloads and intervening steps can change the environment or toolchain. Matching visible inputs alone does not establish that the second setup is redundant. Verify conditions, outputs and environment requirements before removing it.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: low
@@ -2827,9 +2827,9 @@ References:
 
 ### redundancy/duplicate-command
 
-A job should not run the same non-trivial shell command more than once.
+Review repeated non-trivial shell commands for potentially redundant work.
 
-**Why:** Repeating an install, build, or test command in one job repeats its cost on every run. It is usually left over from merging two step lists and makes it unclear which invocation the job actually depends on.
+**Why:** Repeated command text can indicate avoidable work, but identical text does not establish identical effects or cost: files, environment, tool caches and external state may have changed. Check conditions and intervening effects before removing an invocation, then measure any savings.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
@@ -2937,9 +2937,9 @@ References:
 
 ### testing/playwright-browser-cache
 
-Jobs that download Playwright browsers should cache them or run in the Playwright container image.
+Evaluate browser reuse when Playwright downloads are a measured bottleneck.
 
-**Why:** `playwright install` downloads several hundred megabytes of browser builds on every run. Restoring ~/.cache/ms-playwright keyed on the Playwright version (or using the image that ships the browsers) turns that download into a cache hit.
+**Why:** `playwright install` may download missing browser builds; runner images or existing caches may already supply them. Restoring an archive can cost as much as downloading the browsers, and Linux OS dependencies still need installation. Inspect actual install/restore timings and version/platform compatibility before choosing a browser cache or matching Playwright image.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
@@ -3113,9 +3113,9 @@ References:
 
 ### testing/cache-disabled-install
 
-Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps.
+Review installs that appear to clear or bypass a configured package-manager cache.
 
-**Why:** Restoring a dependency cache costs a download and a save on every run; clearing it, pointing installs at an empty temporary cache or passing `--no-cache-dir` throws that work away and makes every install download from the registry again.
+**Why:** Clearing or bypassing compatible restored package-manager entries can cause avoidable work. Restore/save operations are conditional, and clearing a cache does not necessarily require a registry download. Verify actual cache paths, command ordering, install behavior and any correctness or isolation requirement before changing the workflow.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
@@ -3151,7 +3151,7 @@ References:
 
 Run steps should wait for services to become ready instead of sleeping for a fixed time.
 
-**Why:** A fixed `sleep` before tests is a guess: on a fast runner it wastes the whole interval on every run, and on a slow or busy runner it is too short and the tests fail intermittently. Polling for readiness returns as soon as the service is up and fails clearly when it never comes up.
+**Why:** A fixed delay can outlast service startup or finish before the service is ready. A bounded readiness check can reduce unnecessary waiting and report timeout failures, but its health predicate, polling interval and timeout must match the workload. Preserve deliberate rate-limiting or propagation delays rather than assuming every sleep is redundant.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium

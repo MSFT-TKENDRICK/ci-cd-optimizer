@@ -6,9 +6,9 @@ export default defineRule({
   meta: {
     id: "redundancy/duplicate-setup-step",
     ruleset: "redundancy",
-    description: "A job should not run the same toolchain setup action twice with the same inputs.",
+    description: "Review repeated toolchain setup declarations with matching visible inputs.",
     rationale:
-      "Running a setup action a second time with identical inputs reinstalls the same toolchain, adds download and cache-restore time to every run, and usually signals a copy-paste mistake that hides which configuration is authoritative.",
+      "Repeated setup declarations may add avoidable work, but tool caches can avoid downloads and intervening steps can change the environment or toolchain. Matching visible inputs alone does not establish that the second setup is redundant. Verify conditions, outputs and environment requirements before removing it.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -41,8 +41,8 @@ export default defineRule({
             path: workflow.path,
             line: step.line,
             key: `${step.key}.duplicate-setup`,
-            message: `Job "${job.id}" runs ${action} again with the same inputs as the step on line ${first.line}.`,
-            suggestion: "Remove the repeated setup step; the toolchain from the first step is still on PATH.",
+            message: `Job "${job.id}" declares ${action} again with matching visible inputs to the step on line ${first.line}.`,
+            suggestion: "Before removing the repeated setup, verify conditions, referenced outputs and any toolchain or environment changes between the steps.",
             related: [{ path: workflow.path, line: first.line }],
           });
         }

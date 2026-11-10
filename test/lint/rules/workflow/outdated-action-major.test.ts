@@ -36,22 +36,22 @@ ruleTester(rule, {
       name: "node20-era majors are high impact",
       files: job("      - uses: actions/checkout@v4", "      - uses: actions/setup-python@v5.3.0"),
       errors: [
-        { line: 6, messageIncludes: "actions/checkout@v4 targets Node 20 or older" },
-        { line: 7, messageIncludes: "actions/setup-python@v5.3.0 targets Node 20 or older" },
+        { line: 6, messageIncludes: "actions/checkout@v4 is classified by the tracked major table" },
+        { line: 7, messageIncludes: "actions/setup-python@v5.3.0 is classified by the tracked major table" },
       ],
     },
     {
       name: "node24 majors behind latest are reported without the runtime warning",
       files: job("      - uses: actions/checkout@v5", "      - uses: actions/upload-artifact@v6"),
       errors: [
-        { line: 6, messageIncludes: "behind the latest major, v7" },
-        { line: 7, messageIncludes: "behind the latest major, v7" },
+        { line: 6, messageIncludes: "behind the latest major in the tracked table, v7" },
+        { line: 7, messageIncludes: "behind the latest major in the tracked table, v7" },
       ],
     },
     {
       name: "SHA pin with an old version comment",
       files: job(`      - uses: actions/cache@${SHA} # v4.2.0`),
-      errors: [{ line: 6, messageIncludes: "(v4.2.0) targets Node 20 or older" }],
+      errors: [{ line: 6, messageIncludes: "(v4.2.0) is classified by the tracked major table" }],
     },
     {
       name: "composite actions are checked",

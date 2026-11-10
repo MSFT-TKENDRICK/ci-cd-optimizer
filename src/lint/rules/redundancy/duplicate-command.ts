@@ -19,9 +19,9 @@ export default defineRule({
   meta: {
     id: "redundancy/duplicate-command",
     ruleset: "redundancy",
-    description: "A job should not run the same non-trivial shell command more than once.",
+    description: "Review repeated non-trivial shell commands for potentially redundant work.",
     rationale:
-      "Repeating an install, build, or test command in one job repeats its cost on every run. It is usually left over from merging two step lists and makes it unclear which invocation the job actually depends on.",
+      "Repeated command text can indicate avoidable work, but identical text does not establish identical effects or cost: files, environment, tool caches and external state may have changed. Check conditions and intervening effects before removing an invocation, then measure any savings.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["strict"],
@@ -64,8 +64,8 @@ export default defineRule({
               path: workflow.path,
               line,
               key: `${job.key}.duplicate-command.${hash(key)}.${first.count}`,
-              message: `\`${text}\` already ran earlier in job "${job.id}" (line ${first.line}).`,
-              suggestion: "Remove the repeated command, or explain with a comment why the second run is required.",
+              message: `\`${text}\` also appears earlier in job "${job.id}" (line ${first.line}).`,
+              suggestion: "Verify conditions and intervening effects before removing the repeated command, or document why both invocations are required.",
               related: [{ path: workflow.path, line: first.line }],
             });
           }

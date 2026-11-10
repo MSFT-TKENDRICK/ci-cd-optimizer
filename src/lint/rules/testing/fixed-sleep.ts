@@ -50,7 +50,7 @@ export default defineRule({
     ruleset: "testing",
     description: "Run steps should wait for services to become ready instead of sleeping for a fixed time.",
     rationale:
-      "A fixed `sleep` before tests is a guess: on a fast runner it wastes the whole interval on every run, and on a slow or busy runner it is too short and the tests fail intermittently. Polling for readiness returns as soon as the service is up and fails clearly when it never comes up.",
+      "A fixed delay can outlast service startup or finish before the service is ready. A bounded readiness check can reduce unnecessary waiting and report timeout failures, but its health predicate, polling interval and timeout must match the workload. Preserve deliberate rate-limiting or propagation delays rather than assuming every sleep is redundant.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -91,9 +91,9 @@ export default defineRule({
             path: workflow.path,
             line: entry.direct ? entry.line : stepLine(entry.owner),
             key: `${entry.step.key}:${entry.command}`,
-            message: `\`${wait.text}\` waits a fixed ${wait.seconds} seconds instead of checking that what it waits for is ready.`,
+            message: `\`${wait.text}\` specifies a fixed ${wait.seconds} seconds of waiting; no readiness condition is visible in this command.`,
             suggestion:
-              "Poll for readiness instead: `docker compose up --wait`, service-container health checks (`--health-cmd`), `npx wait-on <url>`, or a bounded `until curl -fsS <url>; do sleep 1; done` loop.",
+              "Consider an appropriate health predicate using `docker compose up --wait`, service-container health checks, or `wait-on`, with an explicit overall timeout. Verify that the delay is not needed for another purpose.",
           });
         }
       }

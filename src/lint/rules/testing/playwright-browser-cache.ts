@@ -9,9 +9,9 @@ export default defineRule({
   meta: {
     id: "testing/playwright-browser-cache",
     ruleset: "testing",
-    description: "Jobs that download Playwright browsers should cache them or run in the Playwright container image.",
+    description: "Evaluate browser reuse when Playwright downloads are a measured bottleneck.",
     rationale:
-      "`playwright install` downloads several hundred megabytes of browser builds on every run. Restoring ~/.cache/ms-playwright keyed on the Playwright version (or using the image that ships the browsers) turns that download into a cache hit.",
+      "`playwright install` may download missing browser builds; runner images or existing caches may already supply them. Restoring an archive can cost as much as downloading the browsers, and Linux OS dependencies still need installation. Inspect actual install/restore timings and version/platform compatibility before choosing a browser cache or matching Playwright image.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -48,9 +48,9 @@ export default defineRule({
           path: workflow.path,
           line: install.direct ? install.line : stepLine(install.owner),
           key: `${job.key}:playwright-install`,
-          message: "Playwright browsers are downloaded on every run without a cache.",
+          message: "No browser cache or Playwright container image was detected for this `playwright install` invocation.",
           suggestion:
-            "Cache ~/.cache/ms-playwright (%USERPROFILE%\\AppData\\Local\\ms-playwright on Windows) with actions/cache keyed on the Playwright version and run `playwright install` (or only `install-deps` on a hit), or run the job in the mcr.microsoft.com/playwright container image.",
+            "Measure browser-install duration first. If reuse is beneficial, cache the actual browser location with a key matching the Playwright version and platform, or use a compatible Playwright image. Preserve required browser installation and OS dependencies.",
         });
       }
     }
