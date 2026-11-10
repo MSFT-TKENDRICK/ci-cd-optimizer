@@ -2,6 +2,7 @@ import { isMap, isPair, isScalar, isSeq, type Node } from "yaml";
 import { insertLinesAfter, lineStart, lineText } from "../../fix.js";
 import type { JobModel, WorkflowModel } from "../../parsers/workflow.js";
 import { lineOfNode } from "../../parsers/yaml.js";
+import { commandTokens, shellTokens } from "../../parsers/shell.js";
 import type { ProjectModel } from "../../project.js";
 import type { SourceFile, TextEdit } from "../../types.js";
 import { basename, commandWords } from "../caching/shared.js";
@@ -45,53 +46,46 @@ export function jobContexts(project: ProjectModel): JobContext[] {
   return result;
 }
 
-const SHELL_BREAK = /^(?:\||\|&|&|[0-9]*>>?.*|&>.*|<.*|[0-9]*<.*)$/;
-
-/** Re-joins `${{ … }}` expressions that whitespace splitting broke into several words. */
-function mergeExpressions(list: string[]): string[] {
-  const count = (text: string, pattern: RegExp): number => text.match(pattern)?.length ?? 0;
-  const result: string[] = [];
-  for (let index = 0; index < list.length; index += 1) {
-    let word = list[index] ?? "";
-    while (count(word, /\$\{\{/g) > count(word, /\}\}/g) && index + 1 < list.length) {
-      index += 1;
-      word = `${word} ${list[index] ?? ""}`;
-    }
-    result.push(word);
-  }
-  return result;
-}
-
-/**
- * Words of one command: `VAR=`/`sudo`/`env`/`time` prefixes removed, cut at the first pipe or redirection, subshell
- * parentheses and wrapping quotes removed.
- */
+/** Quote-aware words of the first program; shell expansion is deliberately not evaluated. */
 export function words(command: string): string[] {
-  const result: string[] = [];
-  for (const raw of mergeExpressions(commandWords(command))) {
-    // `${{ a || b }}` is substituted by the runner before the shell sees it, so it is never a pipe.
-    const masked = raw.replace(/\$\{\{[^]*?\}\}/g, (expression) => "x".repeat(expression.length));
-    if (SHELL_BREAK.test(masked)) break;
-    const pipe = masked.indexOf("|");
-    const word = (pipe >= 0 ? raw.slice(0, pipe) : raw)
-      .replace(/^\(+/, "")
-      .replace(/\)+$/, "")
-      .replace(/^(["'])(.*)\1$/, "$2");
-    if (word !== "") result.push(word);
-    if (pipe >= 0) break;
-  }
-  return result;
+  return commandWords(command);
 }
 
 /** Leading `VAR=value` assignments of a command. */
 export function inlineEnv(command: string): Map<string, string> {
   const result = new Map<string, string>();
-  for (const word of command.split(/\s+/).filter(Boolean)) {
-    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(word);
+  let envWrapper = false;
+  for (const { value: word } of shellTokens(command)) {
+    if (!envWrapper && basename(word) === "env") {
+      envWrapper = true;
+      continue;
+    }
+    if (envWrapper && word === "--") continue;
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/.exec(word);
     if (!match) break;
     result.set(match[1] ?? "", (match[2] ?? "").replace(/^(["'])(.*)\1$/, "$2"));
   }
   return result;
+}
+
+function conditionalScript(script: string): boolean {
+  return /\|\||(?:^|[\n;])\s*(?:if|then|elif|else|case|for|while|until)\b/.test(script);
+}
+
+/** Prefix/environment effects requiring shell or external configuration evaluation. */
+export function unknownCommandEnvironment(ctx: JobContext, command: JobCommand): boolean {
+  const first = commandTokens(command.command)[0];
+  if (!first) return true;
+  const all = shellTokens(command.command);
+  const prefix = all.slice(0, all.length - commandTokens(command.command).length);
+  if (prefix.some((token) => ["sudo", "doas", "su"].includes(basename(token.value)))) return true;
+  if (prefix.some((token) => basename(token.value) === "env") &&
+      prefix.some((token) => token.value.startsWith("-") && token.value !== "--")) return true;
+  const before = ctx.commands.slice(0, ctx.commands.indexOf(command))
+    .filter((other) => other.step === command.step && other.owner === command.owner);
+  return before.some((other) => /^(?:source|\.|eval|unset)\s/.test(other.command) ||
+      (shellTokens(other.command).length > 0 && commandTokens(other.command).length === 0)) ||
+    (before.length > 0 && conditionalScript(command.step.run?.value ?? ""));
 }
 
 function stringValue(value: unknown): string {
@@ -101,10 +95,13 @@ function stringValue(value: unknown): string {
 /** `NAME=value` pairs one command appends to `$GITHUB_ENV` (empty when it does not write that file). */
 export function githubEnvPairs(command: string): Map<string, string> {
   const result = new Map<string, string>();
-  if (!/GITHUB_ENV\b/.test(command)) return result;
-  const at = command.search(/>>?\s*["']?\$\{?GITHUB_ENV/);
-  const payload = at >= 0 ? command.slice(0, at) : command;
-  for (const match of payload.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)=([^\s"'>]*)/g)) {
+  if (!/>>?\s*"?\$(?:GITHUB_ENV|\{GITHUB_ENV\})"?\s*$/.test(command)) return result;
+  const tokens = shellTokens(command);
+  const verb = tokens[0]?.value;
+  const payload = verb === "echo" ? tokens.slice(1) : verb === "printf" && tokens[1]?.value === "%s\\n" ? tokens.slice(2) : [];
+  if (payload.length !== 1) return result;
+  const match = /^([A-Za-z_][A-Za-z0-9_]*)=([^\n\r]*)$/.exec(payload[0]?.value ?? "");
+  if (match) {
     result.set(match[1] ?? "", match[2] ?? "");
   }
   return result;
@@ -124,7 +121,9 @@ export function githubEnvWrites(ctx: JobContext, before?: ExpandedStep): Map<str
   const stop = before === undefined ? Number.POSITIVE_INFINITY : entryIndex(ctx, before);
   for (const command of ctx.commands) {
     if (entryIndex(ctx, command) >= stop) break;
-    for (const [key, value] of githubEnvPairs(command.command)) result.set(key, value);
+    for (const [key, value] of githubEnvPairs(command.command)) {
+      result.set(key, command.step.if || command.owner.if || conditionalScript(command.step.run?.value ?? "") ? "${unknown}" : value);
+    }
   }
   return result;
 }
@@ -134,9 +133,13 @@ function exportsBefore(ctx: JobContext, command: JobCommand): Map<string, string
   const result = new Map<string, string>();
   for (const other of ctx.commands) {
     if (other === command) break;
-    if (other.step !== command.step) continue;
-    const match = /^export\s+([A-Za-z_][A-Za-z0-9_]*)=(\S*)/.exec(other.command);
-    if (match) result.set(match[1] ?? "", (match[2] ?? "").replace(/^(["'])(.*)\1$/, "$2"));
+    if (other.step !== command.step || other.owner !== command.owner) continue;
+    const tokens = shellTokens(other.command);
+    if (tokens[0]?.value !== "export") continue;
+    for (const token of tokens.slice(1)) {
+      const match = /^([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/.exec(token.value);
+      if (match) result.set(match[1] ?? "", match[2] ?? "");
+    }
   }
   return result;
 }
@@ -213,7 +216,10 @@ export function envSource(project: ProjectModel, ctx: JobContext, command: JobCo
   for (const other of ctx.commands) {
     if (entryIndex(ctx, other) >= stop) break;
     const value = githubEnvPairs(other.command).get(name);
-    if (value !== undefined) result = { value, path: other.path, line: other.line, origin: "shell" };
+    if (value !== undefined) result = {
+      value: other.step.if || other.owner.if || conditionalScript(other.step.run?.value ?? "") ? "${unknown}" : value,
+      path: other.path, line: other.line, origin: "shell",
+    };
   }
   if (!command.direct) yaml(command.owner.env, ctx.workflow, { kind: "step", key: command.owner.key }, ctx.workflow.path);
   const model = command.direct ? ctx.workflow : project.actions.find((action) => action.path === command.path);
@@ -222,7 +228,9 @@ export function envSource(project: ProjectModel, ctx: JobContext, command: JobCo
   if (exported.has(name)) {
     const line = [...ctx.commands]
       .reverse()
-      .find((other) => other.step === command.step && other.line <= command.line && new RegExp(`^export\\s+${name}=`).test(other.command))?.line;
+      .find((other) => other.step === command.step && other.owner === command.owner && other.line <= command.line &&
+        shellTokens(other.command)[0]?.value === "export" &&
+        shellTokens(other.command).some((token) => token.value.startsWith(`${name}=`)))?.line;
     result = { value: exported.get(name) ?? "", path: command.path, line, origin: "shell" };
   }
   const inline = inlineEnv(command.command).get(name);
@@ -271,13 +279,14 @@ export function commandDirectory(ctx: JobContext, command: JobCommand): string |
   let dir: string | undefined = configured === undefined ? "" : normaliseDirectory(configured);
   for (const other of ctx.commands) {
     if (other === command) break;
-    if (other.step !== command.step || dir === undefined) continue;
+    if (other.step !== command.step || other.owner !== command.owner || dir === undefined) continue;
     const [verb, target, extra] = words(other.command);
     if (verb === "popd") {
       dir = undefined;
       continue;
     }
     if (verb !== "cd" && verb !== "pushd") continue;
+    if (/\|\||(?:^|\n)\s*(?:if|case|for|while|until)\b/.test(command.step.run?.value ?? "")) return undefined;
     if (target === undefined || extra !== undefined || target === "-" || /[$`~*]/.test(target)) dir = undefined;
     else dir = joinPath(dir, target);
   }
@@ -303,7 +312,7 @@ export function findUpFrom(project: ProjectModel, dir: string | undefined, marke
   if (dir !== undefined) return findUp(project, dir, name);
   const markers = [...project.files.keys()].filter((path) => basename(path) === marker);
   const found = markers.map((path) => findUp(project, dirname(path), name));
-  return found.length > 0 && found.every((path) => path !== undefined) ? found[0] : undefined;
+  return found[0] !== undefined && found.every((path) => path === found[0]) ? found[0] : undefined;
 }
 
 export interface PropertyEntry {
@@ -372,6 +381,7 @@ export function withInserted(raw: string, list: string[], prefix: string[], text
 export function toolCommands(ctx: JobContext, ...tools: string[]): Array<{ command: JobCommand; words: string[] }> {
   const result: Array<{ command: JobCommand; words: string[] }> = [];
   for (const command of ctx.commands) {
+    if (unknownCommandEnvironment(ctx, command)) continue;
     const list = words(command.command);
     const first = list[0];
     if (first !== undefined && tools.includes(basename(first))) result.push({ command, words: list });

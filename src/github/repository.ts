@@ -92,7 +92,12 @@ export async function loadRepositorySnapshot(
       .map((entry) => [entry.path, entry]),
   );
   const selection = selectInventory(
-    [...blobs.values()].map((entry) => ({ path: entry.path, ...(entry.size !== undefined ? { size: entry.size } : {}) })),
+    treeData.tree.filter((entry) => (entry.type === "blob" || entry.type === "commit") && (!options.pathFilter || options.pathFilter(entry.path)))
+      .map((entry) => ({
+        path: entry.path,
+        opaque: entry.mode === SYMLINK_MODE || entry.type === "commit",
+        ...(entry.size !== undefined ? { size: entry.size } : {}),
+      })),
     options.config,
   );
   const truncated = new Set(selection.truncated);
@@ -109,7 +114,7 @@ export async function loadRepositorySnapshot(
     input: {
       files,
       mode: "repository",
-      inventoryComplete: selection.complete && treeData.truncated !== true,
+      inventoryComplete: selection.complete && treeData.truncated !== true && options.pathFilter === undefined,
       truncated: selection.truncated,
       ...(options.change ? { change: options.change } : {}),
     },

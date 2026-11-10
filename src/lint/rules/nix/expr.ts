@@ -61,14 +61,17 @@ export function identAt(file: NixFile, offset: number): NixIdent | undefined {
 }
 
 /**
- * `*.nix` files worth linting: excludes nixpkgs itself and vendored copies of it (any tree containing
- * `pkgs/top-level/all-packages.nix`), which define rather than consume the helpers these rules flag.
+ * Excludes recognizable nixpkgs source trees, not a user project with one similarly named file.
  */
 export function lintableNixFiles(project: ProjectModel): NixFile[] {
   const roots: string[] = [];
   for (const file of project.nix.files) {
     const match = /^(.*?)pkgs\/top-level\/all-packages\.nix$/.exec(file.path);
-    if (match) roots.push(match[1] ?? "");
+    if (match) {
+      const root = match[1] ?? "";
+      if (["lib/default.nix", "pkgs/stdenv/generic/default.nix", "nixos/modules/module-list.nix"]
+        .every((marker) => project.files.has(`${root}${marker}`))) roots.push(root);
+    }
   }
   return project.nix.files.filter((file) => !roots.some((root) => file.path.startsWith(root)));
 }

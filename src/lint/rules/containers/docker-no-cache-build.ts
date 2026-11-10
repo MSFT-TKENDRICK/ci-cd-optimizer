@@ -6,7 +6,15 @@ import { cacheEntries, flagSet, isBuildPush, literalWith, parseBuildCommand } fr
 
 /** Triggers that run on ordinary development activity (as opposed to scheduled or manual rebuilds). */
 const DEVELOPMENT_TRIGGERS = ["pull_request", "pull_request_target", "merge_group"];
-const REBUILD_CONDITION = /schedule|workflow_dispatch|release|refs\/tags/;
+function rebuildOnly(condition: string | undefined): boolean {
+  const expression = (condition ?? "").trim().replace(/^\$\{\{\s*|\s*\}\}$/g, "");
+  if (expression === "false") return true;
+  if (expression.includes("||")) return false;
+  return expression.split("&&").some((atom) =>
+    /^\s*\(?\s*github\.event_name\s*==\s*['"](?:schedule|workflow_dispatch|release)['"]\s*\)?\s*$/.test(atom) ||
+    /^\s*startsWith\(\s*github\.ref\s*,\s*['"]refs\/tags\/['"]\s*\)\s*$/.test(atom),
+  );
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -77,7 +85,7 @@ export default defineRule({
     description:
       "Push and pull-request image builds should not pass --no-cache when they import a cache (cache-from) or run on a persistent self-hosted builder.",
     rationale:
-      "`--no-cache` makes BuildKit ignore every cached layer, so each run re-executes all RUN instructions (package installs, dependency downloads, compiles) even when their inputs are unchanged. A GitHub-hosted job starts on a fresh VM with an empty builder, so the flag only costs time when the build imports a cache (`cache-from`) or runs on a persistent self-hosted builder; only those builds are reported. The usual motive, picking up fresh base images and security updates, is served by `--pull` (always re-resolve the base image) plus a scheduled no-cache rebuild, as Docker's best-practices guide recommends; `--no-cache-filter` rebuilds only the stages that must be fresh.",
+      "`--no-cache` bypasses reusable instruction results for the stages built; unused stages need not run, and cache mounts or external dependency caches can still help. A declared cache import or self-hosted builder does not prove a usable hit. `--pull` refreshes base-image resolution but does not refresh an otherwise cached RUN apt-get install or other mutable download. Preserve the project's freshness policy; measure cache hits and use intentional full or selected-stage rebuilds when required.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -101,10 +109,10 @@ export default defineRule({
       if (!runsOnDevelopmentActivity(workflow)) continue;
       const triggeredBy = workflow.triggers.map((item) => item.event).join("/");
       for (const job of workflow.jobs) {
-        if (REBUILD_CONDITION.test(job.if ?? "")) continue;
+        if (rebuildOnly(job.if)) continue;
         const persistent = persistentBuilder(job);
         for (const step of job.steps) {
-          if (REBUILD_CONDITION.test(step.if ?? "")) continue;
+          if (rebuildOnly(step.if)) continue;
           if (isBuildPush(step)) {
             const entry = step.with.get("no-cache");
             if (!entry || !isTrue(entry.value)) continue;
@@ -115,9 +123,9 @@ export default defineRule({
               path: workflow.path,
               line: entry.line,
               key: `${job.key}:${step.key}:no-cache`,
-              message: `\`no-cache: true\` on docker/build-push-action in a workflow triggered by ${triggeredBy} ${discarded}: every run re-executes every RUN instruction, even when nothing it depends on changed.`,
+              message: `\`no-cache: true\` on docker/build-push-action in a workflow triggered by ${triggeredBy} ${discarded}. Built stages cannot reuse ordinary instruction results, but usable cache hits and extra runtime are not established by this configuration alone.`,
               suggestion:
-                "Keep the cache and refresh the base image instead:\n  with:\n    pull: true\nand rebuild from scratch on a schedule in a separate workflow:\non:\n  schedule:\n    - cron: \"0 4 * * 1\"\n...\n  with:\n    pull: true\n    no-cache: true\nTo force only one stage to rebuild, use `no-cache-filters: <stage>` instead of `no-cache: true`.",
+                "Review why a fresh build is required before removing no-cache. `pull: true` refreshes the base image only; cached RUN package updates do not rerun merely because pull is enabled. If policy permits, compare ordinary caching plus scheduled or selected-stage (`no-cache-filters`) refreshes, preserving required security-update cadence.",
               impact: "high",
               confidence: imports.length > 0 && step.with.get("cache-from")?.kind !== "expression" ? "high" : "medium",
             });
@@ -132,13 +140,12 @@ export default defineRule({
             const discarded = discardedCache(imports, persistent);
             if (!discarded) continue;
             const invocation = build ? build.invocation : words[0] === "docker-compose" ? "docker-compose build" : "docker compose build";
-            const pulled = command.replace(/\s--no-cache(=true)?(?=\s|$)/, /\s--pull(=true)?(?=\s|$)/.test(command) ? "" : " --pull");
             report({
               path: workflow.path,
               line,
               key: `${job.key}:${step.key}:no-cache:${line}`,
-              message: `\`${invocation} --no-cache\` in a workflow triggered by ${triggeredBy} ${discarded}: every run re-executes every RUN instruction, even when nothing it depends on changed.`,
-              suggestion: `Keep the cache and refresh the base image instead:\n${pulled}\nand run the full \`--no-cache\` rebuild from a scheduled workflow (\`on: schedule\`). To force only one stage to rebuild, use \`--no-cache-filter <stage>\`${build ? "" : " with `docker buildx build`"}.`,
+              message: `\`${invocation} --no-cache\` in a workflow triggered by ${triggeredBy} ${discarded}. This bypasses ordinary instruction-result reuse for built stages; measure available hits and runtime before changing freshness policy.`,
+              suggestion: `Preserve required dependency/security refreshes. \`--pull\` only refreshes base-image resolution, not cached RUN package updates. If policy permits, compare cached builds with scheduled full rebuilds or selected-stage \`--no-cache-filter <stage>\`${build ? "" : " using `docker buildx build`"}.`,
               impact: "high",
               confidence: imports.length > 0 ? "high" : "medium",
             });

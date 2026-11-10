@@ -198,8 +198,7 @@ function posixShell(workflow: WorkflowModel, job: JobModel, step: StepModel): bo
 function eligible(job: JobModel): boolean {
   if (job.uses || job.containerImage) return false;
   const labels = jobRunsOnLabels(job);
-  if (labels.length === 0 || labels.some((label) => label.includes("${{"))) return false;
-  if (!labels.some((label) => /^ubuntu-/i.test(label))) return false;
+  if (labels.length !== 1 || !/^ubuntu-(?:latest|\d{2}\.\d{2})(?:-arm)?$/i.test(labels[0] ?? "")) return false;
   // Jobs that drive the Docker daemon (image builds, compose) would need Docker-in-Docker inside a job container.
   return !job.steps.some(
     (step) =>
@@ -224,7 +223,7 @@ function dockerfile(install: ToolInstall): string {
     case "go":
       return `FROM golang:1-bookworm\nRUN go install ${items}`;
     case "binary":
-      return `FROM ubuntu:24.04\nADD --checksum=sha256:<sha256> ${items} /tmp/tool.tar.gz\nRUN tar -xzf /tmp/tool.tar.gz -C /usr/local/bin && rm /tmp/tool.tar.gz`;
+      return `FROM ubuntu:24.04\nADD --checksum=sha256:<independently-reviewed-sha256> ${items} /opt/tool.tar.gz\nRUN tar -xzf /opt/tool.tar.gz -C /usr/local/bin && rm /opt/tool.tar.gz`;
   }
 }
 
@@ -238,7 +237,7 @@ export default defineRule({
     ruleset: "containers",
     description: "The same tools are installed at runtime in several jobs instead of being baked into a job container image.",
     rationale:
-      "Every job starts on a fresh runner VM, so a tool installed with apt, npm -g, pip, cargo, go install or a curl | tar download is downloaded and installed again in every job and every run, before the job does any useful work, and its version floats with whatever the package index serves that day. Baking the tools into an image once and running the jobs in it with `jobs.<id>.container` replaces each install with an image pull and pins the toolset to an immutable image.",
+      "Repeated tool installation specifications may be worth consolidating, but downloads can already be cached and versions may already be pinned. A job container replaces installation work with image build/pull/maintenance costs and changes OS, user, shell, networking and action compatibility. Tags are mutable: a reviewed image digest identifies the intended image. Benchmark and validate the migration; repeated command text is not proof of repeated network work or equivalent artifacts.",
     kind: "insight",
     defaultSeverity: "info",
     presets: ["insights"],
@@ -256,7 +255,7 @@ export default defineRule({
     fixable: false,
     example: {
       bad: "lint:\n  runs-on: ubuntu-latest\n  steps:\n    - run: sudo apt-get install -y shellcheck jq\ntest:\n  runs-on: ubuntu-latest\n  steps:\n    - run: sudo apt-get install -y jq shellcheck",
-      good: "lint:\n  runs-on: ubuntu-latest\n  container: ghcr.io/acme/app/ci-tools:2026-01-15\n  steps:\n    - run: shellcheck scripts/*.sh",
+      good: "lint:\n  runs-on: ubuntu-latest\n  container: ghcr.io/acme/app/ci-tools@sha256:<reviewed-digest>\n  steps:\n    - run: shellcheck scripts/*.sh",
     },
   },
   check({ project, options, report }) {
@@ -296,8 +295,8 @@ export default defineRule({
         path: first.path,
         line: first.line,
         key: `runtime-tool:${key}`,
-        message: `\`${first.command.trim()}\` installs ${describeInstall(first.install)} at runtime in ${perJob.size} jobs: ${where}${more}. Each job re-downloads and installs the same tools on a fresh runner in every run before doing any work.`,
-        suggestion: `Bake the tools into a CI image, publish it to GHCR from a workflow that runs when that Dockerfile changes, and run these jobs in it:\n# ci/tools.Dockerfile\n${dockerfile(first.install)}\n\n# each job\nruns-on: ubuntu-latest\ncontainer:\n  image: ghcr.io/<owner>/<repo>/ci-tools:<tag>\n  credentials: # only for a private image; the job needs \`permissions: packages: read\`\n    username: \${{ github.actor }}\n    password: \${{ secrets.GITHUB_TOKEN }}\nJob containers need a Linux runner; steps then run inside the container, and service containers are reached by their service name instead of localhost.`,
+        message: `\`${first.command.trim()}\` requests installation of ${describeInstall(first.install)} in ${perJob.size} jobs: ${where}${more}. Measure repeated installation cost; these specifications may already use pinned versions or warm download caches.`,
+        suggestion: `If measurements justify it, build and test a CI image, preserving the original installation flags, versions and configuration. This illustrative Dockerfile is not an equivalent drop-in replacement:\n# ci/tools.Dockerfile\n${dockerfile(first.install)}\n\nUse a reviewed image digest such as \`ghcr.io/<owner>/<repo>/ci-tools@sha256:<digest>\`. Check OS, architecture, users, shells, actions and service networking (service names instead of localhost), and keep credentials in build/runtime secret channels rather than image layers. Compare pull time and maintenance cost before adopting it.`,
         related: others.map((occurrence) => ({ path: occurrence.path, line: occurrence.line })),
         impact: "low",
         confidence: "medium",

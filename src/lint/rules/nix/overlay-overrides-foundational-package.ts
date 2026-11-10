@@ -84,12 +84,12 @@ function rebindings(file: NixFile, open: number, watched: ReadonlySet<string>): 
 
 function blastRadius(name: string): string {
   if (name === "stdenv") {
-    return "`stdenv` builds almost every package in nixpkgs, so essentially every package gets a new store path";
+    return "a changed `stdenv` can affect a large part of the package graph";
   }
   if (BOOTSTRAP.has(name)) {
     return `overlays are also applied inside the nixpkgs stdenv bootstrap stages and \`${name}\` is built there, so this can change the standard environment itself and give essentially every package a new store path`;
   }
-  return `every package that depends on \`${name}\`, directly or transitively, gets a new store path`;
+  return `a derivation-changing replacement can affect packages that depend on \`${name}\`, directly or transitively`;
 }
 
 function scopedSuggestion(name: string): string {
@@ -121,7 +121,7 @@ export default defineRule({
     ruleset: "nix",
     description: "Overlays should not globally replace foundational packages such as `stdenv`, `glibc`, `openssl` or `zlib`.",
     rationale:
-      "An overlay rebinding an attribute replaces it in the fixed point for the whole package set: every package that takes it as an input, and every package depending on those, gets a different derivation hash and therefore a store path that the public binary cache (cache.nixos.org) has never built. For foundational packages that is most of the closure, so CI and every developer machine rebuild compilers, interpreters and libraries from source instead of substituting them. Nixpkgs also passes the user's overlays to each stage of its stdenv bootstrap (pkgs/stdenv/booter.nix), so overriding a package built there, such as glibc, gcc, binutils, coreutils or zlib, can change the standard environment itself. Scoping the change with `.override` to the packages that need it keeps everything else cacheable.",
+      "A package-set overlay can change inputs widely, especially foundational libraries and bootstrap packages. Rebinding alone does not establish changed derivations: metadata-only overrides or equivalent values can retain store paths, and changed outputs may already exist in a cache. Evaluate the before/after derivation graph and substitutability before deciding whether to narrow an intentional override. Scoped overrides also change dependency policy and require testing.",
     kind: "insight",
     defaultSeverity: "warn",
     presets: ["strict", "insights"],
@@ -161,7 +161,7 @@ export default defineRule({
           report({
             path: file.path,
             line: file.lineOf(finding.offset),
-            message: `Overlay rebinds \`${finding.shown}\` for the whole package set: ${blastRadius(finding.name)}. None of those can be substituted from cache.nixos.org, so they are rebuilt from source on every machine and CI runner that has no copy in its own cache.`,
+            message: `Overlay rebinds \`${finding.shown}\` for the whole package set: ${blastRadius(finding.name)}. Compare resulting derivations and available substitutes; syntax alone does not establish changed store paths or cache misses.`,
             suggestion: `${scopedSuggestion(finding.name)}\n\nIf the global override is intended, push the rebuilt closure to a binary cache your CI and developers use (Cachix, Attic, or \`nix copy --to s3://...\`) and add \`${finding.name}\` to this rule's \`allow\` option.`,
             confidence: "medium",
             key: `overlay:${finding.name}#${count}`,

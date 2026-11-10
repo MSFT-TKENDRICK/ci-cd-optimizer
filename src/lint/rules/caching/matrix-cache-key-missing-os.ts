@@ -1,8 +1,4 @@
-import { isAlias, isMap, isPair, isScalar, isSeq, Scalar } from "yaml";
-import { fix } from "../../fix.js";
 import type { JobModel, StepModel, WorkflowModel } from "../../parsers/workflow.js";
-import { lineOfNode } from "../../parsers/yaml.js";
-import type { SourceFile, TextEdit } from "../../types.js";
 import { defineRule } from "../helpers.js";
 import { isTrue, listOf, usesAction } from "./shared.js";
 
@@ -49,7 +45,7 @@ const NEUTRAL_PATHS = new Set([
 ]);
 
 const isPrimitive = (value: unknown): boolean => value === null || ["string", "number", "boolean"].includes(typeof value);
-const same = (a: unknown, b: unknown): boolean => isPrimitive(a) && isPrimitive(b) && String(a) === String(b);
+const same = (a: unknown, b: unknown): boolean => isPrimitive(a) && isPrimitive(b) && a === b;
 
 function records(value: unknown): Combo[] | undefined {
   if (value === undefined || value === null) return [];
@@ -67,7 +63,7 @@ function combinations(matrix: Record<string, unknown>): Combo[] | undefined {
   const excludes = records(matrix.exclude);
   if (!includes || !excludes) return undefined;
   const dimensions = Object.entries(matrix).filter(([name]) => name !== "include" && name !== "exclude");
-  if (dimensions.some(([, values]) => !Array.isArray(values) || values.length === 0)) return undefined;
+  if (dimensions.some(([, values]) => !Array.isArray(values) || values.length === 0 || values.some((value) => typeof value === "string" && value.includes("${{")))) return undefined;
   const product = dimensions.reduce((total, [, values]) => total * (values as unknown[]).length, 1);
   if (product > COMBINATION_CAP) return undefined;
   if (excludes.some((entry) => Object.values(entry).some((value) => !isPrimitive(value)))) return undefined;
@@ -178,68 +174,6 @@ function evaluate(text: string, leg: Leg, env: (name: string) => string | undefi
   });
 }
 
-function directChild(node: unknown, key: string): unknown {
-  if (!isMap(node)) return undefined;
-  const pair = node.items.find((item) => isPair(item) && isScalar(item.key) && String(item.key.value) === key);
-  return pair && !isAlias(pair.value) ? pair.value : undefined;
-}
-
-/** The step's block mapping when the step and the path to it are written inline (no anchors, aliases or merge keys). */
-function stepNode(workflow: WorkflowModel, step: StepModel): unknown {
-  const match = /^jobs\.([^.]+)\.steps\[(\d+)\]$/.exec(step.key);
-  if (!match) return undefined;
-  const steps = directChild(directChild(directChild(workflow.source.doc.contents, "jobs"), match[1] ?? ""), "steps");
-  if (!isSeq(steps)) return undefined;
-  const node = steps.items[Number(match[2])];
-  if (!isMap(node) || node.flow || lineOfNode(workflow.source, node) !== step.line) return undefined;
-  return node;
-}
-
-const INLINE_TYPES: unknown[] = [Scalar.PLAIN, Scalar.QUOTE_DOUBLE, Scalar.QUOTE_SINGLE];
-
-/** Zero-width insertion at the start of a single-line scalar's value. */
-function prependScalar(file: SourceFile, node: unknown, prefix: string): TextEdit | undefined {
-  if (!isScalar(node) || !node.range || !INLINE_TYPES.includes(node.type)) return undefined;
-  const [start, end] = node.range;
-  if (file.content.slice(start, end).includes("\n")) return undefined;
-  const offset = start + (node.type === Scalar.PLAIN ? 0 : 1);
-  return { path: file.path, start: offset, end: offset, text: prefix };
-}
-
-/** Prefixes every restore key, which must each be a prefix of the primary key (so they keep matching after the fix). */
-function prependRestoreKeys(file: SourceFile, node: unknown, key: string, prefix: string): Array<TextEdit | undefined> {
-  if (node === undefined) return [];
-  if (!isScalar(node) || typeof node.value !== "string" || !node.range) return [undefined];
-  const keys = listOf(node.value);
-  if (keys.length === 0 || keys.some((entry) => !key.startsWith(entry))) return [undefined];
-  if (node.type !== Scalar.BLOCK_LITERAL) return [prependScalar(file, node, prefix)];
-  const [start, end] = node.range;
-  const edits: Array<TextEdit | undefined> = [];
-  let position = file.content.indexOf("\n", start) + 1;
-  while (position > 0 && position < end) {
-    const next = file.content.indexOf("\n", position);
-    const line = file.content.slice(position, next < 0 ? file.content.length : next).replace(/\r$/, "");
-    const content = line.trimStart();
-    if (content.startsWith("#")) return [undefined];
-    if (content !== "") {
-      const offset = position + line.length - content.length;
-      edits.push({ path: file.path, start: offset, end: offset, text: prefix });
-    }
-    if (next < 0) break;
-    position = next + 1;
-  }
-  return edits.length > 0 ? edits : [undefined];
-}
-
-function prefixEdits(file: SourceFile, workflow: WorkflowModel, step: StepModel, prefix: string): Array<TextEdit | undefined> {
-  const withNode = directChild(stepNode(workflow, step), "with");
-  if (!isMap(withNode) || withNode.flow) return [undefined];
-  const keyNode = directChild(withNode, "key");
-  const keyText = isScalar(keyNode) && typeof keyNode.value === "string" ? keyNode.value : undefined;
-  if (keyText === undefined) return [undefined];
-  return [prependScalar(file, keyNode, prefix), ...prependRestoreKeys(file, directChild(withNode, "restore-keys"), keyText, prefix)];
-}
-
 interface Target {
   /** Step whose `key` (and `restore-keys`) is analyzed and fixed. */
   keyStep: StepModel;
@@ -272,7 +206,7 @@ export default defineRule({
     ruleset: "caching",
     description: "`actions/cache` keys in a matrix that spans operating systems or CPU architectures must include `runner.os`/`runner.arch`.",
     rationale:
-      "A cache entry is identified by its key plus a version that only hashes `path`, the compression method (zstd on every GitHub-hosted image) and, on Windows without `enableCrossOsArchive`, a Windows marker. When a matrix runs the same job on Linux and macOS (or on x64 and arm64) and the key does not include `runner.os`/`runner.arch`, every leg computes the same key and version. Caches are immutable, so the first leg to save wins: the other legs get an exact hit, restore that platform's files with `cache-hit: true`, and never save their own. Native modules in `node_modules`, virtualenvs and build output are then restored for the wrong OS or CPU.",
+      "Cache matching depends on key, version and accessible branch scope. Versions include configured paths and compression details; Windows has additional cross-OS handling. Under the modeled hosted-runner/action behavior, equal visible inputs can permit incompatible native outputs to share a key. Custom compression, action versions or external configuration can change the version. Concurrent cold runs may all miss before a later run restores the winning cache. Changing keys must preserve every paired restore/save expression and caller, so no automatic rewrite is offered.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -285,7 +219,7 @@ export default defineRule({
       "https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#cache-key-matching",
     ],
     impact: "high",
-    fixable: true,
+    fixable: false,
     example: {
       bad: "runs-on: ${{ matrix.os }}\nstrategy:\n  matrix:\n    os: [ubuntu-latest, macos-latest]\nsteps:\n  - uses: actions/cache@v6\n    with:\n      path: node_modules\n      key: modules-${{ hashFiles('package-lock.json') }}",
       good: "runs-on: ${{ matrix.os }}\nstrategy:\n  matrix:\n    os: [ubuntu-latest, macos-latest]\nsteps:\n  - uses: actions/cache@v6\n    with:\n      path: node_modules\n      key: ${{ runner.os }}-modules-${{ hashFiles('package-lock.json') }}",
@@ -294,7 +228,6 @@ export default defineRule({
   check({ project, report }) {
     for (const workflow of project.workflows) {
       if (workflow.kind !== "workflow") continue;
-      const file = project.files.get(workflow.path);
       for (const job of workflow.jobs) {
         if (job.containerImage) continue;
         const legs = legsOf(job);
@@ -343,19 +276,10 @@ export default defineRule({
           const prefix = `${needOs ? "${{ runner.os }}-" : ""}${needArch ? "${{ runner.arch }}-" : ""}`;
           const contexts = [needOs ? "`runner.os`" : "", needArch ? "`runner.arch`" : ""].filter(Boolean).join(" and ");
           const keyText = key.value;
-          const twins = job.steps.filter(
-            (candidate) => candidate !== keyStep && usesAction(candidate, "actions/cache/restore") && rawText(candidate, "key") === keyText,
-          );
-          const repair = file
-            ? fix(
-                `Prefix the cache key${keyStep.with.has("restore-keys") || twins.length > 0 ? " and restore keys" : ""} with ${prefix.replace(/-$/, "")}`,
-                ...[keyStep, ...twins].flatMap((candidate) => prefixEdits(file, workflow, candidate, prefix)),
-              )
-            : undefined;
           const restoreKeys = rawText(keyStep, "restore-keys");
           const restoreLines = restoreKeys === undefined ? [] : listOf(restoreKeys);
           const suggestion = [
-            `Add ${contexts} to the key${restoreLines.length > 0 ? " and every restore key" : ""} so each platform saves and restores its own cache:`,
+            `Consider adding ${contexts} consistently to every paired save/restore key${restoreLines.length > 0 ? " and restore prefix" : ""}. Review expressions and all callers before changing the cache namespace:`,
             "",
             `key: ${prefix}${keyText}`,
             ...(restoreLines.length > 0 ? ["restore-keys: |", ...restoreLines.map((line) => `  ${prefix}${line}`)] : []),
@@ -365,9 +289,9 @@ export default defineRule({
             path: workflow.path,
             line: key.line,
             key: `${keyStep.key}.with.key:${needOs ? "os" : ""}${needArch ? "arch" : ""}`,
-            message: `Cache key \`${keyText}\` in matrix job \`${job.id}\` resolves to the same key and cache version on ${describe(first)} and ${describe(second)}. Caches are immutable, so whichever leg saves first wins: the other leg gets an exact hit (\`cache-hit: true\`), restores the first platform's files and never saves its own — useless at best, wrong-platform native binaries at worst.`,
+            message: `Cache key \`${keyText}\` in matrix job \`${job.id}\` has matching modeled key/version inputs on ${describe(first)} and ${describe(second)}. If the actual versions and branch scopes also match, a later restore can receive another platform's native files. Verify archive compatibility rather than assuming a guaranteed collision.`,
             suggestion,
-            ...(repair ? { fix: repair } : {}),
+            confidence: "medium",
           });
         }
       }

@@ -53,8 +53,16 @@ function isLocalSource(file: NixFile, start: number, end: number): boolean {
   if (!ident) return false;
   const last = ident.segments.at(-1) ?? "";
   if (ident.text === "self" || ident.text === "inputs.self" || ident.text === "self.outPath") return true;
-  if (ident.segments.includes("fileset") || LOCAL_SOURCE_HELPERS.has(last) || ident.text === "nix-gitignore.gitignoreSource") return true;
-  if (ident.text === "builtins.path") return true;
+  if (ident.segments.includes("fileset") || LOCAL_SOURCE_HELPERS.has(last) || ident.text === "nix-gitignore.gitignoreSource" || ident.text === "builtins.path") {
+    const argument = callArgument(file, ident);
+    if (!argument) return false;
+    const open = attrsetOf(file, argument);
+    if (open !== undefined) {
+      const source = bindingNamed(file, open, "src") ?? bindingNamed(file, open, "root") ?? bindingNamed(file, open, "path");
+      return source !== undefined && isLocalSource(file, source.valueStart, source.valueEnd);
+    }
+    return argument.start > ident.offset && isPathLiteral(file.masked.slice(argument.start, argument.end).trim());
+  }
   return false;
 }
 
@@ -102,7 +110,7 @@ export default defineRule({
     ruleset: "nix",
     description: "Rust crates built from local source should compile dependencies in a separate, cacheable derivation.",
     rationale:
-      "`rustPlatform.buildRustPackage` vendors crate sources into a fixed-output derivation (`cargoHash`/`cargoLock`), but compiles every dependency and the workspace itself with one `cargo build` inside a single derivation whose inputs include `src`. When `src` is the repository itself, every commit changes that derivation's hash, so the binary cache never has a match and CI recompiles every dependency crate from scratch. crane's `buildDepsOnly` builds only the dependencies (from a dummy source derived from `Cargo.toml`/`Cargo.lock`) into `cargoArtifacts`, which `buildPackage` reuses, so routine source changes only rebuild the workspace crates and the dependency derivation stays cached until `Cargo.lock` changes.",
+      "Standard buildRustPackage separates dependency source fetching from package compilation, not necessarily dependency compilation from workspace compilation. When included local source changes, the package derivation can change, and a cache miss may rebuild dependency crates. Two-phase builders such as crane can reuse compatible compiled artifacts, but their inputs also include toolchains, features, native dependencies and build scripts, not only Cargo.lock. Custom phases and compiler caches can already provide reuse. Measure representative builds and preserve all build behavior before migrating.",
     kind: "insight",
     defaultSeverity: "info",
     presets: ["strict", "insights"],
@@ -138,8 +146,8 @@ export default defineRule({
         report({
           path: file.path,
           line: ident.line,
-          message: `\`${ident.text}\`${name ? ` (\`${name}\`)` : ""} compiles all dependency crates and the workspace in one derivation from local source \`${source.text}\`: \`cargoHash\`/\`cargoLock\` only caches crate downloads, so every source change produces a new derivation and recompiles every dependency from scratch with no binary-cache hit.`,
-          suggestion: `Split dependency compilation into its own derivation with crane (flake input \`crane.url = "github:ipetkov/crane";\`):\n\nlet\n  craneLib = crane.mkLib pkgs;\n  src = craneLib.cleanCargoSource ./.;\n  commonArgs = { inherit src; strictDeps = true; };\n  cargoArtifacts = craneLib.buildDepsOnly commonArgs;\nin\ncraneLib.buildPackage (commonArgs // { inherit cargoArtifacts; })\n\n\`buildDepsOnly\` only changes when \`Cargo.toml\`/\`Cargo.lock\` change, so its output is reused from the binary cache across commits; reuse \`cargoArtifacts\` for \`cargoClippy\`/\`cargoNextest\` checks as well.`,
+          message: `\`${ident.text}\`${name ? ` (\`${name}\`)` : ""} uses local source \`${source.text}\`. With standard buildRustPackage phases, \`cargoHash\`/\`cargoLock\` reuse dependency sources rather than compiled artifacts; source changes and a package-cache miss can repeat dependency compilation.`,
+          suggestion: `If measurements justify migration, lock and review a crane input (\`crane.url = "github:ipetkov/crane";\`, with committed flake.lock), then adapt a two-phase build:\n\nlet\n  craneLib = crane.mkLib pkgs;\n  src = craneLib.cleanCargoSource ./.;\n  commonArgs = { inherit src; strictDeps = true; };\n  cargoArtifacts = craneLib.buildDepsOnly commonArgs;\nin\ncraneLib.buildPackage (commonArgs // { inherit cargoArtifacts; })\n\nPreserve all build inputs, features, cross-compilation settings, patches and checks. Artifact reuse also depends on toolchain and native dependency compatibility; compare outputs and benchmark rather than assuming this example is equivalent.`,
           confidence: "medium",
           key: `rust-single-phase#${count}`,
         });

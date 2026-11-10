@@ -5,10 +5,12 @@ import type { JobCommand } from "../helpers.js";
 import {
   commandDirectory,
   dirname,
+  effectiveEnv,
   inDir,
   jobContexts,
   joinPath,
   parseProperties,
+  unknownCommandEnvironment,
   words,
   type JobContext,
   type PropertyEntry,
@@ -75,6 +77,10 @@ export interface GradleBuild {
 }
 
 function parseInvocation(ctx: JobContext, command: JobCommand): { dir: string; invocation: GradleInvocation } | undefined {
+  if (unknownCommandEnvironment(ctx, command)) return undefined;
+  const env = effectiveEnv(ctx, command, command);
+  if (env.has("GRADLE_USER_HOME") || ["GRADLE_OPTS", "JAVA_OPTS", "JAVA_TOOL_OPTIONS"]
+    .some((key) => /[$`]/.test(env.get(key) ?? ""))) return undefined;
   const list = words(command.command).map((word) => word.replace(/\\/g, "/"));
   let start = 0;
   if (SHELLS.has(list[0] ?? "") && list[1] !== undefined && EXECUTABLES.has(basename(list[1]))) start = 1;
@@ -91,7 +97,7 @@ function parseInvocation(ctx: JobContext, command: JobCommand): { dir: string; i
     if (arg === "--") break;
     if (arg.startsWith("-")) {
       const name = arg.split("=")[0] ?? arg;
-      if (OPAQUE_OPTIONS.has(name)) return undefined;
+      if (OPAQUE_OPTIONS.has(name) || name === "-g" || name === "--gradle-user-home") return undefined;
       options.push(arg);
       if (VALUE_OPTIONS.has(arg)) {
         const value = args[index + 1];
@@ -140,7 +146,8 @@ export function gradleBuilds(project: ProjectModel): GradleBuild[] {
       if (!parsed || !isBuildRun(parsed.invocation)) continue;
       const root = rootOf(project, parsed.dir);
       if (root === undefined) continue;
-      let build = builds.get(root);
+      const key = `${root}:${ctx.workflow.path}:${ctx.job.id}`;
+      let build = builds.get(key);
       if (!build) {
         const propertiesPath = inDir(root, "gradle.properties");
         const properties = project.files.get(propertiesPath);
@@ -153,7 +160,7 @@ export function gradleBuilds(project: ProjectModel): GradleBuild[] {
           ...(properties ? { properties } : {}),
           ...(settings ? { settings } : {}),
         };
-        builds.set(root, build);
+        builds.set(key, build);
       }
       build.invocations.push(parsed.invocation);
     }
@@ -161,9 +168,14 @@ export function gradleBuilds(project: ProjectModel): GradleBuild[] {
   return [...builds.values()];
 }
 
-/** True when any workflow or action file mentions `text` (for example a `GRADLE_OPTS` or `~/.gradle/gradle.properties` write). */
-export function workflowsMention(project: ProjectModel, text: string): boolean {
-  return [...project.workflows, ...project.actions].some((workflow) => project.files.get(workflow.path)?.content.includes(text));
+/** Relevant invocation environments and preceding configuration writes, never unrelated jobs. */
+export function buildMentions(build: GradleBuild, text: string): boolean {
+  return build.invocations.some(({ ctx, command }) =>
+    [...effectiveEnv(ctx, command, command).values()].some((value) => value.includes(text)) ||
+    ctx.commands.slice(0, ctx.commands.indexOf(command)).some((entry) =>
+      entry.command.includes(text) && /gradle\.properties|GITHUB_ENV/.test(entry.command),
+    ),
+  );
 }
 
 /** True when an invocation passes one of the flags or sets one of the properties with `-D`. */
@@ -179,7 +191,15 @@ export function invocationSets(build: GradleBuild, flags: string[], properties: 
 export function propertyDecided(project: ProjectModel, build: GradleBuild, properties: string[], flags: string[]): boolean {
   if (properties.some((property) => build.values.has(property))) return true;
   if (invocationSets(build, flags, properties)) return true;
-  return properties.some((property) => workflowsMention(project, property));
+  return properties.some((property) => buildMentions(build, property));
+}
+
+/** Retain invocations whose setting is not decided by a different invocation in the same job. */
+export function undecidedBuild(project: ProjectModel, build: GradleBuild, properties: string[], flags: string[]): GradleBuild | undefined {
+  const invocations = build.invocations.filter((invocation) =>
+    !propertyDecided(project, { ...build, invocations: [invocation] }, properties, flags),
+  );
+  return invocations.length > 0 ? { ...build, invocations } : undefined;
 }
 
 export function related(build: GradleBuild): Location[] {

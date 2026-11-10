@@ -6,6 +6,7 @@ import { isAlias, isMap, isPair, isScalar, isSeq, type YAMLMap } from "yaml";
 import { lineText } from "../fix.js";
 import { lineOfNode } from "../parsers/yaml.js";
 import type { ProjectModel } from "../project.js";
+import { splitShellCommands } from "../parsers/shell.js";
 
 export function defineRule<O extends Record<string, unknown>>(rule: {
   meta: RuleMeta<O>;
@@ -23,32 +24,11 @@ export interface RunCommand {
   line: number;
 }
 
-/** Splits a `run:` script into logical commands, joining `\` continuations and splitting on `&&`, `||`, `;`. */
+/** Lexical commands only: quoted separators and heredoc bodies are not executable top-level commands. */
 export function commandsOf(step: StepModel): Array<{ command: string; line: number }> {
   const script = step.run?.value;
   if (!script) return [];
-  const result: Array<{ command: string; line: number }> = [];
-  let offset = 0;
-  let buffer = "";
-  let bufferStart = 0;
-  for (const rawLine of script.split("\n")) {
-    const lineOffset = offset;
-    offset += rawLine.length + 1;
-    const text = rawLine.replace(/\r$/, "");
-    if (buffer === "") bufferStart = lineOffset;
-    if (/\\\s*$/.test(text)) {
-      buffer += text.replace(/\\\s*$/, " ");
-      continue;
-    }
-    buffer += text;
-    const line = runLine(step, bufferStart);
-    for (const part of buffer.split(/&&|\|\||;/)) {
-      const command = part.trim();
-      if (command && !command.startsWith("#")) result.push({ command, line });
-    }
-    buffer = "";
-  }
-  return result;
+  return splitShellCommands(script).map(({ command, offset }) => ({ command, line: runLine(step, offset) }));
 }
 
 export function* runCommands(workflows: WorkflowModel[]): Generator<RunCommand> {

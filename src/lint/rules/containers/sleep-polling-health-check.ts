@@ -59,9 +59,9 @@ export default defineRule({
     ruleset: "containers",
     description: "A job with service containers waits for them with a fixed `sleep` instead of a `--health-cmd` health check.",
     rationale:
-      "Service containers start before the job's steps, but without a health check nothing tells the runner whether the database or broker inside is ready yet. A fixed `sleep` is a guess: too short and the first connection fails intermittently on a slow start, too long and every run pays the full delay. With `options: --health-cmd ...` the runner waits until the container reports healthy before running the steps, which is both exact and as fast as the service allows.",
-    kind: "practice",
-    defaultSeverity: "warn",
+      "A fixed sleep may wait longer than a useful readiness probe or fail on a slow start. However, the image may already define HEALTHCHECK and the sleep may await unrelated work. An explicit probe helps only if it tests the same readiness condition; polling intervals, retries and credentials affect correctness and latency. This rule observes a sleep and absent workflow-level health command, not the image's configuration or the sleep's purpose.",
+    kind: "insight",
+    defaultSeverity: "info",
     presets: ["recommended", "agentic", "strict"],
     requires: [],
     defaultOptions: { minSeconds: 5 },
@@ -114,8 +114,8 @@ export default defineRule({
               path: workflow.path,
               line,
               key: `${step.key}:sleep-health:${line}`,
-              message: `\`${command.trim()}\` waits a fixed ${seconds}s in job \`${job.id}\`, whose service container${unchecked.length > 1 ? "s" : ""} ${names} ${unchecked.length > 1 ? "have" : "has"} no \`--health-cmd\`. The sleep is a guess: too short and the first connection fails intermittently, too long and every run pays the full ${seconds}s. With a health check the runner waits until the service is healthy before running the steps.`,
-              suggestion: `Add a health check to the service and delete \`${command.trim()}\`:\nservices:\n${snippets}`,
+              message: `\`${command.trim()}\` waits a fixed ${seconds}s in job \`${job.id}\`, whose service container${unchecked.length > 1 ? "s" : ""} ${names} ${unchecked.length > 1 ? "have" : "has"} no explicit workflow \`--health-cmd\`. The image may already have HEALTHCHECK, and the sleep may await something else; verify its purpose before replacing it.`,
+              suggestion: `If the sleep only waits for service readiness, consider an equivalent probe. Preserve existing service environment, ports, credentials and options, and validate slow-start behavior before deleting \`${command.trim()}\`. Example options to adapt:\nservices:\n${snippets}`,
               impact: "medium",
               confidence: "medium",
             });

@@ -1,9 +1,8 @@
-import { fix, replaceOnLine } from "../../fix.js";
 import { usesAction } from "../caching/shared.js";
 import { actionVersion, defineRule, stepLine, steps } from "../helpers.js";
 
 const ACTION = "determinatesystems/magic-nix-cache-action";
-/** First major released after the 2025-02-01 GitHub cache API shutdown broke older releases. */
+/** First action major using the replacement cache API. */
 const FIRST_WORKING_MAJOR = 10;
 const CURRENT_MAJOR = "v15";
 
@@ -13,7 +12,7 @@ export default defineRule({
     ruleset: "nix",
     description: "magic-nix-cache-action releases before v10 stopped working when GitHub retired the legacy cache API.",
     rationale:
-      "magic-nix-cache runs a local binary-cache daemon that Nix uses as a substituter and that stores NARs in the GitHub Actions cache. Releases before v10 talk to the legacy Actions cache service, which GitHub shut down on 2025-02-01, so on those versions the cache silently stops restoring and saving: every run builds or downloads its whole closure from scratch while the step still succeeds. v10 (2025-06-10) moved to the new cache service. Determinate Systems now recommends FlakeHub Cache (`flakehub-cache-action`) for authenticated, cross-repository caching.",
+      "Older magic-nix-cache releases target the retired GitHub.com cache API; v10 introduced the replacement service support. Exact failure behavior depends on service and action configuration, and GitHub Enterprise Server can have different compatibility. Other Nix caches may still supply outputs. Review a supported release or cache migration, its permissions and trust boundaries; a major upgrade is not an unattended behavior-preserving fix.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -26,7 +25,7 @@ export default defineRule({
       "https://github.blog/changelog/2024-09-16-notice-of-upcoming-deprecations-and-changes-in-github-actions-services/",
     ],
     impact: "high",
-    fixable: true,
+    fixable: false,
     example: {
       bad: "- uses: DeterminateSystems/magic-nix-cache-action@v8",
       good: `- uses: DeterminateSystems/magic-nix-cache-action@${CURRENT_MAJOR}`,
@@ -39,22 +38,13 @@ export default defineRule({
       const version = actionVersion(step, file);
       if (!version || version.major >= FIRST_WORKING_MAJOR) continue;
       const ref = step.uses.action.ref ?? "";
-      const plainTag = version.source === "ref" && /^v\d+$/.test(ref);
-      const repair =
-        plainTag && file
-          ? fix(
-              `Update magic-nix-cache-action to ${CURRENT_MAJOR}`,
-              replaceOnLine(file, step.uses.line, new RegExp(`(?<=magic-nix-cache-action@)${ref}\\b`, "i"), CURRENT_MAJOR),
-            )
-          : undefined;
       const pinned = version.source === "comment" ? `a SHA commented as ${version.text}` : `\`${ref}\``;
       report({
         path: workflow.path,
         line: stepLine(step),
         key: `${step.key}.uses`,
-        message: `magic-nix-cache-action is pinned to ${pinned}, a release from before v10 that uses GitHub's retired cache API, so it no longer restores or saves anything.`,
+        message: `magic-nix-cache-action is pinned to ${pinned}, a pre-v10 release associated with the legacy cache API. On GitHub.com that API is retired; check the actual host, action release and cache logs before upgrading.`,
         suggestion: `Use \`DeterminateSystems/magic-nix-cache-action@${CURRENT_MAJOR}\` (or a SHA of a v10+ release), or switch to FlakeHub Cache:\n- uses: DeterminateSystems/flakehub-cache-action@v3\n(requires \`permissions: { id-token: write, contents: read }\`).`,
-        ...(repair ? { fix: repair } : {}),
       });
     }
   },

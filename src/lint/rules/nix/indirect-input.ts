@@ -13,7 +13,7 @@ import {
   str,
 } from "./flake.js";
 
-/** GitHub targets of the global flake registry (https://github.com/NixOS/flake-registry), so a suggestion keeps today's source. */
+/** Common registry examples, not authoritative mappings for the user's current registry. */
 const REGISTRY: Record<string, string> = {
   agda: "agda/agda",
   agenix: "ryantm/agenix",
@@ -73,13 +73,13 @@ interface Candidate {
 function replacement(candidate: Candidate, node: FlakeLockNode | undefined): { url: string; known: boolean } {
   const suffix = candidate.rev ?? candidate.ref;
   const tail = suffix ? `/${suffix}` : "";
+  const owner = str(node?.locked?.owner);
+  const repo = str(node?.locked?.repo);
+  if (str(node?.locked?.type) === "github" && owner && repo) return { url: `github:${owner}/${repo}/${candidate.rev ?? str(node?.locked?.rev) ?? candidate.ref ?? "HEAD"}`, known: true };
   // The global registry resolves a bare `nixpkgs` to the nixpkgs-unstable channel.
   if (candidate.id === "nixpkgs") return { url: `github:NixOS/nixpkgs/${suffix ?? "nixpkgs-unstable"}`, known: true };
   const registered = REGISTRY[candidate.id];
   if (registered) return { url: `github:${registered}${tail}`, known: true };
-  const owner = str(node?.locked?.owner);
-  const repo = str(node?.locked?.repo);
-  if (str(node?.locked?.type) === "github" && owner && repo) return { url: `github:${owner}/${repo}${tail}`, known: true };
   return { url: `github:<owner>/${candidate.id}${tail}`, known: false };
 }
 
@@ -183,7 +183,7 @@ export default defineRule({
           key: `${flake.dir}:${candidate.name}`,
           message: `${describe(candidate)}, which Nix resolves through whichever flake registry wins on the machine (~/.config/nix/registry.json, then /etc/nix/registry.json, then the downloaded global registry); every \`nix flake update\` re-resolves it there. Declare the source explicitly, e.g. \`${target.url}\`.`,
           suggestion: [
-            instruction(candidate),
+            `${instruction(candidate)} Review the existing lock and actual registry mapping first; a suggested source is not proof of equivalence.`,
             "",
             "```nix",
             `inputs.${candidate.name}.url = "${target.url}";`,
@@ -193,7 +193,7 @@ export default defineRule({
             `nix flake lock --update-input ${candidate.name}`,
             "```",
             ...(candidate.id === "nixpkgs" && !candidate.ref && !candidate.rev
-              ? ["", `The global registry currently resolves a bare \`nixpkgs\` to the \`nixpkgs-unstable\` channel; use \`github:NixOS/nixpkgs/${STABLE_CHANNEL}\` to follow the stable release instead.`]
+              ? ["", `A common nixpkgs mapping follows nixpkgs-unstable, but local registry policy may differ. Choosing \`github:NixOS/nixpkgs/${STABLE_CHANNEL}\` instead changes the dependency policy and needs review.`]
               : []),
             ...(target.known
               ? []

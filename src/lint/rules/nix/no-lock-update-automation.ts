@@ -47,7 +47,7 @@ export default defineRule({
     ruleset: "nix",
     description: "A committed flake.lock has no Dependabot, Renovate or scheduled workflow keeping it up to date.",
     rationale:
-      "`flake.lock` freezes every input at the revision it had when someone last ran `nix flake update`. Nothing refreshes it by itself: Renovate's `nix` manager is disabled by default and Dependabot only updates ecosystems listed in `dependabot.yml`. A lock nobody bumps keeps CI on months-old nixpkgs (missing security fixes), and the eventual manual bump moves every input at once, so the single pull request invalidates most of the binary cache and rebuilds or re-downloads the whole closure while mixing unrelated upstream changes into one hard-to-bisect diff. Small, regular automated bumps keep each change reviewable and each cache miss small.",
+      "Committed locks require deliberate maintenance. Repository-visible Dependabot, Renovate or update workflows can make that maintenance reviewable, but external services and manual targeted updates may already provide it. A commit timestamp is not a vulnerability assessment or proof of neglect. Even a small update can change a large build closure; automation does not guarantee smaller cache misses. Review and test update pull requests before merging.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["strict"],
@@ -103,7 +103,7 @@ export default defineRule({
       path: first.path,
       line: 1,
       key: "no-lock-update-automation",
-      message: `${subject} but nothing updates ${uncovered.length === 1 ? "it" : "them"}: ${gaps.join("; ")}. The lock will drift until a manual bump moves every input at once.`,
+      message: `${subject}, with no recognized repository-local update automation: ${gaps.join("; ")}. External services or manual updates may already cover this; confirm the maintenance policy before adding another updater.`,
       suggestion: `${dependabot ? `Add this entry under \`updates:\` in \`${dependabot.path}\`` : "Create `.github/dependabot.yml`"} so Dependabot opens pull requests that bump the flake inputs:\n\n${snippet}\n\nAlternatives: enable Renovate's beta manager with \`"nix": { "enabled": true }\` (plus \`"lockFileMaintenance": { "enabled": true }\` for whole-lock refreshes), or add a weekly \`schedule:\` workflow that runs \`DeterminateSystems/update-flake-lock\` after installing Nix.`,
       ...(uncovered.length > 1 ? { related: uncovered.slice(1).map((lock) => ({ path: lock.path, line: 1 })) } : {}),
     });
@@ -125,7 +125,7 @@ function trackedLocks(flakes: NixFlake[]): TrackedLock[] {
       if (!node || type === "path") continue;
       inputs += 1;
       const modified = node.locked?.lastModified;
-      if (typeof modified === "number" && modified > 0 && (!oldest || modified < oldest.modified)) oldest = { name, modified };
+      if (typeof modified === "number" && Number.isFinite(modified) && modified > 0 && modified <= 8_640_000_000_000 && (!oldest || modified < oldest.modified)) oldest = { name, modified };
     }
     if (inputs === 0) continue;
     result.push({

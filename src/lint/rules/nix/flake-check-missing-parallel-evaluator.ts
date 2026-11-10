@@ -4,8 +4,9 @@ import { exprEnd, matchingClose, nixBindings } from "../../parsers/nix.js";
 import type { NixFlake } from "../../project.js";
 import { usesAction } from "../caching/shared.js";
 import { actionVersion, defineRule } from "../helpers.js";
-import type { NixInvocation, NixJob } from "./shared.js";
-import { hasFlag, nestedInvocations, nixJobs, positionalArgs } from "./shared.js";
+import { commandDirectory, entryIndex } from "../toolchains/shared.js";
+import type { NixCommand, NixInvocation, NixJob } from "./shared.js";
+import { effectiveNixConf, hasFlag, nestedInvocations, nixJobs, positionalArgs } from "./shared.js";
 
 /** Outputs that `nix flake check` evaluates for the current system (and, for `checks`, builds). */
 const OUTPUT_HEADS = ["checks", "packages", "devShells", "apps", "nixosConfigurations", "hydraJobs"];
@@ -125,9 +126,8 @@ function valueNames(file: NixFile, valueStart: number, valueEnd: number): string
 }
 
 /**
- * A lower bound on the distinct outputs `nix flake check` evaluates (`checks`, `packages`, `devShells`, `apps`,
- * `nixosConfigurations`, `hydraJobs`), keyed `head.name` and merged across systems. Outputs produced by library
- * helpers that are not visible as attribute names (e.g. `self.packages` re-exported as checks) are not counted.
+ * Syntactic output-shaped bindings, keyed by head/name and merged across systems. This is not a bound on evaluated
+ * outputs: helper functions, lexical scopes and lazy conditions are not evaluated.
  */
 export function countFlakeOutputs(file: NixFile): { count: number; heads: string[] } {
   const { masked } = file;
@@ -153,9 +153,10 @@ export function countFlakeOutputs(file: NixFile): { count: number; heads: string
  * Determinate Nix evaluates `nix flake check` in parallel. nix-installer-action installs it when `determinate: true`,
  * and by default from v23 on (unknown versions are assumed to be recent).
  */
-function usesDeterminateNix(job: NixJob): boolean {
-  if (job.conf.some((setting) => setting.key === "eval-cores")) return true;
-  return job.installers.some((step) => {
+function usesDeterminateNix(job: NixJob, site: NixCommand, nix: NixInvocation): boolean {
+  const conf = effectiveNixConf(job, site, nix);
+  if (!conf || conf.some((setting) => setting.key === "eval-cores")) return true;
+  return job.entries.slice(0, entryIndex(job, site)).some(({ step }) => {
     if (usesAction(step, "determinatesystems/determinate-nix-action")) return true;
     if (!usesAction(step, "determinatesystems/nix-installer-action")) return false;
     const determinate = String(step.with.get("determinate")?.value ?? "").trim();
@@ -170,10 +171,12 @@ function usesDeterminateNix(job: NixJob): boolean {
 function flakeDir(nix: NixInvocation, directory: string): string | undefined {
   const ref = positionalArgs(nix)[0] ?? ".";
   if (ref.includes("${{") || ref.includes("$")) return undefined;
-  const local = ref.replace(/^path:/, "").replace(/[#?].*$/, "");
+  const [local = "", query = ""] = ref.replace(/^path:/, "").replace(/#.*$/, "").split("?", 2);
   if (local.includes(":") || local.startsWith("/") || local.startsWith("~")) return undefined;
   if (local !== "" && !local.startsWith(".")) return undefined;
-  const joined = posix.normalize(posix.join(directory.replace(/\\/g, "/"), local || "."));
+  const subdir = new URLSearchParams(query).get("dir") ?? ".";
+  if (/[$`]/.test(subdir) || subdir.startsWith("/")) return undefined;
+  const joined = posix.normalize(posix.join(directory.replace(/\\/g, "/"), local || ".", subdir));
   if (joined.startsWith("..") || joined.startsWith("/")) return undefined;
   return joined === "." ? "" : joined.replace(/\/$/, "");
 }
@@ -199,7 +202,7 @@ export default defineRule({
     ruleset: "nix",
     description: "`nix flake check` runs on a flake with many outputs without a parallel evaluator or a per-output job matrix.",
     rationale:
-      "`nix flake check` walks the flake's outputs one at a time in a single-threaded evaluator (upstream Nix): it evaluates every package, dev shell, app, NixOS configuration and check for the current system, collects the check derivations, and only after the whole walk has finished hands them to one build call. On a flake with many outputs the runner's cores idle during evaluation and no build starts until the last output is evaluated. `nix-fast-build` evaluates `checks` with `nix-eval-jobs` worker processes and starts building each derivation as soon as it is evaluated, and `--skip-cached` skips outputs already in a binary cache; alternatively, nix-github-actions turns the checks into a job matrix, and Determinate Nix parallelises the evaluator itself. The output count is a lower bound read from attribute names in `flake.nix`.",
+      "Evaluation can be a bottleneck for flakes with many expensive outputs. This detector counts output-shaped source bindings, not evaluated outputs, elapsed time or CPU use; helper functions, lazy branches, systems and Nix versions can change the work. Parallel evaluators or job matrices may help but add overhead. Building checks with another tool does not replace flake-check validation of other output types: retain nix flake check --no-build with equivalent system/options coverage and test the combined behavior. Pin and review any additional tooling.",
     kind: "insight",
     defaultSeverity: "info",
     presets: ["insights"],
@@ -218,7 +221,7 @@ export default defineRule({
     impact: "medium",
     example: {
       bad: "- uses: cachix/install-nix-action@v31\n- run: nix flake check   # flake.nix defines 40 packages and checks",
-      good: "- uses: cachix/install-nix-action@v31\n- run: nix run github:Mic92/nix-fast-build -- --skip-cached --no-nom",
+      good: "- uses: cachix/install-nix-action@v31\n- run: nix flake check --no-build\n# Then build the same check set with a reviewed, lock-pinned parallel evaluator.",
     },
   },
   check({ project, options, report }) {
@@ -226,13 +229,13 @@ export default defineRule({
     const flakes = new Map<string, NixFlake>(project.nix.flakes.map((flake) => [flake.dir, flake]));
     const counts = new Map<string, { count: number; heads: string[] }>();
     for (const model of nixJobs(project)) {
-      const workflowText = project.files.get(model.workflow.path)?.content ?? "";
-      if (PARALLEL_TOOLS.test(workflowText) || hasDynamicMatrix(model) || usesDeterminateNix(model)) continue;
+      if (PARALLEL_TOOLS.test(model.commands.map((entry) => entry.command).join("\n")) || hasDynamicMatrix(model)) continue;
       for (const entry of model.commands) {
         if (!entry.nix || entry.command.includes("${{") || PARALLEL_TOOLS.test(entry.command)) continue;
         const nix = nestedInvocations(entry.nix).find((invocation) => invocation.binary === "nix" && invocation.subcommand === "flake check");
-        if (!nix || hasFlag(nix, "--no-build")) continue;
-        const directory = entry.step.workingDirectory ?? model.job.workingDirectory ?? model.workflow.workingDirectory ?? "";
+        if (!nix || hasFlag(nix, "--no-build") || usesDeterminateNix(model, entry, nix)) continue;
+        const directory = commandDirectory(model, entry);
+        if (directory === undefined) continue;
         const dir = flakeDir(nix, directory);
         const flake = dir === undefined ? undefined : flakes.get(dir);
         if (!flake?.nix || !flake.info?.outputs || PARALLEL_TOOLS.test(flake.nix.masked)) continue;
@@ -244,8 +247,8 @@ export default defineRule({
           path: entry.path,
           line: entry.line,
           key: `${model.job.key}.flake-check.${flake.dir}`,
-          message: `\`${nix.command.trim()}\` in job \`${model.job.id}\` checks \`${flake.nix.path}\`, which defines at least ${counted.count} outputs (${counted.heads.join(", ")}); \`nix flake check\` evaluates them one after another and builds the checks only after the whole evaluation finishes. Consider a parallel evaluator.`,
-          suggestion: `Consider evaluating and building the checks concurrently, skipping those already cached:\n- run: nix run github:Mic92/nix-fast-build -- --skip-cached --no-nom${flakeArg}\nnix-fast-build builds \`checks.<system>\` only, so expose packages and dev shells you want built as checks (e.g. \`checks = self.packages.\${system} // { shell = self.devShells.\${system}.default; }\`). Alternatives: a job matrix generated by nix-community/nix-github-actions, or Determinate Nix (DeterminateSystems/determinate-nix-action), whose evaluator runs \`nix flake check\` in parallel.`,
+          message: `\`${nix.command.trim()}\` in job \`${model.job.id}\` checks \`${flake.nix.path}\`, with ${counted.count} syntactically recognized output names (${counted.heads.join(", ")}). This is not an evaluated-output count or timing measurement; profile evaluation before considering a parallel evaluator.`,
+          suggestion: `If evaluation is the bottleneck, compare a reviewed, lock-pinned nix-fast-build/nix-eval-jobs setup or per-output job matrix. For nix-fast-build the local checks selection is \`${flakeArg.trim() || "--flake .#checks"}\`. Retain \`nix flake check --no-build\` with the original flake/system/options coverage: building checks alone does not validate all output types. Preserve every existing check and benchmark memory, evaluation and build time.`,
           confidence: "low",
         });
       }

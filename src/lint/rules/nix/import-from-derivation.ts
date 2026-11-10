@@ -4,6 +4,7 @@ import {
   attrKeys,
   attrsetOf,
   callArgument,
+  enclosingOpen,
   headIdent,
   inheritedFromBuiltins,
   isBindingKey,
@@ -70,15 +71,21 @@ interface Finding {
 function isProducer(file: NixFile, ident: NixIdent, fromBuiltins: Set<string>): boolean {
   const last = ident.segments.at(-1) ?? "";
   if (!PRODUCERS.has(last) || ident.segments[0] === "builtins") return false;
+  if (ident.segments.length === 1 && isShadowed(file, last)) return false;
   if (ident.segments.length === 1 && last === "fetchurl" && fromBuiltins.has("fetchurl")) return false;
   return isValueUse(file, ident);
 }
 
 /** Start of the value of the only `name = ...;` binding in the file (ambiguous names resolve to nothing). */
-function uniqueBinding(file: NixFile, name: string): number | undefined {
+function uniqueBinding(file: NixFile, name: string, reference: number): number | undefined {
+  if (wordOffsets(file, "let").length > 1) return undefined;
   const starts: number[] = [];
   for (const offset of wordOffsets(file, name)) {
     if (file.masked[offset - 1] === "." || !isBindingKey(file.masked, offset, name.length)) continue;
+    const scope = enclosingOpen(file.masked, offset);
+    let enclosing = enclosingOpen(file.masked, reference);
+    while (enclosing >= 0 && enclosing !== scope) enclosing = enclosingOpen(file.masked, enclosing);
+    if (scope !== enclosing) continue;
     starts.push(skipSpace(file.masked, skipSpace(file.masked, offset + name.length) + 1));
   }
   return starts.length === 1 ? starts[0] : undefined;
@@ -91,7 +98,7 @@ function producerAt(file: NixFile, offset: number, fromBuiltins: Set<string>, de
   if (depth > 0) return undefined;
   const [first, second] = head.segments;
   if (!first || (second !== undefined && (head.segments.length > 2 || !OUTPUT_ATTRS.has(second)))) return undefined;
-  const value = uniqueBinding(file, first);
+  const value = uniqueBinding(file, first, head.offset);
   if (value === undefined) return undefined;
   const origin = producerAt(file, value, fromBuiltins, depth + 1);
   return origin ? { ...origin, via: first } : undefined;
@@ -114,6 +121,8 @@ function producerOf(file: NixFile, arg: NixArgument, fromBuiltins: Set<string>):
 
 function consumerKind(file: NixFile, ident: NixIdent, fromBuiltins: Set<string>): "import" | "read" | undefined {
   const { text, segments } = ident;
+  if (segments.length === 1 && isShadowed(file, text)) return undefined;
+  if (segments[0] === "builtins" && isShadowed(file, "builtins")) return undefined;
   const last = segments.at(-1) ?? "";
   if (text === "import" || text === "builtins.import") return "import";
   if (last === "callPackage") return "import";
@@ -144,9 +153,9 @@ function consumerFindings(file: NixFile): Finding[] {
       offset: ident.offset,
       line: ident.line,
       name: ident.text,
-      message: `\`${call}\` is import from derivation (IFD): ${source} is a derivation, so evaluation pauses until it is ${
+      message: `\`${call}\` matches import from derivation (IFD): assuming the recognized functions have their standard semantics, ${source} supplies a derivation output. If demanded and not already available, evaluation waits for it to be ${
         fetched ? "fetched" : "built"
-      } before the rest of the expression can be evaluated. IFD serializes evaluation with building, is not permitted in Nixpkgs, and is rejected by evaluators that set \`allow-import-from-derivation = false\`.`,
+      }. Evaluators with \`allow-import-from-derivation = false\` reject demanded IFD; this does not establish how much work a cached evaluation performs.`,
       suggestion: `${fix}${
         fetched
           ? " To pin external Nix code such as nixpkgs, use a flake input or `builtins.fetchTarball { url = \"https://github.com/<owner>/<repo>/archive/<rev>.tar.gz\"; sha256 = \"<hash>\"; }`, which fetch during evaluation without building a derivation."
@@ -175,6 +184,7 @@ function helperFindings(file: NixFile): Finding[] {
   const findings: Finding[] = [];
   for (const name of HASKELL_HELPERS) {
     for (const offset of wordOffsets(file, name)) {
+      if (isShadowed(file, name)) continue;
       const arg = wordCall(file, offset, name);
       if (!arg) continue;
       const qualified = qualifiedName(file, offset, name);
@@ -183,9 +193,9 @@ function helperFindings(file: NixFile): Finding[] {
         offset,
         line: file.lineOf(offset),
         name,
-        message: `\`${qualified}\` is import from derivation (IFD): it runs \`cabal2nix\` in a derivation${
+        message: `\`${qualified}\` matches a standard Haskell import-from-derivation (IFD) helper: it normally runs \`cabal2nix\` in a derivation${
           hackage ? " over the Hackage package index" : ""
-        } and imports the generated expression, so evaluation pauses until that derivation is built and repeats it whenever its inputs change. Nixpkgs disallows IFD, and evaluators with \`allow-import-from-derivation = false\` reject it.`,
+        } and imports the result when demanded. Available outputs may avoid rebuilding. Confirm the binding and IFD policy before changing it.`,
         suggestion: `Generate the package expression once and commit it: \`${
           hackage ? "cabal2nix cabal://<package>-<version> > nix/<package>.nix" : "cabal2nix . > package.nix"
         }\`, then use \`haskellPackages.callPackage ${hackage ? "./nix/<package>.nix" : "./package.nix"} { }\` (regenerate it when the \`.cabal\` file changes). ${CHECK}`,
@@ -194,6 +204,8 @@ function helperFindings(file: NixFile): Finding[] {
     }
   }
   for (const offset of wordOffsets(file, "developPackage")) {
+    const qualified = qualifiedName(file, offset, "developPackage");
+    if (!/haskell/i.test(qualified) || isShadowed(file, "developPackage")) continue;
     const arg = wordCall(file, offset, "developPackage");
     const open = arg ? attrsetOf(file, arg) : undefined;
     if (open === undefined || !attrKeys(file, open).has("root")) continue;
@@ -201,24 +213,26 @@ function helperFindings(file: NixFile): Finding[] {
       offset,
       line: file.lineOf(offset),
       name: "developPackage",
-      message: `\`${qualifiedName(file, offset, "developPackage")}\` is import from derivation (IFD): it calls \`callCabal2nix\` on \`root\`, so evaluation pauses while \`cabal2nix\` runs in a derivation and repeats whenever the source changes.`,
+      message: `\`${qualified}\` with \`root\` matches the standard Haskell import-from-derivation helper. When demanded, it may need a cabal2nix derivation before evaluation continues; cached outputs and custom bindings can change the observed work.`,
       suggestion: `Commit a generated expression instead (\`cabal2nix . > package.nix\`) and build it with \`haskellPackages.callPackage ./package.nix { }\`; keep \`developPackage\` only for local development shells where IFD is acceptable. ${CHECK}`,
       confidence: "high",
     });
   }
   for (const offset of wordOffsets(file, "appliedCargoNix")) {
+    if (isShadowed(file, "appliedCargoNix")) continue;
     if (!wordCall(file, offset, "appliedCargoNix")) continue;
     findings.push({
       offset,
       line: file.lineOf(offset),
       name: "appliedCargoNix",
-      message: `\`${qualifiedName(file, offset, "appliedCargoNix")}\` is import from derivation (IFD): crate2nix runs \`crate2nix generate\` in a derivation and then \`callPackage\`s the generated \`Cargo.nix\`, so evaluation pauses until that derivation is built and repeats whenever \`Cargo.lock\` or the source changes.`,
+      message: `\`${qualifiedName(file, offset, "appliedCargoNix")}\` matches crate2nix's import-from-derivation helper. With its standard semantics, demanded evaluation may need generated Cargo.nix before continuing; cached outputs and custom bindings can avoid the assumed work.`,
       suggestion: `Run \`crate2nix generate\` and commit the resulting \`Cargo.nix\` (regenerate it when \`Cargo.lock\` changes), then use \`(pkgs.callPackage ./Cargo.nix { }).rootCrate.build\`. ${CHECK}`,
       confidence: "high",
     });
   }
   for (const name of YARN_HELPERS) {
     for (const offset of wordOffsets(file, name)) {
+      if (isShadowed(file, name)) continue;
       const arg = wordCall(file, offset, name);
       const open = arg ? attrsetOf(file, arg) : undefined;
       if (open === undefined) continue;
@@ -228,7 +242,7 @@ function helperFindings(file: NixFile): Finding[] {
         offset,
         line: file.lineOf(offset),
         name,
-        message: `\`${qualifiedName(file, offset, name)}\` without \`offlineCache\` or \`yarnNix\` is import from derivation (IFD): yarn2nix converts \`yarn.lock\` into \`yarn.nix\` in a derivation and then imports it, so evaluation pauses until it is built and repeats whenever \`yarn.lock\` changes.`,
+        message: `\`${qualifiedName(file, offset, name)}\` without \`offlineCache\` or \`yarnNix\` matches a conventional yarn2nix import-from-derivation path. If demanded under those helper semantics, evaluation may need generated yarn.nix; existing outputs and helper versions affect the work.`,
         suggestion: `Pass a fixed-output dependency cache instead: \`offlineCache = fetchYarnDeps { yarnLock = ./yarn.lock; hash = "<SRI hash from the first build's hash mismatch>"; };\` (or commit the output of \`yarn2nix\` and set \`yarnNix = ./yarn.nix;\`). For new packages, prefer \`stdenv.mkDerivation\` with \`yarnOfflineCache = fetchYarnDeps { ... };\` and \`yarnConfigHook\`/\`yarnBuildHook\`/\`yarnInstallHook\`. ${CHECK}`,
         confidence: "high",
       });
@@ -236,12 +250,21 @@ function helperFindings(file: NixFile): Finding[] {
   }
   for (const offset of wordOffsets(file, "autoPubspecLock")) {
     if (file.masked[offset - 1] === "." || !isBindingKey(file.masked, offset, "autoPubspecLock".length)) continue;
+    const value = skipSpace(file.masked, skipSpace(file.masked, offset + "autoPubspecLock".length) + 1);
+    if (/^(?:true|false|null)\b/.test(file.masked.slice(value))) continue;
+    const open = enclosingOpen(file.masked, offset);
+    const builder = file.idents.some((ident) => {
+      if (!["buildDartApplication", "buildFlutterApplication"].includes(ident.segments.at(-1) ?? "")) return false;
+      const arg = callArgument(file, ident);
+      return arg !== undefined && attrsetOf(file, arg) === open;
+    });
+    if (!builder) continue;
     findings.push({
       offset,
       line: file.lineOf(offset),
       name: "autoPubspecLock",
       message:
-        "`autoPubspecLock` is import from derivation (IFD): the Dart builder converts `pubspec.lock` to Nix in a derivation and imports the result during evaluation, which Nixpkgs does not permit.",
+        "`autoPubspecLock` in a recognized Dart/Flutter builder matches a conventional import-from-derivation path. Confirm the builder version and binding: demanded conversion may require a derivation output during evaluation, subject to the evaluator's IFD policy and available outputs.",
       suggestion: `Convert the lock file once and commit it: \`yq . pubspec.lock > pubspec.lock.json\`, then set \`pubspecLock = lib.importJSON ./pubspec.lock.json;\` (regenerate it when \`pubspec.lock\` changes). ${CHECK}`,
       confidence: "high",
     });
@@ -259,7 +282,7 @@ export default defineRule({
     ruleset: "nix",
     description: "Nix expressions should not import or read files produced by a derivation during evaluation (import from derivation).",
     rationale:
-      "Import from derivation (IFD) happens when evaluation needs the contents of a store path that must first be built or fetched by a derivation: `import`, `builtins.readFile`, `lib.importJSON` or `callPackage` applied to the output of `runCommand`, `fetchFromGitHub`, a cabal2nix/crate2nix/yarn2nix generator, and so on. The evaluator must stop, realise that derivation, and only then continue, so evaluation and building serialize instead of producing the full build graph up front; the work repeats whenever the generator's inputs change, and evaluators that set `allow-import-from-derivation = false` (as Nixpkgs requires) reject the expression outright. Committing generated Nix code, or moving the work into a build phase, keeps evaluation pure and fast.",
+      "IFD demands derivation output during evaluation. If unavailable, it may need realization before evaluation continues, and evaluators disabling IFD reject demanded uses. Existing store outputs or substitutes can avoid rebuilding. This lexical detector recognizes conventional producers/readers and selected helpers; it cannot resolve arbitrary bindings, laziness or runtime cost. IFD is not itself proof of impurity. Committing generated code or moving generation to build time can remove an evaluation dependency, but needs regeneration policy and behavioral testing.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],

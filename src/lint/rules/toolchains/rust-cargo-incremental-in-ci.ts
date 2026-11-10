@@ -1,6 +1,6 @@
-import { fix, replaceOnLine } from "../../fix.js";
 import type { StepModel, WorkflowModel } from "../../parsers/workflow.js";
 import type { ProjectModel } from "../../project.js";
+import { shellTokens } from "../../parsers/shell.js";
 import { CACHE_RESTORE_ACTIONS, isFalse, isTrue, listOf, usesAction } from "../caching/shared.js";
 import { defineRule, type JobCommand } from "../helpers.js";
 import { parseCargo, type CargoCommand } from "./rust-missing-locked-flag.js";
@@ -91,7 +91,7 @@ function resolve(project: ProjectModel, ctx: JobContext, command: JobCommand): M
     if (index >= stop) return;
     const { step } = entry;
     const implicit = (actionName: string): void => {
-      env.set("CARGO_INCREMENTAL", { value: "0", path: entry.path, line: step.line, origin: "action", actionName });
+      env.set("CARGO_INCREMENTAL", { value: step.if || entry.owner.if ? "${unknown}" : "0", path: entry.path, line: step.line, origin: "action", actionName });
     };
     if (isRustCache(step)) implicit("Swatinem/rust-cache");
     // setup-rust-toolchain writes CARGO_INCREMENTAL=0 only when unset, then (cache enabled by default) runs rust-cache.
@@ -102,7 +102,7 @@ function resolve(project: ProjectModel, ctx: JobContext, command: JobCommand): M
       if (other.step !== step || other.owner !== entry.owner) continue;
       for (const [name, value] of githubEnvPairs(other.command)) {
         if ((VARIABLES as readonly string[]).includes(name)) {
-          env.set(name as Variable, { value, path: other.path, line: other.line, origin: "shell" });
+          env.set(name as Variable, { value: step.if || entry.owner.if ? "${unknown}" : value, path: other.path, line: other.line, origin: "shell" });
         }
       }
     }
@@ -114,11 +114,12 @@ function resolve(project: ProjectModel, ctx: JobContext, command: JobCommand): M
   if (model) scopeSettings(env, command.step.env, model, { kind: "step", key: command.step.key });
   for (const other of ctx.commands) {
     if (other === command) break;
-    if (other.step !== command.step) continue;
-    const match = /^export\s+(CARGO_(?:BUILD_)?INCREMENTAL)=(\S*)/.exec(other.command);
-    if (match) {
-      const value = (match[2] ?? "").replace(/^(["'])(.*)\1$/, "$2");
-      env.set(match[1] as Variable, { value, path: other.path, line: other.line, origin: "shell" });
+    if (other.step !== command.step || other.owner !== command.owner) continue;
+    const tokens = shellTokens(other.command);
+    if (tokens[0]?.value !== "export") continue;
+    for (const token of tokens.slice(1)) {
+      const match = /^(CARGO_(?:BUILD_)?INCREMENTAL)=([\s\S]*)$/.exec(token.value);
+      if (match) env.set(match[1] as Variable, { value: match[2] ?? "", path: other.path, line: other.line, origin: "shell" });
     }
   }
   for (const [name, value] of inlineEnv(command.command)) {
@@ -194,9 +195,10 @@ function fileChannel(content: string): string | undefined {
 }
 
 /** Toolchain a job's installer steps select (only when exactly one unambiguous choice exists). */
-function installedToolchain(ctx: JobContext): string | undefined {
+function installedToolchain(ctx: JobContext, command: JobCommand): string | undefined {
   const found = new Set<string>();
-  for (const { step } of ctx.entries) {
+  for (const { step, owner } of ctx.entries.slice(0, entryIndex(ctx, command))) {
+    if (step.if || owner.if) return undefined;
     const input = step.with.get("toolchain");
     const literal = input !== undefined && input.kind === "literal" ? text(input.value) : undefined;
     if (usesAction(step, "dtolnay/rust-toolchain")) {
@@ -223,7 +225,7 @@ function toolchainMinor(project: ProjectModel, ctx: JobContext, command: JobComm
     }
     current = current === "" ? undefined : dirname(current);
   }
-  return rustMinor(installedToolchain(ctx));
+  return rustMinor(installedToolchain(ctx, command));
 }
 
 function devProfile(cargo: CargoCommand): boolean {
@@ -231,19 +233,6 @@ function devProfile(cargo: CargoCommand): boolean {
     cargo.subcommand !== "bench" &&
     !cargo.args.some((word) => word === "--release" || word === "-r" || word === "--profile" || word.startsWith("--profile="))
   );
-}
-
-/** Edit switching the forcing value to "off" on the line that sets it. */
-function switchOff(project: ProjectModel, name: Variable, setting: Setting): ReturnType<typeof replaceOnLine> {
-  const file = project.files.get(setting.path);
-  if (file === undefined || setting.line === undefined) return undefined;
-  const value = name === "CARGO_INCREMENTAL" ? "1" : "true";
-  const replacement = name === "CARGO_INCREMENTAL" ? "0" : "false";
-  const pattern =
-    setting.origin === "yaml"
-      ? new RegExp(`(?<=^\\s*${name}\\s*:\\s*(["']?))${value}(?=\\1\\s*(?:#.*)?$)`)
-      : new RegExp(`(?<=\\b${name}=(["']?))${value}(?=\\1(?![\\w.-]))`);
-  return replaceOnLine(file, setting.line, pattern, replacement);
 }
 
 function describe(name: Variable, setting: Setting): string {
@@ -256,20 +245,21 @@ export default defineRule({
     ruleset: "toolchains",
     description: "CI jobs that cache Cargo's `target/` directory should not compile with incremental compilation enabled.",
     rationale:
-      "Incremental compilation makes rustc store per-crate session data under `target/<profile>/incremental` so a later rebuild of the same workspace crate can reuse it. In a CI job that caches `target/`, this data is either thrown away (Swatinem/rust-cache sets `CARGO_INCREMENTAL=0` and deletes incremental artifacts before saving, because caching workspace crates is generally not effective) or saved and restored with the cache by actions/cache. `CARGO_INCREMENTAL=1` overrides every config and profile setting, so it re-enables the extra work behind the caching action's back. Cargo itself disables incremental compilation by default when the `CI` variable is set starting with Cargo 1.99, but older toolchains still enable it for the dev and test profiles.",
+      "Incremental compilation writes session data that can help subsequent builds, including multiple compilations within the same CI job. Persisting it across runs may cost more than it saves; Swatinem/rust-cache removes it before saving. CARGO_INCREMENTAL=1 forces it on regardless of profile settings. Cargo 1.99 introduced a CI default of off, while older dev/test profiles default on absent overrides. Paths and cache behavior depend on toolchain/action versions. Benchmark before disabling incremental compilation; this is a tradeoff, not proof of wasted work.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["strict"],
-    requires: [],
+    requires: ["complete-inventory"],
     defaultOptions: {},
     references: [
       "https://doc.rust-lang.org/cargo/reference/config.html#buildincremental",
       "https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-reads",
       "https://doc.rust-lang.org/cargo/reference/profiles.html#incremental",
+      "https://doc.rust-lang.org/cargo/CHANGELOG.html#cargo-199-2026-10-01",
       "https://github.com/Swatinem/rust-cache#cache-details",
     ],
     impact: "low",
-    fixable: true,
+    fixable: false,
     example: {
       bad: "- uses: Swatinem/rust-cache@v2\n- run: cargo test\n  env:\n    CARGO_INCREMENTAL: 1",
       good: "- uses: Swatinem/rust-cache@v2\n- run: cargo test\n  env:\n    CARGO_INCREMENTAL: 0",
@@ -278,42 +268,38 @@ export default defineRule({
   check({ project, report }) {
     const seen = new Set<string>();
     for (const ctx of jobContexts(project)) {
-      const direct = ctx.entries.some(({ step }) => isRustCache(step));
-      const bundled = ctx.entries.some(({ step }) => isSetupRust(step) && !isFalse(step.with.get("cache")?.value));
-      const rustCache = direct || bundled;
-      const targetCache = ctx.entries.find(({ step }) => cachesTarget(step));
-      if (!rustCache && targetCache === undefined) continue;
-      const cacheName = direct
-        ? "Swatinem/rust-cache"
-        : bundled
-          ? "actions-rust-lang/setup-rust-toolchain (which runs Swatinem/rust-cache)"
-          : (targetCache?.step.uses?.value.replace(/@.*$/, "") ?? "actions/cache");
       let absenceReported = false;
       for (const { command, words: list } of toolCommands(ctx, "cargo")) {
         const cargo = parseCargo(list);
         if (cargo === undefined || !COMPILING.has(cargo.subcommand)) continue;
+        const preceding = ctx.entries.slice(0, entryIndex(ctx, command)).filter(({ step, owner }) => !step.if && !owner.if);
+        const direct = preceding.some(({ step }) => isRustCache(step));
+        const bundled = preceding.some(({ step }) => isSetupRust(step) && !isFalse(step.with.get("cache")?.value));
+        const rustCache = direct || bundled;
+        const targetCache = preceding.find(({ step }) => cachesTarget(step));
+        if (!rustCache && !targetCache) continue;
+        const cacheName = direct ? "Swatinem/rust-cache" : bundled ? "actions-rust-lang/setup-rust-toolchain (which runs Swatinem/rust-cache)" : (targetCache?.step.uses?.value.replace(/@.*$/, "") ?? "actions/cache");
         const raw = command.command.trim();
         const env = resolve(project, ctx, command);
         const forced = forcedOn(env);
+        if (list.some((word) => word === "--config" || word.startsWith("--config=")) && forced?.name !== "CARGO_INCREMENTAL") continue;
         if (forced) {
           const { name, setting } = forced;
           const key = `incremental:${setting.path}:${setting.line ?? command.line}`;
           if (seen.has(key)) continue;
           seen.add(key);
           const consequence = rustCache
-            ? `${cacheName} sets \`CARGO_INCREMENTAL=0\` and deletes incremental artifacts before saving the cache, so rustc spends time writing incremental session data that is never reused`
+            ? `${cacheName} normally sets \`CARGO_INCREMENTAL=0\` and deletes incremental artifacts before saving; the data can still be reused by subsequent compilations within this job`
             : `rustc writes incremental session data for the workspace crates under \`target/\`, and \`${cacheName}\` saves and restores it with the rest of the target directory`;
-          const repair = fix(`Set ${name} to ${name === "CARGO_INCREMENTAL" ? "0" : "false"}`, switchOff(project, name, setting));
           report({
             path: setting.path,
             line: setting.line ?? command.line,
             key,
             message: `${describe(name, setting)} forces incremental compilation on for \`${raw}\` in a job that caches \`target/\`: ${consequence}.`,
-            suggestion: `Turn incremental compilation off for CI (Cargo 1.99 and later already default to off when \`CI\` is set, and \`CARGO_INCREMENTAL\` overrides every config and profile setting):\n\nenv:\n  CARGO_INCREMENTAL: 0`,
+            suggestion: `Compare representative job time and cache transfer size with \`CARGO_INCREMENTAL: 0\` before changing the policy. Multiple compilations within a job may benefit from keeping it on. Cargo 1.99+ already defaults to off when CI is detected, absent overrides.`,
             ...(setting.path !== command.path || setting.line !== command.line
               ? { related: [{ path: command.path, line: command.line }] }
               : {}),
-            ...(repair ? { fix: repair } : {}),
           });
           continue;
         }
@@ -321,6 +307,9 @@ export default defineRule({
         const dir = commandDirectory(ctx, command);
         if (dir === undefined || list.some((word) => /[$`]/.test(word))) continue;
         const config = configFor(project, dir);
+        const effective = effectiveEnv(ctx, command, command);
+        if (effective.has("CARGO_HOME") || effective.has("CARGO_TARGET_DIR") || effective.has("CARGO_BUILD_BUILD_DIR") ||
+            effective.get("CARGO_INCREMENTAL") === "${unknown}" || effective.get("CARGO_BUILD_INCREMENTAL") === "${unknown}") continue;
         const cacheLine = targetCache?.step.line ?? command.line;
         const cachePath = targetCache?.path ?? command.path;
         if (config?.value === true) {
@@ -338,6 +327,8 @@ export default defineRule({
           continue;
         }
         if (config !== undefined || absenceReported || !devProfile(cargo)) continue;
+        if ([...project.files.values()].some((file) => /(?:^|\/)Cargo\.toml$/.test(file.path) && /\bincremental\s*=/.test(file.content)) ||
+            [...effectiveEnv(ctx, command, command).keys()].some((name) => /^CARGO_PROFILE_/.test(name))) continue;
         const minor = toolchainMinor(project, ctx, command, cargo, dir);
         if (minor === undefined || minor >= CI_DEFAULT_OFF_MINOR) continue;
         absenceReported = true;

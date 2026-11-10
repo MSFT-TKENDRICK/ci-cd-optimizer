@@ -12,6 +12,7 @@ import {
   type NixFile,
 } from "../../parsers/nix.js";
 import type { NixFlake, ProjectModel } from "../../project.js";
+import { enclosingOpen, inheritStatements } from "./expr.js";
 
 /** Branches that only advance after Hydra built and tested them (https://wiki.nixos.org/wiki/Channel_branches). */
 export const NIXPKGS_CHANNEL = /^(?:nixos-(?:unstable|\d{2}\.\d{2})(?:-small)?|nixpkgs-unstable|nixpkgs-\d{2}\.\d{2}-darwin)$/;
@@ -57,7 +58,7 @@ export function isNixpkgsNode(node: FlakeLockNode | undefined): boolean {
   return /github\.com[/:]nixos\/nixpkgs(?:\.git)?(?:[/?#]|$)/i.test(url) || /^https:\/\/(?:channels|releases)\.nixos\.org\//.test(url);
 }
 
-/** What a lock node pins: its revision, else its NAR hash. Two nodes with the same identity share store paths. */
+/** Comparable source revision (or NAR hash), not a proof that consumers produce identical derivations. */
 export function nodeIdentity(node: FlakeLockNode): string | undefined {
   return str(node.locked?.rev) ?? str(node.locked?.narHash);
 }
@@ -84,7 +85,9 @@ export function parseGitHubGitUrl(url: string): GitHubGitUrl | undefined {
   const params = new Map<string, string>();
   for (const pair of (match[4] ?? "").split("&")) {
     if (!pair) continue;
-    const [key = "", value = ""] = pair.split("=");
+    const equals = pair.indexOf("=");
+    const key = equals < 0 ? pair : pair.slice(0, equals);
+    const value = equals < 0 ? "" : pair.slice(equals + 1);
     try {
       params.set(key, decodeURIComponent(value));
     } catch {
@@ -149,6 +152,7 @@ export function inputsFullyKnown(file: NixFile, bindings: NixBinding[]): boolean
     else if (binding.path.length === 1 && binding.path[0] === "inputs") return false;
   }
   return scopes.every((brace) => {
+    if (inheritStatements(file).some((statement) => enclosingOpen(file.masked, statement.offset) === brace)) return false;
     const close = matchingClose(file.masked, brace);
     const inside = bindings.filter((binding) => binding.keyStart > brace && binding.keyStart < close);
     const last = Math.max(brace, ...inside.map((binding) => binding.valueEnd));
@@ -173,7 +177,13 @@ function pathTarget(url: string, fromDir: string): string | undefined {
   else if (/^\.{1,2}(?:\/|$)/.test(base)) path = base;
   if (path === undefined || path.startsWith("/")) return undefined;
   const dir = /(?:^|&)dir=([^&]*)/.exec(query)?.[1];
-  const joined = posix.normalize(posix.join(fromDir || ".", path, dir ? decodeURIComponent(dir) : "."));
+  let subdir = ".";
+  try {
+    if (dir) subdir = decodeURIComponent(dir);
+  } catch {
+    return undefined;
+  }
+  const joined = posix.normalize(posix.join(fromDir || ".", path, subdir));
   return joined === "." ? "" : joined.replace(/\/$/, "");
 }
 

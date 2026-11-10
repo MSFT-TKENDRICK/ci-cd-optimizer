@@ -2,10 +2,13 @@ import { commandsOf, defineRule, expandedJobSteps } from "../helpers.js";
 import type { ProjectModel } from "../../project.js";
 import type { JobModel, StepModel } from "../../parsers/workflow.js";
 import type { ReportDescriptor } from "../../types.js";
+import { attrsetOf, callArgument, enclosingOpen, lintableNixFiles } from "./expr.js";
 import {
   NIX_CONF_INPUTS,
   cliConf,
   envConf,
+  effectiveNixConf,
+  hasOption,
   installerConf,
   nestedInvocations,
   nixInvocation,
@@ -132,9 +135,7 @@ function stepFound(step: StepModel, path: string): Found[] {
 }
 
 /**
- * True when the sandbox setting has no effect on this job: macOS runners already default to `sandbox = false`, and
- * container jobs (e.g. `nixos/nix`, whose nix.conf sets `sandbox = false`) cannot create the sandbox's namespaces
- * without a privileged container.
+ * macOS has a different default; container namespace support is unknown from the image name alone.
  */
 function sandboxIrrelevant(job: JobModel): boolean {
   if (job.containerImage) return true;
@@ -147,13 +148,13 @@ function confReport(project: ProjectModel, found: Found, from: number, confidenc
   const written = found.written ?? `${setting.key} = ${setting.value}`;
   const effect =
     mode === "false"
-      ? "turns the Nix build sandbox off for every build here: builders run with the runner's whole filesystem (`/usr/bin`, `$HOME`, the checkout) and network instead of only their declared inputs, so a derivation can silently depend on host tools or downloads"
-      : "keeps the sandbox for ordinary builds but builds fixed-output derivations and every derivation that sets `__noChroot = true` outside it, so any expression this job evaluates (a dependency, an overlay, a flake input) can opt itself out of isolation and read the host filesystem and network";
+      ? "requests that the Nix build sandbox be disabled for an inspected build command"
+      : "requests relaxed sandboxing for an inspected build command, allowing fixed-output and __noChroot derivations outside the sandbox";
   return {
     path: setting.path,
     line: settingLine(project, setting, from),
-    message: `\`${written}\` (set by ${where}) ${effect}. The output keeps the store path its inputs determine, so an impure result looks reproducible and, if pushed to a binary cache, is substituted on every other machine.`,
-    suggestion: `${found.fix}\nIf a build needs the network, make it a fixed-output derivation (a fetcher with a hash: \`outputHash\`), which keeps network access inside the sandbox; if it needs a host path, expose only that path:\nextra-sandbox-paths = /path/it/needs`,
+    message: `\`${written}\` (set by ${where}) ${effect}. If the builder or trusted daemon honors it, undeclared host dependencies become possible. This observation does not establish that outputs differ or that a daemon accepted the request.`,
+    suggestion: `Review the builder's isolation requirements and effective daemon policy before changing this setting. ${found.fix}\nPreserve other NIX_CONFIG entries and check later CLI overrides. Fetch network resources with reviewed fixed-output fetchers; if a host path is unavoidable, consider a narrowly scoped extra-sandbox-paths setting. Sandboxing alone is not a reproducibility proof.`,
     confidence,
   };
 }
@@ -169,7 +170,7 @@ function flakeReports(project: ProjectModel): ReportDescriptor[] {
         {
           path,
           line: entry.line,
-          message: `\`nixConfig.${key} = ${entry.raw.replace(/;$/, "")}\` in ${path} asks every consumer of this flake to ${mode === "false" ? "turn the build sandbox off" : "run `__noChroot` and fixed-output derivations outside the build sandbox"}. Wherever it is accepted (\`accept-flake-config = true\`, which nix-quick-install-action enables by default, or a "yes" at the prompt) by a user the daemon trusts, builds read the host filesystem and network without declaring them, and the outputs keep their store paths, so impure results can reach a binary cache.`,
+          message: `\`nixConfig.${key} = ${entry.raw.replace(/;$/, "")}\` in ${path} asks consumers to ${mode === "false" ? "turn the build sandbox off" : "run `__noChroot` and fixed-output derivations outside the build sandbox"}. It only takes effect when accepted and honored by the installation; no actual impurity or daemon privilege is established by this declaration.`,
           suggestion: `Remove \`${key}\` from \`nixConfig\` in ${path}. Fetch network resources with a fixed-output fetcher (e.g. \`pkgs.fetchurl { url = "..."; hash = "sha256-..."; }\`), which keeps network access inside the sandbox, and leave sandbox policy to the machine's nix.conf.`,
           confidence: "medium" as const,
         },
@@ -181,16 +182,22 @@ function flakeReports(project: ProjectModel): ReportDescriptor[] {
 const NO_CHROOT = /(?<![\w'-])__noChroot\s*=\s*true\s*;/g;
 
 function noChrootReports(project: ProjectModel): ReportDescriptor[] {
-  return project.nix.files.flatMap((file) =>
-    [...file.masked.matchAll(NO_CHROOT)].map((match) => ({
+  return lintableNixFiles(project).flatMap((file) => {
+    const derivations = new Set(file.idents.filter((ident) => /(?:^|\.)(?:mkDerivation|derivation)$/.test(ident.text))
+      .flatMap((ident) => {
+        const argument = callArgument(file, ident);
+        const open = argument ? attrsetOf(file, argument) : undefined;
+        return open === undefined ? [] : [open];
+      }));
+    return [...file.masked.matchAll(NO_CHROOT)].filter((match) => derivations.has(enclosingOpen(file.masked, match.index))).map((match) => ({
       path: file.path,
       line: file.lineOf(match.index),
       message: `\`__noChroot = true\` in ${file.path} asks Nix to build this derivation outside the sandbox. With the Linux default \`sandbox = true\` Nix refuses the build ("derivation '…' has '__noChroot' set, but that's not allowed when 'sandbox' is 'true'"), so it only builds where \`sandbox = relaxed\` or \`false\` is configured, and there the builder reads the host filesystem and network while the output keeps the same store path.`,
       suggestion:
         'Remove `__noChroot` and declare what the build reaches for: download network resources with a fixed-output fetcher (`pkgs.fetchurl { url = "..."; hash = "sha256-..."; }`, or set `outputHash`/`outputHashMode` on the derivation), and add host tools as `nativeBuildInputs`. If a host path is unavoidable, expose only that path on the builders (`extra-sandbox-paths = /path/it/needs`) instead of disabling isolation.',
       confidence: "medium" as const,
-    })),
-  );
+    }));
+  });
 }
 
 export default defineRule({
@@ -199,9 +206,9 @@ export default defineRule({
     ruleset: "nix",
     description: "The Nix build sandbox is turned off or relaxed in CI, in flake nixConfig, or by `__noChroot`.",
     rationale:
-      "On Linux Nix builds every derivation in a sandbox (`sandbox = true` is the default there): a private mount namespace containing only the derivation's declared inputs, its build directory, private /proc, /dev, /dev/shm and /dev/pts and the configured `sandbox-paths`, plus private PID, network, IPC and UTS namespaces, so only fixed-output derivations (whose content hash is declared up front) can reach the network. That is what makes an input-addressed store path a function of its declared inputs. `sandbox = false` removes the isolation for every build, and `sandbox = relaxed` removes it for fixed-output derivations and for any derivation that sets `__noChroot = true` (with the sandbox on, Nix refuses such derivations). An unsandboxed builder can read `/usr/bin`, `$HOME` or the network and still produce the store path its declared inputs determine, so an impure output is indistinguishable from a pure one: it differs between the runner and a developer machine, and once pushed to a binary cache it is substituted everywhere as if it were reproducible. On hosted runners install-nix-action adds the `runner` user to `trusted-users`, so `--option sandbox false` or `--no-sandbox` from a workflow is honoured by the daemon. macOS (where the default is `false`) and container jobs (the `nixos/nix` image ships `sandbox = false` because an unprivileged container cannot create the namespaces) are not reported.",
+      "Nix sandboxing restricts access to undeclared host state. Disabling or relaxing it can make additional inputs available, but does not establish that a derivation uses them or produces different bytes. Input-addressed store paths identify declared inputs, not a proof of deterministic output. This rule follows observed configuration precedence at build commands and also reports explicit flake requests and recognizable derivation __noChroot attributes. Restricted daemon settings, remote builders, unsupported shell code and container namespace support cannot be established statically. macOS and container jobs are conservatively omitted rather than assuming Linux defaults apply. No isolation change is automatic.",
     kind: "policy",
-    defaultSeverity: "error",
+    defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
     requires: [],
     defaultOptions: {},
@@ -218,31 +225,30 @@ export default defineRule({
   },
   check({ project, report }) {
     const seen = new Set<string>();
-    const skipped = new Set<string>();
     const emit = (found: Found, from: number, confidence: "high" | "medium"): void => {
       const key = `${found.setting.path}:${found.setting.line}:${found.setting.key}:${found.setting.source}`;
       if (seen.has(key)) return;
       seen.add(key);
       report({ ...confReport(project, found, from, confidence), key: `${key}:sandbox-disabled` });
     };
-    const covered = new Set<string>();
-    for (const { workflow, job } of nixJobs(project)) {
+    for (const model of nixJobs(project)) {
+      const { workflow, job } = model;
       const expanded = expandedJobSteps(project, workflow, job);
-      if (sandboxIrrelevant(job)) {
-        for (const entry of expanded) if (!entry.direct) skipped.add(entry.path);
-        continue;
+      if (sandboxIrrelevant(job)) continue;
+      const effective = new Set<string>();
+      const identity = (setting: NixConfSetting): string => `${setting.path}:${setting.line}:${setting.source}:${setting.key}:${setting.value}`;
+      for (const site of model.commands) {
+        if (!site.nix) continue;
+        for (const invocation of nestedInvocations(site.nix)) {
+          if (hasOption(invocation, "--dry-run", "--no-build") || (invocation.binary !== "nix-build" && !["build", "flake check", "develop", "run", "shell"].includes(invocation.subcommand))) continue;
+          const last = effectiveNixConf(model, site, invocation)?.filter((setting) => SANDBOX_KEYS.has(setting.key)).at(-1);
+          if (last) effective.add(identity(last));
+        }
       }
-      for (const entry of expanded) if (!entry.direct) covered.add(entry.path);
-      for (const found of envFound(workflow.env, workflow.path, workflow.triggersLine, "workflow")) emit(found, 1, "high");
-      for (const found of envFound(job.env, workflow.path, job.line, "job")) emit(found, job.line, "high");
+      for (const found of envFound(workflow.env, workflow.path, workflow.triggersLine, "workflow")) if (effective.has(identity(found.setting))) emit(found, 1, "medium");
+      for (const found of envFound(job.env, workflow.path, job.line, "job")) if (effective.has(identity(found.setting))) emit(found, job.line, "medium");
       for (const entry of expanded) {
-        for (const found of stepFound(entry.step, entry.path)) emit(found, entry.step.line, entry.direct ? "high" : "medium");
-      }
-    }
-    for (const action of project.actions) {
-      if (skipped.has(action.path) && !covered.has(action.path)) continue;
-      for (const job of action.jobs) {
-        for (const step of job.steps) for (const found of stepFound(step, action.path)) emit(found, step.line, "medium");
+        for (const found of stepFound(entry.step, entry.path)) if (effective.has(identity(found.setting))) emit(found, entry.step.line, "medium");
       }
     }
     for (const found of [...flakeReports(project), ...noChrootReports(project)]) {

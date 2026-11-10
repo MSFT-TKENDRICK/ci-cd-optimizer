@@ -39,11 +39,11 @@ export default defineRule({
   meta: {
     id: "nix/fetchtarball-no-hash",
     ruleset: "nix",
-    description: "`builtins.fetchTarball` must be called with a `sha256` so the fetched source is verified and cached permanently.",
+    description: "`builtins.fetchTarball` should declare the expected unpacked-source `sha256`.",
     rationale:
-      "`builtins.fetchTarball` downloads and unpacks at evaluation time. Without `sha256` Nix cannot know the content in advance: it treats the cached download as fresh only for `tarball-ttl` (3600 seconds by default), after which evaluation goes back to the network (revalidating with the ETag, or downloading again) and picks up whatever the URL serves now, so a moving URL (a branch archive or channel tarball) silently changes the whole dependency graph between two runs of the same commit, and offline evaluation breaks. Pure evaluation mode (the default for flakes, or `--pure-eval`) refuses the call outright with \"in pure evaluation mode, 'fetchTarball' requires a 'sha256' argument\". With a commit-addressed URL and `sha256` the result is a fixed-output store path that is reused from the store without any network access.",
+      "fetchTarball downloads and unpacks during evaluation. Without an expected sha256, mutable URLs may yield different sources when cache entries expire; cache and offline settings affect revalidation. Pure evaluation rejects unpinned calls when evaluated. A declared digest checks unpacked source identity and permits reuse while the matching store object exists, but does not prevent garbage collection, guarantee availability or authenticate an unreviewed digest.",
     kind: "policy",
-    defaultSeverity: "error",
+    defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
     requires: [],
     defaultOptions: {},
@@ -76,20 +76,20 @@ export default defineRule({
         const problem = commit
           ? `pins commit ${commit.slice(0, 12)} but has no \`sha256\`, so the download is never verified`
           : url
-            ? `fetches a moving URL (\`${url}\`) with no \`sha256\`: its content changes whenever that branch or channel moves`
+            ? `fetches \`${url}\` without an expected \`sha256\`; the URL may be immutable, but the expected unpacked bytes are not declared`
             : "has no `sha256`, so the download is never verified";
         const targetUrl = url ? pinnedUrl(url) : "https://github.com/<owner>/<repo>/archive/<commit-sha>.tar.gz";
         report({
           path: file.path,
           line: ident.line,
-          message: `\`${ident.text} ${finding.shown}\` ${problem}. Nix considers the cached download fresh only for \`tarball-ttl\` (1 hour by default) and then goes back to the network, and pure evaluation (the flake default) rejects the call.`,
+          message: `\`${ident.text} ${finding.shown}\` ${problem}. Cache freshness can depend on \`tarball-ttl\` (1 hour by default); pure evaluation rejects this unpinned call if demanded.`,
           suggestion: [
             `${ident.text} {`,
             `  url = "${targetUrl}";`,
             `  sha256 = "<output of: nix-prefetch-url --unpack ${targetUrl}>";`,
             "}",
             "",
-            "Or let a lock file track it: a flake input (`inputs.<name> = { url = \"github:<owner>/<repo>/<branch>\"; flake = false; };`, pinned by flake.lock and updated with `nix flake update`) or npins/niv.",
+            "Review the downloaded source through an independently trusted channel before accepting its digest. Alternatively use a flake input with a committed reviewed flake.lock, or npins/niv.",
           ].join("\n"),
           confidence: "high",
           key: `fetchTarball#${count}`,

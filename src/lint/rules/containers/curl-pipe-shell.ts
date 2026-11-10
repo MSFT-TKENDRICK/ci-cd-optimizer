@@ -1,5 +1,6 @@
 import { lineStart } from "../../fix.js";
 import { runLine } from "../../parsers/workflow.js";
+import { splitShellCommands } from "../../parsers/shell.js";
 import { defineRule } from "../helpers.js";
 import { fileOf } from "./docker.js";
 
@@ -9,21 +10,6 @@ const SCRIPT_INTERPRETERS = /^(python[\d.]*|perl|ruby|node)$/;
 const CURL_ARG_LETTERS = new Set([..."AbcCdDeEFHKmPQrTuUwxXyYz"]);
 /** wget short options that take an argument. */
 const WGET_ARG_LETTERS = new Set([..."aAbBDeiIlPQRtTUwXo"]);
-
-/**
- * Verification of a downloaded file anywhere in the same step/RUN: checksum check modes, GPG/minisign/cosign
- * signatures, GitHub artifact attestations or SLSA provenance.
- */
-const VERIFICATION = [
-  /\b(?:sha(?:1|224|256|384|512)sum|b2sum|md5sum)\b[^\n;&|]*\s(?:-[a-zA-Z]*c[a-zA-Z]*|--check)\b/,
-  /\bshasum\b[^\n;&|]*\s(?:-[a-zA-Z]*c[a-zA-Z]*|--check)\b/,
-  /\bgpg2?\b[^\n;&|]*\s--verify\b/,
-  /\bgpgv2?\b/,
-  /\bcosign\s+verify(?:-blob|-attestation)?\b/,
-  /\bminisign\b[^\n;&|]*\s-[a-zA-Z]*V/,
-  /\bgh\s+attestation\s+verify\b/,
-  /\bslsa-verifier\b/,
-];
 
 interface Finding {
   offset: number;
@@ -175,7 +161,6 @@ function pipelines(text: string): Array<Array<{ text: string; offset: number }>>
     const char = text[index];
     const next = text[index + 1];
     const previous = text[index - 1];
-    if (char === "\n") quote = undefined;
     if (quote) {
       if (char === quote) quote = undefined;
       else if (char === "\\" && quote === '"') index += 1;
@@ -219,7 +204,7 @@ function leadingSpace(text: string): number {
 }
 
 /** Download-then-execute patterns in shell text whose continuations and comment lines are already blanked. */
-function findings(text: string): Finding[] {
+function commandFindings(text: string): Finding[] {
   const result: Finding[] = [];
   for (const stages of pipelines(text)) {
     for (let index = 0; index < stages.length - 1; index += 1) {
@@ -227,9 +212,10 @@ function findings(text: string): Finding[] {
       if (!stage) continue;
       const args = stripWrappers(words(stage.text.replace(/^[\s({]*(?:\$\()?/, "")));
       if (!downloadsToStdout(args)) continue;
-      const target = stages.slice(index + 1).find((later) => stdinInterpreter(stripWrappers(words(later.text))) !== undefined);
-      if (!target) continue;
-      const interpreter = stdinInterpreter(stripWrappers(words(target.text))) ?? "sh";
+      const target = stages[index + 1];
+      if (!target || target.text.includes("<")) continue;
+      const interpreter = stdinInterpreter(stripWrappers(words(target.text)));
+      if (!interpreter) continue;
       const end = target.offset + target.text.trimEnd().length;
       const offset = stage.offset + leadingSpace(stage.text);
       const url = firstUrl(stage.text);
@@ -238,9 +224,9 @@ function findings(text: string): Finding[] {
     }
   }
   const substitutions = [
-    /(?:^|[\s;&|({!])(?:sudo\s+(?:-\S+\s+)*)?((?:\S*\/)?(?:bash|sh|zsh|ksh|dash)|source|\.)\s+(?:-\S+\s+)*<\(\s*(?:sudo\s+)?(?:curl|wget)\b[^)]*\)/g,
-    /(?:^|[\s;&|({!])(?:sudo\s+(?:-\S+\s+)*)?((?:\S*\/)?(?:bash|sh|zsh|ksh|dash))\s+(?:-[A-Za-z]+\s+)*-[A-Za-z]*c[A-Za-z]*\s+["']?(?:\$\(|`)\s*(?:curl|wget)\b[^)`]*[)`]["']?/g,
-    /(?:^|[\s;&|({!])(eval)\s+["']?(?:\$\(|`)\s*(?:curl|wget)\b[^)`]*[)`]["']?/g,
+    /^\s*(?:sudo\s+(?:-\S+\s+)*)?((?:\S*\/)?(?:bash|sh|zsh|ksh|dash)|source|\.)\s+(?:-\S+\s+)*<\(\s*(?:sudo\s+)?(?:curl|wget)\b[^)]*\)/g,
+    /^\s*(?:sudo\s+(?:-\S+\s+)*)?((?:\S*\/)?(?:bash|sh|zsh|ksh|dash))\s+(?:-[A-Za-z]+\s+)*-[A-Za-z]*c[A-Za-z]*\s+"?(?:\$\(|`)\s*(?:curl|wget)\b[^)`]*[)`]"?/g,
+    /^\s*(eval)\s+"?(?:\$\(|`)\s*(?:curl|wget)\b[^)`]*[)`]"?/g,
   ];
   for (const pattern of substitutions) {
     for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
@@ -253,6 +239,12 @@ function findings(text: string): Finding[] {
   return result;
 }
 
+function findings(text: string): Finding[] {
+  return splitShellCommands(text).flatMap(({ command, offset }) =>
+    commandFindings(command).map((finding) => ({ ...finding, offset: offset + finding.offset })),
+  );
+}
+
 /** Blanks comment lines and joins backslash continuations without shifting offsets. */
 function clean(text: string): string {
   return text
@@ -260,10 +252,6 @@ function clean(text: string): string {
     .map((line) => (line.trimStart().startsWith("#") ? " ".repeat(line.length) : line))
     .join("\n")
     .replace(/\\[ \t]*\r?\n/g, (match) => " ".repeat(match.length));
-}
-
-function verified(text: string): boolean {
-  return VERIFICATION.some((pattern) => pattern.test(text));
 }
 
 function newlines(text: string): number {
@@ -276,23 +264,21 @@ function describe(finding: Finding): string {
   return `\`${command}\` executes a script downloaded ${source} with \`${finding.interpreter}\` without verifying a checksum or signature`;
 }
 
-const SCORECARD = "OpenSSF Scorecard's Pinned-Dependencies check flags this as an unpinned `downloadThenRun` dependency.";
-
 export default defineRule({
   meta: {
     id: "containers/curl-pipe-shell",
     ruleset: "containers",
     description: "A script is downloaded and executed in one go (`curl | sh`, `bash <(curl ...)`) without checksum or signature verification.",
     rationale:
-      "Piping a download into an interpreter executes whatever the server returns at that moment: a compromised host, CDN or release, a moved tag, or a truncated transfer runs with the job's token and secrets, or is baked into the image. The content is never pinned, so two runs or two image builds of the same commit can execute different code. Downloading to a file, verifying a pinned checksum or signature, then executing makes the step hermetic and tamper-evident.",
+      "A direct download-to-interpreter stream executes bytes before the complete payload can be checked locally. A checksum command elsewhere in the step, or a check after execution, does not verify that stream. Download to a file and require successful verification of that exact file before execution. Use an independently trusted expected digest or signing key. Verification authenticates payload bytes; it does not make the script, its network dependencies or the overall build hermetic.",
     kind: "policy",
     defaultSeverity: "error",
     presets: ["recommended", "agentic", "strict"],
     requires: [],
     defaultOptions: {},
     references: [
-      "https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned-dependencies",
       "https://docs.docker.com/reference/dockerfile/#verifying-a-remote-file-checksum-add---checksum",
+      "https://curl.se/docs/manpage.html",
     ],
     impact: "high",
     fixable: false,
@@ -309,7 +295,6 @@ export default defineRule({
           const shell = step.shell ?? job.shell ?? workflow.shell;
           if (shell && /^(pwsh|powershell|cmd|python)\b/i.test(shell.trim())) continue;
           const text = clean(step.run.value);
-          if (verified(text)) continue;
           for (const finding of findings(text)) {
             const line = runLine(step, finding.offset);
             const url = finding.url ?? "<url>";
@@ -317,8 +302,8 @@ export default defineRule({
               path: workflow.path,
               line,
               key: `${step.key}:curl-pipe-shell:${line}:${finding.offset}`,
-              message: `${describe(finding)}: the job runs whatever the server returns on that run, with its token and secrets. ${SCORECARD}`,
-              suggestion: `Download to a file, verify a pinned checksum, then execute:\n  curl -fsSLo install.sh ${url}\n  echo "<sha256>  install.sh" | sha256sum -c -\n  ${finding.interpreter === "source" || finding.interpreter === "." || finding.interpreter === "eval" ? "sh" : finding.interpreter} install.sh`,
+              message: `${describe(finding)} before execution: downloaded code receives the permissions and environment available to this step.`,
+              suggestion: `Download to a file and execute only after that exact file passes a trusted, pinned checksum:\n  curl -fsSLo install.sh ${url} && \\\n  echo "<sha256>  install.sh" | sha256sum -c - && \\\n  ${finding.interpreter === "source" || finding.interpreter === "." || finding.interpreter === "eval" ? "sh" : finding.interpreter} install.sh`,
               impact: "high",
               confidence: "high",
             });
@@ -333,7 +318,6 @@ export default defineRule({
         if (instruction.keyword !== "RUN") continue;
         const raw = file.content.slice(lineStart(file.content, instruction.line), lineStart(file.content, instruction.endLine + 1));
         const text = clean(raw.replace(/^(\s*)RUN\b(?:\s+--[a-z-]+(?:=\S*)?)*/i, (match) => " ".repeat(match.length)));
-        if (verified(text)) continue;
         for (const finding of findings(text)) {
           const line = instruction.line + newlines(raw.slice(0, finding.offset));
           const url = finding.url ?? "<url>";
@@ -341,8 +325,8 @@ export default defineRule({
             path: model.path,
             line,
             key: `${model.path}:curl-pipe-shell:${line}:${finding.offset}`,
-            message: `${describe(finding)}: the build bakes whatever the server returns into the image, so rebuilds of the same commit can differ or be tampered with. ${SCORECARD}`,
-            suggestion: `Fetch the script with a pinned checksum, then run it:\n  ADD --checksum=sha256:<sha256> ${url} /tmp/install.sh\n  RUN sh /tmp/install.sh`,
+            message: `${describe(finding)} before execution: the build bakes whatever the server returns into the image unless the source independently enforces the payload's identity.`,
+            suggestion: `Fetch the script with a trusted pinned checksum, then run it:\n  ADD --checksum=sha256:<sha256> ${url} /opt/install.sh\n  RUN sh /opt/install.sh`,
             impact: "high",
             confidence: "high",
           });

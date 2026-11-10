@@ -1,7 +1,5 @@
-import { fix } from "../../fix.js";
 import { defineRule } from "../helpers.js";
-import { gradleBuilds, invocationSets, propertyDecided, related, workflowsMention } from "./gradle.js";
-import { appendLines } from "./shared.js";
+import { gradleBuilds, invocationSets, undecidedBuild, related, buildMentions } from "./gradle.js";
 
 const PROPERTY = "org.gradle.parallel";
 
@@ -27,34 +25,37 @@ export default defineRule({
     ruleset: "toolchains",
     description: "Multi-project Gradle builds run in CI could execute independent subprojects in parallel with `org.gradle.parallel=true`.",
     rationale:
-      "By default Gradle runs only one task at a time, even when the build has independent subprojects. `org.gradle.parallel=true` (or `--parallel`) lets Gradle execute tasks of different subprojects in parallel, up to `org.gradle.workers.max` workers, which defaults to the number of processors. The gain depends on how independent the subprojects are: a build dominated by one subproject or a long dependency chain gains little.",
+      "Enabling parallel project execution can overlap independent subproject tasks, subject to task dependencies, worker limits and shared-resource constraints. Other concurrency, including worker APIs or configuration-cache task execution, may already exist. Source-level include declarations do not establish an independent runtime task graph. Measure representative builds and validate shared mutable state before changing scheduling.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["strict"],
-    requires: [],
+    requires: ["complete-inventory"],
     defaultOptions: {},
     references: [
       "https://docs.gradle.org/current/userguide/performance.html#sec:enable_parallel_execution",
       "https://docs.gradle.org/current/userguide/build_environment.html#sec:gradle_configuration_properties",
     ],
     impact: "medium",
-    fixable: true,
+    fixable: false,
     example: {
       bad: '# settings.gradle.kts\ninclude(":app", ":core", ":data")\n\n# gradle.properties\norg.gradle.caching=true',
       good: '# settings.gradle.kts\ninclude(":app", ":core", ":data")\n\n# gradle.properties\norg.gradle.caching=true\norg.gradle.parallel=true',
     },
   },
   check({ project, report }) {
-    for (const build of gradleBuilds(project)) {
+    for (const candidate of gradleBuilds(project)) {
+      const build = undecidedBuild(project, candidate, [PROPERTY], ["--parallel", "--no-parallel"]);
+      if (!build) continue;
       if (!build.settings || !build.properties) continue;
       const projects = includedProjects(build.settings.content);
       if (projects.size < 2) continue;
-      if (propertyDecided(project, build, [PROPERTY], ["--parallel", "--no-parallel"])) continue;
       // The configuration cache already runs tasks in parallel, and a worker limit signals deliberate tuning.
       if (build.values.get("org.gradle.configuration-cache")?.value === "true") continue;
-      if (invocationSets(build, ["--configuration-cache", "--max-workers"], ["org.gradle.configuration-cache", "org.gradle.workers.max"])) continue;
-      if (build.invocations.some((invocation) => invocation.options.some((option) => option.startsWith("--max-workers=")))) continue;
-      if (build.values.has("org.gradle.workers.max") || workflowsMention(project, "org.gradle.workers.max")) continue;
+      build.invocations = build.invocations.filter((invocation) =>
+        !invocationSets({ ...build, invocations: [invocation] }, ["--configuration-cache", "--max-workers"], ["org.gradle.configuration-cache", "org.gradle.workers.max"]) &&
+        !invocation.options.some((option) => option.startsWith("--max-workers=")),
+      );
+      if (build.values.has("org.gradle.workers.max") || buildMentions(build, "org.gradle.workers.max")) continue;
       const first = build.invocations[0];
       if (!first) continue;
       const where = build.root === "" ? "the root Gradle build" : `the Gradle build in \`${build.root}/\``;
@@ -62,12 +63,11 @@ export default defineRule({
       report({
         path: first.command.path,
         line: first.command.line,
-        key: `gradle-root:${build.root}`,
-        message: `${where[0]?.toUpperCase() ?? ""}${where.slice(1)} includes ${projects.size} subprojects (${names}${projects.size > 3 ? ", …" : ""}) but runs one task at a time: \`${build.propertiesPath}\` does not set \`${PROPERTY}=true\` and \`${first.command.command.trim()}\` does not pass \`--parallel\`.`,
+        key: `gradle-root:${build.root}:${first.ctx.job.id}`,
+        message: `${where[0]?.toUpperCase() ?? ""}${where.slice(1)} includes ${projects.size} subprojects (${names}${projects.size > 3 ? ", …" : ""}) but does not enable parallel project execution in the inspected configuration: \`${build.propertiesPath}\` does not set \`${PROPERTY}=true\` and \`${first.command.command.trim()}\` does not pass \`--parallel\`.`,
         suggestion: `Add this line to \`${build.propertiesPath}\`:\n\n${PROPERTY}=true\n\nTasks of independent subprojects then run concurrently. Tasks that share mutable state (for example a fixed port or output file used by two subprojects) must declare it, for instance through a shared build service, before parallel execution is safe.`,
         confidence: "medium",
         related: [{ path: build.settings.path, line: 1 }, ...related(build)],
-        fix: fix(`Add ${PROPERTY}=true to ${build.propertiesPath}`, appendLines(build.properties, [`${PROPERTY}=true`])),
       });
     }
   },

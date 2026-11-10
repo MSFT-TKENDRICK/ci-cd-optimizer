@@ -1,4 +1,4 @@
-import { identsNamed } from "../../parsers/nix.js";
+import { identsNamed, nixBindings } from "../../parsers/nix.js";
 import type { NixArgument, NixFile, NixIdent, NixString } from "../../parsers/nix.js";
 import { defineRule } from "../helpers.js";
 import {
@@ -34,6 +34,7 @@ function unverified(file: NixFile, arg: NixArgument): Finding | undefined {
   const keys = attrKeys(file, open);
   // `hash` is not accepted by builtins.fetchurl ("unsupported argument"), so such calls already fail loudly.
   if (keys.has("sha256") || keys.has("hash")) return undefined;
+  if (nixBindings(file, open).some((binding) => binding.path[0] === "${}")) return undefined;
   const urlBinding = bindingNamed(file, open, "url");
   const url = urlBinding ? stringAt(file, urlBinding.valueStart) : undefined;
   return { ...(url ? { url } : {}), shown };
@@ -53,7 +54,7 @@ export default defineRule({
     ruleset: "nix",
     description: "`builtins.fetchurl` downloads at evaluation time without an integrity check; pin it with `sha256` or use the `pkgs.fetchurl` fixed-output fetcher.",
     rationale:
-      "`builtins.fetchurl` is an evaluation-time primop: Nix downloads the file while evaluating, before any build starts, and without a `sha256` it trusts whatever the server returns. The download is only considered fresh for `tarball-ttl` (3600 seconds by default), so a changed or compromised file silently changes the evaluation result, and pure evaluation (the flake default) rejects the call (\"requires a 'sha256' argument\"). When the result is passed to `import`, remote Nix code is executed with no integrity check at all. The nixpkgs `fetchurl` instead creates a fixed-output derivation: the download happens at build time, is verified against `hash`, and the content-addressed output can be substituted from a binary cache.",
+      "When demanded, an unpinned builtins.fetchurl call lacks a declared expected content digest. Download/cache behavior depends on Nix settings and availability, and pure evaluation rejects an unpinned demanded fetch. Importing the result may evaluate remote Nix code. A reviewed digest constrains bytes, not source trust or whole-build reproducibility. pkgs.fetchurl is a build-time fixed-output fetcher; substituting it into evaluation-time code can introduce IFD, so it is not a universally equivalent replacement.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -73,6 +74,7 @@ export default defineRule({
   },
   check({ project, report }) {
     for (const file of lintableNixFiles(project)) {
+      if (isShadowed(file, "builtins")) continue;
       const calls: NixIdent[] = identsNamed(file, "builtins.fetchurl");
       if (inheritedFromBuiltins(file).has("fetchurl") && !isShadowed(file, "fetchurl")) calls.push(...identsNamed(file, "fetchurl"));
       calls.sort((a, b) => a.offset - b.offset);
@@ -90,8 +92,8 @@ export default defineRule({
           path: file.path,
           line: ident.line,
           message: imported
-            ? `\`${imported}\` of ${label} evaluates Nix code downloaded at evaluation time with no integrity check: whatever the server returns (re-fetched after \`tarball-ttl\`, 1 hour by default) is executed, and pure evaluation (the flake default) rejects the call.`
-            : `${label} downloads at evaluation time with no \`sha256\`, so the content is never verified, is re-fetched after \`tarball-ttl\` (1 hour by default), and pure evaluation (the flake default) rejects the call.`,
+            ? `\`${imported}\` of ${label} can evaluate downloaded Nix code without a declared expected content hash. If demanded in pure evaluation (the flake default), this unpinned call is rejected.`
+            : `${label} has no declared \`sha256\` for verifying the expected bytes. Cache freshness can depend on \`tarball-ttl\` (1 hour by default); pure evaluation rejects the unpinned call if it is demanded.`,
           suggestion: imported
             ? [
                 `${imported} (${ident.text} {`,
@@ -99,7 +101,7 @@ export default defineRule({
                 `  sha256 = "<output of: nix-prefetch-url ${url}>";`,
                 "})",
                 "",
-                "Better still, vendor the file into the repository or declare it as a flake input with `flake = false`.",
+                "Independently verify the source before accepting a fetched digest. Alternatively vendor reviewed code or declare a reviewed, locked flake input with `flake = false`.",
               ].join("\n")
             : [
                 "pkgs.fetchurl {",
@@ -107,7 +109,7 @@ export default defineRule({
                 `  hash = "<SRI hash from: nix store prefetch-file ${url}>";`,
                 "}",
                 "",
-                "`pkgs.fetchurl` is a fixed-output derivation: it downloads at build time, verifies the hash and can be substituted from a binary cache. If the value is needed during evaluation, keep `builtins.fetchurl` but add `sha256 = \"<output of: nix-prefetch-url <url>>\";`.",
+                "`pkgs.fetchurl` is build-time: only use it where that preserves evaluation behavior. Otherwise keep `builtins.fetchurl` and add a sha256. Independently verify the source before accepting any fetched digest; prefetching alone does not establish trust.",
               ].join("\n"),
           confidence: "high",
           key: `fetchurl#${count}`,

@@ -1,7 +1,5 @@
-import { fix } from "../../fix.js";
 import { defineRule } from "../helpers.js";
-import { gradleBuilds, propertyDecided, related } from "./gradle.js";
-import { appendLines } from "./shared.js";
+import { gradleBuilds, undecidedBuild, related } from "./gradle.js";
 
 const PROPERTY = "org.gradle.caching";
 
@@ -11,11 +9,11 @@ export default defineRule({
     ruleset: "toolchains",
     description: "Gradle builds run in CI should enable the build cache with `org.gradle.caching=true`.",
     rationale:
-      "Gradle's build cache is off unless `org.gradle.caching=true` is set or `--build-cache` is passed. While it is off, every cacheable task (compilation, tests, code generation) executes on every run even when its inputs are unchanged. With it on, task outputs are stored in the local build cache under the Gradle user home (`caches/build-cache-1`), which gradle/actions/setup-gradle and actions/setup-java `cache: gradle` save and restore between runs, so unchanged tasks are loaded from cache instead of re-executed.",
+      "Gradle's build cache is opt-in. It can reuse eligible task outputs when matching cache entries are available; ordinary up-to-date checks and existing outputs can still avoid work without it. Reuse across ephemeral runners requires cache persistence or a remote cache. Custom tasks must declare their inputs correctly before caching is safe. This detector only sees repository configuration and workflow invocations, not user-home properties, external init scripts or runtime cache hits.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
-    requires: [],
+    requires: ["complete-inventory"],
     defaultOptions: {},
     references: [
       "https://docs.gradle.org/current/userguide/build_cache.html#sec:build_cache_enable",
@@ -23,30 +21,29 @@ export default defineRule({
       "https://github.com/gradle/actions/blob/main/docs/setup-gradle.md#caching-build-state-between-jobs",
     ],
     impact: "high",
-    fixable: true,
+    fixable: false,
     example: {
       bad: "# gradle.properties\norg.gradle.jvmargs=-Xmx2g\n\n# workflow\n- run: ./gradlew build",
       good: "# gradle.properties\norg.gradle.jvmargs=-Xmx2g\norg.gradle.caching=true\n\n# workflow\n- run: ./gradlew build",
     },
   },
-  check({ project, input, report }) {
-    for (const build of gradleBuilds(project)) {
-      if (propertyDecided(project, build, [PROPERTY], ["--build-cache", "--no-build-cache"])) continue;
+  check({ project, report }) {
+    for (const candidate of gradleBuilds(project)) {
+      const build = undecidedBuild(project, candidate, [PROPERTY], ["--build-cache", "--no-build-cache"]);
+      if (!build) continue;
       if (build.settings && /[bB]uildCacheEnabled\b/.test(build.settings.content)) continue;
-      if (!build.properties && !input.inventoryComplete) continue;
       const first = build.invocations[0];
       if (!first) continue;
       const where = build.root === "" ? "the root Gradle build" : `the Gradle build in \`${build.root}/\``;
       const command = first.command.command.trim();
-      const repair = build.properties ? fix(`Add ${PROPERTY}=true to ${build.propertiesPath}`, appendLines(build.properties, [`${PROPERTY}=true`])) : undefined;
       report({
         path: first.command.path,
         line: first.command.line,
-        key: `gradle-root:${build.root}`,
-        message: `The Gradle build cache is off for ${where}: ${build.properties ? `\`${build.propertiesPath}\` does not set \`${PROPERTY}=true\`` : `there is no \`${build.propertiesPath}\` setting \`${PROPERTY}=true\``} and \`${command}\` does not pass \`--build-cache\`, so every cacheable task re-executes on every CI run.`,
-        suggestion: `${build.properties ? `Add this line to \`${build.propertiesPath}\`` : `Create \`${build.propertiesPath}\` containing`}:\n\n${PROPERTY}=true\n\nThis enables the build cache for local and CI builds alike; gradle/actions/setup-gradle then saves the local build cache with the Gradle user home so unchanged task outputs are reused across runs. Only cacheable tasks are stored; a custom task with under-declared inputs can be marked non-cacheable (see "Marking tasks as non-cacheable by default" in the build cache guide).`,
+        key: `gradle-root:${build.root}:${first.ctx.job.id}`,
+        message: `The inspected configuration does not enable the Gradle build cache for ${where}: ${build.properties ? `\`${build.propertiesPath}\` does not set \`${PROPERTY}=true\`` : `there is no \`${build.propertiesPath}\` setting \`${PROPERTY}=true\``} and \`${command}\` does not pass \`--build-cache\`. On a fresh runner without external configuration, eligible task outputs cannot be reused from the build cache.`,
+        suggestion: `After validating task input declarations, compare a trial with \`--build-cache\`. If it helps, consider \`${PROPERTY}=true\` in \`${build.propertiesPath}\` and an appropriate persistence policy. setup-gradle may persist the user-home cache depending on its configuration and access policy; hits are not guaranteed. Keep tasks with incomplete input declarations non-cacheable.`,
+        confidence: "medium",
         related: related(build),
-        ...(repair ? { fix: repair } : {}),
       });
     }
   },

@@ -1,4 +1,3 @@
-import { fix, replaceOnLine } from "../../fix.js";
 import type { FlakeInput } from "../../parsers/nix.js";
 import { defineRule } from "../helpers.js";
 import { parseGitHubGitUrl, type GitHubGitUrl } from "./flake.js";
@@ -9,8 +8,6 @@ const REV = /^[0-9a-f]{40}$/i;
 
 interface Conversion {
   url: string;
-  /** False when the replacement drops information or needs a judgement call. */
-  exact: boolean;
 }
 
 /** The `github:` reference equivalent to a git URL on github.com, or undefined when the URL needs git. */
@@ -31,8 +28,7 @@ function convert(git: GitHubGitUrl): Conversion | undefined {
   else if (ref !== undefined && !ref.includes("/")) path += `/${ref}`;
   else if (ref !== undefined) query.push(`ref=${encode(ref)}`);
   if (dir) query.push(`dir=${encode(dir)}`);
-  const exact = git.scheme === "https" && rawRef === ref && !ref?.includes("/") && !(ref !== undefined && rev !== undefined);
-  return { url: query.length ? `${path}?${query.join("&")}` : path, exact };
+  return { url: query.length ? `${path}?${query.join("&")}` : path };
 }
 
 function encode(value: string): string {
@@ -49,7 +45,7 @@ export default defineRule({
     ruleset: "nix",
     description: "A flake input fetches a github.com repository with `git+https://` or `git+ssh://` instead of the `github:` tarball fetcher.",
     rationale:
-      "A `git+…` flake reference makes Nix fetch the repository with git, which transfers the history of the requested ref into Nix's git cache before it can copy the tree into the store. A `github:` reference downloads one tarball of the commit; the Nix manual describes this as often much faster and using less disk space because it does not fetch the history. On ephemeral CI runners, where the git cache starts empty, every job pays for the full fetch.",
+      "A `git+…` flake reference uses Git, while `github:` downloads a commit tarball. The Nix manual describes the tarball fetcher as often faster and smaller; shallow Git fetches and warm caches reduce that difference. Fetcher changes can affect authentication, source metadata such as revCount and lockfile contents, so review and re-lock them rather than treating them as behavior-preserving edits.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["strict"],
@@ -61,7 +57,7 @@ export default defineRule({
       "https://github.com/cachix/install-nix-action#inputs",
     ],
     impact: "low",
-    fixable: true,
+    fixable: false,
     example: {
       bad: 'inputs.devshell.url = "git+https://github.com/numtide/devshell?ref=main";',
       good: 'inputs.devshell.url = "github:numtide/devshell/main";',
@@ -71,7 +67,6 @@ export default defineRule({
     for (const flake of project.nix.flakes) {
       const file = flake.nix;
       if (!file || !flake.info) continue;
-      const source = project.files.get(file.path);
       const usesRevCount = /\brevCount\b/.test(file.masked);
       for (const input of flake.info.inputs.values()) {
         const url = declaredUrl(input);
@@ -80,8 +75,6 @@ export default defineRule({
         const conversion = git ? convert(git) : undefined;
         if (!git || !conversion) continue;
         const ssh = git.scheme === "ssh";
-        const safe = conversion.exact && !usesRevCount && source !== undefined && source.content === file.content;
-        const edit = safe ? replaceOnLine(source, input.urlLine, `"${url}"`, `"${conversion.url}"`) : undefined;
         const caveats = [
           ssh
             ? "Over SSH this input is probably private: `github:` authenticates with a token instead of an SSH key, so give Nix one with `access-tokens = github.com=<token>` (cachix/install-nix-action's `github_access_token` input); the default `GITHUB_TOKEN` only reaches the workflow's own repository."
@@ -94,7 +87,7 @@ export default defineRule({
           path: file.path,
           line: input.urlLine,
           key: `${flake.dir}:${input.name}`,
-          message: `Input \`${input.name}\` fetches \`${url}\` with git, transferring the ref's history into Nix's git cache on every fresh runner; \`${conversion.url}\` downloads a single tarball of the commit instead.`,
+          message: `Input \`${input.name}\` fetches \`${url}\` with git; \`${conversion.url}\` uses a commit tarball instead, which can avoid history transfer on a cold fetch. This changes fetcher and lockfile semantics, not just syntax.`,
           suggestion: [
             "Use the `github:` fetcher, then re-lock the input:",
             "",
@@ -108,7 +101,6 @@ export default defineRule({
             "",
             ...caveats,
           ].join("\n"),
-          ...(edit ? { fix: fix(`Use \`${conversion.url}\` (then run \`nix flake lock\`)`, edit) } : {}),
         });
       }
     }

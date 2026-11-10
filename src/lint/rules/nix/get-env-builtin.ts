@@ -51,10 +51,12 @@ export default defineRule({
         report({
           path: file.path,
           line: ident.line,
-          message: `\`${label}\` reads the evaluating process's environment: the result differs between machines and CI runners, and it silently evaluates to "" under pure evaluation (flakes) or restricted evaluation.${
+          message: `\`${label}\` reads the evaluating process's environment: the result can differ between machines and CI runners, and it evaluates to "" under pure evaluation (flakes) or restricted evaluation.${
             name !== undefined && SECRET.test(name) ? " If this is a secret, any derivation that uses it stores it in a world-readable `.drv` file in /nix/store." : ""
           }`,
-          suggestion: `Pass the value in explicitly: declare a function argument (\`{ ${param} ? "<default>" }:\`) and call \`nix-build --argstr ${param} "$${variable}"\`; in a flake, expose it as a configurable output or read it from a committed file. ${
+          suggestion: name !== undefined && SECRET.test(name)
+            ? "Do not move a secret into a committed file, a derivation argument or an output in the Nix store. Keep secrets outside evaluation/build outputs and supply them only at the runtime boundary that needs them, with an appropriate secret mechanism."
+            : `Pass non-secret values explicitly: declare a function argument (\`{ ${param} ? "<default>" }:\`) and call \`nix-build --argstr ${param} "$${variable}"\`; in a flake, expose it as a configurable output or read non-secret configuration from a committed file. ${
             name !== undefined ? `If the dependency on \`${name}\` is intended, add it to this rule's \`allow\` option.` : ""
           }`.trim(),
           confidence: name !== undefined ? "high" : "medium",

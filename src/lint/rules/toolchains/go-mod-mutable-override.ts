@@ -1,9 +1,7 @@
-import { fix, lineStart, lineText } from "../../fix.js";
 import type { ProjectModel } from "../../project.js";
-import type { TextEdit } from "../../types.js";
 import { basename } from "../caching/shared.js";
 import { defineRule, type JobCommand } from "../helpers.js";
-import { commandDirectory, effectiveEnv, envSource, findUp, findUpFrom, jobContexts, words, type JobContext } from "./shared.js";
+import { commandDirectory, effectiveEnv, envSource, findUp, findUpFrom, jobContexts, toolCommands, words, type JobContext } from "./shared.js";
 
 /** Module-aware commands that build or run code (and therefore resolve imports against go.mod). */
 const BUILD_SUBCOMMANDS = new Set(["build", "test", "vet", "run", "install"]);
@@ -23,6 +21,7 @@ const GO_ENV_WRITE = /\bgo\s+env\s+-w\s+(?:[^\n]*\s)?GOFLAGS=("[^"]*"|'[^']*'|\S
 const GO_ENV_UNSET = /\bgo\s+env\s+-u\s+(?:[^\n]*\s)?GOFLAGS\b/;
 const GET_FLAGS = /^(?:-v|-t|-d|-x|-insecure)$/;
 const LOCAL_PATTERN = /^(?:\.|\.\.?\/[^@\s]*|all)$/;
+const VALUE_OPTIONS = new Set(["-mod", "--mod", "-modfile", "-overlay", "-tags", "-ldflags", "-gcflags", "-asmflags", "-gccgoflags", "-toolexec", "-p", "-o", "-C", "-coverpkg", "-run", "-bench", "-count", "-timeout", "-cpu", "-parallel"]);
 
 interface GoCommand {
   subcommand: string;
@@ -35,16 +34,31 @@ function parseGo(list: string[]): GoCommand | undefined {
   if (subcommand === undefined) return undefined;
   const rest = list.slice(2);
   const separator = rest.indexOf("--");
-  return { subcommand, args: separator < 0 ? rest : rest.slice(0, separator) };
+  let args = separator < 0 ? rest : rest.slice(0, separator);
+  const passthrough = args.indexOf("-args");
+  if (passthrough >= 0) args = args.slice(0, passthrough);
+  if (subcommand === "run") {
+    for (let index = 0; index < args.length; index += 1) {
+      const word = args[index] ?? "";
+      if (!word.startsWith("-")) {
+        args = args.slice(0, index + 1);
+        break;
+      }
+      if (VALUE_OPTIONS.has(word)) index += 1;
+    }
+  }
+  return { subcommand, args };
 }
 
 /** The `-mod` value given on the command line (last one wins), or undefined. */
 function modFlag(args: string[]): string | undefined {
   let value: string | undefined;
-  args.forEach((word, index) => {
+  for (let index = 0; index < args.length; index += 1) {
+    const word = args[index] ?? "";
     const match = /^--?mod(?:=(.*))?$/.exec(word);
     if (match) value = match[1] ?? args[index + 1];
-  });
+    if (VALUE_OPTIONS.has(word)) index += 1;
+  }
   return value;
 }
 
@@ -67,18 +81,6 @@ function moduleFile(project: ProjectModel, ctx: JobContext, command: JobCommand,
     }
   }
   return findUpFrom(project, dir, "go.mod", "go.mod");
-}
-
-/** Replaces the single `-mod=mod` on a line with `-mod=readonly`; undefined when the line has none or several. */
-function readonlyEdit(project: ProjectModel, path: string, line: number): TextEdit | undefined {
-  const file = project.files.get(path);
-  if (!file) return undefined;
-  const text = lineText(file.content, line);
-  const matches = [...text.matchAll(MOD_MOD_TEXT)];
-  const match = matches[0];
-  if (matches.length !== 1 || match === undefined) return undefined;
-  const start = lineStart(file.content, line) + match.index;
-  return { path, start, end: start + match[0].length, text: `${match[1] ?? "-mod"}${match[2] ?? "="}readonly` };
 }
 
 interface FlagSource {
@@ -107,7 +109,7 @@ function goflagsSource(project: ProjectModel, ctx: JobContext, command: JobComma
 
 function mutatingJob(ctx: JobContext): boolean {
   return (
-    ctx.commands.some(({ command }) => MUTATING_JOB.test(command)) ||
+    ctx.commands.some(({ command }) => /^(?:git|go)\s/.test(words(command).join(" ")) && MUTATING_JOB.test(words(command).join(" "))) ||
     ctx.entries.some(({ step }) => step.uses !== undefined && MUTATING_ACTIONS.includes(step.uses.action.name ?? ""))
   );
 }
@@ -122,11 +124,11 @@ export default defineRule({
     ruleset: "toolchains",
     description: "CI should not let Go build commands rewrite go.mod and go.sum (`-mod=mod`, GOFLAGS, or a `go get` before building).",
     rationale:
-      "Since Go 1.16, build commands (`go build`, `go test`, `go vet`, ...) act as if `-mod=readonly` were set: when go.mod is missing a requirement or go.sum lacks a checksum they fail with an error instead of changing the files. `-mod=mod` (on the command line or through GOFLAGS) and `go get` turn that off: the go command looks up modules for missing imports, picks whatever version the proxy serves at that moment and updates go.mod and go.sum on the runner. CI then passes with a dependency graph that is not committed and that nobody reviewed, and an untidy go.mod is never caught.",
+      "In modern module-aware Go builds, -mod=mod permits go.mod updates when module loading needs them. Since Go 1.16 the ordinary default is readonly unless automatic vendor mode or other configuration applies. Readonly restricts go.mod updates, not every go.sum write; go mod download may also update sums. These flags do not prove an actual graph change or absence of review. If both files must remain unchanged, verify their diff after all resolving commands.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
-    requires: [],
+    requires: ["complete-inventory"],
     defaultOptions: {},
     references: [
       "https://go.dev/ref/mod#build-commands",
@@ -135,7 +137,7 @@ export default defineRule({
       "https://pkg.go.dev/cmd/go#hdr-Environment_variables",
     ],
     impact: "medium",
-    fixable: true,
+    fixable: false,
     example: {
       bad: "env:\n  GOFLAGS: -mod=mod\nsteps:\n  - run: go test ./...",
       good: "steps:\n  - run: go test ./...  # -mod=readonly is the default since Go 1.16",
@@ -144,8 +146,8 @@ export default defineRule({
   check({ project, report }) {
     if (![...project.files.keys()].some((path) => basename(path) === "go.mod")) return;
     for (const ctx of jobContexts(project)) {
-      const go = ctx.commands
-        .map((command) => ({ command, parsed: parseGo(words(command.command)) }))
+      const go = toolCommands(ctx, "go")
+        .map(({ command, words: list }) => ({ command, parsed: parseGo(list) }))
         .filter((entry): entry is { command: JobCommand; parsed: GoCommand } => entry.parsed !== undefined);
       if (!go.some(({ parsed }) => isBuild(parsed)) || mutatingJob(ctx)) continue;
       for (const [position, { command, parsed }] of go.entries()) {
@@ -161,8 +163,8 @@ export default defineRule({
             path: command.path,
             line: command.line,
             key: `go-get:${command.path}:${command.line}`,
-            message: `\`${raw}\` runs before \`${build.command.command.trim()}\` and lets the go command add missing requirements and checksums to \`${module}\` and go.sum on the runner, so the build uses a dependency graph that is not committed and an untidy go.mod never fails CI (build commands default to -mod=readonly since Go 1.16).`,
-            suggestion: `Download the committed module graph without changing it:\n\ngo mod download\n\n(or drop the step: go build and go test download what they need). Fix missing requirements locally with \`go mod tidy\` and commit go.mod and go.sum. In module mode \`go get\` only manages dependencies; its -d flag is deprecated and always on since Go 1.18. To install a tool, use \`go install example.com/tool@v1.2.3\`, which does not touch go.mod.`,
+            message: `\`${raw}\` runs before \`${build.command.command.trim()}\` and may add requirements/checksums to \`${module}\` and go.sum. That is a dependency-update operation, not just downloading an immutable graph; confirm it belongs in this build job.`,
+            suggestion: `If only downloading is intended, compare omitting the step or using \`go mod download\`; either normal builds or download can still update go.sum. Where both files must stay unchanged, verify their diff after all resolving commands. Perform intentional dependency updates separately, review go.mod/go.sum, and test the resulting graph.`,
             related: [{ path: build.command.path, line: build.command.line }],
           });
           continue;
@@ -172,14 +174,12 @@ export default defineRule({
         if (module === undefined) continue;
         const flag = modFlag(parsed.args);
         if (flag === "mod") {
-          const repair = fix("Replace -mod=mod with -mod=readonly", readonlyEdit(project, command.path, command.line));
           report({
             path: command.path,
             line: command.line,
             key: `go-mod-flag:${command.path}:${command.line}`,
-            message: `\`${raw}\` passes \`-mod=mod\`, which lets the go command add missing requirements and rewrite \`${module}\` and go.sum on the runner instead of failing (the default since Go 1.16 is -mod=readonly), so CI builds a dependency graph that is not committed.`,
-            suggestion: `Drop the override, or make it explicit:\n\n${withoutModMod(raw)}\n\nThen fix missing requirements locally with \`go mod tidy\` and commit go.mod and go.sum. Like -mod=mod, -mod=readonly ignores the vendor directory, so module loading is otherwise unchanged.`,
-            ...(repair ? { fix: repair } : {}),
+            message: `\`${raw}\` passes \`-mod=mod\`, permitting necessary updates to \`${module}\`. This does not establish that the graph changes. Readonly mode rejects required go.mod updates but can still write go.sum.`,
+            suggestion: `If CI should reject required go.mod changes, test an explicit readonly policy:\n\n${withoutModMod(raw)}\n\nReview vendor/toolchain behavior before changing defaults. To enforce unchanged go.mod and go.sum, check their diff after all resolving commands; readonly alone is not that guarantee.`,
           });
           continue;
         }
@@ -188,15 +188,13 @@ export default defineRule({
         const source = goflagsSource(project, ctx, command);
         if (source === undefined) continue;
         const elsewhere = source.path !== command.path || source.line !== command.line;
-        const repair = fix("Replace -mod=mod with -mod=readonly in GOFLAGS", readonlyEdit(project, source.path, source.line));
         report({
           path: source.path,
           line: source.line,
           key: `goflags:${source.path}:${source.line}`,
-          message: `GOFLAGS is \`${source.text}\`, so \`${raw}\` runs with \`-mod=mod\` and may add missing requirements and rewrite \`${module}\` and go.sum on the runner instead of failing (the default since Go 1.16 is -mod=readonly); CI then builds a dependency graph that is not committed.`,
-          suggestion: `Remove \`-mod=mod\` from GOFLAGS, or make the safe default explicit:\n\nGOFLAGS: ${withoutModMod(source.text)}\n\nThen fix missing requirements locally with \`go mod tidy\` and commit go.mod and go.sum.`,
+          message: `GOFLAGS is \`${source.text}\`, so \`${raw}\` may run with \`-mod=mod\` and update \`${module}\` if needed. That is permission, not an observed graph change; readonly still permits some go.sum writes.`,
+          suggestion: `If CI should reject required go.mod changes, test \`GOFLAGS: ${withoutModMod(source.text)}\` with the intended vendor/toolchain policy. Separately check go.mod/go.sum after all resolving commands if both must remain unchanged.`,
           ...(elsewhere ? { related: [{ path: command.path, line: command.line }] } : {}),
-          ...(repair ? { fix: repair } : {}),
         });
       }
     }

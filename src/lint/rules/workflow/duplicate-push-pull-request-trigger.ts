@@ -1,8 +1,5 @@
-import { isMap, isScalar, type Node } from "yaml";
-import { fix, indentOf, insertLinesAfter, lineText } from "../../fix.js";
 import { trigger, type WorkflowModel } from "../../parsers/workflow.js";
-import { entries, field, lineOfNode, toJS } from "../../parsers/yaml.js";
-import type { Fix, SourceFile } from "../../types.js";
+import { field, toJS } from "../../parsers/yaml.js";
 import { defineRule } from "../helpers.js";
 
 const ALL_BRANCHES = new Set(["*", "**"]);
@@ -26,43 +23,14 @@ function branchList(branches: string[]): string {
   return `[${branches.join(", ")}]`;
 }
 
-/** Adds `branches: [...]` under a block-map `on.push:` that has no branch or tag filter. */
-function addBranches(file: SourceFile, workflow: WorkflowModel, branches: string[]): Fix | undefined {
-  const source = workflow.source;
-  const onField = field(source, source.doc.contents, "on");
-  if (!onField || onField.origin !== "direct" || !isMap(onField.value) || onField.value.flow) return undefined;
-  const push = field(source, onField.value, "push");
-  if (!push || push.origin !== "direct") return undefined;
-  const description = `Restrict push to ${branchList(branches)}`;
-  if (push.value === null || (isScalar(push.value) && push.value.value === null)) {
-    const text = lineText(file.content, push.line);
-    if (!/^\s*["']?push["']?\s*:\s*(#.*)?$/.test(text)) return undefined;
-    const pushIndent = indentOf(file.content, push.line).length;
-    const firstEvent = entries(source, onField.value)[0];
-    const eventIndent = firstEvent ? indentOf(file.content, firstEvent.line).length : pushIndent;
-    const onIndent = indentOf(file.content, onField.line).length;
-    const step = eventIndent > onIndent ? eventIndent - onIndent : 2;
-    return fix(description, insertLinesAfter(file, push.line, [`${" ".repeat(pushIndent + step)}branches: ${branchList(branches)}`]));
-  }
-  if (!isMap(push.value) || push.value.flow) return undefined;
-  const first = push.value.items[0];
-  if (!first || !isScalar(first.key) || first.key.value === "<<") return undefined;
-  const firstLine = lineOfNode(source, first.key as Node);
-  if (firstLine <= push.line || !/^\s*[A-Za-z_-]+\s*:/.test(lineText(file.content, firstLine))) return undefined;
-  return fix(
-    description,
-    insertLinesAfter(file, firstLine - 1, [`${indentOf(file.content, firstLine)}branches: ${branchList(branches)}`]),
-  );
-}
-
 export default defineRule({
   meta: {
     id: "workflow/duplicate-push-pull-request-trigger",
     ruleset: "workflow",
     description:
-      "A workflow triggered by both `push` (on every branch) and `pull_request` runs twice for every commit pushed to a same-repository pull request branch.",
+      "A workflow accepting both broad `push` and `pull_request` events may repeat overlapping work for same-repository pull requests.",
     rationale:
-      "A commit pushed to a branch that has an open pull request in the same repository fires a `push` event for the branch and a `pull_request` (`synchronize`) event for the PR. When `push` has no `branches` filter (or uses `*`/`**`), both events match and every job runs twice on the same code, doubling runner minutes and queue pressure. Restricting `push` to the default/release branches keeps post-merge coverage while PR commits are validated once by `pull_request`.",
+      "A push to an open same-repository pull request can trigger both push and pull_request runs. They are not equivalent: push usually checks the branch tip, while pull_request checks a synthetic merge commit, and event conditions, paths, permissions and required checks can differ. Review whether that overlap is intentional. Restricting push changes branch and tag coverage, so this rule never edits triggers automatically.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -82,7 +50,7 @@ export default defineRule({
       "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#push",
     ],
     impact: "medium",
-    fixable: true,
+    fixable: false,
     example: {
       bad: "on:\n  push:\n  pull_request:",
       good: "on:\n  push:\n    branches: [main]\n  pull_request:",
@@ -115,17 +83,14 @@ export default defineRule({
         pullRequest.branches && pullRequest.branches.length > 0 && targets.length === pullRequest.branches.length
           ? targets
           : options.defaultBranches;
-      const file = project.files.get(workflow.path);
-      const repair = branches === undefined && file ? addBranches(file, workflow, suggested) : undefined;
       const filter =
         branches === undefined ? "`push` has no `branches` filter" : `\`push\` matches \`branches: ${branchList(branches)}\``;
       report({
         path: workflow.path,
         line: push.line,
         key: "on.push",
-        message: `${filter} and \`pull_request\` is also a trigger, so every commit pushed to a same-repository pull request branch runs this workflow twice.`,
-        suggestion: `Limit \`push\` to the branches you merge into and let \`pull_request\` validate PR commits:\n\non:\n  push:\n    branches: ${branchList(suggested)}\n  pull_request:`,
-        ...(repair ? { fix: repair } : {}),
+        message: `${filter} and \`pull_request\` is also a trigger, so pushes to open same-repository pull requests may trigger overlapping work. Push and PR merge refs are different; this does not prove duplicate coverage.`,
+        suggestion: `Only if branch-tip, tag and non-PR branch coverage can be changed, consider restricting push to your actual integration branches. Preserve required checks and existing filters; the branch names below are configured suggestions, not discovered defaults:\n\non:\n  push:\n    branches: ${branchList(suggested)}\n  pull_request:`,
       });
     }
   },

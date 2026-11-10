@@ -15,7 +15,7 @@ export default defineRule({
     ruleset: "nix",
     description: "Nix expressions should not read `builtins.currentSystem`, the platform of the machine running the evaluation.",
     rationale:
-      "`builtins.currentSystem` evaluates to the `system`/`eval-system` setting of the machine that runs Nix, so the same expression produces different derivations (and different store paths) on an x86_64-linux CI runner, an aarch64-darwin laptop and a remote builder. It hides which platforms are actually supported, makes cross-platform cache behaviour accidental, and is one of the impure constants that pure evaluation mode (the default for flakes) removes, so the expression fails under `nix build`/`nix flake check`. Passing the system explicitly, or enumerating supported systems in flake outputs, makes the platform part of the expression's interface.",
+      "builtins.currentSystem reads the evaluator's system/eval-system setting, not necessarily a remote builder's platform. If the value influences a derivation, different settings can select different outputs. Pure evaluation removes this constant, so a demanded reference fails; unused lazy expressions need not fail. Passing a system explicitly documents platform selection, but does not make different target platforms equivalent or prove reproducibility.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -53,7 +53,7 @@ export default defineRule({
           line: hit.line,
           message: `\`${hit.text}\` makes this expression depend on the platform of whichever machine evaluates it${
             isDefault ? " (used as an argument default, so every caller that omits `system` gets the host platform)" : ""
-          }; it is unavailable in pure evaluation mode, so \`nix build\`/\`nix flake check\` fail on it.`,
+          }; it is unavailable in pure evaluation mode, so evaluating this reference without an override fails. An unused lazy reference need not be evaluated.`,
           suggestion: SUGGESTION,
           confidence: isDefault ? "medium" : "high",
           key: `currentSystem#${count}`,

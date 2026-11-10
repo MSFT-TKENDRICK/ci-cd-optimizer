@@ -52,6 +52,9 @@ export function runRule(rule: AnyRule, testCase: TestCase): Diagnostic[] {
   );
   const crash = result.skipped.find((skip) => skip.reason.startsWith("rule crashed"));
   if (crash) throw new Error(`${rule.meta.id} ${crash.reason}`);
+  if (rule.meta.fixable === false && result.diagnostics.some((diagnostic) => diagnostic.fix !== undefined)) {
+    throw new Error(`${rule.meta.id} emitted an automatic fix despite fixable: false`);
+  }
   return result.diagnostics;
 }
 

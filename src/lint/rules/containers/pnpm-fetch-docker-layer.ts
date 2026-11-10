@@ -33,7 +33,7 @@ export default defineRule({
     ruleset: "containers",
     description: "A pnpm-workspace Dockerfile copies every workspace package.json before `pnpm install` instead of warming the store with `pnpm fetch`.",
     rationale:
-      "A COPY layer is reused only while every copied file is byte-identical, so a dependency layer keyed on all workspace package.json files is rebuilt (and every package re-downloaded) whenever any of them changes, including version bumps and script edits, and each new workspace package needs another COPY line. `pnpm fetch` reads only `pnpm-lock.yaml` to download every dependency into the store, so that layer changes only with the lockfile; after `COPY . .`, `pnpm install --offline` just links packages from the warm store.",
+      "Copying workspace manifests before installation can invalidate the install layer on non-dependency edits. A warm pnpm store or cache mount may already avoid downloads. pnpm fetch can separate dependency fetching from manifest changes, but also depends on pnpm version, workspace configuration, patches, authentication and relevant build inputs. An offline install still performs linking and may run lifecycle scripts. Preserve frozen-lock policy and all required inputs, then benchmark.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["strict"],
@@ -44,7 +44,7 @@ export default defineRule({
     fixable: false,
     example: {
       bad: "COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./\nCOPY packages/api/package.json packages/api/\nCOPY packages/web/package.json packages/web/\nRUN pnpm install --frozen-lockfile\nCOPY . .",
-      good: "COPY pnpm-lock.yaml pnpm-workspace.yaml ./\nRUN pnpm fetch\nCOPY . .\nRUN pnpm install -r --offline",
+      good: "COPY pnpm-lock.yaml pnpm-workspace.yaml ./\n# Also supply required patches/non-secret config; use secret mounts for authentication.\nRUN pnpm fetch --frozen-lockfile\nCOPY . .\nRUN pnpm install -r --offline --frozen-lockfile",
     },
   },
   check({ project, report }) {
@@ -52,7 +52,6 @@ export default defineRule({
       const workspace = workspaceRoot(project.files, model.path);
       if (!workspace) continue;
       const file = fileOf(project, model);
-      const npmrc = project.files.has(workspace.replace(/pnpm-workspace\.yaml$/, ".npmrc"));
       const states = new Map<string, StageState>();
       for (const stage of model.stages) {
         const parent = states.get(stage.image.toLowerCase());
@@ -84,11 +83,11 @@ export default defineRule({
               path: model.path,
               line: command.line,
               key: `stage:${stageLabel(stage)}:pnpm-fetch:${command.line}`,
-              message: `\`${command.text.trim()}\` in stage \`${stageLabel(stage)}\` is keyed on ${sources.length} workspace manifest${sources.length > 1 ? "s" : ""} (${listed}${more}): any change to any of them, even a version bump or script edit, re-downloads every dependency, and each new workspace package needs another COPY line. In this pnpm workspace (\`${workspace}\`), \`pnpm fetch\` fills the store from \`pnpm-lock.yaml\` alone.`,
-              suggestion: `Warm the store from the lockfile, then install offline after copying the sources:\n  COPY pnpm-lock.yaml pnpm-workspace.yaml${npmrc ? " .npmrc" : ""} ./\n  RUN pnpm fetch\n  COPY . .\n  RUN pnpm install -r --offline\n(add \`--prod\` to both for a production-only image).`,
+              message: `\`${command.text.trim()}\` in stage \`${stageLabel(stage)}\` follows copies of ${sources.length} workspace manifest${sources.length > 1 ? "s" : ""} (${listed}${more}). Manifest edits can invalidate this layer; they do not necessarily re-download dependencies from a warm store. Consider measuring a separate \`pnpm fetch\` layer for workspace \`${workspace}\`.`,
+              suggestion: `Consider a fetch layer supplied with the lockfile, workspace configuration and required patches/non-secret settings, followed by source copy and an offline frozen-lock install. Preserve pnpm version, original filters, production/development dependency selection and lifecycle behavior. Supply registry credentials through secret mounts, not copied .npmrc secrets. Validate all dependency inputs before reducing the layer's file set.`,
               related: state.manifests.map((entry) => ({ path: model.path, line: entry.instruction.line })),
               impact: "medium",
-              confidence: "high",
+              confidence: "medium",
             });
             state.fetched = true;
           }

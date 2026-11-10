@@ -1,8 +1,7 @@
-import { fix } from "../../fix.js";
 import type { ProjectModel } from "../../project.js";
 import { basename } from "../caching/shared.js";
 import { defineRule } from "../helpers.js";
-import { commandDirectory, dirname, effectiveEnv, findUp, inDir, insertAfterWords, jobContexts, joinPath, toolCommands, withInserted } from "./shared.js";
+import { commandDirectory, dirname, effectiveEnv, findUp, inDir, jobContexts, joinPath, toolCommands, withInserted, words } from "./shared.js";
 
 /** Cargo subcommands (and aliases) that resolve the dependency graph and accept `--locked`. */
 const SUBCOMMANDS = new Map([
@@ -21,10 +20,22 @@ const SUBCOMMANDS = new Map([
   ["fetch", "fetch"],
 ]);
 const GLOBAL_VALUE_OPTIONS = new Set(["--config", "-Z", "--color"]);
+const VALUE_OPTIONS = new Set([...GLOBAL_VALUE_OPTIONS, "--manifest-path", "--target", "--target-dir", "--profile", "--features", "-F", "--package", "-p", "--bin", "--example", "--test", "--bench", "--jobs", "-j", "--message-format", "--artifact-dir", "--lockfile-path"]);
 const GLOBAL_FLAGS = /^(?:-v+|-q|--verbose|--quiet|--offline|--locked|--frozen)$/;
 /** Jobs that deliberately change the lockfile (dependency bumps, minimal-versions checks, lockfile checks). */
-const LOCK_CHANGES =
-  /\bcargo\s+(?:\+\S+\s+)?(?:update|generate-lockfile|upgrade|add|remove|rm)\b|minimal-versions|--remove-dev-deps|Cargo\.lock|lockfile-path|LOCKFILE_PATH/;
+function changesLock(command: string): boolean {
+  const list = words(command);
+  if (basename(list[0] ?? "") !== "cargo") {
+    return /^(?:sed|perl|python\d*|rm|cp|mv)$/.test(basename(list[0] ?? "")) && list.slice(1).some((word) => word.includes("Cargo.lock"));
+  }
+  let index = list[1]?.startsWith("+") ? 2 : 1;
+  for (; index < list.length && list[index]?.startsWith("-"); index += 1) {
+    const word = list[index] ?? "";
+    if ((word === "-Z" && /^(?:direct-)?minimal-versions$/.test(list[index + 1] ?? "")) || /^-Z(?:direct-)?minimal-versions$/.test(word)) return true;
+    if (GLOBAL_VALUE_OPTIONS.has(word)) index += 1;
+  }
+  return ["update", "generate-lockfile", "upgrade", "add", "remove", "rm"].includes(list[index] ?? "");
+}
 const WORKSPACE = /^\s*\[workspace\]/m;
 
 export interface CargoCommand {
@@ -57,11 +68,13 @@ export function parseCargo(list: string[]): CargoCommand | undefined {
   const separator = rest.indexOf("--");
   const args = separator < 0 ? rest : rest.slice(0, separator);
   let manifestPath: string | undefined;
-  args.forEach((word, position) => {
+  for (let position = 0; position < args.length; position += 1) {
+    const word = args[position] ?? "";
     if (word === "--locked" || word === "--frozen") locked = true;
-    if (word === "--manifest-path" || word === "-m") manifestPath = args[position + 1];
+    if (word === "--manifest-path") manifestPath = args[position + 1];
     else if (word.startsWith("--manifest-path=")) manifestPath = word.slice("--manifest-path=".length);
-  });
+    if (VALUE_OPTIONS.has(word)) position += 1;
+  }
   return { prefix: list.slice(0, index + 1), subcommand, args, locked, ...(manifestPath !== undefined ? { manifestPath } : {}) };
 }
 
@@ -98,7 +111,7 @@ function lockFor(project: ProjectModel, dir: string | undefined, manifestPath: s
   }
   const manifests = [...project.files.keys()].filter((path) => basename(path) === "Cargo.toml");
   const locks = manifests.map((path) => lockOfManifest(project, dirname(path)));
-  return locks.length > 0 && locks.every((lock) => lock !== undefined) ? locks[0] : undefined;
+  return locks[0] !== undefined && locks.every((lock) => lock === locks[0]) ? locks[0] : undefined;
 }
 
 export default defineRule({
@@ -107,11 +120,11 @@ export default defineRule({
     ruleset: "toolchains",
     description: "Cargo commands in CI should pass `--locked` so the committed `Cargo.lock` is enforced instead of silently rewritten.",
     rationale:
-      "Without `--locked`, Cargo treats `Cargo.lock` as a cache: when it no longer matches `Cargo.toml` (a dependency added, bumped or re-featured without committing the regenerated lockfile), Cargo re-resolves on the runner, rewrites the lockfile and builds whatever versions the registry offers at that moment. CI then tests a dependency graph nobody reviewed and that differs from what developers and release builds use. `--locked` makes Cargo exit with an error when the lockfile is missing or would change, which the Cargo docs recommend for CI pipelines where deterministic builds are desired.",
+      "Cargo normally reuses a compatible lockfile, but may resolve dependencies and rewrite it when manifests or configuration require a change. Absence of --locked is permission to change the lock, not evidence that it changes or that dependencies were unreviewed. --locked rejects a missing/changed lockfile; it does not prove a reproducible build or forbid network access. Apply this policy only where CI is intended to enforce a frozen dependency graph.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
-    requires: [],
+    requires: ["complete-inventory"],
     defaultOptions: {},
     references: [
       "https://doc.rust-lang.org/cargo/commands/cargo-build.html#manifest-options",
@@ -119,7 +132,7 @@ export default defineRule({
       "https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html",
     ],
     impact: "medium",
-    fixable: true,
+    fixable: false,
     example: {
       bad: "# Cargo.lock is committed\n- run: cargo test --all-features",
       good: "# Cargo.lock is committed\n- run: cargo test --locked --all-features",
@@ -128,30 +141,27 @@ export default defineRule({
   check({ project, report }) {
     for (const ctx of jobContexts(project)) {
       const cargo = toolCommands(ctx, "cargo");
-      if (cargo.length === 0 || ctx.commands.some(({ command }) => LOCK_CHANGES.test(command))) continue;
-      const verified = new Set<string>();
+      if (cargo.length === 0 || ctx.commands.some(({ command }) => changesLock(command))) continue;
+      const reported = new Set<string>();
       for (const { command, words: list } of cargo) {
         const parsed = parseCargo(list);
         if (!parsed) continue;
         if (effectiveEnv(ctx, command, command).has("CARGO_RESOLVER_LOCKFILE_PATH")) continue;
-        const lock = lockFor(project, commandDirectory(ctx, command), parsed.manifestPath);
-        // The first command per lockfile decides: once it ran with `--locked`, later commands reuse the verified lock.
-        if (lock === undefined || verified.has(lock)) continue;
-        verified.add(lock);
+        const directory = commandDirectory(ctx, command);
+        if (directory === undefined || parsed.args.some((word) => word === "--lockfile-path" || word.startsWith("--lockfile-path="))) continue;
+        const lock = lockFor(project, directory, parsed.manifestPath);
+        if (lock === undefined || reported.has(lock)) continue;
         if (parsed.locked || list.some((word) => /[$`]/.test(word))) continue;
+        reported.add(lock);
         const raw = command.command.trim();
         const suggested = withInserted(raw, list, parsed.prefix, " --locked");
-        const file = project.files.get(command.path);
-        const edit = file ? insertAfterWords(file, command.line, parsed.prefix, " --locked") : undefined;
-        const repair = fix(`Add --locked to cargo ${parsed.subcommand}`, edit);
         report({
           path: command.path,
           line: command.line,
           key: `cargo-lock:${ctx.workflow.path}:${ctx.job.id}:${lock}`,
-          message: `\`${raw}\` runs without \`--locked\` although \`${lock}\` is committed, so if \`Cargo.toml\` and the lockfile disagree Cargo silently re-resolves dependencies and rewrites \`${lock}\` on the runner instead of failing, and CI builds versions nobody reviewed.`,
-          suggestion: `Pass \`--locked\` (or \`--frozen\`, which also forbids network access) so Cargo fails when the lockfile is missing or out of date:\n\n${suggested}\n\nLater cargo commands in the same job then reuse the verified lockfile. Jobs that update dependencies on purpose (\`cargo update\`, minimal-versions checks) are not affected by this rule.`,
+          message: `\`${raw}\` runs without \`--locked\` although \`${lock}\` is present in the inspected repository. Cargo may resolve dependencies and rewrite the lock when necessary instead of rejecting the change; a compatible lock may remain unchanged.`,
+          suggestion: `If CI should reject lockfile changes, pass \`--locked\` (or \`--frozen\`, which also forbids network access) on each dependency-resolving invocation:\n\n${suggested}\n\nAn earlier locked command does not protect later commands if manifests or configuration change. Dependency-update jobs are intentionally excluded.`,
           related: [{ path: lock, line: 1 }],
-          ...(repair ? { fix: repair } : {}),
         });
       }
     }

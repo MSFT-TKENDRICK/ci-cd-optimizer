@@ -20,7 +20,7 @@ export default defineRule({
     ruleset: "nix",
     description: "flake.lock is out of date with flake.nix: an input has no lock entry, was changed without re-locking, or a node reference dangles.",
     rationale:
-      "Nix reuses a lock entry only while the input's reference in flake.nix still equals the entry's `original`. An input with no entry, or whose URL was edited without re-locking, is resolved afresh on every evaluation to whatever its branch points at now. By default Nix then writes the new lock into the checkout, which an ephemeral CI runner discards, so every run fetches and evaluates the newest upstream revision and builds of the same commit stop being reproducible; `--no-write-lock-file` uses the fresh resolution without saving it, and only `--no-update-lock-file` turns the stale lock into an error. A node that references a missing node makes Nix reject the lock file outright.",
+      "An added or changed input may require lock regeneration; mutable references can then resolve differently, while immutable references need not. --no-update-lock-file rejects required updates, whereas --no-write-lock-file alone does not freeze resolution. This rule compares only supported literal source forms and reports direct references to missing nodes. A consistent lock constrains sources, not all build behavior.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -46,12 +46,12 @@ export default defineRule({
       if (flake.nix && flake.info) {
         for (const input of flake.info.inputs.values()) {
           if (input.name === "self") continue;
-          if (!(input.name in lock.rootInputs)) {
+          if (!Object.hasOwn(lock.rootInputs, input.name)) {
             report({
               path: flake.nix.path,
               line: inputLine(input),
               key: `${flake.dir}:${input.name}:missing`,
-              message: `Input \`${input.name}\` is declared in \`${flake.nix.path}\` but \`${lock.path}\` has no entry for it, so it is resolved to its newest upstream revision on every evaluation.`,
+              message: `Input \`${input.name}\` is declared in \`${flake.nix.path}\` but \`${lock.path}\` has no entry for it. Locking may resolve it again or fail under a frozen-lock policy; only mutable references can select newer upstream source.`,
               suggestion: SUGGESTION,
               related: [{ path: lock.path, line: rootLine }],
             });
@@ -79,7 +79,7 @@ export default defineRule({
             line: node.line,
             key: `${flake.dir}:${node.name}.${name}:dangling`,
             message: `Lock node \`${node.name}\` maps input \`${name}\` to node \`${reference}\`, which does not exist in \`${lock.path}\`; Nix rejects this lock file.`,
-            suggestion: `Regenerate the lock instead of editing it by hand: \`git checkout -- ${lock.path}\` if the damage is local, otherwise delete the broken entry and run \`nix flake lock\`.`,
+            suggestion: `Preserve local edits, compare \`${lock.path}\` with a known-good revision, and regenerate a consistent lock using Nix. Review all resulting input changes rather than deleting entries or discarding work automatically.`,
           });
         }
       }

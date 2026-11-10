@@ -2,7 +2,7 @@ import type { Sourced, StepModel } from "../../parsers/workflow.js";
 import type { ProjectModel } from "../../project.js";
 import { basename, isFalse, usesAction } from "../caching/shared.js";
 import { defineRule, stepLine } from "../helpers.js";
-import { effectiveEnv, escapeRegExp, jobContexts, toolCommands, type JobContext } from "./shared.js";
+import { commandDirectory, effectiveEnv, escapeRegExp, findUp, jobContexts, toolCommands, type JobContext } from "./shared.js";
 
 const TOOLCHAIN_FILES = new Set(["rust-toolchain", "rust-toolchain.toml"]);
 /** rustup subcommands (as word sequences) whose positional arguments are toolchain names that get installed or selected. */
@@ -140,9 +140,13 @@ function rustCache(ctx: JobContext): string | undefined {
   return undefined;
 }
 
-function hasToolchainFile(project: ProjectModel): boolean {
-  for (const path of project.files.keys()) if (TOOLCHAIN_FILES.has(basename(path))) return true;
-  return false;
+function hasToolchainFile(project: ProjectModel, ctx: JobContext): boolean {
+  const commands = toolCommands(ctx, "cargo", "cross");
+  if (commands.length === 0) return [...TOOLCHAIN_FILES].some((name) => project.files.has(name));
+  return commands.every(({ command }) => {
+    const dir = commandDirectory(ctx, command);
+    return dir === undefined || [...TOOLCHAIN_FILES].some((name) => findUp(project, dir, name) !== undefined);
+  });
 }
 
 function hasCargoManifest(project: ProjectModel): boolean {
@@ -166,7 +170,7 @@ export default defineRule({
     ruleset: "toolchains",
     description: "CI should build Rust with a pinned toolchain release rather than the floating `stable`/`nightly` channel.",
     rationale:
-      "`dtolnay/rust-toolchain@stable`, `toolchain: stable` and `rustup default stable` install whichever release is current when the job runs, and actions-rust-lang/setup-rust-toolchain defaults to `stable` when there is no `toolchain` input or toolchain file. Without a `rust-toolchain.toml`, a new release therefore changes the compiler and its bundled Clippy and rustfmt under an unchanged commit, so new lints or behaviour can fail a build nobody touched. Swatinem/rust-cache (also run by setup-rust-toolchain) includes the rustc release, host and commit hash in its cache key, so each new release also changes the key and the next run misses the existing cache. Pinning the release in `rust-toolchain.toml` (or in the installer) keeps CI reproducible and makes upgrades explicit.",
+      "Floating stable/beta/nightly selections can pick newer compiler and bundled-tool releases without a repository change. Deliberate compatibility jobs may want this. A reviewed version/date selection constrains the toolchain but does not prove reproducibility. Rust cache keys can incorporate compiler identity, while fallback/seeded entries may still provide reuse. Scoped toolchain files and explicit command/environment overrides take precedence according to rustup and installer behavior.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -186,7 +190,7 @@ export default defineRule({
     },
   },
   check({ project, report }) {
-    if (!hasCargoManifest(project) || hasToolchainFile(project)) return;
+    if (!hasCargoManifest(project)) return;
     const contexts = jobContexts(project).map((ctx) => ({ ctx, found: selections(ctx) }));
     // A workflow that also installs a pinned or matrix-driven toolchain is deliberately testing several releases
     // (an MSRV job next to a latest-stable job), so its floating channel is intentional.
@@ -195,7 +199,7 @@ export default defineRule({
     );
     const reported = new Set<string>();
     for (const { ctx, found } of contexts) {
-      if (deliberate.has(ctx.workflow.path) || found.length === 0 || selectsOwnToolchain(ctx)) continue;
+      if (deliberate.has(ctx.workflow.path) || found.length === 0 || selectsOwnToolchain(ctx) || hasToolchainFile(project, ctx)) continue;
       const cache = rustCache(ctx);
       if (cache === undefined && toolCommands(ctx, "cargo", "cross").length === 0) continue;
       // Nightly/beta jobs are usually deliberate (nightly-only tooling, forward-compatibility checks); only their cache churn is reported.
@@ -208,12 +212,12 @@ export default defineRule({
       const consequence =
         cache === undefined
           ? "so the compiler and its bundled Clippy and rustfmt change whenever a new release ships, and a commit that passed can fail (for example on a new lint) without any change to the repository."
-          : `so the compiler and its bundled Clippy and rustfmt change whenever a new release ships; \`${cache}\` includes the rustc version in its cache key, so each release also makes the next run miss the existing cache.`;
+          : `so the compiler and bundled tools can change after a new release; \`${cache}\` can include compiler identity in its cache key, although fallback or seeded caches may still provide reuse.`;
       report({
         path: selection.path,
         line: selection.line,
         key: `rust-toolchain:${selection.path}:${selection.line}`,
-        message: `${selection.label} installs the floating \`${channel}\` Rust toolchain and the repository has no \`rust-toolchain.toml\` pinning a release, ${consequence}`,
+        message: `${selection.label} selects the floating \`${channel}\` Rust toolchain without a recognized toolchain file covering these commands, ${consequence}`,
         suggestion: suggestion(selection),
         confidence: channel === "stable" ? "high" : "medium",
       });

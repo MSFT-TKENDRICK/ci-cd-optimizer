@@ -7,9 +7,9 @@ export default defineRule({
     ruleset: "nix",
     description: "A flake.nix with inputs has no flake.lock committed next to it.",
     rationale:
-      "A flake's inputs are URLs such as `github:NixOS/nixpkgs/nixos-24.11` that name a moving branch; `flake.lock` records the exact revision and NAR hash each one resolved to. Without a committed lock every `nix build`/`nix flake check` resolves each input to whatever its branch points at right now and writes a fresh lock into the checkout, so two CI runs of the same commit can evaluate different nixpkgs revisions, nothing is reproducible, and an upstream push between runs changes derivation hashes so outputs cached by earlier runs stop matching. A common cause is `flake.lock` listed in `.gitignore`.",
+      "flake.lock records resolved input identities. Without it, mutable references can resolve differently between runs, unless an external lock policy or explicit immutable inputs constrain them. Local or already revision-pinned inputs do not necessarily move. Committing and reviewing the lock improves source traceability; it does not prove deterministic outputs or cache hits. This absence check requires a complete repository inventory.",
     kind: "practice",
-    defaultSeverity: "error",
+    defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
     requires: ["complete-inventory"],
     defaultOptions: {},
@@ -41,7 +41,7 @@ export default defineRule({
         path: flake.nix.path,
         line: 1,
         key: `${flake.dir}:missing-flake-lock`,
-        message: `\`${flake.nix.path}\` declares ${names.length === 1 ? "input" : "inputs"} ${shown}${names.length > 3 ? ", ..." : ""} but \`${lockPath}\` is not committed, so every evaluation re-resolves them to the current upstream revisions.`,
+        message: `\`${flake.nix.path}\` declares ${names.length === 1 ? "input" : "inputs"} ${shown}${names.length > 3 ? ", ..." : ""}, but \`${lockPath}\` is absent from the complete inspected inventory. Mutable references may be resolved differently between runs unless constrained elsewhere.`,
         suggestion: `Generate and commit the lock file: \`${cd}nix flake lock && git add flake.lock\`. If \`.gitignore\` lists \`flake.lock\`, remove that entry; to keep CI from silently re-locking afterwards, pass \`--no-update-lock-file\` to \`nix build\`/\`nix flake check\` there.`,
       });
     }

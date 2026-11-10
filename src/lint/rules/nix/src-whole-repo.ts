@@ -67,7 +67,7 @@ function suggestion(finding: Finding): string {
   const base = finding.literal.replace(/(?:\/\.)+$/, "");
   const files = candidates(finding.builder).map((name) => `${base}/${name}`);
   return [
-    "Copy only the files the build reads, so unrelated changes keep the same source hash (lib.fileset, nixpkgs 23.11+):",
+    "After auditing every build input (including generated files, build scripts, patches and fixtures), consider a fileset. These paths are illustrative, not a complete replacement for your build inputs:",
     "",
     `src = lib.fileset.toSource {`,
     `  root = ${finding.literal};`,
@@ -159,7 +159,7 @@ export default defineRule({
     ruleset: "nix",
     description: "Derivations should not use the whole repository (`src = ./.`) as their source.",
     rationale:
-      "A path literal used as `src` is copied into the Nix store in full, and the resulting store path is a hash of every file under it. The derivation's hash depends on that store path, so a change to any file in the directory, including a README, a CI workflow, `flake.lock` or the Nix files themselves, produces a new derivation that no binary cache has built: CI rebuilds and re-tests the package even though nothing it compiles changed. Selecting the inputs with `lib.fileset.toSource` (or a `filter`) makes the source hash, and therefore the cache key, depend only on the files the build reads.",
+      "A broad source path can include files unrelated to the build. Changes to included files affect the source store path and can invalidate derivation reuse, although another cache may already contain the new result. Git-flake filtering and builder-specific filtering affect the actual file set. Selecting all necessary inputs with a fileset can reduce invalidation; omitting a required build script, fixture or generated input changes behavior. Measure and test rather than applying a guessed file list automatically.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -189,7 +189,7 @@ export default defineRule({
         report({
           path: file.path,
           line: file.lineOf(finding.offset),
-          message: `\`${finding.shown}\` in \`${finding.builder}\` copies ${finding.where} into the store as the build's source: a change to any file in it (docs, CI workflows, flake.lock) changes the source hash, so the package is rebuilt with no binary-cache hit even when nothing it compiles changed.`,
+          message: `\`${finding.shown}\` in \`${finding.builder}\` selects ${finding.where} as source. Changes to included but unused files (possibly docs, CI workflows or flake.lock) can change the source hash and reduce cache reuse. Actual filtering and required inputs need review.`,
           suggestion: suggestion(finding),
           confidence: finding.confidence,
           key: `src:${finding.builder}#${count}`,

@@ -1,7 +1,7 @@
 import { identsEndingWith, nixBindings } from "../../parsers/nix.js";
 import type { NixFile } from "../../parsers/nix.js";
 import { defineRule } from "../helpers.js";
-import { assignedKey, inLambdaDefault, isValueUse, lintableNixFiles, previousNonSpace, skipSpace, snippet, stringAt, validateStringLists } from "./expr.js";
+import { assignedKey, inLambdaDefault, isShadowed, isValueUse, lintableNixFiles, previousNonSpace, skipSpace, snippet, stringAt, validateStringLists } from "./expr.js";
 
 const FAKE_NAMES = ["fakeHash", "fakeSha256", "fakeSha512"];
 const HASH_KEYS = [
@@ -57,7 +57,11 @@ function findings(file: NixFile): Finding[] {
   for (const name of FAKE_NAMES) {
     for (const ident of identsEndingWith(file, name)) {
       if (!isValueUse(file, ident) || comparedWith(file, ident.offset, ident.end) || inLambdaDefault(file.masked, ident.offset)) continue;
-      add(ident.offset, ident.text, assignedKey(file.masked, ident.offset));
+      if (!/^(?:(?:pkgs\.)?lib\.)?(?:fakeHash|fakeSha256|fakeSha512)$/.test(ident.text)) continue;
+      if (ident.segments.length === 1 && isShadowed(file, name)) continue;
+      const key = assignedKey(file.masked, ident.offset);
+      if (key === undefined || !/hash|sha/i.test(key)) continue;
+      add(ident.offset, ident.text, key);
     }
   }
   for (const match of file.masked.matchAll(EMPTY_HASH)) {
@@ -85,6 +89,7 @@ function findings(file: NixFile): Finding[] {
     if (string.interpolated) continue;
     const key = assignedKey(file.masked, string.start);
     if (key?.toLowerCase().startsWith("fake")) continue;
+    if (key === undefined || !/hash|sha/i.test(key)) continue;
     if (SRI_PLACEHOLDER.test(string.value) || (ZERO_PLACEHOLDER.test(string.value) && key !== undefined && /hash|sha/i.test(key))) {
       add(string.start, `"${snippet(file, string.start + 1, string.end - 1, 24)}"`, key);
     }
@@ -98,9 +103,9 @@ export default defineRule({
     ruleset: "nix",
     description: "Placeholder hashes (`lib.fakeHash`, `\"\"`, all-zero or `sha256-AAAA…` values) must not be committed.",
     rationale:
-      "The nixpkgs \"fake hash method\" sets a fixed-output derivation's hash to `\"\"`, `lib.fakeHash`, `lib.fakeSha256` or `lib.fakeSha512` so that one build fails and prints the real hash (`specified: … got: …`). It is a local workflow step: a fixed-output derivation whose declared hash can never match its content fails on every machine, so once committed the package, everything that depends on it and every CI job that builds it are broken until someone copies the real hash in. Only these well-known placeholders are reported; `vendorHash = null` (Go with a vendored `vendor/` directory) is not a placeholder and is not reported.",
+      "The fake-hash workflow uses an empty or well-known placeholder digest to make a fixed-output build print its actual digest. Such values normally cause a mismatch if the corresponding derivation is built; static syntax alone cannot establish that an expression is evaluated or really feeds a fetcher. Templates can intentionally contain placeholders. Review the downloaded source independently before accepting a newly printed digest. vendorHash = null is not treated as a placeholder.",
     kind: "policy",
-    defaultSeverity: "error",
+    defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
     requires: [],
     defaultOptions: { ignorePaths: [] as string[] },
@@ -128,9 +133,9 @@ export default defineRule({
         report({
           path: file.path,
           line: finding.line,
-          message: `${label} is a placeholder hash: the fixed-output derivation can never match it, so every build of this package (and of everything that depends on it) fails with a hash mismatch until the real hash is committed.`,
+          message: `${label} matches a well-known placeholder hash. If used as a fixed-output derivation's expected digest, it normally causes a hash mismatch when that derivation is built. Confirm it is not intentional test data and review the fetched content before replacing it.`,
           suggestion: [
-            `Build once (\`nix build\` / \`nix-build\`), copy the \`got:\` value from the "hash mismatch in fixed-output derivation" error and commit it:`,
+            `Build once, independently verify the intended source, then record the reviewed \`got:\` digest from the hash-mismatch error:`,
             "",
             `${key} = "sha256-<value printed after got:>";`,
             ...(vendor ? ["", "If the module has no dependencies outside a committed `vendor/` directory, use `vendorHash = null;` instead."] : []),

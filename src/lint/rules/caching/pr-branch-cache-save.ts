@@ -71,9 +71,9 @@ export default defineRule({
     ruleset: "caching",
     description: "A workflow that only runs on `pull_request` saves caches no other pull request or branch can restore.",
     rationale:
-      "GitHub scopes a cache saved by a `pull_request` run to the pull request's merge ref (`refs/pull/<n>/merge`): it cannot be restored by the base branch or by other pull requests. Only runs in the default branch's scope (for example `push` to `main`) create caches every pull request can restore. When the only workflow that saves a cache runs on `pull_request`, the default branch never has a copy, so the first run of every new pull request misses, and each pull request's private copy still counts toward the repository's cache storage limit (10 GB by default), where it can evict the caches that are actually shared.",
-    kind: "practice",
-    defaultSeverity: "warn",
+      "A cache saved by a pull_request run is scoped to its merge ref and can be useful on subsequent commits or reruns of that pull request, but cannot seed other pull requests or the base branch. PR runs can also restore accessible base/default-branch caches with compatible keys and versions. No recognized non-PR writer in the inspected repository does not prove no cache exists: history, external workflows and other cache actions may supply one. Compare hit rates, transfer cost and storage policy before adding trusted-branch warming; do not remove useful PR writes automatically.",
+    kind: "insight",
+    defaultSeverity: "info",
     presets: ["insights", "strict"],
     requires: ["complete-inventory"],
     defaultOptions: {},
@@ -108,14 +108,14 @@ export default defineRule({
           const action = step.uses.action.name ?? "actions/cache";
           const restoreKeys = text(step, "restore-keys");
           const suggestion = [
-            "Save this cache from the default branch, where every pull request can restore it. Either run this workflow on pushes to the default branch as well:",
+            "Consider a trusted base/default-branch writer with compatible keys and cache versions if measurements justify shared warming. The example uses main; substitute the repository's actual branch and preserve its trigger/access policy:",
             "",
             "on:",
             "  pull_request:",
             "  push:",
             "    branches: [main]",
             "",
-            "or keep this workflow pull-request-only, make its step restore-only:",
+            "Alternatively, if PR-local writes are not useful, consider restore-only after establishing the trusted writer:",
             "",
             "- uses: actions/cache/restore@v6",
             "  with:",
@@ -134,8 +134,9 @@ export default defineRule({
             path: workflow.path,
             line: stepLine(step),
             key: `${step.key}:${action}`,
-            message: `\`${action}\` saves cache \`${key}\` in a workflow that only runs on ${events}, and no workflow that runs on the default branch saves this cache. A cache saved by a pull request run is scoped to its merge ref (\`refs/pull/<n>/merge\`) and cannot be restored by the base branch or other pull requests, so the first run of every new pull request misses while each pull request's copy counts toward the repository's cache storage limit.`,
+            message: `\`${action}\` saves cache \`${key}\` in a workflow that only runs on ${events}, with no recognized non-PR writer for it in the inspected inventory. PR merge-ref caches cannot seed other PRs or the base branch, but can help this PR's later commits/reruns. Existing accessible base/default-branch caches may also provide hits.`,
             suggestion,
+            confidence: "medium",
           });
         }
       }

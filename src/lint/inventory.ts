@@ -88,7 +88,7 @@ const LOCKFILE_HEAD_BYTES = 8192;
 const SKIP_DIRS = new Set([".git", "node_modules", ".pnpm-store", ".yarn", ".venv", "venv", "__pycache__", ".turbo", ".nx", "target", ".gradle", ".direnv"]);
 
 export function isInventoryPath(path: string): boolean {
-  if (/(^|\/)node_modules\//.test(path)) return false;
+  if (path.split("/").slice(0, -1).some((part) => SKIP_DIRS.has(part))) return false;
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
   if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
   if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;
@@ -98,7 +98,7 @@ export function isInventoryPath(path: string): boolean {
   if (/^(Dockerfile|Containerfile)(\.[^/]+)?$/i.test(name) || /\.(dockerfile|containerfile|dockerignore)$/i.test(name)) return true;
   if (/^requirements.*\.txt$/i.test(name) || /(^|\/)requirements\/[^/]+\.txt$/i.test(path)) return true;
   if (/\.bazelrc$/i.test(name) || /\.(csproj|fsproj|sln)$/i.test(name)) return true;
-  if (/\.nix$/.test(name)) return true;
+  if (/\.nix$/i.test(name)) return true;
   return path === ".changeset/config.json";
 }
 
@@ -107,6 +107,8 @@ export const isLockfile = (path: string) => LOCKFILES.has(path.slice(path.lastIn
 export interface InventoryEntry {
   path: string;
   size?: number;
+  /** Links/submodules are not file contents and are never followed. */
+  opaque?: boolean;
 }
 
 export interface InventorySelection {
@@ -124,7 +126,12 @@ export function selectInventory(entries: readonly InventoryEntry[], config: Pick
   let complete = true;
   const ignored = (path: string) => config.ignorePaths.some((glob) => matchesGlob(path, glob) || matchesGlob(path, `${glob}/**`));
   for (const entry of [...entries].sort((a, b) => a.path.localeCompare(b.path))) {
-    if (!isInventoryPath(entry.path) || ignored(entry.path)) continue;
+    if (ignored(entry.path)) continue;
+    if (entry.opaque) {
+      if (!entry.path.split("/").some((part) => SKIP_DIRS.has(part))) complete = false;
+      continue;
+    }
+    if (!isInventoryPath(entry.path)) continue;
     if (paths.length >= config.limits.maxFiles) {
       complete = false;
       break;
@@ -150,6 +157,8 @@ async function walk(root: string, dir: string, out: InventoryEntry[]): Promise<v
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
       if (!SKIP_DIRS.has(entry.name)) await walk(root, full, out);
+    } else if (entry.isSymbolicLink()) {
+      out.push({ path: relative(root, full).split(sep).join("/"), opaque: true });
     } else if (entry.isFile()) {
       const path = relative(root, full).split(sep).join("/");
       if (isInventoryPath(path)) out.push({ path, size: (await stat(full)).size });
@@ -181,12 +190,12 @@ async function git(root: string, args: string[]): Promise<string> {
 
 /** Loads the analysis input for a git revision (used to compute the baseline for `introduced` diagnostics). */
 export async function loadGitRevision(root: string, ref: string, config: Pick<LintConfig, "ignorePaths" | "limits">): Promise<AnalysisInput> {
-  const listing = await git(root, ["ls-tree", "-r", "-l", "--full-tree", ref]);
+  const listing = await git(root, ["ls-tree", "-r", "-l", "-z", "--full-tree", ref]);
   const entries = listing
-    .split("\n")
-    .map((line) => /^\d+ blob [0-9a-f]+\s+(\d+|-)\t(.+)$/.exec(line))
+    .split("\0")
+    .map((line) => /^(\d+) (?:blob|commit) [0-9a-f]+\s+(\d+|-)\t([\s\S]+)$/.exec(line))
     .filter((match): match is RegExpExecArray => match !== null)
-    .map((match) => ({ path: match[2] as string, size: Number(match[1]) || 0 }));
+    .map((match) => ({ path: match[3] as string, size: Number(match[2]) || 0, opaque: match[1] === "120000" || match[1] === "160000" }));
   const selection = selectInventory(entries, config);
   const truncated = new Set(selection.truncated);
   const files: SourceFile[] = [];

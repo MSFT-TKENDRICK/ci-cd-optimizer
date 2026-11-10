@@ -83,13 +83,13 @@ export default defineRule({
     id: "workflow/unnecessary-needs-serialization",
     ruleset: "workflow",
     description:
-      "A `needs` edge on a job that produces nothing the dependent job can use only delays the dependent job.",
+      "Review `needs` edges without a recognized data transfer; they still provide success gating.",
     rationale:
-      "Every job runs on a fresh runner, so files, installed dependencies and environment changes from one job are invisible to the next; only job outputs, artifacts and caches cross the boundary. When job A has no outputs, uploads nothing, saves no cache and only checks out, sets up toolchains, installs dependencies or prints information, `needs: A` cannot pass anything to B. B still waits for A's queue time, runner start-up and steps, which lengthens the critical path of every run.",
+      "Hosted jobs do not share their ordinary filesystem merely because one needs another. Outputs, artifacts, caches and external systems can transfer data. Even without data transfer, needs provides ordering and success/skip/failure gating; an installation can intentionally validate dependencies or have external side effects. This insight identifies no recognized data transfer, not a redundant edge. Removing it changes behavior and requires an explicit decision about gating and concurrency.",
     kind: "insight",
     defaultSeverity: "info",
     presets: ["insights", "strict"],
-    requires: [],
+    requires: ["complete-inventory"],
     defaultOptions: {},
     references: [
       "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds",
@@ -129,12 +129,13 @@ export default defineRule({
             path: workflow.path,
             line: needsLine(workflow, job, dependency),
             key: `${job.key}.needs.${dependency}`,
-            message: `Job \`${job.id}\` needs \`${dependency}\`, but \`${dependency}\` only ${did} and has no outputs, artifacts or caches, so nothing it does reaches \`${job.id}\` (jobs run on separate runners); consider removing the edge so both start in parallel.`,
-            suggestion: `${
+            message: `Job \`${job.id}\` needs \`${dependency}\`, whose visible steps ${did}, with no recognized outputs, artifacts or cache transfer. The edge still success-gates and orders \`${job.id}\`; review whether that behavior is intentional before considering parallel execution.`,
+            suggestion: `Only if the ordering and success gate are unnecessary, consider the following behavior change: ${
               remaining.length === 0
                 ? `Remove \`needs: ${dependency}\` from \`${job.id}\``
                 : `Use \`needs: [${remaining.join(", ")}]\` in \`${job.id}\``
-            }. If \`${dependency}\` exists to prepare dependencies for \`${job.id}\`, it has to share them explicitly, e.g. with \`actions/cache\` keyed on the lockfile or \`actions/upload-artifact\`; otherwise drop the job.`,
+            }. Verify failure, skip, cancellation and external-side-effect behavior. If \`${dependency}\` prepares files for \`${job.id}\`, transfer them explicitly with an appropriate artifact/cache contract; keep the edge when its gate is required.`,
+            confidence: "low",
           });
         }
       }

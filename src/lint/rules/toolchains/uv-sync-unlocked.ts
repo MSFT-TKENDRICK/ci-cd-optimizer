@@ -1,6 +1,5 @@
-import { fix } from "../../fix.js";
 import type { ProjectModel } from "../../project.js";
-import { basename } from "../caching/shared.js";
+import { basename, usesAction } from "../caching/shared.js";
 import type { JobCommand } from "../helpers.js";
 import { defineRule } from "../helpers.js";
 import {
@@ -10,7 +9,6 @@ import {
   escapeRegExp,
   findUp,
   inDir,
-  insertAfterWords,
   type JobContext,
   jobContexts,
   joinPath,
@@ -83,11 +81,8 @@ const EXEMPT_OPTIONS = new Set([
   "--frozen",
   "--no-sync",
   "--no-project",
-  "--no-workspace",
-  "--no_workspace",
   "--script",
   "-s",
-  "--isolated",
   "--check",
   "--dry-run",
   "--upgrade",
@@ -96,7 +91,32 @@ const EXEMPT_OPTIONS = new Set([
   "-P",
   "--upgrade-group",
 ]);
-const EXEMPT_ENV = ["UV_FROZEN", "UV_NO_SYNC", "UV_NO_PROJECT", "UV_ISOLATED"];
+const EXEMPT_ENV = ["UV_FROZEN", "UV_NO_SYNC", "UV_NO_PROJECT"];
+const ENV_SINCE: Record<string, number[]> = {
+  UV_LOCKED: [0, 4, 25],
+  UV_FROZEN: [0, 4, 25],
+  UV_NO_SYNC: [0, 4, 18],
+  UV_NO_PROJECT: [0, 11, 8],
+};
+
+/** Unknown versions/expressions may honor the setting; known older releases must not be exempted by it. */
+function envEnabled(ctx: JobContext, command: JobCommand, env: Map<string, string>, name: string): boolean {
+  const value = env.get(name);
+  if (value === undefined || /^(?:|0|false|no|off)$/i.test(value.trim())) return false;
+  const selected = ctx.entries.slice(0, ctx.entries.findIndex((entry) => entry.step === command.step && entry.owner === command.owner))
+    .filter(({ step }) => usesAction(step, "astral-sh/setup-uv")).at(-1);
+  const setup = selected && !selected.step.if && !selected.owner.if ? selected.step : undefined;
+  const version = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(setup?.with.get("version")?.value ?? ""));
+  const minimum = ENV_SINCE[name];
+  if (version && minimum) {
+    for (let index = 0; index < 3; index += 1) {
+      const difference = Number(version[index + 1]) - (minimum[index] ?? 0);
+      if (difference < 0) return false;
+      if (difference > 0) break;
+    }
+  }
+  return true;
+}
 /** Non-uv commands that touch the lockfile or manifest (freshness checks, version bumps) make the job lock-aware. */
 const LOCK_AWARE = /(?:^|[^\w.-])(?:uv\.lock|pyproject\.toml)\b/;
 
@@ -250,11 +270,11 @@ export default defineRule({
     ruleset: "toolchains",
     description: "`uv sync` and `uv run` in CI should pass `--locked` so the committed `uv.lock` is enforced instead of silently re-locked.",
     rationale:
-      "uv keeps `uv.lock` up to date automatically: `uv sync` re-locks the project before syncing unless `--locked` or `--frozen` is provided, and `uv run` locks and syncs the project before invoking the command. When a dependency was added or changed in `pyproject.toml` without committing the regenerated lockfile, CI therefore resolves fresh versions from the index, rewrites `uv.lock` on the runner and tests a dependency graph that nobody reviewed and that developers do not use. With `--locked` (or `UV_LOCKED=1`) uv asserts that `uv.lock` will remain unchanged and exits with an error when it is missing or needs to be updated.",
+      "Project-mode uv sync/run can update uv.lock when freshness checks require it; a compatible existing lock need not change. --locked rejects required lock changes, whereas --frozen skips freshness checks and --no-sync avoids synchronization. Environment equivalents depend on uv version and boolean values. This rule observes visible lock policy, not actual resolution, review history or whole-build reproducibility.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
-    requires: [],
+    requires: ["complete-inventory"],
     defaultOptions: {},
     references: [
       "https://docs.astral.sh/uv/concepts/projects/sync/",
@@ -262,10 +282,10 @@ export default defineRule({
       "https://docs.astral.sh/uv/reference/environment/#uv_locked",
     ],
     impact: "medium",
-    fixable: true,
+    fixable: false,
     example: {
       bad: "# uv.lock is committed\n- run: uv sync --all-extras\n- run: uv run pytest",
-      good: "# uv.lock is committed\n- run: uv sync --locked --all-extras\n- run: uv run pytest",
+      good: "# uv.lock is committed\n- run: uv sync --locked --all-extras\n- run: uv run --locked pytest",
     },
   },
   check({ project, report }) {
@@ -273,35 +293,26 @@ export default defineRule({
       const commands = toolCommands(ctx, "uv").map((entry) => ({ ...entry, uv: parseUv(entry.words) }));
       if (commands.length === 0) continue;
       if (commands.some(({ uv, words: list }) => uv !== undefined && mutatesLock(uv, list))) continue;
-      if (ctx.commands.some(({ command }) => basename(words(command)[0] ?? "") !== "uv" && LOCK_AWARE.test(command))) continue;
-      const verified = new Set<string>();
+      if (ctx.commands.some(({ command }) => /^(?:sed|perl|python\d*|rm|cp|mv)$/.test(basename(words(command)[0] ?? "")) && LOCK_AWARE.test(command))) continue;
+      const reported = new Set<string>();
       for (const { command, words: list, uv } of commands) {
         if (uv === undefined || !["sync", "run", "lock"].includes(uv.subcommand)) continue;
         if (uv.dynamic) continue;
         const env = effectiveEnv(ctx, command, command);
-        const lock = lockFor(project, projectDirectory(ctx, command, uv, env));
-        // The first command per lockfile decides: once it ran with `--locked`, later commands reuse the verified lock.
-        if (lock === undefined || verified.has(lock)) continue;
-        if (uv.subcommand === "lock") {
-          if (uv.flags.has("--check") || uv.flags.has("--locked")) verified.add(lock);
-          continue;
-        }
-        if (uv.flags.has("--locked") || env.has("UV_LOCKED")) {
-          verified.add(lock);
-          continue;
-        }
+        const directory = projectDirectory(ctx, command, uv, env);
+        if (directory === undefined) continue;
+        const lock = lockFor(project, directory);
+        if (lock === undefined || reported.has(lock) || uv.subcommand === "lock") continue;
+        if (uv.flags.has("--locked") || envEnabled(ctx, command, env, "UV_LOCKED")) continue;
         const options = [...uv.flags, ...uv.values.keys()];
-        if (options.some((option) => EXEMPT_OPTIONS.has(option)) || EXEMPT_ENV.some((name) => env.has(name))) continue;
+        if (options.some((option) => EXEMPT_OPTIONS.has(option)) || EXEMPT_ENV.some((name) => envEnabled(ctx, command, env, name))) continue;
         const target = uv.target;
         if (uv.subcommand === "run" && (target === undefined || /\.pyw?$/i.test(target) || /^https?:/i.test(target) || target === "-")) {
           continue;
         }
-        verified.add(lock);
+        reported.add(lock);
         const raw = command.command.trim();
         const suggested = withInserted(raw, list, uv.prefix, " --locked");
-        const file = project.files.get(command.path);
-        const edit = file ? insertAfterWords(file, command.line, uv.prefix, " --locked") : undefined;
-        const repair = fix(`Add --locked to uv ${uv.subcommand}`, edit);
         const misplaced = uv.targetArgs.includes("--locked")
           ? ` (the \`--locked\` after \`${target ?? ""}\` is passed to that command, not to uv)`
           : "";
@@ -313,10 +324,9 @@ export default defineRule({
           path: command.path,
           line: command.line,
           key: `uv-lock:${ctx.workflow.path}:${ctx.job.id}:${lock}`,
-          message: `${what} silently rewrites the committed \`${lock}\` on the runner when it no longer matches \`pyproject.toml\` instead of failing, so CI installs dependency versions nobody reviewed.`,
-          suggestion: `Pass \`--locked\` right after the subcommand so uv exits with an error when \`${lock}\` is missing or out of date:\n\n${suggested}\n\nLater uv commands in the same job then reuse the verified lockfile. Alternatively set \`UV_LOCKED: 1\` in the job's \`env:\` to cover every uv command, or use \`--frozen\` to install exactly what the lockfile pins without checking it against \`pyproject.toml\`.`,
+          message: `${what} may rewrite the inspected \`${lock}\` when freshness checks require changes instead of rejecting the update. A compatible lock can remain unchanged; this does not establish an actual dependency change.`,
+          suggestion: `If CI should reject lockfile changes, pass \`--locked\` right after each dependency-resolving subcommand:\n\n${suggested}\n\nAn earlier check does not constrain later commands. On uv >= 0.4.25, \`UV_LOCKED: 1\` can set this policy for every command in scope. \`--frozen\` instead skips freshness checks, which is a different policy. Test the chosen policy before adopting it.`,
           related: [{ path: lock, line: 1 }],
-          ...(repair ? { fix: repair } : {}),
         });
       }
     }

@@ -26,7 +26,7 @@ export default defineRule({
     ruleset: "nix",
     description: "Nix expressions should not use `<nixpkgs>`-style lookup paths, which resolve through the machine's NIX_PATH.",
     rationale:
-      "A lookup path such as `<nixpkgs>` is resolved at evaluation time against the `NIX_PATH` environment variable / `nix-path` setting of whichever machine runs Nix. The same commit therefore evaluates against whatever channel a developer last ran `nix-channel --update` on, a different nixpkgs on each CI runner image, and a new one after every channel update: results are not reproducible and binary-cache hits depend on the runner. Pure evaluation mode (the default for flakes) refuses lookup paths altogether. Pinning the dependency as a flake input (locked in flake.lock) or as `fetchTarball` with a commit URL and `sha256` makes the evaluated nixpkgs a function of the repository alone.",
+      "Lookup paths resolve through search-path configuration, including NIX_PATH, nix-path and -I flags. That configuration may be pinned externally or may follow a mutable channel; this file-level detector does not establish which. Explicit pinned inputs make the dependency easier to audit. Pure evaluation disables ordinary external search-path resolution. A source pin is not a proof of deterministic builds or cache hits.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -60,7 +60,7 @@ export default defineRule({
           line: lookup.line,
           message: `\`<${lookup.name}>\` is resolved from NIX_PATH on the machine that evaluates this file${
             isDefault ? " (whenever the caller does not pass this argument, e.g. plain `nix-build`/`nix-shell`)" : ""
-          }, so the ${root === "nixpkgs" ? "nixpkgs revision" : `\`${root}\` revision`} used depends on that machine's channels rather than on this repository; pure evaluation (flakes) rejects it.`,
+          }, including explicit search-path flags. Unless that configuration is pinned, the selected source can vary independently of this file; ordinary external lookup is unavailable in pure evaluation.`,
           suggestion: suggestionFor(lookup.name),
           confidence: isDefault ? "medium" : "high",
           key: `<${lookup.name}>#${count}`,

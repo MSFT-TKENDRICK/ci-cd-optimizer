@@ -29,7 +29,7 @@ function unlocked(file: NixFile, arg: NixArgument): Finding | undefined {
   const open = attrsetOf(file, unwrapParens(file, arg));
   if (open === undefined) return undefined;
   const keys = attrKeys(file, open);
-  if (keys.has("rev")) return undefined;
+  if (keys.has("rev") || keys.has("narHash")) return undefined;
   if (nixBindings(file, open).some((binding) => binding.path[0] === "${}")) return undefined;
   const urlBinding = bindingNamed(file, open, "url");
   const url = urlBinding ? remoteUrl(stringAt(file, urlBinding.valueStart)) : undefined;
@@ -45,9 +45,9 @@ export default defineRule({
     ruleset: "nix",
     description: "`builtins.fetchGit` of a remote repository must pin a commit with `rev`.",
     rationale:
-      "`builtins.fetchGit` runs at evaluation time. Without `rev` it resolves `ref` (default `HEAD`) against the remote and fetches whatever commit the branch points to at that moment; the result is cached only for `tarball-ttl` (3600 seconds by default), so the same commit of your repository evaluates to different sources over time and cannot be reproduced later. A `ref` is just a mutable branch or tag name, not a pin. Pure evaluation (the default for flakes) rejects such calls with \"in pure evaluation mode, 'fetchGit' doesn't fetch unlocked input\". With a 40-character `rev` the fetch is deterministic and is served from the local cache without contacting the remote.",
+      "fetchGit resolves a remote ref during evaluation. Without a revision or supported content-hash pin, a mutable branch or tag can select different source over time. Pure evaluation rejects unlocked inputs if evaluated. A full revision identifies a Git object, but does not guarantee local cache presence, remote availability, identical fetcher metadata across options or deterministic downstream builds.",
     kind: "policy",
-    defaultSeverity: "error",
+    defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
     requires: [],
     defaultOptions: {},

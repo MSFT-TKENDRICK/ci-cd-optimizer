@@ -2,7 +2,7 @@ import type { ProjectModel } from "../../project.js";
 import type { Location } from "../../types.js";
 import { basename, usesAction } from "../caching/shared.js";
 import { defineRule } from "../helpers.js";
-import { commandDirectory, dirname, findUp, inDir, jobContexts, joinPath, words } from "./shared.js";
+import { commandDirectory, dirname, effectiveEnv, entryIndex, findUp, inDir, jobContexts, toolCommands } from "./shared.js";
 
 const WORKSPACE_FILES = ["MODULE.bazel", "WORKSPACE.bazel", "WORKSPACE"];
 const SETUP_ACTIONS = ["bazel-contrib/setup-bazel", "bazelbuild/setup-bazelisk"];
@@ -14,6 +14,7 @@ interface Use {
   line: number;
   dir: string;
   label: string;
+  scope: string;
 }
 
 function workspaceRoot(project: ProjectModel, dir: string): string | undefined {
@@ -29,11 +30,12 @@ function workspaceRoot(project: ProjectModel, dir: string): string | undefined {
 /** `USE_BAZEL_VERSION` from a `.bazeliskrc` (`KEY=value` lines). */
 function bazeliskrcVersion(content: string): { value: string; line: number } | undefined {
   const lines = content.split("\n");
+  let result: { value: string; line: number } | undefined;
   for (let index = 0; index < lines.length; index += 1) {
     const match = /^\s*(?:export\s+)?USE_BAZEL_VERSION\s*=\s*["']?([^"'\s#]*)/.exec(lines[index] ?? "");
-    if (match && match[1]) return { value: match[1], line: index + 1 };
+    if (match && match[1]) result = result ? { value: "${unknown}", line: index + 1 } : { value: match[1], line: index + 1 };
   }
-  return undefined;
+  return result;
 }
 
 function bazelversionValue(content: string): { value: string; line: number } | undefined {
@@ -45,20 +47,13 @@ function bazelversionValue(content: string): { value: string; line: number } | u
   return undefined;
 }
 
-function mentions(project: ProjectModel, ...texts: string[]): boolean {
-  return [...project.workflows, ...project.actions].some((workflow) => {
-    const content = project.files.get(workflow.path)?.content ?? "";
-    return texts.some((text) => content.includes(text));
-  });
-}
-
 export default defineRule({
   meta: {
     id: "toolchains/bazel-missing-version-pin",
     ruleset: "toolchains",
     description: "Bazel workspaces built in CI should pin the Bazel version in a checked-in `.bazelversion` file.",
     rationale:
-      "Bazelisk (pre-installed on GitHub-hosted runners and used by bazel-contrib/setup-bazel) picks the Bazel version from `USE_BAZEL_VERSION`, then `.bazeliskrc`, then `.bazelversion`; with none of them, or with a label such as `latest`, `rolling` or `7.x`, it runs whatever release is newest when the job starts. A new release can bring backward-incompatible changes between major versions and changes the Bazel binary every action runs under, so CI results can change without any commit, and setup-bazel's `bazelisk-cache`, keyed on `.bazelversion`, cannot follow the version. The Bazel docs recommend checking `.bazelversion` into version control to make builds reproducible.",
+      "Bazelisk resolves Bazel using its environment/configuration and version file. Without a visible choice, its fallback can track newer releases; floating labels intentionally do so. Plain Bazel does not select versions this way, so only explicit bazelisk commands or bazel commands after a recognized Bazelisk setup are considered. External configuration, cache state and installer versions can change resolution. An exact reviewed release constrains the tool version, not whole-build reproducibility.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -77,29 +72,24 @@ export default defineRule({
     },
   },
   check({ project, report }) {
-    if (mentions(project, "USE_BAZEL_VERSION", "USE_BAZEL_FALLBACK_VERSION")) return;
     const uses: Use[] = [];
     for (const ctx of jobContexts(project)) {
-      for (const entry of ctx.entries) {
-        if (!usesAction(entry.step, ...SETUP_ACTIONS)) continue;
-        const moduleRoot = entry.step.with.get("module-root");
-        if (moduleRoot && (moduleRoot.kind !== "literal" || typeof moduleRoot.value !== "string")) continue;
-        const dir = joinPath("", typeof moduleRoot?.value === "string" ? moduleRoot.value : ".");
-        const action = entry.step.uses?.value ?? "setup-bazel";
-        if (dir !== undefined) uses.push({ path: entry.path, line: entry.step.line, dir, label: `uses: ${action}` });
-      }
-      for (const command of ctx.commands) {
-        const first = words(command.command)[0];
-        if (first === undefined || !["bazel", "bazelisk"].includes(basename(first))) continue;
+      for (const { command, words: list } of toolCommands(ctx, "bazel", "bazelisk")) {
+        const env = effectiveEnv(ctx, command, command);
+        if (env.has("USE_BAZEL_VERSION") || env.has("USE_BAZEL_FALLBACK_VERSION")) continue;
+        const prior = ctx.entries.slice(0, entryIndex(ctx, command));
+        if (basename(list[0] ?? "") !== "bazelisk" &&
+            !prior.some(({ step, owner }) => !step.if && !owner.if && usesAction(step, ...SETUP_ACTIONS))) continue;
+        if (!list.some((word) => ["build", "test", "run", "coverage", "query", "cquery", "aquery"].includes(word))) continue;
         const dir = commandDirectory(ctx, command);
-        if (dir !== undefined) uses.push({ path: command.path, line: command.line, dir, label: command.command.trim() });
+        if (dir !== undefined) uses.push({ path: command.path, line: command.line, dir, label: command.command.trim(), scope: `${ctx.workflow.path}:${ctx.job.id}` });
       }
     }
     const reported = new Set<string>();
     for (const use of uses) {
       const root = workspaceRoot(project, use.dir);
-      if (root === undefined || reported.has(root)) continue;
-      reported.add(root);
+      if (root === undefined || reported.has(`${root}:${use.scope}`)) continue;
+      reported.add(`${root}:${use.scope}`);
       const workspaceFile = WORKSPACE_FILES.map((name) => inDir(root, name)).find((path) => project.files.has(path)) ?? inDir(root, "MODULE.bazel");
       const where = root === "" ? "the root Bazel workspace" : `the Bazel workspace in \`${root}/\``;
       const Where = root === "" ? "The root Bazel workspace" : `The Bazel workspace in \`${root}/\``;
@@ -115,8 +105,8 @@ export default defineRule({
         report({
           path: pinPath,
           line: pinned.line,
-          key: `bazel-root:${root}`,
-          message: `\`${pinPath}\` selects the floating Bazel label \`${pinned.value}\` for ${where}, so Bazelisk runs a different Bazel release whenever a new one matching it is published and CI behaviour can change without a commit.`,
+          key: `bazel-root:${root}:${use.scope}`,
+          message: `\`${pinPath}\` selects the floating Bazel label \`${pinned.value}\` for ${where}. Under standard Bazelisk resolution this may select a newer release without a repository change; external configuration and caches can affect the actual version.`,
           suggestion: `Pin an exact release instead, for example the one CI uses today (\`bazel --version\` prints it):\n\n${rc ? "USE_BAZEL_VERSION=<version>" : "<version>"}\n\nUpgrade deliberately by changing this file in a pull request (Renovate and Dependabot-style tools can propose the bumps).`,
           confidence: /^(?:[\w.-]+\/)?\d+\.[x*]$/.test(pinned.value) ? "medium" : "high",
           related: [{ path: use.path, line: use.line }, ...related],
@@ -126,9 +116,10 @@ export default defineRule({
       report({
         path: use.path,
         line: use.line,
-        key: `bazel-root:${root}`,
-        message: `${Where} has no \`.bazelversion\`, no \`USE_BAZEL_VERSION\` in \`.bazeliskrc\` and no \`USE_BAZEL_VERSION\` in the workflow environment, so \`${use.label}\` runs whichever Bazel release is the latest when the job starts.`,
-        suggestion: `Commit \`${target}\` containing the exact Bazel release CI should use (\`bazel --version\` prints the one it resolves today), for example:\n\n8.4.2\n\nBazelisk then downloads exactly that release, local and CI builds use the same Bazel, and upgrades happen in reviewed pull requests.`,
+        key: `bazel-root:${root}:${use.scope}`,
+        message: `${Where} has no \`.bazelversion\`, no \`USE_BAZEL_VERSION\` in the inspected \`.bazeliskrc\` and no visible version/fallback environment setting for \`${use.label}\`. Standard Bazelisk fallback may choose a newer release; inspect external configuration before adding a pin.`,
+        suggestion: `If a fixed release is intended, record the reviewed version in \`${target}\` and verify the actual Bazelisk precedence and runtime version. For example, a version file can contain \`8.4.2\`; choose the release supported by this project, not the example blindly. Upgrade and test deliberately.`,
+        confidence: "medium",
         related,
       });
     }

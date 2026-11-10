@@ -1,11 +1,7 @@
-import { isAlias, isMap, isPair, isScalar, isSeq } from "yaml";
-import { fix, indentOf, insertLinesAfter, lineText } from "../../fix.js";
-import type { JobModel, StepModel, WorkflowModel } from "../../parsers/workflow.js";
-import { lineOfNode } from "../../parsers/yaml.js";
+import type { StepModel } from "../../parsers/workflow.js";
 import type { ProjectModel } from "../../project.js";
-import type { Fix, SourceFile } from "../../types.js";
 import { usesAction } from "../caching/shared.js";
-import { defineRule } from "../helpers.js";
+import { actionVersion, defineRule } from "../helpers.js";
 
 interface Tool {
   action: string;
@@ -134,68 +130,6 @@ function hasInput(step: StepModel, name: string): boolean {
   return value !== undefined && value !== null && String(value).trim() !== "";
 }
 
-/** The version file is only on disk when an earlier checkout put the repository at the workspace root. */
-function workspaceCheckedOut(job: JobModel, step: StepModel): boolean {
-  const checkouts = job.steps.filter((candidate) => candidate.index < step.index && usesAction(candidate, "actions/checkout"));
-  return (
-    checkouts.length > 0 &&
-    checkouts.every((checkout) => !["path", "repository", "sparse-checkout"].some((input) => checkout.with.has(input)))
-  );
-}
-
-function directChild(node: unknown, key: string): unknown {
-  if (!isMap(node)) return undefined;
-  const pair = node.items.find((item) => isPair(item) && isScalar(item.key) && String(item.key.value) === key);
-  return pair && !isAlias(pair.value) ? pair.value : undefined;
-}
-
-/** The step's block mapping when the step and the path to it are written inline (no anchors, aliases or merge keys). */
-function stepNode(workflow: WorkflowModel, step: StepModel): ReturnType<typeof directChild> {
-  const match = /^jobs\.([^.]+)\.steps\[(\d+)\]$/.exec(step.key);
-  if (!match) return undefined;
-  const steps = directChild(directChild(directChild(workflow.source.doc.contents, "jobs"), match[1] ?? ""), "steps");
-  if (!isSeq(steps)) return undefined;
-  const node = steps.items[Number(match[2])];
-  if (!isMap(node) || node.flow || lineOfNode(workflow.source, node) !== step.line) return undefined;
-  return node;
-}
-
-function addInput(file: SourceFile, workflow: WorkflowModel, step: StepModel, input: string, path: string): Fix | undefined {
-  const description = `Add \`${input}: ${path}\``;
-  const node = stepNode(workflow, step);
-  if (!isMap(node) || !step.uses) return undefined;
-  if (node.items.some((item) => isPair(item) && isScalar(item.key) && item.key.value === "<<")) return undefined;
-  const withNode = directChild(node, "with");
-  if (withNode !== undefined) {
-    if (!isMap(withNode) || withNode.flow) return undefined;
-    const entries = [...step.with.values()];
-    if (entries.length === 0 || entries.some((entry) => entry.origin !== "direct" || entry.line <= step.line)) return undefined;
-    const first = Math.min(...entries.map((entry) => entry.line));
-    const text = lineText(file.content, first);
-    if (!/^\s*[A-Za-z0-9_-]+\s*:/.test(text) || /[{}]/.test(text)) return undefined;
-    for (let line = first - 1; line >= step.line; line -= 1) {
-      const candidate = lineText(file.content, line);
-      if (/^\s*(-\s+)?with\s*:\s*(#.*)?$/.test(candidate)) {
-        return fix(description, insertLinesAfter(file, first - 1, [`${indentOf(file.content, first)}${input}: ${path}`]));
-      }
-      if (candidate.trim() !== "" && !candidate.trim().startsWith("#")) return undefined;
-    }
-    return undefined;
-  }
-  if (step.with.size > 0) return undefined;
-  const usesText = lineText(file.content, step.uses.line);
-  const match = /^(\s*(?:-\s+)?)uses\s*:\s*[^\s#]+\s*(#.*)?$/.exec(usesText);
-  if (!match) return undefined;
-  const pad = (match[1] ?? "").length;
-  const lines = file.content.split(/\r?\n/);
-  const next = lines.slice(step.uses.line).find((line) => line.trim() !== "");
-  if (next !== undefined && (indentOf(next, 1).length > pad || next.trim().startsWith("#"))) return undefined;
-  return fix(
-    description,
-    insertLinesAfter(file, step.uses.line, [`${" ".repeat(pad)}with:`, `${" ".repeat(pad + 2)}${input}: ${path}`]),
-  );
-}
-
 export default defineRule({
   meta: {
     id: "workflow/setup-action-missing-version-file",
@@ -203,7 +137,7 @@ export default defineRule({
     description:
       "Language setup actions (setup-node, setup-python, setup-go, setup-dotnet) should pin the toolchain with a version input or the repository's version file.",
     rationale:
-      "Without `node-version`/`python-version`/`go-version`/`dotnet-version` or the matching `*-version-file`/`global-json-file` input, the setup action does not install a chosen toolchain: setup-node and setup-python fall back to the version on the runner's PATH, setup-go to the pre-installed Go, and setup-dotnet to the newest pre-installed SDK. Those versions change whenever GitHub updates the runner image, so the same commit can build with a different compiler or interpreter from one week to the next, and local development (which follows `.nvmrc`, `go.mod`, `.python-version` or `global.json`) drifts from CI. Pointing the action at the version file the project already maintains makes CI hermetic with a single source of truth.",
+      "Without explicit version inputs or supported implicit version files, setup actions generally fall back to pre-installed toolchains. Hosted image updates or custom runner provisioning may then change the selected version. Reusing the project's supported version file can align CI and local development, but version ranges, aliases and .NET roll-forward policies still permit different releases. A version input is not a hermetic-build guarantee. Selecting a toolchain can change behavior and therefore is never automatically applied.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -218,7 +152,7 @@ export default defineRule({
       "https://github.com/actions/setup-dotnet#using-the-global-json-file-input",
     ],
     impact: "medium",
-    fixable: true,
+    fixable: false,
     example: {
       bad: "- uses: actions/checkout@v5\n- uses: actions/setup-node@v5\n- run: npm ci",
       good: "- uses: actions/checkout@v5\n- uses: actions/setup-node@v5\n  with:\n    node-version-file: .nvmrc\n- run: npm ci",
@@ -232,22 +166,22 @@ export default defineRule({
         for (const step of job.steps) {
           const tool = TOOLS.find((candidate) => usesAction(step, candidate.action));
           if (!tool || !step.uses) continue;
+          const version = actionVersion(step, file);
+          if (!version || version.major < 3) continue;
           if (hasInput(step, tool.versionInput) || hasInput(step, tool.fileInput)) continue;
           if (tool.implicitFile !== undefined && (!complete || project.files.has(tool.implicitFile))) continue;
-          const candidates = tool.candidates(project);
+          const candidates = tool.candidates(project).filter((path) =>
+            path !== ".tool-versions" || tool.action === "actions/setup-node" || version.major >= 6,
+          );
           const [only] = candidates;
-          const repair =
-            candidates.length === 1 && only !== undefined && file && workflow.kind === "workflow" && workspaceCheckedOut(job, step)
-              ? addInput(file, workflow, step, tool.fileInput, only)
-              : undefined;
           const uses = step.uses.value;
           const found =
             candidates.length > 0
-              ? ` The repository already pins ${tool.language} in ${candidates.map((path) => `\`${path}\``).join(", ")}.`
+              ? ` The repository declares ${tool.language} in ${candidates.map((path) => `\`${path}\``).join(", ")}.`
               : "";
           const suggestion =
             candidates.length > 0
-              ? `Read the version from the file the project already maintains:\n\n- uses: ${uses}\n  with:\n    ${tool.fileInput}: ${only ?? ""}`
+              ? `After checking compatibility and ensuring checkout makes this file available at that path, consider reading its version selection:\n\n- uses: ${uses}\n  with:\n    ${tool.fileInput}: ${only ?? ""}`
               : `Pin the toolchain explicitly (example version shown), or add a version file and point \`${tool.fileInput}\` at it:\n\n- uses: ${uses}\n  with:\n    ${tool.pinExample}${
                   tool.rangeFiles ? `\n\n${tool.rangeFiles.join(" and ")} only declare a range, which resolves to whatever is newest at run time.` : ""
                 }`;
@@ -255,9 +189,8 @@ export default defineRule({
             path: workflow.path,
             line: step.uses.line,
             key: `${step.key}.with.${tool.versionInput}`,
-            message: `\`${tool.action}\` sets neither \`${tool.versionInput}\` nor \`${tool.fileInput}\`, so ${tool.fallback}; that version changes whenever the runner image is updated.${found}`,
+            message: `\`${tool.action}\` sets neither \`${tool.versionInput}\` nor \`${tool.fileInput}\`, so ${tool.fallback}; runner image or provisioning changes can change that version.${found}`,
             suggestion,
-            ...(repair ? { fix: repair } : {}),
           });
         }
       }

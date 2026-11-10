@@ -1,14 +1,10 @@
-import { indentOf, fix, insertLinesAfter } from "../../fix.js";
-import { resolveLockInput, type FlakeLock, type FlakeLockNode, type NixBinding, type NixFile } from "../../parsers/nix.js";
+import { resolveLockInput, type FlakeLock, type FlakeLockNode, type NixBinding } from "../../parsers/nix.js";
 import type { NixFlake, ProjectModel } from "../../project.js";
-import type { Fix, SourceFile } from "../../types.js";
 import { usesAction } from "../caching/shared.js";
 import { defineRule } from "../helpers.js";
 import { confValues, nixJobs } from "./shared.js";
 import { describeOriginal, flakeBindings, inputLine, isNixpkgsNode, lockOf, nodeIdentity, shortRev, str } from "./flake.js";
 
-const IDENT = /^[A-Za-z_][A-Za-z0-9_'-]*$/;
-const URL_KEY = /^(?:[A-Za-z_][A-Za-z0-9_'-]*\.)*url$/;
 const GENERIC_HOST_LABELS = new Set(["cache", "cachix", "nixos", "nix", "binary", "binaries", "store", "www", "org", "com", "io", "net", "dev", "app"]);
 
 interface RootTarget {
@@ -109,33 +105,6 @@ function duplicates(flake: NixFlake, lock: FlakeLock, caches: Set<string>, bindi
   return found;
 }
 
-/** Inserts `<prefix>inputs.<edge>.follows = "<target>";` after a simple single-line `<prefix>url = "...";` binding. */
-function followsFix(file: NixFile, source: SourceFile, bindings: NixBinding[], duplicate: Duplicate): Fix | undefined {
-  const { input, edge, target } = duplicate;
-  if (!duplicate.compatible || !IDENT.test(input) || !IDENT.test(edge) || !IDENT.test(target.name)) return undefined;
-  const own = bindings.filter(({ path }) => path[0] === "inputs" && path[1] === input);
-  const urls = own.filter(({ path }) => path.length === 3 && path[2] === "url");
-  if (urls.length !== 1 || own.some(({ path }) => path[2] === "inputs")) return undefined;
-  const binding = urls[0];
-  if (!binding) return undefined;
-  const { masked } = file;
-  const line = file.lineOf(binding.keyStart);
-  if (file.lineOf(binding.valueEnd) !== line || masked[binding.valueEnd] !== ";") return undefined;
-  const lineEnd = masked.indexOf("\n", binding.valueEnd);
-  if (masked.slice(binding.valueEnd + 1, lineEnd < 0 ? masked.length : lineEnd).trim() !== "") return undefined;
-  const lineBegin = masked.lastIndexOf("\n", binding.keyStart - 1) + 1;
-  if (masked.slice(lineBegin, binding.keyStart).trim() !== "") return undefined;
-  const equals = masked.lastIndexOf("=", binding.valueStart);
-  const key = file.content.slice(binding.keyStart, equals).trim();
-  if (!URL_KEY.test(key)) return undefined;
-  const segments = key.split(".");
-  if (segments.join("\0") !== binding.path.slice(-segments.length).join("\0")) return undefined;
-  const prefix = key.slice(0, -"url".length);
-  if (source.content !== file.content) return undefined;
-  const text = `${indentOf(file.content, line)}${prefix}inputs.${edge}.follows = "${target.name}";`;
-  return fix(`Make \`${input}\` follow \`${target.name}\` (then run \`nix flake lock\`)`, insertLinesAfter(source, line, [text]));
-}
-
 function describeNode(node: FlakeLockNode): string {
   const source = describeOriginal(node.original);
   const rev = shortRev(str(node.locked?.rev));
@@ -148,9 +117,9 @@ export default defineRule({
     ruleset: "nix",
     description: "A flake input brings its own nixpkgs revision instead of following the flake's `nixpkgs`, so flake.lock holds several nixpkgs copies.",
     rationale:
-      "Every distinct nixpkgs node in flake.lock is a separate source tree: Nix fetches and unpacks each one, evaluates each one (nixpkgs evaluation dominates the evaluation time of most flakes), and packages built from different revisions have different store paths, so the closures of the flake's outputs cannot share them and CI downloads or builds every shared dependency once per revision. `inputs.<input>.inputs.nixpkgs.follows = \"nixpkgs\"` makes the dependency use the flake's own nixpkgs node, and the next `nix flake lock` drops the extra copy.",
-    kind: "practice",
-    defaultSeverity: "warn",
+      "Distinct nixpkgs revisions can add source fetches, evaluation work and different derivations when those inputs are used. They do not imply that every package differs: unchanged derivations can still share store paths. A follows declaration changes the dependency revision and requires regenerating flake.lock; sharing a channel name does not establish compatibility. Review and test that change, including upstream binary-cache coverage, rather than applying it automatically.",
+    kind: "insight",
+    defaultSeverity: "info",
     presets: ["strict"],
     requires: [],
     defaultOptions: {},
@@ -160,7 +129,7 @@ export default defineRule({
       "https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake-lock",
     ],
     impact: "medium",
-    fixable: true,
+    fixable: false,
     example: {
       bad: 'inputs.home-manager.url = "github:nix-community/home-manager";',
       good: 'inputs.home-manager.url = "github:nix-community/home-manager";\ninputs.home-manager.inputs.nixpkgs.follows = "nixpkgs";',
@@ -178,8 +147,6 @@ export default defineRule({
         const { input, edge, dep, target, compatible } = duplicate;
         const declared = flake.info?.inputs.get(input);
         const onFlake = nixFile !== undefined && declared !== undefined;
-        const source = onFlake ? project.files.get(nixFile.path) : undefined;
-        const fixed = onFlake && source ? followsFix(nixFile, source, bindings, duplicate) : undefined;
         const mismatch = compatible
           ? ""
           : ` It asks for ${describeNode(dep)} while \`${target.name}\` is ${describeNode(target.node)}; check that \`${input}\` supports that revision before following it.`;
@@ -187,9 +154,9 @@ export default defineRule({
           path: onFlake ? nixFile.path : lock.path,
           line: onFlake ? inputLine(declared) : duplicate.inputNode.line,
           key: `${flake.dir}:${input}/${edge}`,
-          message: `Input \`${input}\` locks its own nixpkgs (\`${edge}\` → lock node \`${dep.name}\`, ${describeNode(dep)}) instead of following \`${target.name}\`; flake.lock holds ${identities.size} distinct nixpkgs revisions, each fetched and evaluated separately, and their packages share no store paths.${mismatch}`,
+          message: `Input \`${input}\` locks its own nixpkgs (\`${edge}\` → lock node \`${dep.name}\`, ${describeNode(dep)}) instead of following \`${target.name}\`; flake.lock holds ${identities.size} distinct nixpkgs revisions. Used inputs may require extra fetches and evaluation; unchanged derivations can still share store paths.${mismatch}`,
           suggestion: [
-            `Make \`${input}\` use your nixpkgs, then re-lock to drop the extra node:`,
+            `Only if \`${input}\` supports your nixpkgs revision, consider the following dependency change, regenerate the lock and test all affected outputs:`,
             "",
             "```nix",
             `inputs.${input}.inputs.${edge}.follows = "${target.name}";`,
@@ -201,7 +168,6 @@ export default defineRule({
             "",
             `\`${input}\` is then built against your nixpkgs revision instead of the one it was tested with. Skip this if \`${input}\` publishes a binary cache you rely on, because its cached outputs were built with its own nixpkgs.`,
           ].join("\n"),
-          ...(fixed ? { fix: fixed } : {}),
         });
       }
     }

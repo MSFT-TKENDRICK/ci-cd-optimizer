@@ -43,11 +43,11 @@ export default defineRule({
   meta: {
     id: "nix/nix-build-inside-docker",
     ruleset: "nix",
-    description: "Dockerfiles should not run `nix build`/`nix-build` inside the `nixos/nix` image; build the image with Nix instead.",
+    description: "Review Nix sandboxing and store-cache reuse when Dockerfile RUN instructions build with a nixos/nix-named base.",
     rationale:
-      "The `nixos/nix` image writes `sandbox = false` to its nix.conf, because Nix's sandbox cannot run in an unprivileged container (the image's README says enabling it needs a privileged container plus `sandbox = true`). A `nix build` in a Dockerfile therefore runs every derivation unsandboxed: builders can read paths outside their declared inputs and all of them, not only fixed-output fetchers, get network access, so a build that works in Docker can be impure. The /nix/store it fills also lives in a Docker layer: when any earlier layer changes, BuildKit re-runs the step from the base image's store and re-substitutes or rebuilds the whole closure, and neither the CI runner's /nix/store nor its Nix cache action is reused. Building the image with `dockerTools.streamLayeredImage` or nix2container runs the build sandboxed on the runner, reuses its Nix cache, and gives one layer per store path.",
-    kind: "practice",
-    defaultSeverity: "warn",
+      "Docker's isolation boundary is not the Nix build sandbox. Some nixos/nix releases disable Nix sandboxing for container compatibility, but a name, mirror or tag does not establish the running configuration or namespace capabilities. A missed BuildKit layer can repeat Nix work, while parent layers, cache mounts and substituters may still provide reuse. Moving image construction outside Docker changes build/runtime assumptions and must be validated; it does not automatically enable sandboxing or guarantee one layer per store path.",
+    kind: "insight",
+    defaultSeverity: "info",
     presets: ["strict"],
     requires: [],
     defaultOptions: {},
@@ -92,8 +92,9 @@ export default defineRule({
               path: model.path,
               line: command.line,
               key: `stage:${stageLabel(stage)}:run[${ordinal}]:nix-build`,
-              message: `\`${display(command.text)}\` builds inside \`${nix.image}\`${based}, whose nix.conf sets \`sandbox = false\`: derivations run unsandboxed (they can read undeclared paths and all of them get network access), and the /nix/store lives in this Docker layer, so any change to an earlier layer re-fetches or rebuilds every dependency without reusing the CI runner's Nix cache.`,
-              suggestion: `Build the image with Nix on the runner instead, where the sandbox is on and the Nix cache is reused: add \`packages.<system>.image = pkgs.dockerTools.streamLayeredImage { name = "app"; tag = "latest"; contents = [ app ]; config.Cmd = [ "\${app}/bin/app" ]; };\` to flake.nix and run \`nix build .#image && ./result | docker image load\` (nix2container is an alternative that also avoids writing the image tarball). If it must stay a Dockerfile, keep the store across builds with \`RUN --mount=type=cache,target=/nix,from=${nix.image},source=/nix ${display(command.text)}\` and, in the same RUN, copy the closure out (\`cp -R $(nix-store -qR result) /tmp/closure\`) for a slim final stage (\`COPY --from=<stage> /tmp/closure /nix/store\`), because the cached /nix is not part of the layer.${syntax}`,
+              message: `\`${display(command.text)}\` builds inside \`${nix.image}\`${based}. No recognized sandbox enablement or Nix cache mount is visible for this instruction. Check the actual image configuration and layer-cache behavior; the image name alone does not establish either.`,
+              suggestion: `Inspect effective Nix sandbox/daemon policy and measure repeated BuildKit cache misses. Consider building a tested dockerTools/nix2container image outside Docker, preserving runtime closure, ownership and configuration. If retaining a cache mount, persist the store/database consistently and explicitly materialize required runtime outputs into the final image: cache-mount contents are not committed as layer files.${syntax} Do not enable privileged containers merely to silence this insight.`,
+              confidence: "low",
             });
             break;
           }

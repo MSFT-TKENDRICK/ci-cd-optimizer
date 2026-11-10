@@ -1,4 +1,4 @@
-import { expandedJobSteps, defineRule } from "../helpers.js";
+import { defineRule } from "../helpers.js";
 import type { ProjectModel } from "../../project.js";
 import type { ReportDescriptor } from "../../types.js";
 import {
@@ -76,8 +76,10 @@ function suggestion(name: string, tarball: string): string {
 /** True when an installer action sets Nix up for the job; those installers subscribe to no channel, so `--update` alone is a no-op. */
 function installsWithAction(project: ProjectModel, site: NixCommandSite): boolean {
   if (!site.job) return true;
-  const { workflow, job } = site.job;
-  return expandedJobSteps(project, workflow, job).some(({ step }) => NIX_INSTALLER_ACTIONS.has(step.uses?.action.name ?? ""));
+  const position = site.job.entries.findIndex((entry) => entry.step === site.step);
+  return site.job.entries.slice(0, Math.max(0, position)).some(({ step, owner }) =>
+    !step.if && !owner.if && NIX_INSTALLER_ACTIONS.has(step.uses?.action.name ?? ""),
+  );
 }
 
 /** True when the job (or composite action) adds a channel itself, so `--update` refreshes a subscription reported at its `--add`. */
@@ -98,7 +100,7 @@ function addReport(site: NixCommandSite, nix: NixInvocation, args: string[]): Re
   return {
     path: site.path,
     line: nix.line,
-    message: `\`nix-channel --add ${url}${given ? ` ${given}` : ""}\` subscribes the runner to ${source.reason} under the name \`${name}\`: \`<${name}>\` lookups and \`nix-env\` then evaluate whatever revision \`nix-channel --update\` downloaded, so the build changes with upstream pushes rather than with this repository, and the revision a run used is not recorded.`,
+    message: `\`nix-channel --add ${url}${given ? ` ${given}` : ""}\` subscribes the runner to ${source.reason} under the name \`${name}\`. A later update can change that channel's revision; only expressions actually resolving through it are affected. Other logging or pinning may record the resolved revision.`,
     suggestion: suggestion(name, pinnedTarball(url)),
     confidence: source.indirect ? "medium" : "high",
   };
@@ -111,7 +113,7 @@ function updateReport(project: ProjectModel, site: NixCommandSite, nix: NixInvoc
   return {
     path: site.path,
     line: nix.line,
-    message: `\`nix-channel --update${args.length > 0 ? ` ${args.join(" ")}` : ""}\` downloads the current head of ${which}: expressions resolved through channels (\`<nixpkgs>\`, \`nix-env -iA nixpkgs.…\`) change with upstream pushes rather than with this repository, and on a persistent runner the update also changes what later jobs evaluate.`,
+    message: `\`nix-channel --update${args.length > 0 ? ` ${args.join(" ")}` : ""}\` refreshes ${which}. If those subscriptions are mutable and used by later evaluation, dependencies can change independently of the repository. Existing pinned subscriptions, empty channel lists or explicit search-path overrides may avoid that effect.`,
     suggestion: suggestion(name, pinnedTarball("")),
     confidence: "medium",
   };
@@ -123,7 +125,7 @@ export default defineRule({
     ruleset: "nix",
     description: "`nix-channel --add/--update` in CI makes evaluation depend on a channel that moves.",
     rationale:
-      "A channel is a mutable subscription: `nix-channel --add <url> [name]` records a URL such as `https://nixos.org/channels/nixos-unstable`, and `nix-channel --update` downloads whatever that channel currently points to into a new generation of the channels profile, which `~/.nix-defexpr/channels` (and therefore `<name>` lookups through the default `nix-path`, and `nix-env` without `-f`) resolve to. The revision is decided by the time the job runs, not by the commit under test, so the same commit can evaluate a different nixpkgs on a re-run, a failure cannot be reproduced locally from the repository alone, and nothing in the logs or the tree records which revision was used. The Nix manual notes that channel state is external to the expressions relying on it and recommends declaring dependencies explicitly (`fetchTarball` of a commit, `-I`, or flake inputs locked in flake.lock).",
+      "Channel subscriptions live outside the Nix expressions consuming them. A mutable channel URL can resolve differently after an update, while immutable snapshots, explicit search paths and recorded revisions can constrain or document the selection. Adding a channel alone does not establish that a build uses it. Prefer an explicit, reviewed dependency policy where frozen inputs are required; this detector does not establish reproducibility or the presence/absence of runtime provenance.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],

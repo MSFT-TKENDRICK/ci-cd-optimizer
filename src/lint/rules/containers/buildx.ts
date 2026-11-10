@@ -180,7 +180,7 @@ export function parseBuildCommand(command: string): BuildCommand | undefined {
 
 /** True when a boolean CLI flag is set (`--load`, `--load=true`). */
 export function flagSet(build: BuildCommand, name: string): boolean {
-  return (build.flags.get(name) ?? []).some((value) => value.toLowerCase() !== "false");
+  return /^(true|1)$/i.test(build.flags.get(name)?.at(-1) ?? "");
 }
 
 export interface BuildSite {
@@ -228,8 +228,7 @@ function joinPath(...parts: string[]): string | undefined {
 /**
  * The Dockerfile a build uses. `file` is relative to the working directory and defaults to `<context>/Dockerfile`;
  * an absent context (build-push-action's Git context) is the repository root. A literal path is looked up exactly;
- * when `file` or `context` is computed, falls back to the repository's only Dockerfile. Remote contexts resolve to
- * nothing.
+ * computed and remote contexts are unknown, even when the inventory contains only one Dockerfile.
  */
 export function resolveDockerfile(
   project: ProjectModel,
@@ -238,7 +237,7 @@ export function resolveDockerfile(
   workingDirectory = "",
 ): DockerfileModel | undefined {
   if ((file !== undefined && isDynamic(file)) || (context !== undefined && isDynamic(context))) {
-    return project.dockerfiles.length === 1 ? project.dockerfiles[0] : undefined;
+    return undefined;
   }
   const cwd = workingDirectory.startsWith("/") || isDynamic(workingDirectory) ? undefined : workingDirectory;
   if (cwd === undefined) return undefined;
@@ -262,7 +261,8 @@ export function siteDockerfile(project: ProjectModel, site: BuildSite): Dockerfi
     const context = build.positional[0];
     if (context === undefined) return undefined;
     const workingDirectory = site.step.workingDirectory ?? site.job.workingDirectory ?? site.workflow.workingDirectory ?? "";
-    return resolveDockerfile(project, build.flags.get("file")?.[0], context, workingDirectory);
+    if (commandsOf(site.step).some(({ command, line }) => line <= site.command!.line && /^(?:cd|pushd)\s/.test(command))) return undefined;
+    return resolveDockerfile(project, build.flags.get("file")?.at(-1), context, workingDirectory);
   }
   const fileEntry = site.step.with.get("file");
   const contextEntry = site.step.with.get("context");

@@ -1,9 +1,10 @@
 import type { ProjectModel } from "../../project.js";
 import { hasTrigger } from "../../parsers/workflow.js";
-import { defineRule, expandedJobSteps, jobCommands } from "../helpers.js";
+import { defineRule } from "../helpers.js";
+import { commandDirectory, entryIndex } from "../toolchains/shared.js";
 import { usesAction } from "../caching/shared.js";
 import { hasOption, nestedInvocations, nixJobs, optionArgs, positionalArgs } from "./shared.js";
-import type { NixInvocation, NixJob } from "./shared.js";
+import { shellWords, stepIsSkipped, type NixCommand, type NixInvocation, type NixJob } from "./shared.js";
 
 const BUILD_TRIGGERS = ["push", "pull_request", "pull_request_target", "merge_group"];
 
@@ -14,8 +15,7 @@ const PUBLISHING_ACTIONS = [
   "stefanzweifel/git-auto-commit-action",
   "endbug/add-and-commit",
 ];
-const PUBLISHING_COMMAND = /\bgh\s+pr\s+create\b|\bgit\s+push\b|\bhub\s+pull-request\b/;
-const EVENT_EQUALS = /github\.event_name\s*==\s*['"]([\w-]+)['"]/g;
+const PUBLISHING_COMMAND = /^(?:gh\s+pr\s+create|git\s+push|hub\s+pull-request)\b/;
 
 interface LockUpdate {
   /** The command as shown in the message, e.g. `nix flake update` or `nix flake lock --update-input nixpkgs`. */
@@ -25,9 +25,11 @@ interface LockUpdate {
 }
 
 /** Flake inputs declared anywhere in the project, mapped to their URL. */
-function declaredInputs(project: ProjectModel): Map<string, string> {
+function declaredInputs(project: ProjectModel, dir: string | undefined): Map<string, string> {
   const inputs = new Map<string, string>();
+  if (dir === undefined) return inputs;
   for (const flake of project.nix.flakes) {
+    if (flake.dir !== dir) continue;
     for (const [name, input] of flake.info?.inputs ?? []) inputs.set(name, input.url ?? inputs.get(name) ?? "");
   }
   return inputs;
@@ -62,13 +64,23 @@ function onlyLocalInputs(update: LockUpdate, inputs: Map<string, string>): boole
 
 /** True when an `if:` limits execution to events other than push/pull_request/merge_group. */
 function limitedToUpdateEvents(condition: string | undefined): boolean {
-  const events = [...(condition ?? "").matchAll(EVENT_EQUALS)].map((match) => match[1] ?? "");
-  return events.length > 0 && events.every((event) => !BUILD_TRIGGERS.includes(event)) && !/!=|\|\|/.test(condition ?? "");
+  const expression = (condition ?? "").trim().replace(/^\$\{\{\s*|\s*\}\}$/g, "");
+  if (expression === "false") return true;
+  if (expression.includes("||")) return false;
+  return expression.split("&&").some((atom) => {
+    const event = /^\s*\(?\s*github\.event_name\s*==\s*['"]([\w-]+)['"]\s*\)?\s*$/.exec(atom)?.[1];
+    return event !== undefined && !BUILD_TRIGGERS.includes(event);
+  });
 }
 
-function publishesLock(project: ProjectModel, { workflow, job }: NixJob): boolean {
-  if (expandedJobSteps(project, workflow, job).some(({ step }) => usesAction(step, ...PUBLISHING_ACTIONS))) return true;
-  return jobCommands(project, workflow, job).some(({ command }) => PUBLISHING_COMMAND.test(command) || /--commit-lock-file\b/.test(command));
+function publishesLock(model: NixJob, site: NixCommand): boolean {
+  const position = entryIndex(model, site);
+  const unconditional = (entry: NixCommand | NixJob["entries"][number]): boolean =>
+    !stepIsSkipped(entry) && (!entry.step.if || entry.step.if === site.step.if) && (!entry.owner.if || entry.owner.if === site.owner.if);
+  if (model.entries.slice(position + 1).some((entry) => unconditional(entry) && usesAction(entry.step, ...PUBLISHING_ACTIONS))) return true;
+  return model.commands.slice(model.commands.indexOf(site) + 1).some((entry) =>
+    unconditional(entry) && PUBLISHING_COMMAND.test(shellWords(entry.command).join(" ")),
+  );
 }
 
 function updaterSnippet(inputs: string[]): string {
@@ -98,9 +110,9 @@ export default defineRule({
     ruleset: "nix",
     description: "A push/pull_request CI job runs `nix flake update` (or `--update-input`/`--recreate-lock-file`) before building.",
     rationale:
-      "flake.lock records the exact revision and NAR hash of every flake input; it is the only thing that makes a Nix build of a given commit reproducible. Re-locking inside a build job (`nix flake update`, `nix flake lock --update-input`, `--recreate-lock-file`) resolves inputs such as `github:NixOS/nixpkgs/nixos-unstable` to whatever their branch points at during that run. The job then builds and tests a dependency set nobody committed or reviewed: a green check no longer means the commit builds, an unrelated upstream change can turn every open pull request red, two reruns of the same commit can disagree, and most derivations change hash, so the binary cache misses. Because the updated lock is discarded at the end of the job, the result cannot be reproduced locally either. Updates belong in a separate scheduled job that commits the new lock through a pull request, where it gets its own CI run and review.",
+      "Updating a lock in ordinary push/PR CI can resolve mutable inputs differently from the committed lock. Pinned or unchanged inputs need not change, other steps may preserve the result, and neither a lock nor this detector proves reproducible builds. Separating reviewed dependency updates from frozen-lock build checks makes the tested source set clearer. Explicit local-input refreshes and recognized publication paths can be intentional.",
     kind: "practice",
-    defaultSeverity: "error",
+    defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
     requires: [],
     defaultOptions: {},
@@ -116,24 +128,25 @@ export default defineRule({
     },
   },
   check({ project, report }) {
-    const inputs = declaredInputs(project);
     for (const nixJob of nixJobs(project)) {
       const { workflow, job } = nixJob;
       const triggers = BUILD_TRIGGERS.filter((event) => hasTrigger(workflow, event));
-      if (triggers.length === 0 || limitedToUpdateEvents(job.if) || publishesLock(project, nixJob)) continue;
+      if (triggers.length === 0 || limitedToUpdateEvents(job.if)) continue;
       for (const entry of nixJob.commands) {
-        if (!entry.nix || limitedToUpdateEvents(entry.step.if) || limitedToUpdateEvents(entry.owner.if)) continue;
+        if (!entry.nix || limitedToUpdateEvents(entry.step.if) || limitedToUpdateEvents(entry.owner.if) || publishesLock(nixJob, entry)) continue;
+        const inputs = declaredInputs(project, commandDirectory(nixJob, entry));
         nestedInvocations(entry.nix).forEach((nix, depth) => {
           const update = lockUpdate(nix, inputs);
-          if (!update || onlyLocalInputs(update, inputs)) return;
-          const what = update.inputs.length > 0 ? `input${update.inputs.length > 1 ? "s" : ""} ${update.inputs.map((name) => `\`${name}\``).join(", ")}` : "every flake input";
+          if (!update || hasOption(nix, "--commit-lock-file") ||
+              (depth === 0 && !hasOption(nix, "--flake", "--override-input") && onlyLocalInputs(update, inputs))) return;
+          const what = update.inputs.length > 0 ? `input${update.inputs.length > 1 ? "s" : ""} ${update.inputs.map((name) => `\`${name}\``).join(", ")}` : "the flake's inputs";
           report({
             path: entry.path,
             line: nix.line,
             key: `${entry.path}:${entry.line}:${depth}:${job.id}:flake-update`,
-            message: `\`${update.shown}\` in job \`${job.id}\` (triggered by ${triggers.join("/")}) re-resolves ${what} to the newest revision, so CI builds dependencies that are not in the committed flake.lock and the updated lock is thrown away.`,
+            message: `\`${update.shown}\` in job \`${job.id}\` (enabled for ${triggers.join("/")}) requests an update of ${what}. Mutable references may differ from the committed lock, and no recognized later publication of this update is visible. Confirm that testing updated dependencies is intentional.`,
             suggestion: `Remove the update from the build job and build exactly what is committed; \`--no-update-lock-file\` makes the job fail instead of silently re-locking:\nnix build --no-update-lock-file\nMove updates to a scheduled workflow that opens a pull request with the new lock:\n${updaterSnippet(update.inputs)}`,
-            confidence: "high",
+            confidence: "medium",
           });
         });
       }

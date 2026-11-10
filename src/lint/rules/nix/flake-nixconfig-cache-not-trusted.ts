@@ -1,24 +1,24 @@
 import { posix } from "node:path";
 import type { FlakeConfigEntry } from "../../parsers/nix.js";
 import type { StepModel } from "../../parsers/workflow.js";
-import type { ProjectModel } from "../../project.js";
 import { usesAction } from "../caching/shared.js";
-import { defineRule, expandedJobSteps, type ExpandedStep } from "../helpers.js";
+import { defineRule, type ExpandedStep } from "../helpers.js";
+import { commandDirectory } from "../toolchains/shared.js";
 import { SAMPLE_DIR, flakePath } from "./flake.js";
 import {
   NIX_CONF_INPUTS,
   NIX_INSTALLER_ACTIONS,
   confValues,
-  flakeConfigTrust,
+  effectiveNixConf,
   hasOption,
-  installerConf,
   isGitHubHosted,
   isTruthyConf,
   nestedInvocations,
   nixInvocation,
   nixJobs,
   positionalArgs,
-  type NixConfSetting,
+  stepIsSkipped,
+  type NixCommand,
   type NixInvocation,
   type NixJob,
 } from "./shared.js";
@@ -63,11 +63,13 @@ const DEFAULTS_TO_CWD = new Set(["build", "develop", "run", "print-dev-env", "bu
 const WORKSPACE_PREFIX = /^(?:\$\{\{\s*github\.workspace\s*\}\}|\$GITHUB_WORKSPACE|\$\{GITHUB_WORKSPACE\})(?:\/|$)/;
 
 function normalizeUrl(url: string): string {
-  return url
-    .trim()
-    .toLowerCase()
-    .replace(/[?#].*$/, "")
-    .replace(/\/+$/, "");
+  try {
+    const parsed = new URL(url.trim());
+    parsed.hash = "";
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return url.trim();
+  }
 }
 
 function hostOf(url: string): string | undefined {
@@ -135,27 +137,23 @@ function display(nix: NixInvocation): string {
   return `nix ${nix.subcommand}${first ? ` ${first}` : ""}`;
 }
 
-function addTargets(targets: Target[], nix: NixInvocation, cwd: string, path: string, line: number): void {
-  for (const link of nestedInvocations(nix)) {
-    for (const dir of flakeTargets(link, cwd)) {
-      if (!targets.some((target) => target.dir === dir)) targets.push({ dir, path, line, display: display(link) });
-    }
-  }
-}
-
-function jobView(project: ProjectModel, model: NixJob): JobView | undefined {
+function jobView(model: NixJob, site: NixCommand, nix: NixInvocation): JobView | undefined {
   const { workflow, job } = model;
-  if (!isGitHubHosted(job)) return undefined;
-  const steps = expandedJobSteps(project, workflow, job);
+  if (!isGitHubHosted(job) || stepIsSkipped(site)) return undefined;
+  const position = model.entries.findIndex((entry) => entry.step === site.step && entry.owner === site.owner);
+  if (position < 0) return undefined;
+  const steps = model.entries.slice(0, position).filter((entry) => !stepIsSkipped(entry));
   const installers = steps.filter((entry) => NIX_INSTALLER_ACTIONS.has(entry.step.uses?.action.name ?? ""));
-  const installer = installers[0];
+  const installer = installers.at(-1);
   if (!installer) return undefined;
-  const conf: NixConfSetting[] = [...model.conf, ...installers.filter((entry) => !entry.direct).flatMap((entry) => installerConf(entry.step, entry.path))];
-  const substituters = new Set(words(confValues(conf, "substituters", true).map((setting) => setting.value)).map(normalizeUrl));
-  const indirectTrust = installers.some(
-    (entry) => !entry.direct && confValues(installerConf(entry.step, entry.path), "accept-flake-config").some((setting) => isTruthyConf(setting.value)),
-  );
-  const trusted = indirectTrust || flakeConfigTrust(model).length > 0;
+  const conf = effectiveNixConf(model, site, nix);
+  if (!conf) return undefined;
+  const substituters = new Set<string>();
+  for (const setting of confValues(conf, "substituters", true)) {
+    if (setting.key === "substituters") substituters.clear();
+    for (const value of words([setting.value])) substituters.add(normalizeUrl(value));
+  }
+  const trusted = isTruthyConf(confValues(conf, "accept-flake-config").at(-1)?.value ?? "false");
 
   const cachixNames = new Set<string>();
   let anyCachix = false;
@@ -165,7 +163,8 @@ function jobView(project: ProjectModel, model: NixJob): JobView | undefined {
   };
   let flakehub = false;
   const text: string[] = [];
-  for (const { step } of steps) {
+  for (const { step, owner } of steps) {
+    if ((step.if || owner.if) && usesAction(step, "cachix/cachix-action", "determinatesystems/flakehub-cache-action", "determinatesystems/magic-nix-cache-action")) return undefined;
     if (usesAction(step, "cachix/cachix-action") && String(step.with.get("skipAddingSubstituter")?.value ?? "").trim() !== "true") {
       for (const input of ["name", "extraPullNames"]) {
         for (const name of String(step.with.get(input)?.value ?? "").split(/[\s,]+/)) addCachix(name.trim());
@@ -178,20 +177,17 @@ function jobView(project: ProjectModel, model: NixJob): JobView | undefined {
   }
   for (const env of [workflow.env, job.env]) for (const [name, value] of Object.entries(env)) if (name !== "NIX_CONFIG") text.push(String(value));
 
-  const targets: Target[] = [];
   for (const entry of model.commands) {
+    if (entry === site || (entry.step === site.step && entry.owner === site.owner && site.command === "")) break;
+    const index = model.entries.findIndex((candidate) => candidate.step === entry.step && candidate.owner === entry.owner);
+    if (index > position) break;
+    if (stepIsSkipped(entry)) continue;
     for (const match of entry.command.matchAll(/\bcachix\s+use\s+(?:-\S+\s+)*([^\s;&|]+)/g)) addCachix(match[1] ?? "");
     text.push(entry.command);
-    const cwd = entry.nix ? stepCwd(entry, model) : undefined;
-    if (entry.nix && cwd !== undefined) addTargets(targets, entry.nix, cwd, entry.path, entry.line);
   }
-  for (const step of job.steps) {
-    const shell = step.shell ?? job.shell ?? workflow.shell;
-    if (!step.run || !shell || !/\bnix\s+develop\b/.test(shell)) continue;
-    const nix = nixInvocation(shell, step.run.line);
-    const cwd = stepCwd({ step, owner: step, path: workflow.path, direct: true }, model);
-    if (nix && cwd !== undefined) addTargets(targets, nix, cwd, workflow.path, step.run.line);
-  }
+  const cwd = site.command === "" ? stepCwd(site, model) : commandDirectory(model, site);
+  if (cwd === undefined) return undefined;
+  const targets = flakeTargets(nix, cwd).map((dir) => ({ dir, path: site.path, line: site.line, display: display(nix) }));
   return { model, installer: installer.step, substituters, trusted, cachixNames, anyCachix, flakehub, text: text.join("\n").toLowerCase(), targets };
 }
 
@@ -214,13 +210,13 @@ export default defineRule({
   meta: {
     id: "nix/flake-nixconfig-cache-not-trusted",
     ruleset: "nix",
-    description: "A flake's `nixConfig` adds a binary cache that CI jobs building the flake never apply.",
+    description: "A flake names an additional binary cache without recognized configuration at a CI command building it.",
     rationale:
-      "Settings in a flake's `nixConfig` are applied only when the flake is evaluated with `accept-flake-config = true` (apart from a short whitelist such as `bash-prompt`). Otherwise Nix asks whether to allow each one, the non-interactive answer in CI is \"no\", and it prints `ignoring untrusted flake configuration setting 'extra-substituters'` and carries on. Neither cachix/install-nix-action nor the Determinate installer sets `accept-flake-config`, and being a trusted user does not change this, so a CI job that builds the flake queries only the caches in its own nix.conf: everything the flake's cache holds and cache.nixos.org does not is rebuilt from source on every run.",
+      "Flake-provided substituters need appropriate acceptance and trust, or equivalent configuration outside the flake. This rule compares visible preceding installer/actions, per-command configuration and local flake targets on recognized hosted runners. External trust decisions, daemon policy and other cache sources may still provide reuse. A complete inventory is required, but it does not reveal runtime state or prove cache misses. Prefer explicitly reviewed cache URLs/keys to broadly accepting pull-request-controlled flake settings.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["strict"],
-    requires: [],
+    requires: ["complete-inventory"],
     defaultOptions: {},
     references: [
       "https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake.html#flake-format",
@@ -243,7 +239,15 @@ export default defineRule({
       return [{ flake, urls, keys }];
     });
     if (flakes.length === 0) return;
-    const views = [...nixJobs(project)].flatMap((model) => jobView(project, model) ?? []);
+    const views = [...nixJobs(project)].flatMap((model) => {
+      const sites = [...model.commands];
+      for (const entry of model.entries) {
+        const shell = entry.step.shell ?? (entry.direct ? model.job.shell ?? model.workflow.shell : undefined);
+        const nix = entry.step.run && shell ? nixInvocation(shell, entry.step.run.line) : undefined;
+        if (nix) sites.push({ ...entry, command: "", line: nix.line, nix });
+      }
+      return sites.flatMap((site) => site.nix ? nestedInvocations(site.nix).flatMap((nix) => jobView(model, site, nix) ?? []) : []);
+    });
 
     for (const { flake, urls, keys } of flakes) {
       const misses: Array<{ view: JobView; target: Target; urls: CacheUrl[] }> = [];
@@ -260,12 +264,13 @@ export default defineRule({
       const path = flake.nix?.path ?? flakePath(flake.dir, "flake.nix");
       const uncovered = urls.filter((url) => misses.some((miss) => miss.urls.includes(url)));
       const { view, target } = first;
-      const more = misses.length > 1 ? ` (and ${misses.length - 1} more job${misses.length > 2 ? "s" : ""})` : "";
+      const jobCount = new Set(misses.map((miss) => `${miss.view.model.workflow.path}:${miss.view.model.job.id}`)).size;
+      const more = jobCount > 1 ? ` (and ${jobCount - 1} more job${jobCount > 2 ? "s" : ""})` : "";
       const listed = first.urls
         .filter((url) => url.key === firstUrl.key)
         .map((url) => code(url.raw))
         .join(", ");
-      const message = `\`nixConfig.${firstUrl.key}\` adds ${listed}, but job \`${view.model.job.id}\` (\`${view.model.workflow.path}\`) runs \`${target.display}\` on this flake without \`accept-flake-config\` or ${first.urls.length > 1 ? "those substituters" : "that substituter"} in its own Nix configuration${more}, so Nix ignores the setting ("ignoring untrusted flake configuration setting") and the job never queries ${first.urls.length > 1 ? "these caches" : "this cache"}.`;
+      const message = `\`nixConfig.${firstUrl.key}\` adds ${listed}, but job \`${view.model.job.id}\` (\`${view.model.workflow.path}\`) runs \`${target.display}\` on this flake without recognized preceding acceptance or equivalent substituter configuration${more}. The setting may be ignored; external configuration and daemon policy are not established by this inspection.`;
 
       const hosts = uncovered.flatMap((url) => url.host ?? []);
       const matchingKeys = keys.filter((key) => hosts.some((host) => key.toLowerCase().startsWith(host)));
@@ -286,7 +291,7 @@ export default defineRule({
         parts.push(`For Cachix caches, a \`cachix/cachix-action@v17\` step with \`${input}\` after the installer adds the substituter and its key as well.`);
       }
       parts.push(
-        "Prefer this to `accept-flake-config = true`: that lets any flake the job evaluates, including a pull request's edited flake.nix, set arbitrary Nix settings for the job.",
+        "Review the cache operator and public key independently. Prefer explicit settings to `accept-flake-config = true`, which accepts eligible flake-provided settings, potentially from an edited pull request. Effective permissions and daemon behavior still depend on the installation and Nix version.",
       );
       report({
         path,

@@ -4,8 +4,7 @@ import { defineRule, jobRunsOnLabels, stepLine } from "../helpers.js";
 import { archOf, flagSet, isDynamic, jobBuilds, literalWith, parseCacheEntry, platformList, runnerArch, type BuildSite } from "./buildx.js";
 
 /**
- * GitHub-hosted images that ship Docker Engine 28 with the classic image store (actions/runner-images READMEs).
- * `ubuntu-26.04` ships Docker 29, which uses the containerd image store by default, so it is not listed.
+ * Labels historically shipping a classic store. Labels do not establish the daemon's current configuration.
  */
 const CLASSIC_STORE_RUNNERS = new Set(["ubuntu-22.04", "ubuntu-24.04", "ubuntu-latest", "ubuntu-22.04-arm", "ubuntu-24.04-arm"]);
 
@@ -17,9 +16,11 @@ function classicStoreRunner(job: JobModel): string | undefined {
 
 /** The job configures the daemon itself (setup-docker-action, containerd snapshotter) or runs in a container. */
 function customDaemon(job: JobModel): boolean {
-  if (job.containerImage) return true;
+  if (job.containerImage || job.env.DOCKER_HOST !== undefined || job.env.DOCKER_CONTEXT !== undefined) return true;
   return job.steps.some(
-    (step) => usesAction(step, "docker/setup-docker-action") || (step.run?.value ?? "").includes("containerd-snapshotter"),
+    (step) => usesAction(step, "docker/setup-docker-action") ||
+      step.env.DOCKER_HOST !== undefined || step.env.DOCKER_CONTEXT !== undefined ||
+      /containerd-snapshotter|DOCKER_(HOST|CONTEXT)|docker\s+context\b/.test(step.run?.value ?? ""),
   );
 }
 
@@ -56,7 +57,7 @@ function inspect(site: BuildSite): Finding | undefined {
   const platforms = [...new Set(platformList(value))];
   if (platforms.length < 2) return undefined;
   const outputs = literalWith(step, "outputs");
-  const output = outputs === undefined ? undefined : loadsIntoDaemon(platformList(outputs));
+  const output = outputs === undefined ? undefined : loadsIntoDaemon(outputs.split(/\r?\n/).map((output) => output.trim()));
   const loadEntry = step.with.get("load");
   const load = loadEntry && isTrue(loadEntry.value) ? "load: true" : output !== undefined ? `outputs: ${output}` : undefined;
   return load ? { platforms, load, line: step.with.get("platforms")?.line ?? stepLine(step) } : undefined;
@@ -68,9 +69,9 @@ export default defineRule({
     ruleset: "containers",
     description: "Multi-platform image builds must not be loaded into the classic Docker image store of a GitHub-hosted runner.",
     rationale:
-      "`--load` is shorthand for `--output=type=docker` and loads a single-platform build result into `docker images`. The Docker Engine on the ubuntu-22.04/24.04 images uses the classic image store, which cannot hold a multi-platform image; Docker's GitHub Actions guide states the default runner setup does not support loading multi-platform images, so the build step fails instead of producing a testable image.",
-    kind: "practice",
-    defaultSeverity: "error",
+      "The classic Docker image store cannot hold multi-platform images. Loading a multi-platform build therefore requires a compatible exporter and containerd image store, or a separate single-platform test build. Runner labels alone do not prove which store is enabled: hosted images change and workflows can address custom daemons. This is a compatibility check to verify, not a prediction that every such job fails.",
+    kind: "insight",
+    defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
     requires: [],
     defaultOptions: {},
@@ -89,6 +90,7 @@ export default defineRule({
   check({ project, report }) {
     for (const workflow of project.workflows) {
       for (const job of workflow.jobs) {
+        if (workflow.env.DOCKER_HOST !== undefined || workflow.env.DOCKER_CONTEXT !== undefined) continue;
         const runner = classicStoreRunner(job);
         if (runner === undefined || customDaemon(job)) continue;
         const native = runnerArch(job) === "arm64" ? "linux/arm64" : "linux/amd64";
@@ -118,10 +120,10 @@ export default defineRule({
             path: workflow.path,
             line: finding.line,
             key: `${job.key}:${site.step.key}:load-multiplatform:${finding.line}`,
-            message: `\`${finding.load}\` with ${finding.platforms.length} platforms (\`${others}\`) on \`${runner}\`: \`--load\` "will automatically load the single-platform build result to docker images", and this runner's Docker Engine uses the classic image store, which "does not support loading multi-platform images" - the build step fails.`,
+            message: `\`${finding.load}\` with ${finding.platforms.length} platforms (\`${others}\`) on \`${runner}\` requires a multi-platform-compatible Docker image store/exporter. If the daemon still uses the classic image store, loading fails; verify the actual daemon rather than inferring it from the runner label.`,
             suggestion: `Load only the native platform for testing and push the multi-platform image separately:\n${snippet}\nOr enable the containerd image store before building:\n- uses: docker/setup-docker-action@v5\n  with:\n    daemon-config: |\n      {"features": {"containerd-snapshotter": true}}`,
             impact: "high",
-            confidence: "high",
+            confidence: "medium",
           });
         }
       }

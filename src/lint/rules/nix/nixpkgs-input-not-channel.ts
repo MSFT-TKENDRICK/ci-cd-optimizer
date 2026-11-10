@@ -48,7 +48,7 @@ function suggestion(name: string, branch: string | undefined): string {
   const channel = replacement(branch);
   const darwin = channel === "nixos-unstable" ? "nixpkgs-unstable" : `nixpkgs-${channel.slice("nixos-".length)}-darwin`;
   return [
-    `Track a channel branch, which only advances to commits Hydra has built and tested, then re-lock just this input:`,
+    `If compatible with the project's dependency policy, consider a channel branch gated by its release jobset, then re-lock and test the input. This changes dependency selection, not just performance:`,
     "",
     "```nix",
     `inputs.${name}.url = "github:NixOS/nixpkgs/${channel}";`,
@@ -107,7 +107,7 @@ export default defineRule({
     ruleset: "nix",
     description: "A nixpkgs flake input tracks `master`, a `release-*` or `staging*` branch instead of a channel branch.",
     rationale:
-      "Commits reach nixpkgs `master`, `staging` and `release-YY.MM` before Hydra has built them. The channel branches (`nixos-unstable`, `nixpkgs-unstable`, `nixos-YY.MM`, `nixpkgs-YY.MM-darwin`, and their `-small` variants) only advance to a commit after Hydra finished the corresponding jobset, so the binaries for that revision are already on cache.nixos.org. A lock taken from a development branch can therefore point at a revision whose changed packages have no substitutes yet, and CI builds them, and everything depending on them, from source. Locking a development branch also picks up changes that have not passed the channel's tests.",
+      "Development branches can advance before channel release gates finish. Channel branches are gated by selected jobs, not every package, architecture, license configuration or overlay. A development-branch lock may already have substitutes, and a channel lock may still require local builds. Inspect the chosen revision's actual substitutes before switching source policy, then review and test the changed lock.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],

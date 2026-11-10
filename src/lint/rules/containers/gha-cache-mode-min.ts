@@ -1,11 +1,8 @@
-import { fix } from "../../fix.js";
 import type { DockerfileModel, DockerStage } from "../../parsers/dockerfile.js";
 import { defineRule } from "../helpers.js";
 import {
   isDynamic,
   jobBuilds,
-  replaceFlagValue,
-  replaceWithEntry,
   siteCacheEntries,
   siteCacheLine,
   siteDockerfile,
@@ -58,9 +55,9 @@ export default defineRule({
   meta: {
     id: "containers/gha-cache-mode-min",
     ruleset: "containers",
-    description: "A multi-stage build exports its layer cache with `mode=min`, so builder stages are never cached.",
+    description: "A multi-stage build exports a minimal cache that omits intermediate-stage layers.",
     rationale:
-      "BuildKit cache exporters default to `mode=min`, which caches only the layers exported into the resulting image. In a multi-stage build the expensive work (dependency install, compilation) usually happens in builder stages whose layers are copied from but never exported, so with `mode=min` those steps miss the cache on every run. `mode=max` caches the layers of intermediate stages too.",
+      "BuildKit's mode=min export includes layers in the resulting image, not all intermediate-stage layers. A fresh builder relying only on that export may repeat intermediate work; local caches and other exporters can still avoid it. mode=max exports intermediate layers too, which can increase transfer/storage and disclose source or sensitive files intentionally omitted from the final image. Review cache access, secret handling and measured benefit before opting in; this is not a safe automatic edit.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["strict"],
@@ -68,7 +65,7 @@ export default defineRule({
     defaultOptions: {},
     references: ["https://docs.docker.com/build/cache/backends/#cache-mode", "https://docs.docker.com/build/cache/backends/gha/"],
     impact: "medium",
-    fixable: true,
+    fixable: false,
     example: {
       bad: "# Dockerfile: FROM golang AS build ... RUN go build ... FROM scratch COPY --from=build ...\n- uses: docker/build-push-action@v7\n  with:\n    cache-from: type=gha\n    cache-to: type=gha",
       good: "- uses: docker/build-push-action@v7\n  with:\n    cache-from: type=gha\n    cache-to: type=gha,mode=max",
@@ -76,7 +73,6 @@ export default defineRule({
   },
   check({ project, report }) {
     for (const workflow of [...project.workflows, ...project.actions]) {
-      const file = project.files.get(workflow.path);
       for (const job of workflow.jobs) {
         for (const site of jobBuilds(workflow, job)) {
           const entries = siteCacheEntries(site, "cache-to");
@@ -98,22 +94,15 @@ export default defineRule({
           const stages = uncached.map(stageName).join(", ");
           for (const [index, entry] of minimal.entries()) {
             const replacement = withMaxMode(entry);
-            const edit = site.command
-              ? replaceFlagValue(file, site.command.line, "cache-to", entry.text, replacement)
-              : (() => {
-                  const sourced = site.step.with.get("cache-to");
-                  return sourced ? replaceWithEntry(file, sourced, entry.text, replacement) : undefined;
-                })();
             const flag = site.command ? "--cache-to" : "cache-to";
             report({
               path: workflow.path,
               line: siteCacheLine(project, site, "cache-to", entry),
               key: `${site.step.key}:cache-mode:${site.command?.line ?? 0}:${index}`,
-              message: `\`${flag}\` entry \`${entry.text}\` uses ${entry.attributes.has("mode") ? "`mode=min`" : "the default `mode=min`"}, which caches only layers exported into the resulting image, but ${model.path}${target.value ? ` (target \`${target.value}\`)` : ""} builds intermediate stage(s) ${stages} with ${runs} RUN instruction(s) whose layers are not part of the image, so those steps are never cached and re-run on every fresh runner.`,
-              suggestion: site.command ? `--cache-to ${replacement}` : `cache-to: ${replacement}`,
+              message: `\`${flag}\` entry \`${entry.text}\` uses ${entry.attributes.has("mode") ? "`mode=min`" : "the default `mode=min`"}. ${model.path}${target.value ? ` (target \`${target.value}\`)` : ""} builds intermediate stage(s) ${stages} with ${runs} RUN instruction(s) omitted from this export; a fresh builder relying on it may repeat that work.`,
+              suggestion: `If intermediate layers are safe to share with every cache reader, consider ${site.command ? `--cache-to ${replacement}` : `cache-to: ${replacement}`}. Review sensitive files, cache access and storage/transfer costs first, then measure cache hits.`,
               impact: "medium",
               confidence: "high",
-              ...(edit ? { fix: fix("Export the cache with mode=max", edit) } : {}),
             });
           }
         }

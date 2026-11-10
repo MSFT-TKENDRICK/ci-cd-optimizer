@@ -316,14 +316,15 @@ export function parseNix(path: string, content: string): NixFile {
 
 /** Index of the bracket closing the one at `open` (any of `{([`), or -1. Works on masked text. */
 export function matchingClose(masked: string, open: number): number {
-  let depth = 0;
+  if (!"{([".includes(masked[open] ?? "\0")) return -1;
+  const stack: string[] = [];
+  const pairs: Record<string, string> = { "}": "{", ")": "(", "]": "[" };
   for (let index = open; index < masked.length; index += 1) {
     const char = masked[index];
-    if (char === "{" || char === "(" || char === "[") depth += 1;
+    if (char === "{" || char === "(" || char === "[") stack.push(char);
     else if (char === "}" || char === ")" || char === "]") {
-      depth -= 1;
-      if (depth === 0) return index;
-      if (depth < 0) return -1;
+      if (stack.pop() !== pairs[char]) return -1;
+      if (stack.length === 0) return index;
     }
   }
   return -1;
@@ -488,7 +489,7 @@ export function topLevelAttrset(file: NixFile): number | undefined {
   const close = matchingClose(file.masked, open);
   if (close < 0) return undefined;
   const after = skipSpace(file.masked, close + 1);
-  if (file.masked[after] === ":" || file.masked[after] === "@") return undefined;
+  if (after < file.masked.length) return undefined;
   return open;
 }
 
@@ -534,8 +535,16 @@ function queryParams(text: string): { base: string; params: Map<string, string> 
   if (question < 0) return { base: text, params: new Map() };
   const params = new Map<string, string>();
   for (const pair of text.slice(question + 1).split("&")) {
-    const [key, value = ""] = pair.split("=");
-    if (key) params.set(key, decodeURIComponent(value));
+    const equals = pair.indexOf("=");
+    const key = equals < 0 ? pair : pair.slice(0, equals);
+    const value = equals < 0 ? "" : pair.slice(equals + 1);
+    if (key) {
+      try {
+        params.set(key, decodeURIComponent(value));
+      } catch {
+        params.set(key, value);
+      }
+    }
   }
   return { base: text.slice(0, question), params };
 }
@@ -764,12 +773,19 @@ export function parseFlakeLock(path: string, content: string): FlakeLock {
 
 /** Resolves a lock input reference (a node name, or a `follows` path from the root) to its node. */
 export function resolveLockInput(lock: FlakeLock, reference: string | string[]): FlakeLockNode | undefined {
-  if (typeof reference === "string") return lock.nodes.get(reference);
-  let node = lock.nodes.get(lock.root);
-  for (const segment of reference) {
-    const next = node?.inputs[segment];
-    if (next === undefined) return undefined;
-    node = resolveLockInput(lock, next);
-  }
-  return node;
+  const resolve = (ref: string | string[], active: Set<string>): FlakeLockNode | undefined => {
+    if (typeof ref === "string") return lock.nodes.get(ref);
+    const key = JSON.stringify(ref);
+    if (active.has(key) || active.size >= 128) return undefined;
+    const nextActive = new Set([...active, key]);
+    let node = lock.nodes.get(lock.root);
+    for (const segment of ref) {
+      const next = node?.inputs[segment];
+      if (next === undefined) return undefined;
+      node = resolve(next, nextActive);
+      if (!node) return undefined;
+    }
+    return node;
+  };
+  return resolve(reference, new Set());
 }

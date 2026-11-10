@@ -6,8 +6,9 @@ import { archOf, crossCompiles, isDynamic, jobBuilds, literalWith, platformList,
 const NATIVE_RUNNER: Record<string, string> = { amd64: "ubuntu-24.04", arm64: "ubuntu-24.04-arm" };
 
 /** `docker/setup-qemu-action` or `docker run --privileged tonistiigi/binfmt --install ...`. */
-function registersQemu(job: JobModel): string | undefined {
-  for (const step of job.steps) {
+function registersQemu(job: JobModel, site: BuildSite): string | undefined {
+  for (const step of job.steps.slice(0, job.steps.indexOf(site.step))) {
+    if (step.if) continue;
     if (step.uses?.action.name === "docker/setup-qemu-action") return "docker/setup-qemu-action";
     for (const { command } of commandsOf(step)) {
       const words = commandWords(command);
@@ -36,6 +37,9 @@ function imageName(site: BuildSite): string {
 }
 
 function matrixSnippet(image: string, platforms: string[]): string {
+  if (platforms.some((platform) => !NATIVE_RUNNER[archOf(platform) ?? ""])) {
+    return "Select a verified native/remote builder for every requested platform. Retain architectures without a mapped hosted-runner label; do not silently drop them.";
+  }
   const legs = platforms.flatMap((platform) => {
     const arch = archOf(platform) ?? "";
     return [`          - platform: ${platform}`, `            runner: ${NATIVE_RUNNER[arch] ?? "ubuntu-24.04"}`];
@@ -56,13 +60,13 @@ function matrixSnippet(image: string, platforms: string[]): string {
     "        with:",
     "          platforms: ${{ matrix.platform }}",
     `          outputs: type=image,name=${image},push-by-digest=true,name-canonical=true,push=true`,
-    "      - run: mkdir -p /tmp/digests && touch \"/tmp/digests/${DIGEST#sha256:}\"",
+    "      - run: mkdir -p .ci-digests && touch \".ci-digests/${DIGEST#sha256:}\"",
     "        env:",
     "          DIGEST: ${{ steps.build.outputs.digest }}",
     "      - uses: actions/upload-artifact@v4",
     "        with:",
     "          name: digests-${{ strategy.job-index }}",
-    "          path: /tmp/digests/*",
+    "          path: .ci-digests/*",
     "  merge:",
     "    needs: build",
     "    runs-on: ubuntu-24.04",
@@ -71,11 +75,11 @@ function matrixSnippet(image: string, platforms: string[]): string {
     "      - uses: actions/download-artifact@v4",
     "        with:",
     "          pattern: digests-*",
-    "          path: /tmp/digests",
+    "          path: .ci-digests",
     "          merge-multiple: true",
     "      - uses: docker/setup-buildx-action@v4",
-    "      - working-directory: /tmp/digests",
-    `        run: docker buildx imagetools create -t ${image}:latest $(printf '${image}@sha256:%s ' *)`,
+    "      - working-directory: .ci-digests",
+    `        run: docker buildx imagetools create -t ${image}:<original-tag> $(printf '${image}@sha256:%s ' *)`,
   ].join("\n");
 }
 
@@ -85,9 +89,9 @@ export default defineRule({
     ruleset: "containers",
     description: "Multi-platform image builds should run each architecture on a native runner instead of under QEMU emulation.",
     rationale:
-      "With docker/setup-qemu-action, BuildKit runs every RUN instruction of a foreign platform through QEMU user-mode emulation, which translates each guest CPU instruction in software. Docker's documentation warns that emulation can be much slower than native builds, especially for compilation and compression, and recommends native nodes or cross-compilation. GitHub offers native arm64 hosted runners (ubuntu-24.04-arm), so each platform can build natively and the per-platform digests can be merged into one manifest list.",
-    kind: "practice",
-    defaultSeverity: "warn",
+      "Registering QEMU and requesting a foreign platform does not establish that build steps execute under emulation: native remote nodes, fixed-platform stages, cross-compilation, pruning and cache hits may avoid it. Where measurements show emulated compilation/compression, native nodes or cross-compilation can help. Compare full build and publication costs, verify hosted-runner availability, and preserve every platform, tag, artifact and test requirement.",
+    kind: "insight",
+    defaultSeverity: "info",
     presets: ["strict"],
     requires: [],
     defaultOptions: {},
@@ -107,11 +111,21 @@ export default defineRule({
   check({ project, report }) {
     for (const workflow of project.workflows) {
       for (const job of workflow.jobs) {
-        const qemu = registersQemu(job);
         const native = runnerArch(job);
-        if (qemu === undefined || native === undefined) continue;
+        if (native === undefined) continue;
         const runner = jobRunsOnLabels(job).join(", ");
         for (const site of jobBuilds(workflow, job)) {
+          const qemu = registersQemu(job, site);
+          if (!qemu) continue;
+          if ([workflow.env, job.env, site.step.env].some((env) =>
+            ["DOCKER_HOST", "DOCKER_CONTEXT", "BUILDX_BUILDER"].some((key) => key in env))) continue;
+          if (site.step.with.has("builder") || site.command?.build.flags.has("builder")) continue;
+          const preceding = job.steps.slice(0, job.steps.indexOf(site.step));
+          if (preceding.some((step) =>
+            (step.uses?.action.name === "docker/setup-buildx-action" &&
+              (step.with.has("endpoint") || step.with.has("append") ||
+                ["remote", "cloud", "kubernetes"].includes(literalWith(step, "driver") ?? ""))) ||
+            commandsOf(step).some(({ command }) => /\bdocker\s+buildx\s+(?:create|use)\b/.test(command)))) continue;
           const found = platformsOf(site);
           if (!found) continue;
           const emulated = found.platforms.filter((platform) => {
@@ -121,15 +135,19 @@ export default defineRule({
           if (emulated.length === 0) continue;
           const dockerfile = siteDockerfile(project, site);
           if (!dockerfile || crossCompiles(dockerfile)) continue;
-          const runs = dockerfile.stages.flatMap((stage) => stage.instructions.filter((instruction) => instruction.keyword === "RUN"));
+          const runs = dockerfile.stages.flatMap((stage) => {
+            const platform = dockerfile.instructions.find((instruction) => instruction.keyword === "FROM" && instruction.line === stage.line)?.flags.get("platform")?.at(-1);
+            if (platform && archOf(platform) === native) return [];
+            return stage.instructions.filter((instruction) => instruction.keyword === "RUN");
+          });
           if (runs.length === 0) continue;
           const image = imageName(site);
           report({
             path: workflow.path,
             line: found.line,
             key: `${job.key}:${site.step.key}:qemu:${found.line}`,
-            message: `\`${emulated.join(",")}\` is built on \`${runner}\` (${native}) through ${qemu}: the ${runs.length} RUN instruction(s) of ${dockerfile.path} execute under QEMU user-mode emulation, which translates every ${emulated.map(archOf).join("/")} instruction in software, and ${dockerfile.path} does not cross-compile with \`FROM --platform=$BUILDPLATFORM\`.`,
-            suggestion: `Build each platform on a native runner (arm64: \`ubuntu-24.04-arm\`), push by digest, then merge the digests into one manifest list:\n${matrixSnippet(image, found.platforms)}\nAlternatively use the reusable docker/github-builder/.github/workflows/build.yml@v1 workflow, or make the build stages cross-compile with \`FROM --platform=$BUILDPLATFORM\` and \`$TARGETARCH\`.`,
+            message: `\`${emulated.join(",")}\` is requested on \`${runner}\` (${native}) after ${qemu}, and ${dockerfile.path} contains ${runs.length} potentially relevant RUN instruction(s) without a recognized cross-compilation pattern. This can involve QEMU, but cached/pruned stages or native builder nodes can avoid emulation; inspect build logs and timings.`,
+            suggestion: `If emulation is the bottleneck, compare verified native runners/nodes or cross-compilation. The illustrative platform split below is not a drop-in workflow: preserve all existing dimensions, inputs, tests, tags, permissions, cache settings and publication metadata, and pin/review added actions.\n${matrixSnippet(image, found.platforms)}\nCross-compilation with \`FROM --platform=$BUILDPLATFORM\` and \`$TARGETARCH\` also requires a toolchain and dependency setup supporting the target.`,
             impact: "high",
             confidence: "medium",
           });

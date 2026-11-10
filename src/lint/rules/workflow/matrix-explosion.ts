@@ -25,7 +25,7 @@ interface Expansion {
 }
 
 const isPrimitive = (value: unknown): boolean => value === null || ["string", "number", "boolean"].includes(typeof value);
-const same = (a: unknown, b: unknown): boolean => (isPrimitive(a) && isPrimitive(b) ? String(a) === String(b) : false);
+const same = (a: unknown, b: unknown): boolean => isPrimitive(a) && isPrimitive(b) && a === b;
 
 function records(value: unknown): Combo[] | undefined {
   if (value === undefined || value === null) return [];
@@ -51,7 +51,7 @@ function expand(source: YamlSource, content: string, matrixNode: Node | null | u
   const dimensions: Dimension[] = [];
   for (const [name, values] of Object.entries(matrix)) {
     if (name === "include" || name === "exclude") continue;
-    if (!Array.isArray(values) || values.length === 0) return undefined;
+    if (!Array.isArray(values) || values.length === 0 || values.some((value) => typeof value === "string" && value.includes("${{"))) return undefined;
     const texts = values.every(isPrimitive) ? scalarTexts(source, content, field(source, matrixNode, name)?.value) : undefined;
     dimensions.push({ name, values, ...(texts && texts.length === values.length ? { texts } : {}) });
   }
@@ -132,6 +132,7 @@ const MAX_INCLUDE_ROWS = 24;
  */
 function sparseSuggestion(job: JobModel, expansion: Expansion): { snippet: string; count: number } | undefined {
   const { dimensions } = expansion;
+  if (expansion.includes > 0 || expansion.excludes > 0) return undefined;
   if (dimensions.some((dimension) => !dimension.texts)) return undefined;
   const runner = runnerDimension(job, dimensions);
   const shards = new Set(dimensions.filter((dimension) => dimension !== runner && isShardDimension(job, dimension.name)));
@@ -160,8 +161,9 @@ function sparseSuggestion(job: JobModel, expansion: Expansion): { snippet: strin
   const others = runner ? (runner.texts ?? []).slice(1) : [];
   if (runner && others.length > 0) {
     let shardCombos: Array<Map<Dimension, string>> = [new Map()];
-    for (const shard of shards) {
-      shardCombos = shardCombos.flatMap((combo) => (shard.texts ?? []).map((text) => new Map([...combo, [shard, text]])));
+    for (const dimension of dimensions) {
+      if (dimension === runner || (!shards.has(dimension) && isVersionDimension(dimension))) continue;
+      shardCombos = shardCombos.flatMap((combo) => (dimension.texts ?? []).map((text) => new Map([...combo, [dimension, text]])));
     }
     if (others.length * shardCombos.length > MAX_INCLUDE_ROWS) return undefined;
     lines.push("    include:");
@@ -190,7 +192,7 @@ export default defineRule({
     description:
       "A `strategy.matrix` whose version and runner dimensions multiply past the configured job budget, or past GitHub's 256-job limit.",
     rationale:
-      "A matrix runs one job for every combination of its dimensions, so each added dimension multiplies runner minutes, queue time and flaky-failure exposure. GitHub-hosted runners cap concurrent jobs per account (20 on GitHub Free, 60 on Team, 5 concurrent macOS jobs on both), so a large matrix queues behind itself and blocks other workflows, and a matrix that generates more than 256 jobs is rejected outright. Most matrices only need the oldest and newest value of each version range plus one leg per extra OS. Shards, packages and other fan-out dimensions are deliberate parallelism, so they are kept whole and only reported past the 256-job limit.",
+      "A matrix runs jobs for its dimension combinations and can increase runner usage and queueing. GitHub limits a matrix to 256 jobs. A configured budget is an engineering preference, not evidence that intermediate versions are redundant: reducing version coverage can miss version-specific regressions. Suggested smaller matrices preserve all categorical and shard combinations on every retained runner, but deliberately reduce version combinations and require a coverage decision. Existing include/exclude rules are never replaced automatically.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["agentic", "strict"],
@@ -208,7 +210,7 @@ export default defineRule({
     impact: "medium",
     example: {
       bad: "strategy:\n  matrix:\n    os: [ubuntu-latest, windows-latest, macos-latest]\n    node: [18, 20, 22, 24]\n    db: [postgres, mysql]",
-      good: "strategy:\n  matrix:\n    os: [ubuntu-latest]\n    node: [18, 24]\n    db: [postgres, mysql]\n    include:\n      - { os: windows-latest, node: 24, db: mysql }\n      - { os: macos-latest, node: 24, db: mysql }",
+      good: "# Only after accepting reduced version coverage:\nstrategy:\n  matrix:\n    os: [ubuntu-latest]\n    node: [18, 24]\n    db: [postgres, mysql]\n    include:\n      - { os: windows-latest, node: 24, db: postgres }\n      - { os: windows-latest, node: 24, db: mysql }\n      - { os: macos-latest, node: 24, db: postgres }\n      - { os: macos-latest, node: 24, db: mysql }",
     },
   },
   check({ project, options, report }) {
@@ -223,7 +225,7 @@ export default defineRule({
         if (!matrixField || !expansion || expansion.count <= options.maxJobs) continue;
         const sparse = sparseSuggestion(job, expansion);
         // Pure fan-out (shards, packages, explicit object rows) is deliberate parallelism; only GitHub's hard limit applies to it.
-        if (!sparse && expansion.count <= LIMIT) continue;
+        if (!sparse && expansion.count <= LIMIT && !expansion.dimensions.some((dimension) => isVersionDimension(dimension) && !isShardDimension(job, dimension.name))) continue;
         const breakdown = [
           expansion.dimensions.map((dimension) => `${dimension.name} ${dimension.values.length}`).join(" × "),
           expansion.excludes > 0 ? `${expansion.excludes} exclude` : "",
@@ -235,9 +237,7 @@ export default defineRule({
         const limit =
           expansion.count > LIMIT
             ? ` GitHub rejects it: "A matrix will generate a maximum of 256 jobs per workflow run."`
-            : ` That is above the ${options.maxJobs}-job budget${
-                expansion.count > 20 ? "; standard GitHub-hosted runners on GitHub Free run at most 20 jobs concurrently, so the rest queue" : ""
-              }.`;
+            : ` That is above the configured ${options.maxJobs}-job budget; actual queueing depends on available runners and account limits.`;
         const carry = expansion.includes > 0 || expansion.excludes > 0 ? " Re-check existing `include`/`exclude` entries against the reduced values." : "";
         report({
           path: workflow.path,
@@ -245,8 +245,8 @@ export default defineRule({
           key: `${job.key}.strategy.matrix`,
           message: `Matrix of job \`${job.id}\` expands to ${total} jobs (${breakdown}).${limit}`,
           suggestion: sparse
-            ? `Test the oldest and newest value of each version range, keep the other dimensions whole, and run each extra runner only at the newest versions (${sparse.count} jobs):\n\n${sparse.snippet}\n\n${carry.trim()}`.trim()
-            : `Split the matrix across jobs or workflows so each stays under 256 combinations, or replace the cross product with explicit \`include\` rows for the combinations that matter.${carry}`,
+            ? `If reduced version coverage is acceptable, test the oldest and newest version on the first runner and the newest on additional runners (${sparse.count} jobs). Every categorical and shard combination is retained on each runner. This is a coverage tradeoff, not an equivalent replacement:\n\n${sparse.snippet}`.trim()
+            : `Review the intended coverage and runner budget without dropping categorical or shard combinations. Preserve existing include/exclude semantics; no replacement is generated for this matrix.${carry}${expansion.count > LIMIT ? " Split it into jobs or workflows within GitHub's 256-job limit." : ""}`,
         });
       }
     }

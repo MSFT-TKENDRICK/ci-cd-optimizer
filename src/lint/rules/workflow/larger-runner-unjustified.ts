@@ -4,19 +4,12 @@ import { commandsOf, defineRule, jobRunsOnLabels } from "../helpers.js";
 
 const PRICING = "https://docs.github.com/en/billing/reference/actions-runner-pricing";
 
-/** USD per minute, from the GitHub Actions runner pricing reference. */
-const LARGER_PRICES: Record<string, Record<number, number>> = {
-  "linux-x64": { 4: 0.012, 8: 0.022, 16: 0.042, 32: 0.082, 64: 0.162, 96: 0.252 },
-  "windows-x64": { 4: 0.022, 8: 0.042, 16: 0.082, 32: 0.162, 64: 0.322, 96: 0.552 },
-  "linux-arm64": { 4: 0.008, 8: 0.014, 16: 0.026, 32: 0.05, 64: 0.098 },
-  "windows-arm64": { 4: 0.014, 8: 0.026, 16: 0.05, 32: 0.098, 64: 0.194 },
-};
-const STANDARD_PRICES: Record<string, { label: string; price: number; name: string }> = {
-  "linux-x64": { label: "ubuntu-latest", price: 0.006, name: "Linux 2-core (x64)" },
-  "linux-arm64": { label: "ubuntu-24.04-arm", price: 0.005, name: "Linux 2-core (arm64)" },
-  "windows-x64": { label: "windows-latest", price: 0.01, name: "Windows 2-core (x64)" },
-  "windows-arm64": { label: "windows-11-arm", price: 0.01, name: "Windows 2-core (arm64)" },
-  macos: { label: "macos-latest", price: 0.062, name: "macOS 3-core or 4-core" },
+const STANDARD_RUNNERS: Record<string, string> = {
+  "linux-x64": "ubuntu-latest",
+  "linux-arm64": "ubuntu-24.04-arm",
+  "windows-x64": "windows-latest",
+  "windows-arm64": "windows-11-arm",
+  macos: "macos-latest",
 };
 
 const LIGHT_ACTIONS = new Set([
@@ -141,31 +134,13 @@ function largerRunner(job: JobModel): LargerRunner | undefined {
   return undefined;
 }
 
-function priceNote(runner: LargerRunner): string {
-  const standard = runner.platform ? STANDARD_PRICES[runner.platform] : undefined;
-  if (!standard) return "";
-  const larger =
-    runner.macos !== undefined
-      ? runner.macos === "xlarge"
-        ? { price: 0.102, name: "macOS 5-core (M2 Pro) `macos_xl`" }
-        : { price: 0.077, name: "macOS 12-core `macos_l`" }
-      : runner.cores !== undefined && runner.platform
-        ? (() => {
-            const price = LARGER_PRICES[runner.platform]?.[runner.cores];
-            return price === undefined ? undefined : { price, name: `${runner.platform.replace("-", " ")} ${runner.cores}-core` };
-          })()
-        : undefined;
-  if (!larger) return "";
-  return ` If it is a GitHub-hosted ${larger.name} runner it bills $${larger.price}/min versus $${standard.price}/min for a standard ${standard.name} runner (${PRICING}), and larger runners are billed even for public repositories.`;
-}
-
 export default defineRule({
   meta: {
     id: "workflow/larger-runner-unjustified",
     ruleset: "workflow",
     description: "A job on a larger (multi-core or macOS large) runner that only checks out, sets up tools, installs and runs formatters or linters.",
     rationale:
-      "Larger runners are billed per minute at a multiple of the standard rate and, unlike standard runners, are not free for public repositories. Checkout, toolchain setup, dependency installation and single-pass formatters/linters are dominated by network transfer and process start-up rather than CPU, so extra cores mostly add cost. GitHub also rounds every job up to a whole minute, so short jobs pay the larger per-minute rate for at least a full minute.",
+      "A larger-looking runner label and familiar setup/lint commands do not establish resource needs or actual billing. Install hooks, native compilation, repository size, memory, networking and private runner policy can justify the selection. Compare representative end-to-end time, CPU/memory and current account pricing before downsizing. This is a measurement prompt, not proof of wasted cost.",
     kind: "insight",
     defaultSeverity: "info",
     presets: ["insights"],
@@ -186,16 +161,18 @@ export default defineRule({
     for (const workflow of project.workflows) {
       if (workflow.kind !== "workflow") continue;
       for (const job of workflow.jobs) {
+        if (job.workingDirectory !== undefined || workflow.workingDirectory !== undefined) continue;
         if (job.uses || !job.runsOn || job.services.length > 0 || job.containerImage !== undefined || job.steps.length === 0) continue;
         const runner = largerRunner(job);
         if (!runner || !job.steps.every((step) => lightStep(project, step))) continue;
-        const standard = runner.platform ? STANDARD_PRICES[runner.platform] : undefined;
+        const standard = runner.platform ? STANDARD_RUNNERS[runner.platform] : undefined;
         report({
           path: workflow.path,
           line: job.runsOn.line,
           key: `${job.key}.runs-on`,
-          message: `Job \`${job.id}\` runs on larger runner \`${runner.label}\` but only checks out, sets up tools, installs dependencies and runs formatters or linters, which gain little from extra cores.${priceNote(runner)}`,
-          suggestion: `Run it on a standard runner:\n\nruns-on: ${standard?.label ?? "ubuntu-latest"}\n\nKeep the larger runner only if the job needs its static IP, private networking or extra memory.`,
+          message: `Job \`${job.id}\` uses larger-looking runner label \`${runner.label}\` with recognized setup/install/format/lint commands. These names do not prove low CPU or memory use: installation hooks and native dependencies may be expensive. Measure before changing runner size.`,
+          suggestion: `Benchmark a compatible standard runner${standard ? ` such as \`${standard}\`` : ""} against the current runner, preserving architecture, image, memory and networking requirements. Compare current account pricing (${PRICING}); keep the larger runner if its total cost, latency or required capabilities justify it.`,
+          confidence: "low",
         });
       }
     }
