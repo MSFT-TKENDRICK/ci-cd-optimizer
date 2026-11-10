@@ -19,7 +19,7 @@ export default defineRule({
     ruleset: "caching",
     description: "actions/cache keys must invalidate when inputs change and still hit between runs.",
     rationale:
-      "A static key never changes, so the cache goes stale forever (caches are immutable once saved). A key containing the commit SHA or run id without `restore-keys` misses on every run, paying the upload cost with no benefit. Caching node_modules for `npm ci` is wasted work because `npm ci` deletes node_modules before installing.",
+      "A static primary key does not encode dependency changes. SHA/run-scoped keys can prevent reuse across different context values, although reruns can reuse a key and Actions cache scope/version, prefix lookup and eviction also affect hits. Whether removing a context is safe depends on the workload's actual dependencies. `formal cache-key` checks only an explicit primary-key string-partition model relative to declared dependencies; it does not prove hits or speedups. Restoring node_modules before an unconditional `npm ci` is usually wasteful because npm ci removes that directory.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -50,7 +50,7 @@ export default defineRule({
               path: workflow.path,
               line: key.line,
               key: `${step.key}:static-key`,
-              message: `Cache key \`${text}\` is static, so the cache is never invalidated when dependencies change.`,
+              message: `Cache key \`${text}\` is static and does not encode dependency changes.`,
               suggestion: "Include a hash of the inputs, e.g. `key: deps-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}`, plus `restore-keys` for partial hits.",
               confidence: /\d/.test(text) ? "medium" : "high",
             });
@@ -60,7 +60,7 @@ export default defineRule({
               path: workflow.path,
               line: key.line,
               key: `${step.key}:volatile-key`,
-              message: `Cache key includes \`${match}\` but has no \`restore-keys\`, so every run misses the cache.`,
+              message: `Cache key includes \`${match}\` but has no explicit \`restore-keys\`; different context values can limit cache reuse.`,
               suggestion: "Add `restore-keys` with the key's stable prefix, or key on a hash of the inputs (`hashFiles(...)`) instead.",
             });
           }

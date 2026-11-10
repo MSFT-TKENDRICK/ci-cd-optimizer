@@ -91,6 +91,21 @@ jobs:
       - uses: ./.github/actions/setup
       - run: npm run lint
 
+  formal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: Every built-in rule has an up-to-date explicit assurance entry
+        run: npm run assurance:check
+      - name: Install SHA-256-pinned Dafny and Z3
+        run: npm run formal:setup
+      - name: Verify all theorems and reproduce the committed executable kernel
+        run: npm run formal:check
+      - name: Exercise model adapters, immutable sources, adversarial certificates and production selection
+        run: npx vitest run test/formal test/experiments/formal-integration.test.ts
+
   lint-reusable:
     # Dogfoods the reusable linter workflow at this commit; callers pin `uses:` and `tool-ref` to a SHA.
     uses: ./.github/workflows/lint-reusable.yml
@@ -123,6 +138,8 @@ jobs:
       - name: Generate Action bundle
         id: bundle
         run: npm run bundle
+      - name: Execute the formal checker from the shipped Action bundle
+        run: npm run formal:check-bundle
       - name: Action bundle is up to date
         id: bundle_check
         run: |

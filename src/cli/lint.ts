@@ -7,6 +7,7 @@ import { applyFixes } from "../lint/fix.js";
 import { format, FORMATS, sarif, type FormatName } from "../lint/formatters/index.js";
 import { changedSince, isInventoryPath, loadDirectory, loadGitRevision } from "../lint/inventory.js";
 import { allRules } from "../lint/rules/index.js";
+import { ruleAssurance } from "../lint/assurance.js";
 import type { ActiveSeverity, AnyRule, ChangeContext, Diagnostic, LintResult, Preset, Severity, SourceFile, UnusedDirective } from "../lint/types.js";
 import { effectiveSeverities, explainRuleText, isGlob, LintInputError, selects, toSelector, unknownRuleMessage, withFile } from "../lint/workspace.js";
 import { matchesGlob } from "../utils.js";
@@ -157,7 +158,11 @@ function extractUnusedFlag(args: string[]): { args: string[]; severity: ActiveSe
 export function ruleListText(rules: readonly AnyRule[]): string {
   const width = Math.max(...rules.map((rule) => rule.meta.id.length));
   return rules
-    .map((rule) => `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}`)
+    .map((rule) => {
+      const builtin = allRules.some((candidate) => candidate.meta.id === rule.meta.id);
+      if (builtin) ruleAssurance(rule.meta.id);
+      return `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}  [${builtin ? "heuristic" : "local/unreviewed"}]`;
+    })
     .join("\n");
 }
 

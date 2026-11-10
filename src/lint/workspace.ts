@@ -1,6 +1,8 @@
 import { isAbsolute, posix, relative } from "node:path";
 import { didYouMean, resolveRules, type LintConfig } from "./config.js";
 import { docsUrl } from "./engine.js";
+import { assuranceText } from "./assurance.js";
+import { allRules } from "./rules/index.js";
 import { isLockfile, truncateContent, type LoadedInput } from "./inventory.js";
 import type { AnyRule, Preset, Severity, SourceFile } from "./types.js";
 import { matchesGlob } from "../utils.js";
@@ -71,6 +73,7 @@ export function explainRuleText(id: string, rules: readonly AnyRule[], severitie
     `  Presets:   ${meta.presets.length > 0 ? meta.presets.join(", ") : "(none)"}`,
     `  Fixable:   ${meta.fixable ? "yes" : "no"}`,
     `  Impact:    ${meta.impact}`,
+    `  Assurance: ${allRules.some((candidate) => candidate.meta.id === id) ? assuranceText(id) : "Local rule: not covered by the built-in assurance catalogue."}`,
     ...(meta.requires.length > 0 ? [`  Requires:  ${meta.requires.join(", ")}`] : []),
     "",
     meta.description,

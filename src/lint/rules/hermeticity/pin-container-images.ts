@@ -8,7 +8,7 @@ export default defineRule({
     ruleset: "hermeticity",
     description: "Job containers and service containers should use pinned image versions.",
     rationale:
-      "An image with no tag or `:latest` changes whenever upstream publishes, so a job's toolchain or a service's database version can change between two runs of the same commit. A version tag makes upgrades explicit; a digest makes them fully reproducible.",
+      "Untagged and latest-tag images can change between runs when registry tags move. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not establish reproducibility of the full job or of mutable external dependencies.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],

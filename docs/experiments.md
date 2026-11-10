@@ -1,8 +1,11 @@
 # Hill-climbing experiments
 
-CI/CD Optimizer improves itself, and the pipelines it lints, through controlled experiments that agents propose and
-implement and that statistics decide. Three [GitHub Agentic Workflows](https://github.github.com/gh-aw/) (gh-aw) run the
-loop on a schedule. Every decision is made by deterministic code from measurements the agents can't alter.
+CI/CD Optimizer evaluates proposed changes to itself and the pipelines it lints through finite candidate experiments.
+Three [GitHub Agentic Workflows](https://github.github.com/gh-aw/) (gh-aw) run the loop on a schedule. Deterministic
+grading uses supplied observations and an explicit scoring policy. **Those observations are not authenticated: arm
+code can fabricate measurements, skip work, or exploit an incomplete benchmark.** The mechanically verified selector
+proves its finite ranking and hard-gate contract, not the truth of inputs, causal speedups, or a global policy optimum.
+See [formal verification](formal-verification.md) for executable proofs and source-bound certificates.
 
 ```text
 main
@@ -36,7 +39,7 @@ was tried.
    - the rubric and metrics
    - the history of running, promoted, rejected, and expired experiments, so ideas aren't retried blindly
 
-   The briefing is built before the agent runs, so the agent can't shape its own evidence.
+   The briefing is fixed before that agent invocation. This does not authenticate historical measurements or benchmark labels.
 3. The Copilot agent proposes **one** experiment: a manifest with a hypothesis, 1–4 arms with distinct approaches, and
    self-scored rubric criteria. For `rules` experiments, it can also add new benchmark cases.
 4. The `create-experiment` safe-output job re-validates the proposal with `experiments create`. It checks the schema,
@@ -112,22 +115,42 @@ recorded, so reconcile such retained branches manually rather than replaying cle
 
 ## Scoring
 
-For each metric, an arm's relative improvement over the control is computed and clamped to ±100%:
+For each configured metric, a relative delta over the control is computed, clamped to ±100%, and quantized to
+10,000 integer ticks per unit:
 
-- **Corpus metrics** are deterministic. The arm and control run on the same corpus in the same job.
-- **CI metrics** compare medians of at least `minSamples` successful runs per branch. A one-sided Mann-Whitney U test
-  must reject noise at `pValue`. Otherwise the change scores 0.
+- **Corpus metrics** compare results on the same labeled corpus. Counts depend on engine behavior and labels;
+  duration is a noisy timing measurement, not a deterministic correctness fact.
+- **CI metrics** compare medians of at least `minSamples` successful runs per branch. A Mann-Whitney tail chosen
+  after observing the direction must have an unrounded p-value below `pValue`; otherwise the delta scores zero.
+  This is an unadjusted repeated-comparison heuristic, not a test that can guarantee removal of noise, statistical
+  independence, equivalent work, or causality. Displayed p-values are rounded.
 
-The **deterministic score** is the weighted mean of those improvements. An arm **qualifies** only when:
+The generated Dafny kernel computes the **deterministic score** as an exact integer-weighted mean rounded to a tick
+(ties toward positive infinity). Weights have at most six decimal places and positive total. An arm **qualifies**
+only when the generated kernel establishes all of these conditions on its supplied inputs:
 
-- its deterministic score is at least `minImprovement`,
-- its checks pass,
-- no metric regresses beyond its `maxRegression`,
-- it changed no `protectedPaths`, and
-- its evaluation didn't fail.
+- its score meets `minImprovement`, with that threshold rounded **up** to a tick;
+- both its checks and the control's checks are reported passed;
+- every selected metric is measured and no **scored** delta breaches its regression limit, rounded **down** to a tick;
+- no reported changed path matches `protectedPaths`;
+- neither evaluation reports an error, and numeric inputs/configuration are valid.
 
-The agent's judgment only reorders qualifying arms: `rank = (1 − w) · deterministic + w · (2 · judge − 1)`, where
-`w = judgeWeight` (capped at 0.5). A persuasive but unmeasured change can never be promoted.
+The judge only reorders eligible arms: the kernel rounds
+`rank = (1 − w) · deterministic + w · (2 · judge − 1)` to a tick, with valid `w <= 0.5`.
+Missing judgments leave rank equal to the deterministic score. Invalid/NaN/infinite judgments fail closed, rather
+than being silently clamped. A valid judge value cannot bypass any eligibility gate—this is a proved runtime
+contract, not just an intention. It does **not** prevent an arm from supplying fabricated measurements that satisfy
+those gates.
+
+The candidate universe is exactly the manifest's unique ASCII-named arms. Ties use descending rank, descending
+deterministic score, then ascending ASCII name (not host locale). Missing arms remain pending; measurements for
+unlisted arms are excluded. Before expiry the reducer waits for every nonfailed candidate to finish. At expiry it
+may promote the maximum among currently eligible measured candidates despite unfinished arms; no claim is made
+about their unknown outcomes or unproposed alternatives. The production `decide` path calls this generated reducer.
+
+The [complete rule assurance catalogue](../formal/rule-assurance.json) separately records every built-in detector
+and recommendation as heuristic/conditional. Verified selection does not turn a selected rule improvement into a
+proof of detector correctness or of a real bottleneck reduction.
 
 ## Configuration: `.github/hill-climb.yml`
 
@@ -175,7 +198,8 @@ evaluation:
 ```
 
 Experiments use every metric whose `source` matches their kind, unless the manifest lists `metrics`. To change the
-rubric, metrics, or protected paths, edit this file on `main`. Arms can't change it.
+rubric, metrics, or protected paths, edit this file on `main`. Reported changes to protected configuration paths
+disqualify an arm; this gate is not a sandbox against malicious evaluation code.
 
 ## Manifest: `experiments/<name>/experiment.yml`
 
@@ -289,10 +313,11 @@ them with an older global extension; compiler versions differ in their protected
 
 | Risk | Mitigation |
 |---|---|
-| An arm games its own score, for example by editing the corpus, the metrics, or the manifest. | Changes to `protectedPaths` disqualify the arm. New corpus cases land on the trunk before any arm branches, and existing cases are immutable. |
+| An arm games its own score, for example by editing the corpus, the metrics, or the manifest. | Reported changes to `protectedPaths` disqualify the arm. New corpus cases land on the trunk before arms branch. The gate does not stop runtime tampering, fabricated observations, or exploitation of incomplete labels. |
 | Untrusted arm code runs during evaluation. | It runs only in the grader's `evaluate` step, which has no token in a read-only job. The numbers are uploaded as an artifact before the agent runs and are re-read by the grading job. |
 | A prompt-injected agent pushes a persuasive but harmful change. | Agents never hold write tokens. gh-aw safe outputs validate and apply their requests, and gh-aw threat detection scans their output. Judgments only reorder arms that already qualify on measurements. |
 | A winning arm merges without oversight. | Winners merge only into the experiment trunk. `main` changes only when a human approves the trunk pull request, unless `promotion.autoMerge` is enabled. |
 | An arm forges its measurements. | **Not prevented.** Arm code controls the commands whose results are measured, so it can make itself look faster (for example, by skipping work or editing the report). Grading ranks self-reported evidence; it is not attestation. Human review of the trunk pull request is the trust boundary: confirm the winning diff still does the same work. Do not enable `promotion.autoMerge` when arms may come from untrusted proposers. |
+| A formal certificate is mistaken for execution attestation or universal optimality. | The checker recomputes from recorded `commit:path` blobs and a pinned generated kernel. This binds the calculation to bytes, not to an honest execution. Its maximum ranges only over the declared eligible candidates, and cache-key proofs range only over declared dependency values. |
 | Workflow changes are used for privilege escalation. | Keep the repository's default `GITHUB_TOKEN` permissions read-only, require review for `.github/workflows/**` via CODEOWNERS, and scope `CICD_OPTIMIZER_TOKEN` to this repository. |
 | Runaway cost. | Pre-activation checks skip inference when there's nothing to do. `maxConcurrent`, `maxArms`, `maxAgeDays`, and per-job timeouts bound the work. |

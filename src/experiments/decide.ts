@@ -1,6 +1,7 @@
+import { reduceCandidates } from "../formal/selection.js";
 import type { HillClimbConfig } from "./config.js";
 import type { ExperimentManifest } from "./manifest.js";
-import { metricsFor, scoreArm, type ArmScore, type ExperimentMeasurements } from "./score.js";
+import { evaluateArm, metricsFor, selectionParameters, type ArmScore, type ExperimentMeasurements } from "./score.js";
 
 export interface DispatchRequest {
   /** Branch to run the workflow on (an arm branch or the trunk control). */
@@ -25,16 +26,9 @@ export function isExpired(manifest: ExperimentManifest, config: HillClimbConfig,
   return now.getTime() >= Math.min(Number.isNaN(expires) ? Infinity : expires, Number.isNaN(maxAge) ? Infinity : maxAge);
 }
 
-/** Highest rank wins; ties fall back to the deterministic score, then the arm name for reproducibility. */
-function best(scores: ArmScore[]): ArmScore | undefined {
-  return scores
-    .filter((score) => score.qualifies)
-    .sort((a, b) => b.rank - a.rank || b.deterministic - a.deterministic || a.arm.localeCompare(b.arm))[0];
-}
-
 /**
- * Deterministic grading. The LLM judge only reorders arms that already beat the control on measurements and pass
- * every gate, so a persuasive but unmeasured arm can never be promoted.
+ * The generated reducer chooses only among the manifest's eligible measured candidates.
+ * This verifies selection, not the authenticity, comparability or causal interpretation of measurements.
  */
 export function decide(
   manifest: ExperimentManifest,
@@ -43,26 +37,36 @@ export function decide(
   options: { now?: Date; trunkRef: string; armRef: (arm: string) => string },
 ): Decision {
   const now = options.now ?? new Date();
-  const scores = manifest.arms.map((spec) => {
+  if (!Number.isFinite(now.getTime()) || !Number.isFinite(Date.parse(manifest.createdAt)) || !Number.isFinite(Date.parse(manifest.expiresAt))) {
+    throw new Error("Decision time and manifest deadlines must be valid timestamps.");
+  }
+  if (measurements.experiment !== manifest.name) throw new Error("Measurements belong to a different experiment.");
+  if (new Set(manifest.arms.map((arm) => arm.name)).size !== manifest.arms.length ||
+    manifest.arms.some((arm) => !/^[a-z0-9][a-z0-9-]{0,47}$/.test(arm.name))) throw new Error("Candidate names must be unique ASCII identifiers.");
+  if (new Set(measurements.arms.map((arm) => arm.arm)).size !== measurements.arms.length) throw new Error("Duplicate arm measurements.");
+  const evaluated = manifest.arms.map((spec) => {
     const measured = measurements.arms.find((arm) => arm.arm === spec.name);
-    if (!measured) {
-      return { arm: spec.name, metrics: [], deterministic: 0, rank: 0, pending: ["arm has not been built yet"], failures: [], qualifies: false } satisfies ArmScore;
-    }
-    return scoreArm(manifest, measurements.control, measured, config);
+    const result = evaluateArm(manifest, measurements.control, measured ?? { arm: spec.name, changedPaths: [] }, config);
+    if (!measured) result.score.pending.unshift("arm has not been built yet");
+    return result;
   });
-  if (manifest.status !== "running") return { action: "skip", reason: `experiment is ${manifest.status}`, scores };
-
+  const scores = evaluated.map((result) => result.score);
   const expired = isExpired(manifest, config, now);
-  const winner = best(scores);
+  const ordered = [...evaluated].sort((a, b) => a.score.arm < b.score.arm ? -1 : a.score.arm > b.score.arm ? 1 : 0);
+  const { minimum, influence } = selectionParameters(config);
+  const reduction = reduceCandidates(ordered.map((entry) => entry.candidate), minimum, influence, manifest.status === "running", expired);
+  if (reduction.action === "skip") return { action: "skip", reason: `experiment is ${manifest.status}`, scores };
   const pending = scores.filter((score) => score.pending.length > 0 && score.failures.length === 0);
   const losers = (name: string) => manifest.arms.map((arm) => arm.name).filter((arm) => arm !== name);
 
   // Promote early only when no unfinished arm could still overtake the leader.
-  if (winner && (pending.length === 0 || expired)) {
-    return { action: "promote", winner: winner.arm, losers: losers(winner.arm), reason: `${winner.arm} improved the weighted metrics by ${(winner.deterministic * 100).toFixed(1)}%`, scores };
+  if (reduction.action === "promote") {
+    const winner = ordered[reduction.index]?.score;
+    if (!winner) throw new Error("Generated reducer returned an out-of-universe winner.");
+    return { action: "promote", winner: winner.arm, losers: losers(winner.arm), reason: `${winner.arm} leads the qualified measured candidates with ${(winner.deterministic * 100).toFixed(1)}% weighted scored improvement${pending.length > 0 ? "; unfinished candidates are excluded at expiry" : ""}`, scores };
   }
-  if (expired) return { action: "expire", reason: `no arm qualified within ${config.selection.maxAgeDays} days`, scores };
-  if (pending.length === 0) {
+  if (reduction.action === "expire") return { action: "expire", reason: `no arm qualified within ${config.selection.maxAgeDays} days`, scores };
+  if (reduction.action === "reject") {
     const leader = [...scores].sort((a, b) => b.deterministic - a.deterministic)[0];
     const why = leader?.failures.length ? leader.failures.join("; ") : `best improvement ${(Math.max(0, leader?.deterministic ?? 0) * 100).toFixed(1)}% is below the ${(config.selection.minImprovement * 100).toFixed(1)}% bar`;
     return { action: "reject", reason: `no arm qualified (${why})`, scores };
@@ -117,13 +121,13 @@ export function renderDecision(manifest: ExperimentManifest, decision: Decision)
         const p = metric.pValue === undefined ? "" : ` (p=${metric.pValue.toFixed(3)})`;
         return `${fmt(metric.control)} → ${fmt(metric.arm)} ${pct(metric.delta)}${p}`;
       });
-      const status = score.failures.length ? `❌ ${score.failures.join("; ")}` : score.pending.length ? `⏳ ${score.pending.join("; ")}` : score.qualifies ? "✅ qualifies" : "➖ no measurable gain";
+      const status = score.failures.length ? `❌ ${score.failures.join("; ")}` : score.pending.length ? `⏳ ${score.pending.join("; ")}` : score.qualifies ? "✅ qualifies" : "➖ below scored threshold";
       return `| \`${score.arm}\` | ${cells.join(" | ")} | ${pct(score.deterministic)} | ${score.rank.toFixed(3)} | ${status} |`;
     }),
   ];
   if (decision.action === "wait" && decision.dispatch.length > 0) {
     lines.push("", "Requested additional runs:", ...decision.dispatch.map((request) => `- \`${request.workflow}\` on \`${request.ref}\` × ${request.runs}`));
   }
-  lines.push("", "<sub>Scores are relative improvements over the experiment trunk (control). The judge can only reorder arms that already pass every gate.</sub>");
+  lines.push("", "<sub>The verified reducer ranks only the declared manifest candidates using the quantized objective. It does not attest measurements, prove causal benefits, or find a global pipeline optimum. The judge cannot bypass hard eligibility gates.</sub>");
   return lines.join("\n");
 }

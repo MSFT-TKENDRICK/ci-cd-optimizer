@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { allRules } from "../lint/rules/index.js";
+import { ruleAssurance } from "../lint/assurance.js";
 import { renderRulesMarkdown } from "../lint/docs.js";
 import { VERSION } from "../version.js";
 import { experimentsCommand, EXPERIMENTS_HELP } from "./experiments.js";
@@ -12,6 +13,7 @@ import { knowledgeCommand, KNOWLEDGE_HELP } from "./knowledge.js";
 import { maintenanceCommand, MAINTENANCE_HELP } from "./maintenance.js";
 import { executionCommand, EXECUTION_HELP } from "./execution.js";
 import { reviewCommand, REVIEW_HELP } from "./review.js";
+import { formalCommand, FORMAL_HELP } from "./formal.js";
 
 export const HELP = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimizer for GitHub repositories
 
@@ -28,6 +30,7 @@ Commands:
   maintenance <cmd>     Operator-only knowledge retention and erasure (preview by default)
   execution <cmd>       Opt-in task capture and authorized runtime report import/inspection
   review <cmd>          Project review program: validate, run, intake, scheduled (docs/review-program)
+  formal <cmd>          Source-bound cache-key and finite-selection certificates (docs/formal-verification)
   help [command]        Show help
   version               Print the version
 
@@ -44,7 +47,7 @@ async function rulesCommand(args: string[], io: CliIO): Promise<number> {
   }
   let text: string;
   if (values.format === "markdown") text = renderRulesMarkdown(allRules);
-  else if (values.format === "json") text = JSON.stringify(allRules.map((rule) => rule.meta), null, 2);
+  else if (values.format === "json") text = JSON.stringify(allRules.map((rule) => ({ ...rule.meta, assurance: ruleAssurance(rule.meta.id) })), null, 2);
   else if (values.format === "text") text = ruleListText(allRules);
   else throw new UsageError(`Unknown format "${values.format}". Use text, json, or markdown.`);
   await writeText(io, values.output, text);
@@ -62,6 +65,7 @@ const COMMANDS: Record<string, { run: (args: string[], io: CliIO) => Promise<num
   maintenance: { run: maintenanceCommand, help: MAINTENANCE_HELP },
   execution: { run: executionCommand, help: EXECUTION_HELP },
   review: { run: reviewCommand, help: REVIEW_HELP },
+  formal: { run: formalCommand, help: FORMAL_HELP },
 };
 
 /** Parses argv (without the node and script entries) and returns the exit code. Never calls process.exit. */

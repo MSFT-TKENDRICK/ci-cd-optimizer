@@ -40,7 +40,7 @@ export default defineRule({
     ruleset: "caching",
     description: "Docker image builds in CI should import and export a layer cache.",
     rationale:
-      "Hosted runners start with an empty BuildKit cache, so without `cache-from`/`cache-to` every layer (including dependency installs) is rebuilt on every run. The GitHub Actions cache backend defaults every build to the same `buildkit` scope, so multiple images overwrite each other's cache unless each gets a unique `scope`. Inline cache only supports `mode=min` (final-stage layers); a registry cache with `mode=max` also caches intermediate stages.",
+      "Fresh BuildKit builders may repeat expensive layers without reusable cache state; remote or persistent builders can differ. The GitHub Actions backend's default `buildkit` scope can cause builds to overwrite one another's exported cache. Separate scopes and appropriate import/export settings may improve reuse, but transfer overhead and invalidation still require measurement. Inline cache supports mode=min; a registry cache with mode=max can include intermediate stages.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic"],

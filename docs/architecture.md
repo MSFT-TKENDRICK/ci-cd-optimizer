@@ -321,6 +321,14 @@ Deterministic machinery for the [gh-aw experiment loop](experiments.md). It cove
 `evaluate.ts`, `corpus.ts`), statistics (`score.ts`, a one-sided Mann-Whitney U test), and the
 promote/reject/expire/wait decision (`decide.ts`). Agents propose, implement, and judge. This code decides.
 
+`decide.ts` calls the statically generated `Selection.Reduce` through `src/formal/selection.ts`, after constructing
+the complete manifest candidate universe. Exact integer ranking, gate preservation and finite maximum selection
+are mechanically verified in `formal/Selection.dfy`; the empirical preprocessing and the truth of observations
+are not. The same generated bundle contains `Policy.Resolve`, called by lint configuration resolution, and the
+primary-key partition classifier/transformer used by `formal cache-key` and `formal check`.
+See [the exact guarantees and trusted boundary](formal-verification.md). Rule assurance is a separate exhaustive
+claim inventory, not a blanket correctness proof for detectors or recommendations.
+
 ## Recipes (`src/recipes`)
 
 These turn a promoted pipeline experiment into a portable [recipe](recipes.md). The flow is `apply.ts` (autofix PR,

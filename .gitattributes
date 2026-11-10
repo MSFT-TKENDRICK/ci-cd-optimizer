@@ -2,3 +2,7 @@
 dist-action/** linguist-generated=true
 dist-setup/** linguist-generated=true text eol=lf
 plugins/ci-cd-optimizer/server/** linguist-generated=true text eol=lf
+formal/** text eol=lf
+formal/rule-assurance.json linguist-generated=true
+src/formal/generated/** linguist-generated=true text eol=lf
+scripts/formal*.mjs text eol=lf

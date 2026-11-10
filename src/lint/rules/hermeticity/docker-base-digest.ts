@@ -7,7 +7,7 @@ export default defineRule({
     ruleset: "hermeticity",
     description: "Dockerfile base images should use pinned versions (and digests when required).",
     rationale:
-      "`FROM image` or `FROM image:latest` silently changes whenever upstream publishes, which breaks reproducibility and invalidates the layer cache for every following instruction. A version tag makes upgrades explicit; a digest makes builds fully reproducible.",
+      "Untagged and latest-tag base images can change when their registry tags move, affecting build inputs and layer reuse. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not make the entire build reproducible, because downloads, toolchains and other inputs may still vary.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],

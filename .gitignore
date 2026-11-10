@@ -7,3 +7,5 @@ coverage/
 .DS_Store
 .agent-test-workspaces/
 .agent-artifacts/
+.proof-tools/
+.proof-build/

@@ -156,7 +156,7 @@ export default defineRule({
     ruleset: "caching",
     description: "Build tools with their own caches (Gradle, Maven, Cargo, Bazel, Turborepo, Nx) should persist them between runs.",
     rationale:
-      "Gradle, Maven, Cargo, Bazel, Turborepo and Nx skip downloads and unchanged work when their caches are warm, but hosted runners start empty. Without a cache action or a remote cache, every run (and every agent iteration) rebuilds from scratch.",
+      "Gradle, Maven, Cargo, Bazel, Turborepo and Nx can reuse downloads or build outputs when compatible caches are warm. Fresh runners often lack that state, but remote caches, preinstalled dependencies and tool-specific invalidation can change the benefit. A missing visible cache is a candidate for measurement, not proof that all work is repeated or that adding a cache will be faster.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["recommended", "agentic"],

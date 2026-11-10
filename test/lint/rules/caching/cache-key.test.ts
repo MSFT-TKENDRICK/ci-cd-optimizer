@@ -42,7 +42,7 @@ ruleTester(rule, {
     {
       name: "static key on cache/restore",
       files: wf(cache("          path: ~/.npm\n          key: deps\n", "actions/cache/restore@v6")),
-      errors: [{ line: 9, messageIncludes: "never invalidated" }],
+      errors: [{ line: 9, messageIncludes: "does not encode dependency changes" }],
     },
     {
       name: "github.sha without restore-keys",

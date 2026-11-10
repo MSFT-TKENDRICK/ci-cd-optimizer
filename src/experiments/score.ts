@@ -1,6 +1,8 @@
+import { BigNumber } from "bignumber.js";
 import { mannWhitneyGreater, median } from "../alerts/stats.js";
+import { evaluateCandidate, OBJECTIVE_SCALE, quantize, WEIGHT_SCALE, type KernelCandidate } from "../formal/selection.js";
 import { matchesGlob } from "../utils.js";
-import type { HillClimbConfig, MetricSpec } from "./config.js";
+import { validateHillClimbConfig, type HillClimbConfig, type MetricSpec } from "./config.js";
 import type { CorpusMetrics } from "./corpus.js";
 import type { ExperimentManifest } from "./manifest.js";
 
@@ -40,6 +42,7 @@ export interface MetricComparison {
   pValue?: number;
   /** Samples still needed for a CI metric (control, arm). */
   needs?: { control: number; arm: number };
+  error?: string;
 }
 
 export interface ArmScore {
@@ -56,7 +59,15 @@ export interface ArmScore {
 
 const EPSILON = 1e-9;
 const clamp = (value: number) => Math.max(-1, Math.min(1, value));
-const round = (value: number) => Math.round(value * 10_000) / 10_000;
+const round = (value: number) => quantize(value) / OBJECTIVE_SCALE;
+const finite = (value: number, maximum: number) => Number.isFinite(value) && value >= 0 && value <= maximum;
+
+export function selectionParameters(config: HillClimbConfig): { minimum: number; influence: number } {
+  return {
+    minimum: finite(config.selection.minImprovement, 1) ? quantize(config.selection.minImprovement, OBJECTIVE_SCALE, BigNumber.ROUND_CEIL) : 0,
+    influence: finite(config.selection.judgeWeight, 0.5) ? quantize(config.selection.judgeWeight) : 0,
+  };
+}
 
 export function metricsFor(manifest: ExperimentManifest, config: HillClimbConfig): MetricSpec[] {
   if (manifest.metrics?.length) return config.metrics.filter((spec) => manifest.metrics?.includes(spec.id));
@@ -70,70 +81,121 @@ function relativeDelta(spec: MetricSpec, control: number, arm: number): number {
   return clamp(change / Math.abs(control));
 }
 
+function corpusValue(metrics: CorpusMetrics | undefined, id: string): number | undefined {
+  switch (id) {
+    case "precision": return metrics?.precision;
+    case "recall": return metrics?.recall;
+    case "f1": return metrics?.f1;
+    case "fixRate": return metrics?.fixRate;
+    case "durationMs": return metrics?.durationMs;
+    default: return undefined;
+  }
+}
+
 function compare(spec: MetricSpec, control: BranchMeasurement, arm: BranchMeasurement, config: HillClimbConfig): MetricComparison {
-  const base: MetricComparison = { id: spec.id, weight: spec.weight, direction: spec.direction, delta: 0 };
+  const base: MetricComparison = { id: spec.id, weight: finite(spec.weight, 1_000_000) ? spec.weight : 0, direction: spec.direction, delta: 0 };
   if (spec.source === "corpus") {
-    const c = control.corpus?.[spec.id as keyof CorpusMetrics];
-    const a = arm.corpus?.[spec.id as keyof CorpusMetrics];
+    const c = corpusValue(control.corpus, spec.id);
+    const a = corpusValue(arm.corpus, spec.id);
     if (c === undefined || a === undefined) return base;
+    const maximum = spec.id === "durationMs" ? 1_000_000_000_000 : 1;
+    if (!finite(c, maximum) || !finite(a, maximum)) return { ...base, error: `${spec.id} contains an invalid measurement` };
     return { ...base, control: c, arm: a, delta: round(relativeDelta(spec, c, a)) };
   }
   const cSamples = control.ci?.[spec.id] ?? [];
   const aSamples = arm.ci?.[spec.id] ?? [];
+  if (![cSamples, aSamples].every((samples) => Array.isArray(samples) && samples.length <= 10_000 && Array.from(samples).every((sample) => finite(sample, 1_000_000_000_000)))) {
+    return { ...base, error: `${spec.id} contains invalid CI samples` };
+  }
   const minSamples = config.selection.minSamples;
+  if (!Number.isInteger(minSamples) || minSamples < 2 || minSamples > 10_000 || !finite(config.selection.pValue, 1)) {
+    return { ...base, error: "invalid sampling policy" };
+  }
   if (cSamples.length < minSamples || aSamples.length < minSamples) {
     return { ...base, needs: { control: Math.max(0, minSamples - cSamples.length), arm: Math.max(0, minSamples - aSamples.length) } };
   }
   const c = median(cSamples);
   const a = median(aSamples);
   const delta = relativeDelta(spec, c, a);
-  // One-sided test in the direction of the observed change; noise is scored as no change.
+  // This heuristic selects the tail after observing the direction; it is not a causal or noise-free guarantee.
   const better = delta > 0;
   const [high, low] = (spec.direction === "minimize") === better ? [cSamples, aSamples] : [aSamples, cSamples];
   const pValue = mannWhitneyGreater(high, low).pValue;
+  if (!finite(pValue, 1)) return { ...base, error: `${spec.id} produced an invalid p-value` };
   const significant = delta !== 0 && pValue < config.selection.pValue;
   return { ...base, control: c, arm: a, pValue: round(pValue), delta: significant ? round(delta) : 0 };
 }
 
-export function scoreArm(
+export function evaluateArm(
   manifest: ExperimentManifest,
   control: BranchMeasurement,
   arm: BranchMeasurement,
   config: HillClimbConfig,
-): ArmScore {
+): { score: ArmScore; candidate: KernelCandidate } {
   const specs = metricsFor(manifest, config);
   const metrics = specs.map((spec) => compare(spec, control, arm, config));
   const pending: string[] = [];
   const failures: string[] = [];
+  const configProblems = validateHillClimbConfig(config).problems;
+  const invalidMetrics = specs.length === 0 || !specs.some((spec) => spec.weight > 0);
+  const invalidMetricSelection = manifest.metrics !== undefined && (new Set(manifest.metrics).size !== manifest.metrics.length || manifest.metrics.some((id) => !config.metrics.some((spec) => spec.id === id)));
+  const invalidJudge = arm.judge !== undefined && !finite(arm.judge.score, 1);
+  const invalidChecks = [arm.testsPassed, control.testsPassed].some((value) => value !== undefined && typeof value !== "boolean");
+  if (configProblems.length > 0) failures.push(`invalid scoring configuration: ${configProblems.map((problem) => `${problem.path}: ${problem.message}`).join("; ")}`);
+  if (invalidMetrics) failures.push("no positively weighted metrics in the selected universe");
+  if (invalidMetricSelection) {
+    failures.push("manifest selects duplicate or unknown metrics");
+  }
 
-  if (arm.error) failures.push(`evaluation failed: ${arm.error}`);
-  if (control.error) failures.push(`control evaluation failed: ${control.error}`);
+  if (arm.error !== undefined) failures.push(`evaluation failed: ${arm.error}`);
+  if (control.error !== undefined) failures.push(`control evaluation failed: ${control.error}`);
   if (arm.testsPassed === false) failures.push("checks failed");
-  if (arm.testsPassed === undefined && !arm.error) pending.push("checks are still running");
+  if (control.testsPassed === false) failures.push("control checks failed");
+  if (arm.testsPassed === undefined && arm.error === undefined) pending.push("checks are still running");
+  if (control.testsPassed === undefined && control.error === undefined) pending.push("control checks are still running");
+  if (invalidJudge) failures.push("judge score must be finite and between 0 and 1");
+  if (invalidChecks) failures.push("check results must be booleans or absent");
   const touched = arm.changedPaths.filter((path) => config.protectedPaths.some((glob) => matchesGlob(path, glob)));
   if (touched.length > 0) failures.push(`modified protected paths: ${touched.join(", ")}`);
   for (const metric of metrics) {
     const spec = specs.find((candidate) => candidate.id === metric.id);
-    if (metric.needs && (metric.needs.arm > 0 || metric.needs.control > 0)) pending.push(`${metric.id} needs more CI samples`);
+    if (metric.error) failures.push(metric.error);
+    else if (metric.needs && (metric.needs.arm > 0 || metric.needs.control > 0)) pending.push(`${metric.id} needs more CI samples`);
     else if (metric.control === undefined || metric.arm === undefined) {
-      if (!arm.error && !control.error) pending.push(`${metric.id} has not been measured`);
+      if (arm.error === undefined && control.error === undefined) pending.push(`${metric.id} has not been measured`);
     } else if (spec?.maxRegression !== undefined && metric.delta < -spec.maxRegression) {
       failures.push(`${metric.id} regressed ${Math.round(-metric.delta * 100)}% (limit ${Math.round(spec.maxRegression * 100)}%)`);
     }
   }
 
-  const totalWeight = metrics.reduce((sum, metric) => sum + metric.weight, 0) || 1;
-  const deterministic = round(metrics.reduce((sum, metric) => sum + metric.weight * metric.delta, 0) / totalWeight);
-  const cap = Math.max(0, Math.min(0.5, config.selection.judgeWeight));
-  const judge = arm.judge ? Math.max(0, Math.min(1, arm.judge.score)) : undefined;
-  const rank = round(judge === undefined ? deterministic : (1 - cap) * deterministic + cap * (2 * judge - 1));
-  return {
-    arm: arm.arm,
-    metrics,
-    deterministic,
-    rank,
-    pending,
-    failures,
-    qualifies: failures.length === 0 && pending.length === 0 && deterministic >= config.selection.minImprovement,
+  const status = (value: boolean | undefined): -1 | 0 | 1 => value === true ? 1 : value === false ? 0 : -1;
+  const candidate: KernelCandidate = {
+    metrics: metrics.map((metric, index) => {
+      const limit = specs[index]?.maxRegression;
+      return {
+        delta: quantize(metric.delta),
+        weight: quantize(metric.weight, WEIGHT_SCALE),
+        measured: metric.control !== undefined && metric.arm !== undefined && !metric.error && !metric.needs,
+        regressionLimit: limit === undefined ? -1 : finite(limit, 1) ? quantize(limit, OBJECTIVE_SCALE, BigNumber.ROUND_FLOOR) : -1,
+      };
+    }),
+    tests: status(arm.testsPassed),
+    controlTests: status(control.testsPassed),
+    armError: arm.error !== undefined,
+    controlError: control.error !== undefined,
+    protectedPath: touched.length > 0,
+    invalid: configProblems.length > 0 || invalidMetrics || invalidMetricSelection || invalidJudge || invalidChecks || metrics.some((metric) => metric.error !== undefined),
+    judge: arm.judge && finite(arm.judge.score, 1) ? quantize(arm.judge.score) : -1,
   };
+  const { minimum, influence } = selectionParameters(config);
+  const result = evaluateCandidate(candidate, minimum, influence);
+  if (result.failed && failures.length === 0) failures.push("formal eligibility gates failed");
+  return {
+    candidate,
+    score: { arm: arm.arm, metrics, deterministic: result.deterministic / OBJECTIVE_SCALE, rank: result.rank / OBJECTIVE_SCALE, pending, failures, qualifies: result.eligible },
+  };
+}
+
+export function scoreArm(manifest: ExperimentManifest, control: BranchMeasurement, arm: BranchMeasurement, config: HillClimbConfig): ArmScore {
+  return evaluateArm(manifest, control, arm, config).score;
 }

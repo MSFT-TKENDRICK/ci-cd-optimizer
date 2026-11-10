@@ -4,8 +4,8 @@ CI/CD Optimizer is Dependabot for build and release performance. It lints GitHub
 Nix expressions and flakes, and package/toolchain configuration for declared build practices and potential improvements:
 hermeticity, caching, dependency layers,
 sparse checkout, affected-only testing, GHCR and GitHub Packages, and package decomposition. It then acts on the
-findings the way GitHub Advanced Security and Dependabot do. It also measures configured Actions workflows, flags statistically
-significant slowdowns, and runs hill-climbing experiments with GitHub Agentic Workflows to evolve its own rules and
+findings the way GitHub Advanced Security and Dependabot do. It also measures configured Actions workflows, flags
+potential slowdowns using statistical thresholds, and runs hill-climbing experiments with GitHub Agentic Workflows to evolve its own rules and
 your pipelines.
 
 It is tuned for agentic development, where many small, agent-authored changes make CI latency the bottleneck.
@@ -33,6 +33,7 @@ reviews other projects' CI/CD from a pull request and publishes signed daily rep
 - [What it finds](#what-it-finds)
 - [Acting on findings](#acting-on-findings)
 - [Hill climbing](#hill-climbing-with-github-agentic-workflows) and [recipes](#recipes-reusing-a-winning-fix-elsewhere)
+- [Formal guarantees and their limits](#formal-guarantees-and-their-limits)
 - [Evidence-backed project history](#evidence-backed-project-history)
 - [Versions and pinning](#versions-and-pinning)
 - [Project status](#project-status)
@@ -97,9 +98,11 @@ tarball. Inside the clone, `npm run cli -- <command>` runs the TypeScript source
 | `knowledge <cmd>` | Authorized mitigation history: `applications`, `runs`, `inspect`, `refresh`, `evaluate` | `DATABASE_URL`, a token |
 | `execution <cmd>` | Opt-in task capture on a runner, and authorized report `import` and `list` | `DATABASE_URL` for import and list |
 | `maintenance <cmd>` | Operator-only `prune` and `purge`; previews unless confirmed | `DATABASE_URL` |
+| `formal <cmd>` | Create/check primary-key partition and finite-selection certificates; no execution attestation | Committed inputs; Git for source binding |
 
 Exit codes: `0` success; `1` findings at or above `--fail-on`, or a failed operation; `2` a usage or configuration
-error. The Action exposes the code as its `exit-code` output.
+error. `formal check` additionally returns `3` for model-valid evidence checked without its source repository, not
+source-bound success. The Action exposes the code as its `exit-code` output.
 
 ## Scanning pull requests
 
@@ -299,6 +302,26 @@ Publication automatically uses the configured App; workflow dispatch uses a sepa
 An interrupted trunk publication can be recovered with `experiments resume --experiment NAME --expected-head SHA`.
 See [docs/experiments.md](docs/experiments.md) for credential fallbacks, guarded recovery, and the threat model.
 
+## Formal guarantees and their limits
+
+Production decisions execute a Dafny-verified finite selector, not a second handwritten ranking algorithm.
+It preserves hard eligibility gates and selects a deterministic maximum of the **declared eligible candidates**
+under the configured quantized objective. Severity precedence also executes a verified last-assignment-wins fold.
+Neither establishes a global policy optimum, authenticates measurements, nor proves that an experiment did
+equivalent work or removed a real bottleneck.
+
+Optional cache-key certificates prove primary-key equality partitions **relative to declared component
+dependencies**, not cache lookup behavior, safe workload dependencies, or speed. The checker recomputes from
+immutable Git blobs and executes the generated model; a certificate digest is not a signature.
+
+**Not every rule has a detector or performance proof.** Every built-in has an explicit entry in the
+[machine-readable assurance catalogue](formal/rule-assurance.json); currently their detectors and recommendations
+remain heuristic/conditional. `rules --format json`, `lint --explain`, and the [rule reference](docs/rules.md)
+expose this distinction. CI rejects missing/stale entries and stale generated proofs.
+
+See [formal-verification.md](docs/formal-verification.md) for precise theorems, assumptions, commands, and
+source-bound versus model-only validation.
+
 ## Recipes: reusing a winning fix elsewhere
 
 When a promoted `pipeline` experiment merges, [recipe-publish](.github/workflows/recipe-publish.yml) turns its
@@ -396,6 +419,9 @@ npm run bundle           # rebuild dist-action/index.js (CI fails when it is sta
 npm run build:ui         # rebuild dist-setup/, the setup panel (CI fails when it is stale)
 npm run preview:mcp      # preview the setup panel in a stand-in MCP Apps host against a fake GitHub (docs/setup.md)
 npm run docs:rules       # regenerate docs/rules.md
+npm run assurance:check # every built-in detector/recommendation has an explicit current assurance entry
+npm run formal:setup    # install the SHA-256-pinned Dafny/Z3 distribution
+npm run formal:check    # verify theorems and check deterministic source/runtime regeneration
 npm run cli -- experiments evaluate --engine dist/lint/api.js --corpus corpus   # benchmark
 ```
 
@@ -406,5 +432,8 @@ its grants and role afterward. CI provides its own disposable Postgres service; 
 Rules live in `src/lint/rules/<ruleset>/<rule>.ts` and are tested with the ESLint-style `RuleTester` in
 `test/lint/rule-tester.ts`. Every rule needs valid and invalid cases plus autofix output checks. New rules should
 also add a corpus case ([corpus/README.md](corpus/README.md)) so precision and recall stay measured.
+After reviewing changed rule claims, run `npm run assurance:generate` and `npm run docs:rules`.
+After changing production TypeScript, dependencies, models, or proof tooling, run `npm run formal:generate`
+to verify and update the executable kernel/build stamp; see [the proof development contract](docs/formal-verification.md#verification-and-regeneration).
 
 Architecture: [docs/architecture.md](docs/architecture.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -1,4 +1,5 @@
 import { parse } from "yaml";
+import { BigNumber } from "bignumber.js";
 import { Validator, type ConfigProblem } from "../lint/config.js";
 
 export const HILL_CLIMB_CONFIG_PATH = ".github/hill-climb.yml";
@@ -28,7 +29,7 @@ export interface MetricSpec {
   workflow?: string;
   /** `ci` metrics: measure one job instead of the whole run. */
   job?: string;
-  /** Hard gate: reject an arm that regresses this metric by more than this fraction of the control value. */
+  /** Hard gate on the scored relative regression, after CI filtering and conservative quantization. */
   maxRegression?: number;
 }
 
@@ -37,7 +38,7 @@ export interface SelectionConfig {
   judgeWeight: number;
   /** Successful CI runs required per arm (and control) before CI metrics are compared. */
   minSamples: number;
-  /** One-sided Mann-Whitney p-value an arm must reach on every CI metric it improves. */
+  /** Observed-direction Mann-Whitney threshold for retaining a CI delta; not a calibrated significance guarantee. */
   pValue: number;
   /** Minimum weighted relative improvement over control for an arm to win. */
   minImprovement: number;
@@ -55,7 +56,7 @@ export interface PromotionConfig {
 
 /** How the grader builds and benchmarks each arm of a `rules` experiment (commands come from the trusted base branch). */
 export interface EvaluationConfig {
-  /** Benchmark corpus directory, read from the experiment trunk (arms cannot change it). */
+  /** Benchmark corpus directory selected from the experiment trunk; not an isolation/measurement-integrity guarantee. */
   corpus: string;
   /** Built engine module, relative to an arm checkout, exporting the ENGINE_API_VERSION surface. */
   engine: string;
@@ -155,6 +156,16 @@ export function validateHillClimbConfig(input: unknown): ParsedHillClimbConfig {
     }
   }
 
+  if (metrics.length > 128) v.problem("metrics", "At most 128 metrics.");
+  if (new Set(metrics.map((metric) => metric.id)).size !== metrics.length) v.problem("metrics", "Metric ids must be unique.");
+  if (!metrics.some((metric) => metric.weight > 0)) v.problem("metrics", "At least one metric weight must be positive.");
+  for (const [index, metric] of metrics.entries()) {
+    if (metric.weight > 1_000_000 || !new BigNumber(metric.weight).times(1_000_000).isInteger()) {
+      v.problem(`metrics[${index}].weight`, "Use a weight <= 1000000 with at most six decimal places.");
+    }
+    if (metric.maxRegression !== undefined && metric.maxRegression > 1) v.problem(`metrics[${index}].maxRegression`, "Expected a fraction between 0 and 1.");
+  }
+
   const selectionRaw = v.record("selection", root.selection);
   v.unknownKeys("selection", selectionRaw, Object.keys(defaults.selection));
   const s = defaults.selection;
@@ -167,8 +178,12 @@ export function validateHillClimbConfig(input: unknown): ParsedHillClimbConfig {
     maxConcurrent: v.number("selection.maxConcurrent", selectionRaw.maxConcurrent, s.maxConcurrent, 1),
     maxArms: v.number("selection.maxArms", selectionRaw.maxArms, s.maxArms, 1),
   };
-  if (selection.judgeWeight > 0.5) v.problem("selection.judgeWeight", "Keep the judge weight at or below 0.5 so measurements dominate.");
-  if (selection.pValue >= 1) v.problem("selection.pValue", "Expected a probability below 1.");
+  if (selection.judgeWeight > 0.5) v.problem("selection.judgeWeight", "Use a judge influence between 0 and 0.5.");
+  if (selection.pValue <= 0 || selection.pValue >= 1) v.problem("selection.pValue", "Expected a probability strictly between 0 and 1.");
+  if (selection.minImprovement > 1) v.problem("selection.minImprovement", "Expected a fraction between 0 and 1.");
+  for (const [key, maximum] of [["minSamples", 10_000], ["maxArms", 64], ["maxConcurrent", 64], ["maxAgeDays", 3650]] as const) {
+    if (!Number.isInteger(selection[key]) || selection[key] > maximum) v.problem(`selection.${key}`, `Expected an integer <= ${maximum}.`);
+  }
 
   const promotionRaw = v.record("promotion", root.promotion);
   v.unknownKeys("promotion", promotionRaw, Object.keys(defaults.promotion));

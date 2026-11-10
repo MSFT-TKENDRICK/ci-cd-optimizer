@@ -16,7 +16,7 @@ FROM gcr.io/distroless/nodejs22-debian12:nonroot
 WORKDIR /app
 COPY --from=dependencies --chown=nonroot:nonroot /app/node_modules ./node_modules
 COPY --from=build --chown=nonroot:nonroot /app/dist ./dist
-COPY --chown=nonroot:nonroot package.json ./
+COPY --chown=nonroot:nonroot package.json LICENSE THIRD_PARTY_NOTICES.txt ./
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 EXPOSE 3000

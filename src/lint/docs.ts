@@ -1,4 +1,5 @@
 import { PRESETS } from "./config.js";
+import { assuranceText } from "./assurance.js";
 import { ruleAnchor } from "./engine.js";
 import type { AnyRule } from "./types.js";
 
@@ -12,6 +13,11 @@ export function renderRulesMarkdown(rules: AnyRule[]): string {
     "",
     "Each rule belongs to a ruleset. Enable presets with `extends`, toggle whole rulesets with `rulesets`, and tune",
     "individual rules with `rules` in `.github/ci-cd-optimizer.yml`. See [configuration](configuration.md).",
+    "",
+    "All detectors are heuristic and their recommendations are conditional, not universal speedup or correctness proofs.",
+    "The production severity-precedence reducer is mechanically verified; that contract does not prove a rule's detector,",
+    "autofix, or performance claim. See [formal assurance](formal-verification.md) and the exhaustive",
+    "[machine-readable claim catalogue](../formal/rule-assurance.json). Missing or stale entries fail CI.",
     "",
     `Presets: ${PRESETS.map((preset) => `\`${preset}\``).join(", ")}.`,
     "",
@@ -29,6 +35,7 @@ export function renderRulesMarkdown(rules: AnyRule[]): string {
       const meta = rule.meta;
       lines.push(`<a id="${ruleAnchor(meta.id)}"></a>`, "", `### ${meta.id}`, "", meta.description, "", `**Why:** ${meta.rationale}`, "");
       lines.push(
+        `- Assurance: ${assuranceText(meta.id)}`,
         `- Kind: ${meta.kind}; default severity: ${meta.defaultSeverity}; impact: ${meta.impact}${meta.fixable ? "; autofix available" : ""}`,
         `- Presets: ${meta.presets.map((preset) => `\`${preset}\``).join(", ") || "none (opt-in)"}`,
       );
