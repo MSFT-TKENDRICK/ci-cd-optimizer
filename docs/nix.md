@@ -92,8 +92,10 @@ marker, not an assurance level.
   selected bindings and lock graphs. It is not the Nix evaluator, full grammar/type checker or a complete name
   resolver. Recognizable rebinding suppresses builtin assumptions. Dynamic attributes, arbitrary functions and
   unresolved inputs can prevent a finding. Builtin-specific messages assume the identified builtin's documented
-  behavior; unused lazy expressions need not execute. Delimiter/enclosing-scope indexes and builder/binding facts
-  are reused per parsed file; they describe the masked source, not evaluated Nix semantics.
+  behavior; unused lazy expressions need not execute. Delimiter/enclosing-scope indexes and builder, binding,
+  scoped-inherit and shadowing facts are reused per parsed file. Inherited source analysis collects lexical
+  source bindings once and suppresses ambiguous resolution, including an unknown visible binding or a `src`
+  function parameter. These facts describe the masked source, not evaluated Nix semantics.
 - **Shell commands:** recognizable invocations, quoting, wrappers and literal arguments are inspected without
   interpreting the shell. Definitions, substitutions and opaque environment changes can leave behavior unknown.
   Quoted examples, help/version queries and arguments belonging to another command are not build executions.

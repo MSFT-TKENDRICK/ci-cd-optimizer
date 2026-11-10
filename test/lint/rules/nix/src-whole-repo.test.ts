@@ -61,6 +61,26 @@ ruleTester(rule, {
       },
     },
     {
+      name: "a narrower inner let binding shadows an outer repository literal",
+      files: { "default.nix": "{ pkgs }: let src = ./.; in { p = let src = ./src; in pkgs.stdenv.mkDerivation { inherit src; }; }" },
+    },
+    {
+      name: "a quoted inner binding shadows an outer repository literal",
+      files: { "default.nix": '{ pkgs }: let src = ./.; in { p = let "src" = ./src; in pkgs.stdenv.mkDerivation { inherit src; }; }' },
+    },
+    {
+      name: "a lambda parameter makes inherited source resolution ambiguous",
+      files: { "default.nix": "{ pkgs }: let src = ./.; in { p = src: pkgs.stdenv.mkDerivation { inherit src; }; }" },
+    },
+    {
+      name: "an inherited inner let binding shadows an outer repository literal",
+      files: { "default.nix": "{ pkgs, other }: let src = ./.; in { p = let inherit (other) src; in pkgs.stdenv.mkDerivation { inherit src; }; }" },
+    },
+    {
+      name: "a narrower recursive attribute shadows an outer repository literal",
+      files: { "default.nix": "{ pkgs }: let src = ./.; in rec { src = ./src; p = pkgs.stdenv.mkDerivation { inherit src; }; }" },
+    },
+    {
       name: "allow option skips a file",
       options: { allow: ["default.nix"] },
       files: {
@@ -69,6 +89,40 @@ ruleTester(rule, {
     },
   ],
   invalid: [
+    {
+      name: "source scopes expire between siblings and retain repeated identical active literals",
+      files: {
+        "default.nix": "{ pkgs }: {\n" + Array.from({ length: 60 }, (_, index) => nix(
+          `p${index} = let src = ${index % 2 === 0 ? "./." : "./src"}; in {`,
+          "  a = pkgs.stdenv.mkDerivation { inherit src; };",
+          "  b = let src = ./.; in pkgs.stdenv.mkDerivation { inherit src; };",
+          "  c = pkgs.stdenv.mkDerivation { inherit src; };",
+          "};",
+        )).join("") + "}",
+      },
+      errors: 90,
+      output: null,
+    },
+    {
+      name: "a single quoted let binding remains recognizable",
+      files: { "default.nix": '{ pkgs }: let "src" = ./.; in pkgs.stdenv.mkDerivation { inherit src; }' },
+      errors: 1,
+      output: null,
+    },
+    {
+      name: "a recursive source binding is shared by sibling builders",
+      files: {
+        "default.nix": nix(
+          "{ pkgs }: rec {",
+          "  src = ./.;",
+          '  a = pkgs.stdenv.mkDerivation { name = "a"; inherit src; };',
+          '  b = pkgs.stdenv.mkDerivation { name = "b"; inherit src; };',
+          "}",
+        ),
+      },
+      errors: 2,
+      output: null,
+    },
     {
       name: "root derivation with `src = ./.`",
       files: {

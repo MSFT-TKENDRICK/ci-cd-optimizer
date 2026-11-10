@@ -121,15 +121,16 @@ function producerOf(file: NixFile, arg: NixArgument, fromBuiltins: Set<string>):
 
 function consumerKind(file: NixFile, ident: NixIdent, fromBuiltins: Set<string>): "import" | "read" | undefined {
   const { text, segments } = ident;
+  const last = segments.at(-1) ?? "";
+  let kind: "import" | "read";
+  if (text === "import" || text === "builtins.import" || last === "callPackage") kind = "import";
+  else if (segments.length === 2 && segments[0] === "builtins" && BUILTIN_READERS.has(last)) kind = "read";
+  else if (segments.length === 1 && BUILTIN_READERS.has(last) && fromBuiltins.has(last)) kind = "read";
+  else if (segments.length >= 2 && segments.includes("lib") && LIB_READERS.has(last)) kind = "read";
+  else return undefined;
   if (segments.length === 1 && isShadowed(file, text)) return undefined;
   if (segments[0] === "builtins" && isShadowed(file, "builtins")) return undefined;
-  const last = segments.at(-1) ?? "";
-  if (text === "import" || text === "builtins.import") return "import";
-  if (last === "callPackage") return "import";
-  if (segments.length === 2 && segments[0] === "builtins" && BUILTIN_READERS.has(last)) return "read";
-  if (segments.length === 1 && BUILTIN_READERS.has(last) && fromBuiltins.has(last) && !isShadowed(file, last)) return "read";
-  if (segments.length >= 2 && segments.includes("lib") && LIB_READERS.has(last)) return "read";
-  return undefined;
+  return kind;
 }
 
 function consumerFindings(file: NixFile): Finding[] {

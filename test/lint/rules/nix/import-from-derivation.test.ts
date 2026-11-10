@@ -8,6 +8,13 @@ const HASH = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
 ruleTester(rule, {
   valid: [
     {
+      name: "recognized consumers are still excluded when rebound",
+      files: {
+        "default.nix": '{ builtins, pkgs }: builtins.readFile (pkgs.writeText "version" "1.0")',
+        "local.nix": '{ pkgs }: let import = x: x; in import (pkgs.writeText "generated.nix" "{}")',
+      },
+    },
+    {
       name: "imports and reads of committed paths, nixpkgs itself and flake inputs",
       files: {
         "default.nix": nix(
@@ -65,6 +72,12 @@ ruleTester(rule, {
     },
   ],
   invalid: [
+    {
+      name: "a reader inherited from builtins remains recognized",
+      files: { "default.nix": '{ pkgs }: let inherit (builtins) readFile; in readFile (pkgs.writeText "version" "1.0")' },
+      errors: 1,
+      output: null,
+    },
     {
       name: "importing runCommand output directly and through a let binding",
       files: {

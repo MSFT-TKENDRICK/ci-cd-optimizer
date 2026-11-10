@@ -255,6 +255,7 @@ export interface InheritStatement {
 }
 
 const inheritCache = new WeakMap<NixFile, InheritStatement[]>();
+const inheritScopeCache = new WeakMap<NixFile, Map<number, InheritStatement[]>>();
 
 export function inheritStatements(file: NixFile): InheritStatement[] {
   const cached = inheritCache.get(file);
@@ -270,6 +271,24 @@ export function inheritStatements(file: NixFile): InheritStatement[] {
   }
   inheritCache.set(file, found);
   return found;
+}
+
+/** Inherit statements directly inside one delimiter scope, indexed once per parsed file. */
+export function inheritStatementsAt(file: NixFile, open: number): InheritStatement[] {
+  let scopes = inheritScopeCache.get(file);
+  if (!scopes) {
+    scopes = new Map();
+    for (const statement of inheritStatements(file)) {
+      const scope = enclosingOpen(file, statement.offset);
+      const statements = scopes.get(scope) ?? [];
+      statements.push(statement);
+      scopes.set(scope, statements);
+    }
+    inheritScopeCache.set(file, scopes);
+  }
+  let statements = scopes.get(open);
+  if (!statements) { statements = []; scopes.set(open, statements); }
+  return statements;
 }
 
 /** Names brought into scope from `builtins` by `inherit (builtins) ...;`. */
@@ -289,8 +308,7 @@ export function attrKeys(file: NixFile, open: number): Set<string> {
     const first = binding.path[0];
     if (first) keys.add(first);
   }
-  for (const statement of inheritStatements(file)) {
-    if (enclosingOpen(file, statement.offset) !== open) continue;
+  for (const statement of inheritStatementsAt(file, open)) {
     for (const { name } of statement.names) keys.add(name);
   }
   return keys;
@@ -314,12 +332,21 @@ export function wordOffsets(file: NixFile, word: string): number[] {
   return offsets;
 }
 
+const shadowCache = new WeakMap<NixFile, Map<string, boolean>>();
+
 /**
  * Whether a global name such as `fetchTarball` may be rebound in this file (a binding key, function
  * parameter, pattern field, or `inherit (x) name;` from something other than `builtins`). Bare uses
  * are then ambiguous and rules should skip them.
  */
 export function isShadowed(file: NixFile, name: string): boolean {
+  let cache = shadowCache.get(file);
+  if (!cache) { cache = new Map(); shadowCache.set(file, cache); }
+  if (!cache.has(name)) cache.set(name, readShadowed(file, name));
+  return cache.get(name) as boolean;
+}
+
+function readShadowed(file: NixFile, name: string): boolean {
   for (const statement of inheritStatements(file)) {
     if (statement.source !== undefined && statement.source !== "builtins" && statement.names.some((entry) => entry.name === name)) {
       return true;

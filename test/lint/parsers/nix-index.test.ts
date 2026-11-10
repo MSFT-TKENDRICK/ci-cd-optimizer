@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { lint } from "../../../src/lint/api.js";
 import { matchingClose, nixBindings, nixStructure, parseNix } from "../../../src/lint/parsers/nix.js";
-import { callArgument, calledAttrset, enclosingOpen, inheritStatements, isLambdaPattern } from "../../../src/lint/rules/nix/expr.js";
+import { buildProject } from "../../../src/lint/project.js";
+import { callArgument, calledAttrset, enclosingOpen, inheritStatements, inheritStatementsAt, isLambdaPattern, isShadowed } from "../../../src/lint/rules/nix/expr.js";
+import ifdRule from "../../../src/lint/rules/nix/import-from-derivation.js";
+import sourceRule from "../../../src/lint/rules/nix/src-whole-repo.js";
+import type { AnalysisInput } from "../../../src/lint/types.js";
 
 describe("shared Nix structural index", () => {
   it.each([
@@ -9,13 +13,19 @@ describe("shared Nix structural index", () => {
     "{ a ? f { x = 1; }, b ? [ (f {}) ] }@args: { inherit (args) a b; }",
     "{ a = \"[ not code } ${f { name = \"}\"; }}\"; # unmatched }\n b = ''\n [ not code ) ''${literal} ${f { x = 1; }}\n''; }",
     "{ a = /* } ) ] */ { b = [ (1) ]; }; c = let x = 1; in with p; assert true; x; }",
+    "let inherit top; in { inherit x; a = { inherit (b) c; nested = (let inherit y; in {}); }; }",
     "{([)]}", "({]}[{}])", "{ a = ({ x = 1; });", ")]}", "{(x)[y]} [z", "{[(]} {})",
   ])("preserves legacy delimiter and enclosing semantics for %s", (source) => {
     const file = parseNix("default.nix", source);
+    const inherits = inheritStatements(file);
+    expect(inheritStatementsAt(file, -1)).toEqual(inherits.filter((statement) => enclosingOpen(file.masked, statement.offset) === -1));
     for (let offset = 0; offset <= file.masked.length; offset += 1) {
       expect(matchingClose(file, offset), `closing ${offset}`).toBe(matchingClose(file.masked, offset));
       expect(enclosingOpen(file, offset), `enclosing ${offset}`).toBe(enclosingOpen(file.masked, offset));
       expect(isLambdaPattern(file, offset), `lambda ${offset}`).toBe(isLambdaPattern(file.masked, offset));
+      expect(inheritStatementsAt(file, offset), `inherit scope ${offset}`).toEqual(
+        inherits.filter((statement) => enclosingOpen(file.masked, statement.offset) === offset),
+      );
     }
   });
 
@@ -45,16 +55,17 @@ describe("shared Nix structural index", () => {
       const open = calledAttrset(file, ident);
       expect(argument?.kind).toBe("attrs");
       expect(open).toBe(argument?.start);
-      return { ident, argument, open: open!, bindings: nixBindings(file, open!) };
+      return { ident, argument, open: open!, bindings: nixBindings(file, open!), scoped: inheritStatementsAt(file, open!) };
     });
     expect(sourceReads).toBeGreaterThan(0);
     sourceReads = 0;
-    for (const { ident, argument, open, bindings } of facts) {
+    for (const { ident, argument, open, bindings, scoped } of facts) {
       expect(nixStructure(file)).toBe(structure);
       expect(callArgument(file, ident)).toBe(argument);
       expect(calledAttrset(file, ident)).toBe(open);
       expect(nixBindings(file, open)).toBe(bindings);
       expect(inheritStatements(file)).toBe(inherits);
+      expect(inheritStatementsAt(file, open)).toBe(scoped);
       expect(matchingClose(file, open)).toBe(argument!.end - 1);
       expect(enclosingOpen(file, ident.offset)).toBe(source.indexOf("{", source.indexOf(":")));
       expect(isLambdaPattern(file, enclosingOpen(file, ident.offset))).toBe(false);
@@ -84,6 +95,57 @@ describe("shared Nix structural index", () => {
     expect(sourceReads).toBe(0);
   });
 
+  it("reuses positive and negative shadowing facts without crossing parsed files", () => {
+    let sourceReads = 0;
+    const file = new Proxy(parseNix("default.nix", "{ src }: let inherit (other) fetchTarball; in { builtins = {}; a = builtins.getEnv \"x\"; }"), {
+      get(target, key, receiver) {
+        if (key === "masked") sourceReads += 1;
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    const expected = { src: true, fetchTarball: true, builtins: true, getEnv: false };
+    for (const [name, shadowed] of Object.entries(expected)) expect(isShadowed(file, name)).toBe(shadowed);
+    expect(sourceReads).toBeGreaterThan(0);
+    sourceReads = 0;
+    for (const [name, shadowed] of Object.entries(expected)) expect(isShadowed(file, name)).toBe(shadowed);
+    expect(sourceReads).toBe(0);
+    expect(isShadowed(parseNix("default.nix", "builtins.getEnv \"x\""), "builtins")).toBe(false);
+  });
+
+  it.each([sourceRule, ifdRule])("$meta.id does not repeat file-wide source or shadowing scans for inherited-source builders", (rule) => {
+    const readsFor = (count: number): number => {
+      const content = "{ pkgs }: let src = ./.; in {\n" + Array.from({ length: count }, (_, index) =>
+        `  p${index} = pkgs.stdenv.mkDerivation { name="p${index}";inherit src; };\n`,
+      ).join("") + "}";
+      const input: AnalysisInput = { files: [{ path: "default.nix", content }], mode: "repository", inventoryComplete: true };
+      const project = buildProject(input);
+      let sourceReads = 0;
+      const file = new Proxy(project.nix.files[0]!, {
+        get(target, key, receiver) {
+          if (key === "masked") sourceReads += 1;
+          return Reflect.get(target, key, receiver) as unknown;
+        },
+      });
+      project.nix.files[0] = file;
+      nixStructure(file);
+      isShadowed(file, "builtins");
+      for (const ident of file.idents) {
+        if (ident.text !== "pkgs.stdenv.mkDerivation") continue;
+        const open = calledAttrset(file, ident)!;
+        nixBindings(file, open);
+        expect(inheritStatementsAt(file, open)).toHaveLength(1);
+      }
+      sourceReads = 0;
+      let reports = 0;
+      rule.check({ input, project, options: { allow: [] }, report: () => { reports += 1; } });
+      expect(reports).toBe(rule === sourceRule ? count : 0);
+      return sourceReads;
+    };
+    const first = readsFor(1);
+    expect(first).toBeGreaterThan(0);
+    expect(readsFor(600)).toBe(first);
+  });
+
   it("isolates cached facts by parsed file and keeps caller prefixes out of cached bindings", () => {
     const first = parseNix("default.nix", "{ a = { b = 1; }; }");
     const second = parseNix("default.nix", "{ c = 2; }");
@@ -99,6 +161,18 @@ describe("shared Nix structural index", () => {
   it.each([600, 1200, 2400])("keeps default public-API analysis clean for %i sibling derivations", (count) => {
     const content = "{ pkgs }: {\n" + Array.from({ length: count }, (_, index) =>
       `  p${index} = pkgs.stdenv.mkDerivation { name="p${index}";src=./src; };\n`,
+    ).join("") + "}";
+    expect(Buffer.byteLength(content)).toBeLessThan(512_000);
+    const result = lint({ input: { files: [{ path: "default.nix", content }], mode: "repository", inventoryComplete: true } });
+    expect(result.diagnostics).toEqual([]);
+    expect(result.parseProblems).toEqual([]);
+    expect(result.skipped.some((entry) => entry.reason.includes("crashed"))).toBe(false);
+    expect(result.rulesRun).toBeGreaterThan(0);
+  });
+
+  it.each([600, 1200, 2400])("keeps default public-API analysis clean for %i inherited-source derivations", (count) => {
+    const content = "{ pkgs }: let src = ./src; in {\n" + Array.from({ length: count }, (_, index) =>
+      ` p${index} = pkgs.stdenv.mkDerivation { name="p${index}";inherit src; };\n`,
     ).join("") + "}";
     expect(Buffer.byteLength(content)).toBeLessThan(512_000);
     const result = lint({ input: { files: [{ path: "default.nix", content }], mode: "repository", inventoryComplete: true } });
