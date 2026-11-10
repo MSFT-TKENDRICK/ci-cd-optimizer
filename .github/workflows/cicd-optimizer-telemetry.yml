@@ -1,11 +1,11 @@
-# Snapshots every completed CI and Container run, compares it with prior runs, writes the Gantt / critical-path
+# Snapshots every completed CI, Container, and daily self-application run, compares it with prior runs, writes the Gantt / critical-path
 # report to the run summary and a check run, and opens or resolves duration-regression alert issues.
 # Snapshots persist between runs in an actions/cache entry; without one, history is rebuilt from the Actions API.
 name: CI/CD Optimizer telemetry
 
 on:
   workflow_run:
-    workflows: [CI, Container]
+    workflows: [CI, Container, CI/CD Optimizer daily]
     types: [completed]
 
 permissions:
@@ -14,6 +14,7 @@ permissions:
 concurrency:
   group: cicd-optimizer-telemetry
   cancel-in-progress: false
+  queue: max
 
 jobs:
   telemetry:

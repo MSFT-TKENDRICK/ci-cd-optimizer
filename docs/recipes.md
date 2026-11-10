@@ -174,7 +174,11 @@ node dist-action/index.js recipes apply   --recipe recipes/npm-cache-restore-key
 
 | Setting | Used by | Why |
 |---|---|---|
-| `vars.CICD_OPTIMIZER_APP_ID`, `secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY` | recipe-rollout | Mints an installation token for target repositories. The [App](github-app.md) must be installed on them. The rollout is skipped when the variable isn't set. |
-| `secrets.CICD_OPTIMIZER_TOKEN` (optional) | recipe-publish, recipe-rollout | Opens the publish and score pull requests so that required checks run. Pull requests opened with `GITHUB_TOKEN` don't trigger CI. |
+| `vars.CICD_OPTIMIZER_APP_ID`, `secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY` | recipe-publish, recipe-rollout | Mints repository-scoped tokens for publication/score PRs and a separate installation token for configured targets. The [App](github-app.md) must be installed on the source and targets. Target rollout is skipped when the variable isn't set. |
+| `secrets.CICD_OPTIMIZER_TOKEN` (optional) | recipe-publish | Publication fallback when the App is not configured. The final `GITHUB_TOKEN` fallback needs permission to create PRs and does not trigger their CI. |
 | `secrets.COPILOT_ASSIGN_TOKEN` (optional) | recipe-rollout | A user token that can assign adaptation issues to the Copilot coding agent. Without it, issues get the `copilot:ready` label (see [assign-copilot.yml](../examples/workflows/assign-copilot.yml)). |
 | `secrets.CICD_OPTIMIZER_DATABASE_URL` (optional) | recipe-rollout | Records authenticated recipe definitions and pinned target proposals in the App's evidence database. Requires protected runner-to-database connectivity; dry runs never use it. |
+
+Generated recipe branches and their PRs use the same publication credential; checkout credentials are not retained.
+Repeated publication uses an explicit lease on the observed remote branch head, refusing a concurrent push rather than
+overwriting it. These are bot-owned generated branches: propose manual recipe edits on a different branch.

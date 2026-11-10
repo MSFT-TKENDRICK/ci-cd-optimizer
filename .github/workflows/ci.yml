@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
   push:
     branches: [main]
@@ -15,7 +16,7 @@ concurrency:
 permissions:
   contents: read
 
-# Independent jobs run in parallel so the slowest check (typed ESLint) bounds wall-clock time.
+# Independent checks run in parallel; the longest job determines the critical path.
 jobs:
   test:
     runs-on: ubuntu-24.04
@@ -99,6 +100,7 @@ jobs:
       tool-ref: ${{ github.sha }}
 
   build:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

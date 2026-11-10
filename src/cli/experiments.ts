@@ -9,8 +9,8 @@ import { HILL_CLIMB_CONFIG_PATH, parseHillClimbConfig, type HillClimbConfig } fr
 import { evaluateCorpus, loadCorpus, loadEngine, parseCase } from "../experiments/corpus.js";
 import { decide, renderDecision } from "../experiments/decide.js";
 import { evaluateBranches } from "../experiments/evaluate.js";
-import { applyDecision, createExperiment, groupExperiments, listExperimentPullRequests, type ExperimentState } from "../experiments/github.js";
-import { armBranch, manifestPath, parseManifest, trunkBranch, type ExperimentManifest } from "../experiments/manifest.js";
+import { applyDecision, createExperiment, groupExperiments, listExperimentPullRequests, resumeExperiment, type ExperimentState } from "../experiments/github.js";
+import { armBranch, manifestPath, parseExperimentRef, parseManifest, trunkBranch, type ExperimentManifest } from "../experiments/manifest.js";
 import { generatorContext, knownExperimentNames, validateProposal } from "../experiments/propose.js";
 import { metricsFor, type ExperimentMeasurements } from "../experiments/score.js";
 import { ENGINE_API_VERSION, lint } from "../lint/api.js";
@@ -26,8 +26,10 @@ Hill-climbing experiments on experiments/<name>/<arm> branches (see docs/experim
 
 Commands:
   list                      Running experiments as JSON
+  capacity                  Open experiment count and configured concurrency budget as JSON
   context                   Markdown briefing for the experiment generator agent
   create                    Validate a proposal and create its trunk branch, PR, and arm runs
+  resume                    Recover interrupted trunk PR publication at an inspected commit
   collect                   Gather CI evidence for running experiments into measurement files
   evaluate                  Build each arm in a worktree and score it on the benchmark corpus
   decide                    Grade measurements and (with --apply) promote, reject, or request runs
@@ -37,6 +39,7 @@ Common options:
       --config <file>       Hill-climb configuration (default: ${HILL_CLIMB_CONFIG_PATH})
 
 create:    --manifest <file> | --agent-output <file>   [--cases <file.json>] [--base <branch>] [--arm-workflow <file>] [--dry-run]
+resume:    --experiment <name> --expected-head <SHA> [--base <branch>] [--dry-run]
 collect:   [--experiment <name>] --output-dir <dir> | --output <file>
 evaluate:  --measurements <file|dir> [--repo-dir <dir>]  |  --engine <module> [--corpus <dir>]
 decide:    --measurements <file|dir> [--agent-output <file>] [--apply]
@@ -48,6 +51,11 @@ const COMMON = {
   config: { type: "string" },
   help: { type: "boolean", short: "h", default: false },
 } as const;
+
+function workflowDispatchClient(io: CliIO, fallback: GitHubClient): GitHubClient {
+  const token = io.env.CICD_OPTIMIZER_DISPATCH_TOKEN;
+  return token ? githubClient({ ...io, env: { ...io.env, GITHUB_TOKEN: token } }) : fallback;
+}
 
 async function readText(io: CliIO, path: string): Promise<string> {
   try {
@@ -184,6 +192,16 @@ async function listCommand(args: string[], io: CliIO): Promise<number> {
   return 0;
 }
 
+async function capacityCommand(args: string[], io: CliIO): Promise<number> {
+  const { values } = parseArgs({ args, strict: true, options: { ...COMMON } });
+  const config = await loadHillClimbConfig(io, values.config);
+  const states = groupExperiments(await listExperimentPullRequests(githubClient(io), repoFrom(values.repo, io)));
+  const running = states.filter((state) => state.trunk?.state === "open").length;
+  const limit = config.selection.maxConcurrent;
+  io.stdout(JSON.stringify({ running, limit, available: Math.max(0, limit - running) }));
+  return 0;
+}
+
 async function contextCommand(args: string[], io: CliIO): Promise<number> {
   const { values } = parseArgs({ args, strict: true, options: { ...COMMON, dir: { type: "string" }, telemetry: { type: "string" }, output: { type: "string", short: "o" } } });
   const config = await loadHillClimbConfig(io, values.config);
@@ -233,6 +251,7 @@ async function createCommand(args: string[], io: CliIO): Promise<number> {
     io.stderr("No create_experiment proposals found.");
     return 0;
   }
+  if (proposals.length > 1) throw new UsageError("create accepts only one proposal per invocation; recheck capacity before another proposal.");
   const history = await listExperimentPullRequests(client, repo, "all");
   const running = groupExperiments(history.filter((pull) => pull.state === "open"));
   const knownNames = knownExperimentNames(history);
@@ -260,8 +279,9 @@ async function createCommand(args: string[], io: CliIO): Promise<number> {
     knownNames.push(manifest.name);
     io.stdout(`Created ${created.trunk} (#${created.pullRequest}) at ${created.sha.slice(0, 7)}`);
     if (values["arm-workflow"]) {
+      const dispatcher = workflowDispatchClient(io, client);
       for (const arm of manifest.arms) {
-        await client.request("POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches", {
+        await dispatcher.request("POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches", {
           ...repo,
           workflow_id: values["arm-workflow"],
           ref: base,
@@ -272,6 +292,24 @@ async function createCommand(args: string[], io: CliIO): Promise<number> {
     }
   }
   return failed ? 1 : 0;
+}
+
+async function resumeCommand(args: string[], io: CliIO): Promise<number> {
+  const { values } = parseArgs({
+    args, strict: true,
+    options: { ...COMMON, experiment: { type: "string" }, "expected-head": { type: "string" }, base: { type: "string" }, "dry-run": { type: "boolean", default: false } },
+  });
+  if (!values.experiment || !parseExperimentRef(trunkBranch(values.experiment)) ||
+    !values["expected-head"] || !/^[a-f0-9]{40}$/i.test(values["expected-head"])) {
+    throw new UsageError("resume needs --experiment <name> and --expected-head <40-character SHA>.");
+  }
+  const result = await resumeExperiment(githubClient(io), repoFrom(values.repo, io), {
+    name: values.experiment, expectedSha: values["expected-head"], config: await loadHillClimbConfig(io, values.config),
+    ...(values.base ? { baseBranch: values.base } : {}), ...(io.now ? { now: io.now() } : {}), dryRun: values["dry-run"],
+  });
+  io.stdout(JSON.stringify(result, null, 2));
+  io.stderr(values["dry-run"] ? "Recovery preview only; no changes made." : "Publication confirmed. No arm runs were dispatched; inspect existing PRs and runs before dispatching missing arms.");
+  return 0;
 }
 
 async function collectCommand(args: string[], io: CliIO): Promise<number> {
@@ -382,7 +420,7 @@ async function decideCommand(args: string[], io: CliIO): Promise<number> {
     const decision = decide(manifest, measurements, config, { now, trunkRef: trunkBranch(name), armRef: (arm) => armBranch(name, arm) });
     reports.push(renderDecision(manifest, decision));
     if (values.apply) {
-      const applied = await applyDecision(client, repo, { manifest, decision, state, config, measurements });
+      const applied = await applyDecision(client, repo, { manifest, decision, state, config, measurements, dispatchClient: workflowDispatchClient(io, client) });
       io.stderr(`${name}: ${applied.action}${applied.merged ? ` (merged #${applied.merged})` : ""}${applied.closed.length ? `, closed ${applied.closed.map((n) => `#${n}`).join(", ")}` : ""}${applied.dispatched ? `, dispatched ${applied.dispatched} run(s)` : ""}${applied.notes.length ? `; ${applied.notes.join("; ")}` : ""}`);
     } else {
       io.stderr(`${name}: ${decision.action} (dry run; pass --apply to act)`);
@@ -396,8 +434,10 @@ async function decideCommand(args: string[], io: CliIO): Promise<number> {
 
 const COMMANDS: Record<string, (args: string[], io: CliIO) => Promise<number>> = {
   list: listCommand,
+  capacity: capacityCommand,
   context: contextCommand,
   create: createCommand,
+  resume: resumeCommand,
   collect: collectCommand,
   evaluate: evaluateCommand,
   decide: decideCommand,

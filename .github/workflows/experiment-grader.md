@@ -4,17 +4,29 @@ on:
   schedule: daily
   workflow_dispatch:
   permissions:
+    contents: read
     pull-requests: read
   steps:
     # Skip inference entirely when no experiment is running.
-    - id: check
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+        sparse-checkout: |
+          .github
+          dist-action
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .nvmrc
+    - id: count
       env:
-        GH_TOKEN: ${{ github.token }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
-        RUNNING=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 --json headRefName \
-          --jq '[.[] | select(.headRefName | test("^experiments/[a-z0-9-]+/trunk$"))] | length')
-        echo "$RUNNING experiment(s) running"
-        [ "$RUNNING" -gt 0 ]
+        CAPACITY=$(node dist-action/index.js experiments capacity)
+        echo "$CAPACITY"
+        jq -er '"running=\(.running)\nlimit=\(.limit)"' <<< "$CAPACITY" >> "$GITHUB_OUTPUT"
+    - id: check
+      if: fromJSON(steps.count.outputs.running) > 0
+      run: echo "Experiments are available to grade."
 if: needs.pre_activation.outputs.check_result == 'success'
 permissions:
   actions: read
@@ -92,10 +104,24 @@ safe-outputs:
         - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
           with:
             node-version-file: .nvmrc
-        # Merging arms that change .github/workflows needs CICD_OPTIMIZER_TOKEN (App or PAT); GITHUB_TOKEN cannot.
+        - name: Mint repository App token
+          id: app-token
+          if: vars.CICD_OPTIMIZER_APP_ID != ''
+          uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+          with:
+            client-id: ${{ vars.CICD_OPTIMIZER_APP_ID }}
+            private-key: ${{ secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY }}
+            owner: ${{ github.repository_owner }}
+            repositories: ${{ github.event.repository.name }}
+            permission-actions: read
+            permission-contents: write
+            permission-issues: write
+            permission-pull-requests: write
+            permission-workflows: write
         - name: Apply decisions
           env:
-            GITHUB_TOKEN: ${{ secrets.CICD_OPTIMIZER_TOKEN || github.token }}
+            GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.CICD_OPTIMIZER_TOKEN || github.token }}
+            CICD_OPTIMIZER_DISPATCH_TOKEN: ${{ github.token }}
           run: node dist-action/index.js experiments decide --measurements /tmp/hill-climb/measurements --agent-output "$GH_AW_AGENT_OUTPUT" --apply
 ---
 
