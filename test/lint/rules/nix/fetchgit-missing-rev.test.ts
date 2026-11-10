@@ -65,17 +65,16 @@ ruleTester(rule, {
       errors: [{ line: 2, messageIncludes: "the current tip of `release-1.x`, a mutable ref" }],
     },
     {
-      name: "narHash without rev and a bare fetchGit",
+      name: "content-hash selection is accepted while a second unpinned ref is reported",
       files: {
         "default.nix": nix(
           "[",
           '  (builtins.fetchGit { url = "https://example.org/a.git"; narHash = "sha256-AQ=="; })',
-          '  (fetchGit { url = "ssh://git@example.org/b.git"; ref = "refs/heads/dev"; })',
+          '  (builtins.fetchGit { url = "ssh://git@example.org/b.git"; ref = "refs/heads/dev"; })',
           "]",
         ),
       },
       errors: [
-        { line: 2, messageIncludes: "`narHash` only detects the change after the fact" },
         { line: 3, messageIncludes: "`refs/heads/dev`" },
       ],
     },

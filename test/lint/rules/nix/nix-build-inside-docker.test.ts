@@ -81,7 +81,7 @@ ruleTester(rule, {
     {
       name: "privileged step that leaves the sandbox off",
       files: { Dockerfile: "# syntax=docker/dockerfile:1-labs\nFROM nixos/nix\nRUN --security=insecure nix build --option sandbox false .#app\n" },
-      errors: [{ path: "Dockerfile", line: 3, messageIncludes: "sandbox = false" }],
+      errors: [{ path: "Dockerfile", line: 3, messageIncludes: "`nix build --option sandbox false .#app` builds inside `nixos/nix`. No recognized sandbox enablement or Nix cache mount is visible for this instruction. Check the actual image configuration and layer-cache behavior; the image name alone does not establish either." }],
     },
     {
       name: "build wrapped in nix develop",
@@ -100,12 +100,12 @@ ruleTester(rule, {
 });
 
 describe("nix/nix-build-inside-docker suggestion", () => {
-  it("proposes streamLayeredImage and a seeded /nix cache mount with the syntax directive", () => {
+  it("requires measured behavior and runtime-output preservation rather than a blanket cache-mount recipe", () => {
     const [diagnostic] = runRule(rule, { files: { Dockerfile: "FROM nixos/nix:2.24.0\nRUN nix build .#app\n" } });
-    expect(diagnostic?.suggestion).toContain("pkgs.dockerTools.streamLayeredImage {");
-    expect(diagnostic?.suggestion).toContain("nix build .#image && ./result | docker image load");
-    expect(diagnostic?.suggestion).toContain("RUN --mount=type=cache,target=/nix,from=nixos/nix:2.24.0,source=/nix nix build .#app");
-    expect(diagnostic?.suggestion).toContain("# syntax=docker/dockerfile:1");
+    expect(diagnostic?.suggestion).toContain("measure repeated BuildKit cache misses");
+    expect(diagnostic?.suggestion).toContain("preserving runtime closure, ownership and configuration");
+    expect(diagnostic?.suggestion).toContain("cache-mount contents are not committed as layer files");
+    expect(diagnostic?.suggestion).toContain("Do not enable privileged containers");
     expect(diagnostic?.fix).toBeUndefined();
   });
 

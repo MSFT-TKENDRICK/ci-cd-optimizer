@@ -59,7 +59,7 @@ ruleTester(rule, {
       name: "Kotlin DSL multi-project build",
       files: { [WORKFLOW]: job("      - run: ./gradlew build"), "settings.gradle.kts": MULTI, "gradle.properties": "org.gradle.caching=true\n" },
       errors: [{ line: 7, path: WORKFLOW, messageIncludes: "The root Gradle build includes 3 subprojects (`app`, `core`, `data`)" }],
-      output: { "gradle.properties": "org.gradle.caching=true\norg.gradle.parallel=true\n" },
+      output: null,
     },
     {
       name: "Groovy DSL include without parentheses",
@@ -69,7 +69,7 @@ ruleTester(rule, {
         "gradle.properties": "org.gradle.jvmargs=-Xmx2g",
       },
       errors: [{ line: 7, messageIncludes: "does not set `org.gradle.parallel=true` and `./gradlew check` does not pass `--parallel`" }],
-      output: { "gradle.properties": "org.gradle.jvmargs=-Xmx2g\norg.gradle.parallel=true\n" },
+      output: null,
     },
     {
       name: "separate include statements",
@@ -79,7 +79,7 @@ ruleTester(rule, {
         "gradle.properties": "org.gradle.caching=true\n",
       },
       errors: [{ line: 7, messageIncludes: "includes 2 subprojects" }],
-      output: { "gradle.properties": "org.gradle.caching=true\norg.gradle.parallel=true\n" },
+      output: null,
     },
   ],
 });

@@ -80,7 +80,7 @@ ruleTester(rule, {
           line: 7,
           path: WORKFLOW,
           messageIncludes:
-            "`uses: dtolnay/rust-toolchain@stable` installs the floating `stable` Rust toolchain and the repository has no `rust-toolchain.toml` pinning a release, so the compiler and its bundled Clippy and rustfmt change whenever a new release ships, and a commit that passed can fail",
+            "`uses: dtolnay/rust-toolchain@stable` selects the floating `stable` Rust toolchain without a recognized toolchain file covering these commands",
         },
       ],
     },
@@ -93,7 +93,7 @@ ruleTester(rule, {
       errors: [
         {
           line: 7,
-          messageIncludes: "`rustup default stable` installs the floating `stable` Rust toolchain",
+          messageIncludes: "`rustup default stable` selects the floating `stable` Rust toolchain",
         },
       ],
     },
@@ -104,7 +104,7 @@ ruleTester(rule, {
         {
           line: 7,
           messageIncludes:
-            "`uses: actions-rust-lang/setup-rust-toolchain@v1` without a `toolchain` input installs the floating `stable` Rust toolchain and the repository has no `rust-toolchain.toml` pinning a release, so the compiler and its bundled Clippy and rustfmt change whenever a new release ships; `actions-rust-lang/setup-rust-toolchain (which runs Swatinem/rust-cache)` includes the rustc version in its cache key",
+            "`uses: actions-rust-lang/setup-rust-toolchain@v1` without a `toolchain` input selects the floating `stable` Rust toolchain",
         },
       ],
     },
@@ -120,7 +120,7 @@ ruleTester(rule, {
         ),
         ...CRATE,
       },
-      errors: [{ line: 9, messageIncludes: "`toolchain: nightly` on `dtolnay/rust-toolchain@master` installs the floating `nightly` Rust toolchain" }],
+      errors: [{ line: 9, messageIncludes: "`toolchain: nightly` on `dtolnay/rust-toolchain@master` selects the floating `nightly` Rust toolchain" }],
     },
   ],
 });

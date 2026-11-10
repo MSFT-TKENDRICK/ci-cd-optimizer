@@ -8,14 +8,15 @@ interface Tool {
   language: string;
   versionInput: string;
   fileInput: string;
+  knownMajor: number;
   /** What the action does when neither input is set (quoted from the action's README or source). */
   fallback: string;
   /** Root file the action reads on its own when neither input is set. */
   implicitFile?: string;
   pinExample: string;
-  /** Files that also declare a version but only as a range, so they are mentioned but never auto-applied. */
+  /** Other declarations whose constraints and action support need inspection. */
   rangeFiles?: string[];
-  candidates(project: ProjectModel): string[];
+  candidates(project: ProjectModel, major: number): string[];
 }
 
 function content(project: ProjectModel, path: string): string | undefined {
@@ -37,10 +38,12 @@ function record(value: unknown): Record<string, unknown> | undefined {
 }
 
 /** setup-node reads package.json `volta.node`, then a `devEngines.runtime` entry named node that has a version. */
-function packageJsonPinsNode(project: ProjectModel): boolean {
+function packageJsonPinsNode(project: ProjectModel, major: number): boolean {
   const manifest = json(content(project, "package.json"));
   if (!manifest) return false;
-  if (typeof record(manifest.volta)?.node === "string") return true;
+  const volta = record(manifest.volta)?.node;
+  if (typeof volta === "string" && volta.trim() !== "") return true;
+  if (major < 6) return false;
   const runtime = record(manifest.devEngines)?.runtime;
   const entries = Array.isArray(runtime) ? runtime : [runtime];
   return entries.some((entry) => {
@@ -67,12 +70,13 @@ const TOOLS: Tool[] = [
     language: "Node.js",
     versionInput: "node-version",
     fileInput: "node-version-file",
+    knownMajor: 6,
     fallback: "the Node.js version already on the runner's PATH is used",
     pinExample: "node-version: 22",
     rangeFiles: ["package.json `engines.node`"],
-    candidates: (project) => [
+    candidates: (project, major) => [
       ...[".nvmrc", ".node-version"].filter((path) => nonEmpty(project, path)),
-      ...(packageJsonPinsNode(project) ? ["package.json"] : []),
+      ...(packageJsonPinsNode(project, major) ? ["package.json"] : []),
       ...(toolVersionsPinsNode(project) ? [".tool-versions"] : []),
     ],
   },
@@ -81,13 +85,14 @@ const TOOLS: Tool[] = [
     language: "Python",
     versionInput: "python-version",
     fileInput: "python-version-file",
-    fallback: "there is no root `.python-version`, so the Python on the runner's PATH is used",
+    knownMajor: 6,
+    fallback: "without a root `.python-version` the Python on the runner's PATH is used",
     implicitFile: ".python-version",
     pinExample: "python-version: '3.13'",
     rangeFiles: ["pyproject.toml `requires-python`", "Pipfile `python_version`"],
     candidates: (project) => {
       const text = content(project, ".tool-versions");
-      return text !== undefined && text.split(/\r?\n/).some((line) => /^\s*python\s*v?\s*[^\s]+\s*$/.test(line))
+      return text !== undefined && text.split(/\r?\n/).some((line) => /^python\s+v?[^\s]+\s*$/.test(line))
         ? [".tool-versions"]
         : [];
     },
@@ -97,6 +102,7 @@ const TOOLS: Tool[] = [
     language: "Go",
     versionInput: "go-version",
     fileInput: "go-version-file",
+    knownMajor: 6,
     fallback: "the action uses the Go version pre-installed on the runner",
     pinExample: "go-version: '1.24'",
     candidates: (project) => {
@@ -113,7 +119,8 @@ const TOOLS: Tool[] = [
     language: ".NET",
     versionInput: "dotnet-version",
     fileInput: "global-json-file",
-    fallback: "there is no root `global.json`, so no SDK is installed and the newest SDK pre-installed on the runner is used",
+    knownMajor: 5,
+    fallback: "without a root `global.json` no SDK is installed and the newest SDK pre-installed on the runner is used",
     implicitFile: "global.json",
     pinExample: "dotnet-version: '9.0.x'",
     candidates: (project) => {
@@ -167,10 +174,10 @@ export default defineRule({
           const tool = TOOLS.find((candidate) => usesAction(step, candidate.action));
           if (!tool || !step.uses) continue;
           const version = actionVersion(step, file);
-          if (!version || version.major < 3) continue;
+          if (!version || version.major < 3 || version.major > tool.knownMajor) continue;
           if (hasInput(step, tool.versionInput) || hasInput(step, tool.fileInput)) continue;
           if (tool.implicitFile !== undefined && (!complete || project.files.has(tool.implicitFile))) continue;
-          const candidates = tool.candidates(project).filter((path) =>
+          const candidates = tool.candidates(project, version.major).filter((path) =>
             path !== ".tool-versions" || tool.action === "actions/setup-node" || version.major >= 6,
           );
           const [only] = candidates;
@@ -183,7 +190,7 @@ export default defineRule({
             candidates.length > 0
               ? `After checking compatibility and ensuring checkout makes this file available at that path, consider reading its version selection:\n\n- uses: ${uses}\n  with:\n    ${tool.fileInput}: ${only ?? ""}`
               : `Pin the toolchain explicitly (example version shown), or add a version file and point \`${tool.fileInput}\` at it:\n\n- uses: ${uses}\n  with:\n    ${tool.pinExample}${
-                  tool.rangeFiles ? `\n\n${tool.rangeFiles.join(" and ")} only declare a range, which resolves to whatever is newest at run time.` : ""
+                  tool.rangeFiles ? `\n\nInspect ${tool.rangeFiles.join(" and ")} before reusing them: constraints may allow several releases, and action/file-format support varies by version.` : ""
                 }`;
           report({
             path: workflow.path,

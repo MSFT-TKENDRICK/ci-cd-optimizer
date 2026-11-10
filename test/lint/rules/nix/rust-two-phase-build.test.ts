@@ -71,7 +71,7 @@ ruleTester(rule, {
           "}",
         ),
       },
-      errors: [{ line: 2, messageIncludes: "`rustPlatform.buildRustPackage` (`app`) compiles all dependency crates and the workspace in one derivation from local source `./.`" }],
+      errors: [{ line: 2, messageIncludes: "`rustPlatform.buildRustPackage` (`app`) uses local source `./.`. With standard buildRustPackage phases, `cargoHash`/`cargoLock` reuse dependency sources rather than compiled artifacts; source changes and a package-cache miss can repeat dependency compilation." }],
     },
     {
       name: "finalAttrs form with a filtered local source",
@@ -86,7 +86,7 @@ ruleTester(rule, {
           "})",
         ),
       },
-      errors: [{ line: 2, messageIncludes: "from local source `lib.cleanSource ./.`" }],
+      errors: [{ line: 2, messageIncludes: "`rustPlatform.buildRustPackage` (`cli`) uses local source `lib.cleanSource ./.`. With standard buildRustPackage phases, `cargoHash`/`cargoLock` reuse dependency sources rather than compiled artifacts; source changes and a package-cache miss can repeat dependency compilation." }],
     },
     {
       name: "`inherit src;` resolved to `self` in a flake",
@@ -108,7 +108,7 @@ ruleTester(rule, {
           "}",
         ),
       },
-      errors: [{ line: 7, messageIncludes: "`pkgs.rustPlatform.buildRustPackage` (`tool`) compiles all dependency crates and the workspace in one derivation from local source `self`" }],
+      errors: [{ line: 7, messageIncludes: "`pkgs.rustPlatform.buildRustPackage` (`tool`) uses local source `self`. With standard buildRustPackage phases, `cargoHash`/`cargoLock` reuse dependency sources rather than compiled artifacts; source changes and a package-cache miss can repeat dependency compilation." }],
     },
   ],
 });

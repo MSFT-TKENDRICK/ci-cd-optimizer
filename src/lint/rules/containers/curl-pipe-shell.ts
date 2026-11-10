@@ -1,6 +1,6 @@
 import { lineStart } from "../../fix.js";
 import { runLine } from "../../parsers/workflow.js";
-import { splitShellCommands } from "../../parsers/shell.js";
+import { commandTokens, shellTokens, splitShellCommands } from "../../parsers/shell.js";
 import { defineRule } from "../helpers.js";
 import { fileOf } from "./docker.js";
 
@@ -19,7 +19,11 @@ interface Finding {
 }
 
 function words(text: string): string[] {
-  return text.split(/\s+/).filter(Boolean);
+  const tokens = shellTokens(text);
+  let end = 0;
+  for (const token of tokens) end = text.indexOf(token.raw, end) + token.raw.length;
+  if (text.slice(end).trim() !== "") return [];
+  return commandTokens(text).map((token) => token.value);
 }
 
 function unquote(word: string): string {
@@ -30,33 +34,6 @@ function basename(word: string): string {
   return unquote(word).split("/").pop() ?? word;
 }
 
-/** Drops `sudo [-flags] [-u user]`, `env [VAR=x]`, `VAR=x`, `time`, `exec`, `command`, `!`, `{`, `(`, `then`, `do`. */
-function stripWrappers(input: string[]): string[] {
-  const list = [...input];
-  for (;;) {
-    const word = list[0];
-    if (word === undefined) return list;
-    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(word) || ["time", "exec", "command", "!", "{", "(", "then", "do", "else", "nohup"].includes(word)) {
-      list.shift();
-      continue;
-    }
-    if (basename(word) === "sudo" || basename(word) === "doas") {
-      list.shift();
-      while (list[0]?.startsWith("-")) {
-        const flag = list.shift() ?? "";
-        if (["-u", "-g", "-h", "-p", "-C", "-D", "-U", "-r", "-t", "--user", "--group"].includes(flag)) list.shift();
-      }
-      continue;
-    }
-    if (basename(word) === "env") {
-      list.shift();
-      while (list[0] !== undefined && (list[0].startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(list[0]))) list.shift();
-      continue;
-    }
-    return list;
-  }
-}
-
 /** Whether a curl/wget command writes the downloaded body to stdout (so it can be piped into an interpreter). */
 function downloadsToStdout(args: string[]): "curl" | "wget" | undefined {
   const tool = basename(args[0] ?? "").replace(/^\\/, "");
@@ -65,6 +42,7 @@ function downloadsToStdout(args: string[]): "curl" | "wget" | undefined {
   let stdout = tool === "curl";
   for (let index = 1; index < args.length; index += 1) {
     const word = args[index] ?? "";
+    if (/^(?:--help(?:=|$)|--version$|--config(?:=|$)|-[hV]$)/.test(word)) return undefined;
     if (word === "--") break;
     if (tool === "curl") {
       if (word === "--output" || word === "-o") {
@@ -79,6 +57,7 @@ function downloadsToStdout(args: string[]): "curl" | "wget" | undefined {
         const letters = word.slice(1);
         for (let at = 0; at < letters.length; at += 1) {
           const letter = letters[at] ?? "";
+          if (letter === "h" || letter === "V" || letter === "K") return undefined;
           if (letter === "O") {
             stdout = false;
           } else if (letter === "o") {
@@ -101,6 +80,7 @@ function downloadsToStdout(args: string[]): "curl" | "wget" | undefined {
       const letters = word.slice(1);
       for (let at = 0; at < letters.length; at += 1) {
         const letter = letters[at] ?? "";
+        if (letter === "h" || letter === "V") return undefined;
         if (letter === "O") {
           const rest = letters.slice(at + 1);
           stdout = toStdout(rest === "" ? args[index + 1] : rest);
@@ -117,24 +97,33 @@ function downloadsToStdout(args: string[]): "curl" | "wget" | undefined {
   return stdout ? tool : undefined;
 }
 
+function nonexecutingShell(args: string[]): boolean {
+  return args.some((word) => /^-[^-]*n/.test(word) || ["--help", "--version", "noexec"].includes(word));
+}
+
 /** The interpreter of a pipeline stage when it executes its stdin as a script (`sh`, `bash -s --`, `sudo -E bash -`). */
 function stdinInterpreter(args: string[]): string | undefined {
   const name = basename(args[0] ?? "");
   if (SHELLS.has(name)) {
+    if (nonexecutingShell(args.slice(1))) return undefined;
+    let stdin = false;
     for (let index = 1; index < args.length; index += 1) {
       const word = args[index] ?? "";
-      if (word === "-" || word === "--") return args[index + 1] === undefined || word === "-" ? name : undefined;
+      if (word === "-" || word === "--") return stdin || args[index + 1] === undefined ? name : undefined;
       if (/^[-+]o$/.test(word) || word === "-O" || word === "--rcfile" || word === "--init-file") {
         index += 1;
         continue;
       }
-      if (/^--/.test(word)) continue;
-      if (/^[-+][A-Za-z]+$/.test(word)) {
-        if (word.startsWith("-") && word.includes("s")) return name;
-        if (word.startsWith("-") && word.includes("c")) return undefined;
+      if (/^--/.test(word)) {
+        if (!["--noprofile", "--norc", "--posix", "--restricted", "--verbose", "--login", "--debugger", "--noediting"].includes(word)) return undefined;
         continue;
       }
-      return undefined;
+      if (/^[-+][A-Za-z]+$/.test(word)) {
+        if (word.startsWith("-") && word.includes("c")) return undefined;
+        if (word.startsWith("-") && word.includes("s")) stdin = true;
+        continue;
+      }
+      return stdin ? name : undefined;
     }
     return name;
   }
@@ -210,11 +199,11 @@ function commandFindings(text: string): Finding[] {
     for (let index = 0; index < stages.length - 1; index += 1) {
       const stage = stages[index];
       if (!stage) continue;
-      const args = stripWrappers(words(stage.text.replace(/^[\s({]*(?:\$\()?/, "")));
+      const args = words(stage.text);
       if (!downloadsToStdout(args)) continue;
       const target = stages[index + 1];
       if (!target || target.text.includes("<")) continue;
-      const interpreter = stdinInterpreter(stripWrappers(words(target.text)));
+      const interpreter = stdinInterpreter(words(target.text));
       if (!interpreter) continue;
       const end = target.offset + target.text.trimEnd().length;
       const offset = stage.offset + leadingSpace(stage.text);
@@ -230,6 +219,11 @@ function commandFindings(text: string): Finding[] {
   ];
   for (const pattern of substitutions) {
     for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+      const body = /(?:<\(|\$\(|`)\s*((?:sudo\s+)?(?:curl|wget)\b[^)`]*)/.exec(match[0])?.[1];
+      if (!body || !downloadsToStdout(words(body))) continue;
+      const prefix = match[0].slice(0, match[0].indexOf(body)).trimEnd().replace(/(?:<\(|\$\(|`)$/, "").trimEnd().replace(/"$/, "");
+      const outer = words(prefix);
+      if (outer.length === 0 || nonexecutingShell(outer.slice(1))) continue;
       const offset = match.index + leadingSpace(match[0].replace(/^[;&|({!]/, " "));
       const command = text.slice(offset, match.index + match[0].length).replace(/\s+/g, " ");
       const url = firstUrl(command);
@@ -264,6 +258,12 @@ function describe(finding: Finding): string {
   return `\`${command}\` executes a script downloaded ${source} with \`${finding.interpreter}\` without verifying a checksum or signature`;
 }
 
+function downloadUrl(finding: Finding): string {
+  return finding.url && !/[$`]/.test(finding.url)
+    ? `'${finding.url.replace(/'/g, "'\\''")}'`
+    : '"${INSTALLER_URL:?Set the reviewed installer URL}"';
+}
+
 export default defineRule({
   meta: {
     id: "containers/curl-pipe-shell",
@@ -284,7 +284,7 @@ export default defineRule({
     fixable: false,
     example: {
       bad: "- run: curl -fsSL https://example.com/install.sh | sh",
-      good: '- run: |\n    curl -fsSLo install.sh https://example.com/install.sh\n    echo "<sha256>  install.sh" | sha256sum -c -\n    sh install.sh',
+      good: '- run: |\n    curl -fsSLo install.sh https://example.com/install.sh && \\\n    echo "<trusted-sha256>  install.sh" | sha256sum -c - && \\\n    sh install.sh',
     },
   },
   check({ project, report }) {
@@ -297,15 +297,15 @@ export default defineRule({
           const text = clean(step.run.value);
           for (const finding of findings(text)) {
             const line = runLine(step, finding.offset);
-            const url = finding.url ?? "<url>";
+            const url = downloadUrl(finding);
             report({
               path: workflow.path,
               line,
               key: `${step.key}:curl-pipe-shell:${line}:${finding.offset}`,
               message: `${describe(finding)} before execution: downloaded code receives the permissions and environment available to this step.`,
-              suggestion: `Download to a file and execute only after that exact file passes a trusted, pinned checksum:\n  curl -fsSLo install.sh ${url} && \\\n  echo "<sha256>  install.sh" | sha256sum -c - && \\\n  ${finding.interpreter === "source" || finding.interpreter === "." || finding.interpreter === "eval" ? "sh" : finding.interpreter} install.sh`,
+              suggestion: `Download to a file and execute only after that exact file passes a trusted, pinned checksum. This structural example is not drop-in: preserve the original interpreter, arguments, environment and sourcing semantics:\n  curl -fsSLo install.sh ${url} && \\\n  echo "<sha256>  install.sh" | sha256sum -c - && \\\n  ${finding.interpreter === "eval" ? "sh" : finding.interpreter} install.sh`,
               impact: "high",
-              confidence: "high",
+              confidence: "medium",
             });
           }
         }
@@ -326,9 +326,9 @@ export default defineRule({
             line,
             key: `${model.path}:curl-pipe-shell:${line}:${finding.offset}`,
             message: `${describe(finding)} before execution: the build bakes whatever the server returns into the image unless the source independently enforces the payload's identity.`,
-            suggestion: `Fetch the script with a trusted pinned checksum, then run it:\n  ADD --checksum=sha256:<sha256> ${url} /opt/install.sh\n  RUN sh /opt/install.sh`,
+            suggestion: `Fetch the script with a trusted pinned checksum before running it. Preserve the original interpreter, arguments and environment; this is a structural example, not a drop-in replacement:\n  ADD --checksum=sha256:<sha256> ${JSON.stringify([url, "/opt/install.sh"])}\n  RUN sh /opt/install.sh`,
             impact: "high",
-            confidence: "high",
+            confidence: "medium",
           });
         }
       }

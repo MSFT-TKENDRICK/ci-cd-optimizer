@@ -72,7 +72,7 @@ ruleTester(rule, {
         {
           line: 7,
           messageIncludes:
-            "installs `jq`, `shellcheck` at runtime in 2 jobs: `lint` (.github/workflows/ci.yml:7), `test` (.github/workflows/ci.yml:13)",
+            "`sudo apt-get install -y jq shellcheck` requests installation of `jq`, `shellcheck` in 2 jobs: `lint` (.github/workflows/ci.yml:7), `test` (.github/workflows/ci.yml:13). Measure repeated installation cost; these specifications may already use pinned versions or warm download caches.",
         },
       ],
     },
@@ -86,7 +86,7 @@ ruleTester(rule, {
         {
           path: ".github/workflows/ci.yml",
           line: 6,
-          messageIncludes: "installs `mypy`, `ruff` at runtime in 2 jobs: `lint` (.github/workflows/ci.yml:6), `typecheck` (.github/workflows/nightly.yml:6)",
+          messageIncludes: "`python -m pip install Ruff mypy` requests installation of `mypy`, `ruff` in 2 jobs: `lint` (.github/workflows/ci.yml:6), `typecheck` (.github/workflows/nightly.yml:6). Measure repeated installation cost; these specifications may already use pinned versions or warm download caches.",
         },
       ],
     },
@@ -100,7 +100,7 @@ ruleTester(rule, {
         job("d", "ubuntu-24.04", "- run: sudo npm install -g markdownlint-cli"),
         job("e", "ubuntu-24.04", "- run: npm i -g markdownlint-cli"),
       ),
-      errors: [{ line: 6, messageIncludes: "installs the archive `https://example.com/tool-v1.tar.gz` at runtime in 3 jobs" }],
+      errors: [{ line: 6, messageIncludes: "`curl -fsSL https://example.com/tool-v1.tar.gz | tar -xz -C /usr/local/bin` requests installation of the archive `https://example.com/tool-v1.tar.gz` in 3 jobs: `a` (.github/workflows/ci.yml:6), `b` (.github/workflows/ci.yml:10), `c` (.github/workflows/ci.yml:14). Measure repeated installation cost; these specifications may already use pinned versions or warm download caches." }],
     },
   ],
 });

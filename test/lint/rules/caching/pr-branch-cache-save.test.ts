@@ -69,7 +69,7 @@ ruleTester(rule, {
       errors: [
         {
           line: 7,
-          messageIncludes: `\`actions/cache\` saves cache \`${KEY}\` in a workflow that only runs on \`pull_request\`, and no workflow that runs on the default branch saves this cache.`,
+          messageIncludes: "`actions/cache` saves cache `npm-${{ hashFiles('package-lock.json') }}` in a workflow that only runs on `pull_request`, with no recognized non-PR writer for it in the inspected inventory. PR merge-ref caches cannot seed other PRs or the base branch, but can help this PR's later commits/reruns. Existing accessible base/default-branch caches may also provide hits.",
         },
       ],
     },

@@ -109,7 +109,7 @@ ruleTester(rule, {
         ),
       },
       errors: [
-        { line: 4, messageIncludes: "`stdenv` builds almost every package" },
+        { line: 4, messageIncludes: "Overlay rebinds `stdenv = prev.clangStdenv` for the whole package set: a changed `stdenv` can affect a large part of the package graph. Compare resulting derivations and available substitutes; syntax alone does not establish changed store paths or cache misses." },
         { line: 6, messageIncludes: "`curl = super.curlMinimal`" },
         { line: 7, messageIncludes: "`python3 = prev.python312`" },
       ],

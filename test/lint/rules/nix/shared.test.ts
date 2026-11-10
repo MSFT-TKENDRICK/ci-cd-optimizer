@@ -64,7 +64,7 @@ describe("shellTokens", () => {
 
   it("handles escapes and unbalanced quotes", () => {
     expect(shellTokens(`echo "a \\"b\\"" c\\ d`).map((token) => token.value)).toEqual(["echo", 'a "b"', "c d"]);
-    expect(shellTokens(`nix develop -c bash -c "make`).map((token) => token.value)).toEqual(["nix", "develop", "-c", "bash", "-c", "make"]);
+    expect(shellTokens(`nix develop -c bash -c "make`)).toEqual([]);
   });
 });
 
@@ -160,13 +160,15 @@ describe("shellConfWrites", () => {
       "max-jobs",
       "cores",
     ]);
-    expect(shellConfWrites(`echo -e "accept-flake-config = true" >> /etc/nix/nix.conf`, "ci.yml", 6)[0]?.value).toBe("true");
+    expect(shellConfWrites(`echo -e "accept-flake-config = true" >> /etc/nix/nix.conf`, "ci.yml", 6)).toEqual([]);
   });
 
   it("ignores commands that do not write nix.conf", () => {
     expect(shellConfWrites(`echo "sandbox = false"`, "ci.yml", 1)).toEqual([]);
     expect(shellConfWrites(`cat /etc/nix/nix.conf`, "ci.yml", 1)).toEqual([]);
     expect(shellConfWrites(`grep sandbox /etc/nix/nix.conf > out.txt`, "ci.yml", 1)).toEqual([]);
+    expect(shellConfWrites(`echo "sandbox = false # >> /etc/nix/nix.conf"`, "ci.yml", 1)).toEqual([]);
+    expect(shellConfWrites(`echo "sandbox = false" >> ./examples/nix.conf`, "ci.yml", 1)).toEqual([]);
   });
 });
 
@@ -342,7 +344,7 @@ describe("flakeConfigTrust", () => {
     expect(trust(...header, "      - uses: nixbuild/nix-quick-install-action@v35", "      - run: nix build")).toEqual([["implicit", 6]]);
     expect(
       trust(...header, "      - uses: nixbuild/nix-quick-install-action@v35", "        with:", "          nix_version: 2.13.3", "      - run: nix build"),
-    ).toEqual([]);
+    ).toEqual([["implicit", 6]]);
     expect(trust(...header, "      - uses: nixbuild/nix-quick-install-action@v35", "      - run: nix build --no-accept-flake-config")).toEqual([]);
     expect(
       trust(
@@ -359,11 +361,11 @@ describe("flakeConfigTrust", () => {
     ).toEqual([]);
   });
 
-  it("only trusts quick-install releases that append accept-flake-config (v25+, default branch)", () => {
+  it("uses inspected release families and never infers moving-ref behavior", () => {
     const step = (uses: string) => trust(...header, `      - uses: ${uses}`, "      - run: nix build");
     expect(step("nixbuild/nix-quick-install-action@v24")).toEqual([]);
     expect(step("nixbuild/nix-quick-install-action@v25")).toEqual([["implicit", 6]]);
-    expect(step("nixbuild/nix-quick-install-action@master")).toEqual([["implicit", 6]]);
+    expect(step("nixbuild/nix-quick-install-action@master")).toEqual([]);
     expect(step("nixbuild/nix-quick-install-action@5bb6a3b3abe66fd09bbf250dce8ada94f856a703 # v30")).toEqual([["implicit", 6]]);
     expect(step("nixbuild/nix-quick-install-action@5bb6a3b3abe66fd09bbf250dce8ada94f856a703 # v22")).toEqual([]);
     expect(step("nixbuild/nix-quick-install-action@5bb6a3b3abe66fd09bbf250dce8ada94f856a703")).toEqual([]);
@@ -643,9 +645,9 @@ describe("optionArgs", () => {
     expect(optionArgs(inv("nix build --impure .#a -- x"))).toEqual(["--impure", ".#a"]);
   });
 
-  it("stops after the installable of nix run, skipping option values", () => {
-    expect(optionArgs(inv("nix run --max-jobs 2 .#tool --impure"))).toEqual(["--max-jobs", "2", ".#tool"]);
-    expect(cliConf(inv("nix run --max-jobs 2 .#tool -j 8"), "ci.yml").map((s) => s.value)).toEqual(["2"]);
+  it("continues parsing Nix options after the installable until an explicit separator", () => {
+    expect(optionArgs(inv("nix run --max-jobs 2 .#tool --impure"))).toEqual(["--max-jobs", "2", ".#tool", "--impure"]);
+    expect(cliConf(inv("nix run --max-jobs 2 .#tool -j 8"), "ci.yml").map((s) => s.value)).toEqual(["2", "8"]);
     expect(optionArgs(inv("nix build .#a --impure"))).toEqual([".#a", "--impure"]);
   });
 });

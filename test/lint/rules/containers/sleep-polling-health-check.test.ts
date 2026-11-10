@@ -59,7 +59,7 @@ ruleTester(rule, {
       errors: [
         {
           line: 11,
-          messageIncludes: "`sleep 15` waits a fixed 15s in job `test`, whose service container `postgres` (`postgres:16`) has no `--health-cmd`",
+          messageIncludes: "`sleep 15` waits a fixed 15s in job `test`, whose service container `postgres` (`postgres:16`) has no explicit workflow `--health-cmd`. The image may already have HEALTHCHECK, and the sleep may await something else; verify its purpose before replacing it.",
         },
       ],
     },
@@ -77,7 +77,7 @@ ruleTester(rule, {
     {
       name: "several services without health checks",
       files: withServices([...POSTGRES, "redis:", "  image: redis:7"], "- run: sleep 10"),
-      errors: [{ line: 13, messageIncludes: "service containers `postgres` (`postgres:16`), `redis` (`redis:7`) have no `--health-cmd`" }],
+      errors: [{ line: 13, messageIncludes: "`sleep 10` waits a fixed 10s in job `test`, whose service containers `postgres` (`postgres:16`), `redis` (`redis:7`) have no explicit workflow `--health-cmd`. The image may already have HEALTHCHECK, and the sleep may await something else; verify its purpose before replacing it." }],
     },
     {
       name: "custom threshold",

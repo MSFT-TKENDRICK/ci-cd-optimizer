@@ -36,7 +36,7 @@ ruleTester(rule, {
     { name: "classic nix-build ignores flake config", files: workflow("pull_request", ...acceptInstaller, "      - run: nix-build release.nix") },
     {
       name: "old quick-install Nix does not accept flake config",
-      files: workflow("pull_request", "      - uses: nixbuild/nix-quick-install-action@v35", "        with:", "          nix_version: 2.13.6", "      - run: nix build"),
+      files: workflow("pull_request", "      - uses: nixbuild/nix-quick-install-action@v35", "        with:", "          nix_version: 2.12.0", "      - run: nix build"),
     },
   ],
   invalid: [
@@ -44,7 +44,7 @@ ruleTester(rule, {
       name: "pull_request_target with head checkout and installer setting",
       files: workflow("pull_request_target", ...headCheckout, ...acceptInstaller, "      - run: nix flake check"),
       errors: [{ line: 12, messageIncludes: "`pull_request_target` job that checks out the pull request head `check`" }],
-      output: workflow("pull_request_target", ...headCheckout, ...rejectInstaller, "      - run: nix flake check"),
+      output: null,
     },
     {
       name: "NIX_CONFIG in job env",
@@ -77,8 +77,8 @@ ruleTester(rule, {
         ".github/workflows/ci.yml": workflow("pull_request", ...acceptInstaller, "      - run: nix flake check"),
         "flake.nix": '{\n  nixConfig.allow-import-from-derivation = true;\n  outputs = { self }: { };\n}\n',
       },
-      errors: [{ line: 9, messageIncludes: "flake.nix `nixConfig`" }],
-      output: { ".github/workflows/ci.yml": workflow("pull_request", ...acceptInstaller, "      - run: nix flake check") },
+      errors: [{ line: 9, messageIncludes: "In `pull_request` workflow `check`, the installer's nix.conf input sets `accept-flake-config = true`. A pull-request-controlled flake can request eligible Nix settings without confirmation; actual effects depend on the installation, trusted-user policy and command overrides." }],
+      output: null,
     },
   ],
 });

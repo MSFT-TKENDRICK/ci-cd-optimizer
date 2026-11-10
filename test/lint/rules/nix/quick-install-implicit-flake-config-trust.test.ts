@@ -25,8 +25,8 @@ ruleTester(rule, {
       files: job("push", "      - uses: nixbuild/nix-quick-install-action@v24", "      - run: nix build"),
     },
     {
-      name: "Nix 2.13 or older is not configured to accept flake config",
-      files: job("push", "      - uses: nixbuild/nix-quick-install-action@v30", "        with:", "          nix_version: 2.13.6", "      - run: nix build"),
+      name: "Nix 2.12 is not configured to accept flake config",
+      files: job("push", "      - uses: nixbuild/nix-quick-install-action@v30", "        with:", "          nix_version: 2.12.0", "      - run: nix build"),
     },
     {
       name: "classic nix-build never reads flake nixConfig",
@@ -47,20 +47,16 @@ ruleTester(rule, {
   ],
   invalid: [
     {
+      name: "Nix 2.13.6 compares newer than the installer threshold 2.13",
+      files: job("push", "      - uses: nixbuild/nix-quick-install-action@v30", "        with:", "          nix_version: 2.13.6", "      - run: nix build"),
+      errors: [{ line: 6, messageIncludes: "accept-flake-config = true" }],
+      output: null,
+    },
+    {
       name: "default quick-install with a flake build",
       files: job("push", "      - uses: nixbuild/nix-quick-install-action@v30", "      - run: nix build"),
       errors: [{ line: 6, messageIncludes: "nixbuild/nix-quick-install-action@v30` appends `accept-flake-config = true`" }],
-      output: yml(
-        "on: push",
-        "jobs:",
-        "  build:",
-        "    env:",
-        "      NIX_CONFIG: accept-flake-config = false",
-        "    runs-on: ubuntu-latest",
-        "    steps:",
-        "      - uses: nixbuild/nix-quick-install-action@v30",
-        "      - run: nix build",
-      ),
+      output: null,
     },
     {
       name: "nix_conf false is overridden; remote flake named",
@@ -71,7 +67,7 @@ ruleTester(rule, {
         "          nix_conf: accept-flake-config = false",
         "      - run: nix run github:owner/tool -- --version",
       ),
-      errors: [{ line: 6, messageIncludes: "`github:owner/tool` and any other flake they evaluate (substituters, trusted keys, `sandbox`, `post-build-hook`) without confirmation. The `accept-flake-config = false` in `nix_conf` has no effect" }],
+      errors: [{ line: 6, messageIncludes: "`nixbuild/nix-quick-install-action@v30` appends `accept-flake-config = true` to nix.conf, and a flake-evaluating command in job `build` has no recognized later override. It can accept eligible `nixConfig` settings without confirmation. This job also references remote flake `github:owner/tool`. The false setting in nix_conf is followed by the action's true setting; last assignment wins." }],
     },
     {
       name: "fork-guarded pull_request job is still reported here",
@@ -84,7 +80,7 @@ ruleTester(rule, {
         "    env:",
         "      CI: true",
         "    steps:",
-        "      - uses: nixbuild/nix-quick-install-action@master",
+        "      - uses: nixbuild/nix-quick-install-action@v35",
         "      - run: nix flake check",
       ),
       errors: [{ line: 9, messageIncludes: "job `build`" }],

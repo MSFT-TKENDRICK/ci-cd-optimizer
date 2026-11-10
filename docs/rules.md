@@ -11,9 +11,14 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | --- | --- | --- | --- | --- | --- |
 | [`workflow/artifact-retention`](#workflow-artifact-retention) | practice | info | recommended, agentic | yes | Uploaded artifacts should set a short `retention-days` instead of the repository default. |
 | [`workflow/concurrency`](#workflow-concurrency) | practice | warn | recommended, agentic, strict | yes | Pull request workflows should cancel superseded runs; deploy workflows must not. |
+| [`workflow/duplicate-push-pull-request-trigger`](#workflow-duplicate-push-pull-request-trigger) | practice | warn | recommended, agentic, strict |  | A workflow accepting both broad `push` and `pull_request` events may repeat overlapping work for same-repository pull requests. |
 | [`workflow/job-timeout`](#workflow-job-timeout) | practice | warn | recommended, agentic, strict | yes | Jobs should set `timeout-minutes` well below the 360 minute default. |
+| [`workflow/larger-runner-unjustified`](#workflow-larger-runner-unjustified) | insight | info | insights |  | A job on a larger (multi-core or macOS large) runner that only checks out, sets up tools, installs and runs formatters or linters. |
+| [`workflow/matrix-explosion`](#workflow-matrix-explosion) | practice | warn | agentic, strict |  | A `strategy.matrix` whose version and runner dimensions multiply past the configured job budget, or past GitHub's 256-job limit. |
 | [`workflow/merge-group`](#workflow-merge-group) | practice | info | agentic, strict |  | CI workflows that run on `pull_request` should also run on `merge_group`. |
 | [`workflow/outdated-action-major`](#workflow-outdated-action-major) | practice | warn | recommended, agentic, strict |  | Well-known actions should use their current major version, and local JavaScript actions should run on node24. |
+| [`workflow/setup-action-missing-version-file`](#workflow-setup-action-missing-version-file) | practice | warn | recommended, agentic, strict |  | Language setup actions (setup-node, setup-python, setup-go, setup-dotnet) should pin the toolchain with a version input or the repository's version file. |
+| [`workflow/unnecessary-needs-serialization`](#workflow-unnecessary-needs-serialization) | insight | info | insights, strict |  | Review `needs` edges without a recognized data transfer; they still provide success gating. |
 | [`checkout/affected-base-ref`](#checkout-affected-base-ref) | practice | error | recommended, agentic, strict |  | Affected/changed-only commands need the base commit, which a default shallow checkout does not fetch. |
 | [`checkout/partial-clone`](#checkout-partial-clone) | practice | warn | recommended, agentic | yes | Full-history checkouts (`fetch-depth: 0`) should use a blobless partial clone (`filter: blob:none`). |
 | [`checkout/sparse-checkout`](#checkout-sparse-checkout) | practice | info | strict |  | Jobs that only work inside one workspace package of a large monorepo can use a sparse checkout. |
@@ -24,18 +29,30 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | [`caching/build-tool-cache`](#caching-build-tool-cache) | practice | info | recommended, agentic |  | Build tools with their own caches (Gradle, Maven, Cargo, Bazel, Turborepo, Nx) should persist them between runs. |
 | [`caching/cache-key`](#caching-cache-key) | practice | warn | recommended, agentic, strict |  | actions/cache keys must invalidate when inputs change and still hit between runs. |
 | [`caching/docker-layer-cache`](#caching-docker-layer-cache) | practice | warn | recommended, agentic |  | Docker image builds in CI should import and export a layer cache. |
+| [`caching/matrix-cache-key-missing-os`](#caching-matrix-cache-key-missing-os) | practice | warn | recommended, agentic, strict |  | Native-output cache keys should distinguish matrix platforms when modeled cache versions can overlap. |
+| [`caching/pr-branch-cache-save`](#caching-pr-branch-cache-save) | insight | info | insights, strict |  | A workflow that only runs on `pull_request` saves caches no other pull request or branch can restore. |
 | [`caching/setup-cache`](#caching-setup-cache) | practice | warn | recommended, agentic | yes | Language setup actions should cache downloaded dependencies. |
+| [`caching/uncompressed-artifact-upload`](#caching-uncompressed-artifact-upload) | practice | info | recommended, agentic, strict |  | Artifacts that only contain already-compressed files should be uploaded with `compression-level: 0`. |
 | [`hermeticity/docker-base-digest`](#hermeticity-docker-base-digest) | practice | warn | recommended, agentic, strict |  | Dockerfile base images should use pinned versions (and digests when required). |
 | [`hermeticity/frozen-lockfile`](#hermeticity-frozen-lockfile) | practice | error | recommended, agentic, strict | yes | CI installs must be locked to the committed lockfile. |
 | [`hermeticity/pin-actions`](#hermeticity-pin-actions) | practice | warn | strict |  | Third-party actions and reusable workflows should be pinned to a full commit SHA. |
 | [`hermeticity/pin-container-images`](#hermeticity-pin-container-images) | practice | warn | recommended, agentic, strict |  | Job containers and service containers should use pinned image versions. |
 | [`hermeticity/pin-runner`](#hermeticity-pin-runner) | practice | warn | recommended, agentic, strict | yes | Jobs should run on a pinned runner image label instead of `*-latest`. |
 | [`containers/apt-hygiene`](#containers-apt-hygiene) | practice | warn | recommended, agentic, strict | yes | apt and apk installs in Dockerfiles should skip recommended packages, update and install in one layer, and not leave package caches in the image. |
+| [`containers/buildx-load-multiplatform`](#containers-buildx-load-multiplatform) | insight | warn | recommended, agentic, strict |  | Multi-platform image builds must not be loaded into the classic Docker image store of a GitHub-hosted runner. |
 | [`containers/cache-mount`](#containers-cache-mount) | practice | info | agentic, strict |  | Dependency installs and compiles in Dockerfiles should use BuildKit cache mounts for package-manager and compiler caches. |
+| [`containers/curl-pipe-shell`](#containers-curl-pipe-shell) | policy | error | recommended, agentic, strict |  | A script is downloaded and executed in one go (`curl \| sh`, `bash <(curl ...)`) without checksum or signature verification. |
 | [`containers/dependency-layer`](#containers-dependency-layer) | practice | warn | recommended, agentic |  | Dockerfiles should install dependencies from manifests and lockfiles before copying the rest of the source tree. |
+| [`containers/docker-no-cache-build`](#containers-docker-no-cache-build) | practice | warn | recommended, agentic, strict |  | Push and pull-request image builds should not pass --no-cache when they import a cache (cache-from) or run on a persistent self-hosted builder. |
 | [`containers/dockerignore`](#containers-dockerignore) | practice | warn | recommended, agentic |  | Docker build contexts that are copied into images should have a .dockerignore excluding .git and node_modules. |
+| [`containers/gha-cache-missing-scope`](#containers-gha-cache-missing-scope) | practice | warn | recommended, agentic, strict |  | Consider distinct gha cache scopes for modeled build variants that can replace each other's cache index. |
+| [`containers/gha-cache-mode-min`](#containers-gha-cache-mode-min) | practice | info | strict |  | A multi-stage build exports a minimal cache that omits intermediate-stage layers. |
 | [`containers/multi-stage`](#containers-multi-stage) | practice | info | recommended, agentic |  | Single-stage Dockerfiles that install build toolchains or dev dependencies should use a builder stage and a minimal runtime stage. |
+| [`containers/pnpm-fetch-docker-layer`](#containers-pnpm-fetch-docker-layer) | practice | info | strict |  | A pnpm-workspace Dockerfile copies every workspace package.json before `pnpm install` instead of warming the store with `pnpm fetch`. |
+| [`containers/qemu-emulated-multiarch`](#containers-qemu-emulated-multiarch) | insight | info | strict |  | Potentially emulated multi-platform builds are candidates for measured native-runner or cross-compilation alternatives. |
+| [`containers/runtime-tool-install-vs-container`](#containers-runtime-tool-install-vs-container) | insight | info | insights |  | The same tools are installed at runtime in several jobs instead of being baked into a job container image. |
 | [`containers/shared-base`](#containers-shared-base) | insight | info | insights |  | Dockerfiles that repeat the same base image and toolchain preamble should share a base image published to GHCR. |
+| [`containers/sleep-polling-health-check`](#containers-sleep-polling-health-check) | insight | info | recommended, agentic, strict |  | A job with service containers waits for them with a fixed `sleep` instead of a `--health-cmd` health check. |
 | [`packages/exports-map`](#packages-exports-map) | practice | info | strict, agentic |  | Library packages should declare an `exports` map, and ESM libraries a `sideEffects` field. |
 | [`packages/files-allowlist`](#packages-files-allowlist) | practice | warn | recommended, agentic |  | Publishable packages should declare a `files` allowlist (or an `.npmignore`) so the tarball only ships build output. |
 | [`packages/monolith`](#packages-monolith) | insight | info | insights |  | Packages with very many dependencies are candidates for decomposition into smaller composable packages. |
@@ -71,6 +88,53 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | [`testing/masked-failures`](#testing-masked-failures) | practice | warn | recommended, agentic, strict |  | Test failures should fail the job, not be silenced by `continue-on-error: true` or `\|\| true`. |
 | [`testing/cache-disabled-install`](#testing-cache-disabled-install) | practice | info | agentic, strict |  | Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps. |
 | [`testing/fixed-sleep`](#testing-fixed-sleep) | practice | warn | recommended, agentic, strict |  | Run steps should wait for services to become ready instead of sleeping for a fixed time. |
+| [`nix/accept-flake-config-untrusted`](#nix-accept-flake-config-untrusted) | policy | error | recommended, agentic, strict |  | Nix accepts `nixConfig` from flakes that a pull request can modify. |
+| [`nix/builtins-fetchurl-unverified`](#nix-builtins-fetchurl-unverified) | practice | warn | recommended, agentic, strict |  | `builtins.fetchurl` downloads at evaluation time without an integrity check; pin it with `sha256` or use the `pkgs.fetchurl` fixed-output fetcher. |
+| [`nix/channel-in-ci`](#nix-channel-in-ci) | practice | warn | recommended, agentic, strict |  | `nix-channel --add/--update` in CI makes evaluation depend on a channel that moves. |
+| [`nix/current-system-builtin`](#nix-current-system-builtin) | practice | warn | recommended, agentic, strict |  | Nix expressions should not read `builtins.currentSystem`, the platform of the machine running the evaluation. |
+| [`nix/dev-shell-reinvoked-per-step`](#nix-dev-shell-reinvoked-per-step) | practice | info | strict |  | Several steps of one job each start the same `nix develop` / `nix-shell` environment. |
+| [`nix/dockertools-single-layer-image`](#nix-dockertools-single-layer-image) | practice | info | strict, insights |  | Container images built with `dockerTools.buildImage` put the whole closure in a single layer. |
+| [`nix/duplicate-nixpkgs-nodes`](#nix-duplicate-nixpkgs-nodes) | insight | info | strict |  | A flake input brings its own nixpkgs revision instead of following the flake's `nixpkgs`, so flake.lock holds several nixpkgs copies. |
+| [`nix/fake-hash-committed`](#nix-fake-hash-committed) | policy | warn | recommended, agentic, strict |  | Placeholder hashes (`lib.fakeHash`, `""`, all-zero or `sha256-AAAA…` values) must not be committed. |
+| [`nix/fetchgit-missing-rev`](#nix-fetchgit-missing-rev) | policy | warn | recommended, agentic, strict |  | `builtins.fetchGit` of a remote repository should declare a revision or supported content-hash pin. |
+| [`nix/fetchtarball-no-hash`](#nix-fetchtarball-no-hash) | policy | warn | recommended, agentic, strict |  | `builtins.fetchTarball` should declare the expected unpacked-source `sha256`. |
+| [`nix/flake-check-missing-parallel-evaluator`](#nix-flake-check-missing-parallel-evaluator) | insight | info | insights |  | `nix flake check` runs on a flake with many outputs without a parallel evaluator or a per-output job matrix. |
+| [`nix/flake-lock-missing-input`](#nix-flake-lock-missing-input) | practice | warn | recommended, agentic, strict |  | flake.lock is out of date with flake.nix: an input has no lock entry, was changed without re-locking, or a node reference dangles. |
+| [`nix/flake-nixconfig-cache-not-trusted`](#nix-flake-nixconfig-cache-not-trusted) | practice | info | strict |  | A flake names an additional binary cache without recognized configuration at a CI command building it. |
+| [`nix/flake-update-in-build-job`](#nix-flake-update-in-build-job) | practice | warn | recommended, agentic, strict |  | A push/pull_request CI job runs `nix flake update` (or `--update-input`/`--recreate-lock-file`) before building. |
+| [`nix/get-env-builtin`](#nix-get-env-builtin) | practice | info | strict |  | Nix expressions should not read environment variables with `builtins.getEnv` during evaluation. |
+| [`nix/git-input-for-github`](#nix-git-input-for-github) | practice | info | strict |  | A flake input fetches a github.com repository with `git+https://` or `git+ssh://` instead of the `github:` tarball fetcher. |
+| [`nix/imperative-install`](#nix-imperative-install) | practice | warn | recommended, agentic, strict |  | `nix-env -i` / `nix profile install` installs CI tools from a channel, branch or registry entry that moves. |
+| [`nix/import-from-derivation`](#nix-import-from-derivation) | practice | warn | recommended, agentic, strict |  | Nix expressions should not import or read files produced by a derivation during evaluation (import from derivation). |
+| [`nix/impure-flag-in-ci`](#nix-impure-flag-in-ci) | practice | error | recommended, agentic, strict |  | `--impure` (or `--no-pure-eval`) on a Nix command in CI lets evaluation depend on unrecorded runner state. |
+| [`nix/indirect-input`](#nix-indirect-input) | practice | warn | recommended, agentic, strict |  | A flake input is an indirect reference (`nixpkgs`, `flake:nixpkgs`, or no `url` at all) that Nix resolves through the mutable flake registries. |
+| [`nix/installer-unpinned-nix-version`](#nix-installer-unpinned-nix-version) | practice | info | strict, insights |  | A pinned nix-installer-action still installs whatever Nix version is newest at run time. |
+| [`nix/max-jobs-pinned-low`](#nix-max-jobs-pinned-low) | insight | info | strict |  | Nix's `max-jobs` is pinned to a very small number on a GitHub-hosted runner. |
+| [`nix/missing-flake-lock`](#nix-missing-flake-lock) | practice | warn | recommended, agentic, strict |  | A flake.nix with inputs has no flake.lock committed next to it. |
+| [`nix/nix-build-inside-docker`](#nix-nix-build-inside-docker) | insight | info | strict |  | Review Nix sandboxing and store-cache reuse when Dockerfile RUN instructions build with a nixos/nix-named base. |
+| [`nix/nix-shell-dash-p-unpinned`](#nix-nix-shell-dash-p-unpinned) | practice | warn | recommended, agentic, strict |  | Ad-hoc `nix-shell -p` / `nix run nixpkgs#…` / `nix shell nixpkgs#…` tools come from a moving nixpkgs branch. |
+| [`nix/nixpkgs-angle-bracket-path`](#nix-nixpkgs-angle-bracket-path) | practice | warn | recommended, agentic, strict |  | Nix expressions should not use `<nixpkgs>`-style lookup paths, which resolve through the machine's NIX_PATH. |
+| [`nix/nixpkgs-input-not-channel`](#nix-nixpkgs-input-not-channel) | practice | warn | recommended, agentic, strict |  | A nixpkgs flake input tracks `master`, a `release-*` or `staging*` branch instead of a channel branch. |
+| [`nix/no-binary-cache-configured`](#nix-no-binary-cache-configured) | insight | info | recommended, strict |  | A hosted job builds local Nix targets with no additional binary cache visible before the build. |
+| [`nix/no-lock-update-automation`](#nix-no-lock-update-automation) | practice | info | strict |  | A committed flake.lock has no Dependabot, Renovate or scheduled workflow keeping it up to date. |
+| [`nix/outdated-magic-nix-cache`](#nix-outdated-magic-nix-cache) | insight | info | recommended, agentic, strict |  | Review Magic Nix Cache action refs that predate v11's restored support. |
+| [`nix/overlay-overrides-foundational-package`](#nix-overlay-overrides-foundational-package) | insight | warn | strict, insights |  | Overlays should not globally replace foundational packages such as `stdenv`, `glibc`, `openssl` or `zlib`. |
+| [`nix/quick-install-implicit-flake-config-trust`](#nix-quick-install-implicit-flake-config-trust) | practice | warn | recommended, strict |  | nixbuild/nix-quick-install-action silently enables `accept-flake-config`. |
+| [`nix/raw-store-cache`](#nix-raw-store-cache) | practice | error | recommended, agentic, strict |  | Do not cache `/nix/store` or `/nix/var/nix` with actions/cache; use a Nix-aware cache. |
+| [`nix/rust-two-phase-build`](#nix-rust-two-phase-build) | insight | info | strict, insights |  | Rust crates built from local source should compile dependencies in a separate, cacheable derivation. |
+| [`nix/sandbox-disabled`](#nix-sandbox-disabled) | policy | warn | recommended, agentic, strict |  | The Nix build sandbox is turned off or relaxed in CI, in flake nixConfig, or by `__noChroot`. |
+| [`nix/separate-nix-build-invocations`](#nix-separate-nix-build-invocations) | practice | info | strict |  | Consecutive `nix build` commands in one job that could be a single `nix build` of all installables. |
+| [`nix/src-whole-repo`](#nix-src-whole-repo) | practice | warn | recommended, agentic, strict |  | Derivations should not use the whole repository (`src = ./.`) as their source. |
+| [`toolchains/gradle-build-cache-disabled`](#toolchains-gradle-build-cache-disabled) | practice | warn | recommended, agentic, strict |  | Gradle builds run in CI should enable the build cache with `org.gradle.caching=true`. |
+| [`toolchains/gradle-configuration-cache-disabled`](#toolchains-gradle-configuration-cache-disabled) | practice | info | strict |  | Gradle 8.1+ builds run in CI could enable the configuration cache with `org.gradle.configuration-cache=true`. |
+| [`toolchains/gradle-parallel-disabled`](#toolchains-gradle-parallel-disabled) | practice | info | strict |  | Multi-project Gradle builds run in CI could execute independent subprojects in parallel with `org.gradle.parallel=true`. |
+| [`toolchains/bazel-missing-version-pin`](#toolchains-bazel-missing-version-pin) | practice | warn | recommended, agentic, strict |  | Bazel workspaces built in CI should pin the Bazel version in a checked-in `.bazelversion` file. |
+| [`toolchains/rust-missing-locked-flag`](#toolchains-rust-missing-locked-flag) | practice | warn | recommended, agentic, strict |  | Cargo commands in CI should pass `--locked` so the committed `Cargo.lock` is enforced instead of silently rewritten. |
+| [`toolchains/rust-cargo-incremental-in-ci`](#toolchains-rust-cargo-incremental-in-ci) | practice | info | strict |  | Review incremental compilation tradeoffs in CI jobs that cache Cargo's `target/` directory. |
+| [`toolchains/go-mod-mutable-override`](#toolchains-go-mod-mutable-override) | practice | warn | recommended, agentic, strict |  | CI should not let Go build commands rewrite go.mod and go.sum (`-mod=mod`, GOFLAGS, or a `go get` before building). |
+| [`toolchains/python-pip-no-hash-check`](#toolchains-python-pip-no-hash-check) | practice | info | strict |  | CI installs fully pinned requirements files with pip without hash-checking mode (`--hash` entries and `--require-hashes`). |
+| [`toolchains/uv-sync-unlocked`](#toolchains-uv-sync-unlocked) | practice | warn | recommended, agentic, strict |  | `uv sync` and `uv run` in CI should pass `--locked` so the committed `uv.lock` is enforced instead of silently re-locked. |
+| [`toolchains/rust-toolchain-unpinned`](#toolchains-rust-toolchain-unpinned) | practice | warn | recommended, agentic, strict |  | CI should build Rust with a pinned toolchain release rather than the floating `stable`/`nightly` channel. |
 
 ## Ruleset: workflow
 
@@ -142,6 +206,41 @@ References:
 
 - <https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency>
 
+<a id="workflow-duplicate-push-pull-request-trigger"></a>
+
+### workflow/duplicate-push-pull-request-trigger
+
+A workflow accepting both broad `push` and `pull_request` events may repeat overlapping work for same-repository pull requests.
+
+**Why:** A push to an open same-repository pull request can trigger both push and pull_request runs. They are not equivalent: push usually checks the branch tip, while pull_request checks a synthetic merge commit, and event conditions, paths, permissions and required checks can differ. Review whether that overlap is intentional. Restricting push changes branch and tag coverage, so this rule never edits triggers automatically.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+- Options: `defaultBranches` (default `["main"]`)
+
+Before:
+
+```yaml
+on:
+  push:
+  pull_request:
+```
+
+After:
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushbranchestagsbranches-ignoretags-ignore>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#push>
+
 <a id="workflow-job-timeout"></a>
 
 ### workflow/job-timeout
@@ -174,6 +273,87 @@ jobs:
 References:
 
 - <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes>
+
+<a id="workflow-larger-runner-unjustified"></a>
+
+### workflow/larger-runner-unjustified
+
+A job on a larger (multi-core or macOS large) runner that only checks out, sets up tools, installs and runs formatters or linters.
+
+**Why:** A larger-looking runner label and familiar setup/lint commands do not establish resource needs or actual billing. Install hooks, native compilation, repository size, memory, networking and private runner policy can justify the selection. Compare representative end-to-end time, CPU/memory and current account pricing before downsizing. This is a measurement prompt, not proof of wasted cost.
+
+- Kind: insight; default severity: info; impact: low
+- Presets: `insights`
+
+Before:
+
+```yaml
+format:
+  runs-on: ubuntu-24.04-16core
+  steps:
+    - uses: actions/checkout@v5
+    - run: npx prettier --check .
+```
+
+After:
+
+```yaml
+format:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v5
+    - run: npx prettier --check .
+```
+
+References:
+
+- <https://docs.github.com/en/billing/reference/actions-runner-pricing>
+- <https://docs.github.com/en/actions/reference/runners/larger-runners#machine-sizes-for-larger-runners>
+- <https://docs.github.com/en/actions/how-tos/manage-runners/larger-runners/use-larger-runners>
+
+<a id="workflow-matrix-explosion"></a>
+
+### workflow/matrix-explosion
+
+A `strategy.matrix` whose version and runner dimensions multiply past the configured job budget, or past GitHub's 256-job limit.
+
+**Why:** A matrix runs jobs for its dimension combinations and can increase runner usage and queueing. GitHub limits a matrix to 256 jobs. A configured budget is an engineering preference, not evidence that intermediate versions are redundant: reducing version coverage can miss version-specific regressions. Suggested smaller matrices preserve all categorical and shard combinations on every retained runner, but deliberately reduce version combinations and require a coverage decision. Existing include/exclude rules are never replaced automatically.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `agentic`, `strict`
+- Options: `maxJobs` (default `20`)
+
+Before:
+
+```yaml
+strategy:
+  matrix:
+    os: [ubuntu-latest, windows-latest, macos-latest]
+    node: [18, 20, 22, 24]
+    db: [postgres, mysql]
+```
+
+After:
+
+```yaml
+# Only after accepting reduced version coverage:
+strategy:
+  matrix:
+    os: [ubuntu-latest]
+    node: [18, 24]
+    db: [postgres, mysql]
+    include:
+      - { os: windows-latest, node: 24, db: postgres }
+      - { os: windows-latest, node: 24, db: mysql }
+      - { os: macos-latest, node: 24, db: postgres }
+      - { os: macos-latest, node: 24, db: mysql }
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategymatrix>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategymatrixinclude>
+- <https://docs.github.com/en/actions/reference/limits#job-concurrency-limits-for-github-hosted-runners>
 
 <a id="workflow-merge-group"></a>
 
@@ -237,6 +417,90 @@ References:
 - <https://github.com/actions/cache/releases>
 - <https://github.com/actions/upload-artifact/releases>
 - <https://github.com/actions/download-artifact/releases>
+
+<a id="workflow-setup-action-missing-version-file"></a>
+
+### workflow/setup-action-missing-version-file
+
+Language setup actions (setup-node, setup-python, setup-go, setup-dotnet) should pin the toolchain with a version input or the repository's version file.
+
+**Why:** Without explicit version inputs or supported implicit version files, setup actions generally fall back to pre-installed toolchains. Hosted image updates or custom runner provisioning may then change the selected version. Reusing the project's supported version file can align CI and local development, but version ranges, aliases and .NET roll-forward policies still permit different releases. A version input is not a hermetic-build guarantee. Selecting a toolchain can change behavior and therefore is never automatically applied.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- uses: actions/checkout@v5
+- uses: actions/setup-node@v5
+- run: npm ci
+```
+
+After:
+
+```yaml
+- uses: actions/checkout@v5
+- uses: actions/setup-node@v5
+  with:
+    node-version-file: .nvmrc
+- run: npm ci
+```
+
+References:
+
+- <https://github.com/actions/setup-node#usage>
+- <https://github.com/actions/setup-node/blob/main/docs/advanced-usage.md#node-version-file>
+- <https://github.com/actions/setup-python#basic-usage>
+- <https://github.com/actions/setup-python/blob/main/docs/advanced-usage.md#using-the-python-version-file-input>
+- <https://github.com/actions/setup-go/blob/main/docs/advanced-usage.md#using-the-go-version-file-input>
+- <https://github.com/actions/setup-dotnet#using-the-global-json-file-input>
+
+<a id="workflow-unnecessary-needs-serialization"></a>
+
+### workflow/unnecessary-needs-serialization
+
+Review `needs` edges without a recognized data transfer; they still provide success gating.
+
+**Why:** Hosted jobs do not share their ordinary filesystem merely because one needs another. Outputs, artifacts, caches and external systems can transfer data. Even without data transfer, needs provides ordering and success/skip/failure gating; an installation can intentionally validate dependencies or have external side effects. This insight identifies no recognized data transfer, not a redundant edge. Removing it changes behavior and requires an explicit decision about gating and concurrency.
+
+- Kind: insight; default severity: info; impact: medium
+- Presets: `insights`, `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm ci
+  unit:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm ci && npm test
+```
+
+After:
+
+```yaml
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm ci && npm test
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds>
+- <https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/pass-job-outputs>
+- <https://docs.github.com/en/actions/tutorials/store-and-share-data>
 
 ## Ruleset: checkout
 
@@ -627,6 +891,102 @@ References:
 - <https://docs.docker.com/build/cache/backends/gha/>
 - <https://docs.docker.com/build/cache/backends/registry/>
 
+<a id="caching-matrix-cache-key-missing-os"></a>
+
+### caching/matrix-cache-key-missing-os
+
+Native-output cache keys should distinguish matrix platforms when modeled cache versions can overlap.
+
+**Why:** Cache matching depends on key, version and accessible branch scope. Versions include configured paths and compression details; Windows has additional cross-OS handling. Under the modeled hosted-runner/action behavior, equal visible inputs can permit incompatible native outputs to share a key. Custom compression, action versions or external configuration can change the version. Concurrent cold runs may all miss before a later run restores the winning cache. Changing keys must preserve every paired restore/save expression and caller, so no automatic rewrite is offered.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+runs-on: ${{ matrix.os }}
+strategy:
+  matrix:
+    os: [ubuntu-latest, macos-latest]
+steps:
+  - uses: actions/cache@v6
+    with:
+      path: node_modules
+      key: modules-${{ hashFiles('package-lock.json') }}
+```
+
+After:
+
+```yaml
+runs-on: ${{ matrix.os }}
+strategy:
+  matrix:
+    os: [ubuntu-latest, macos-latest]
+steps:
+  - uses: actions/cache@v6
+    with:
+      path: node_modules
+      key: ${{ runner.os }}-modules-${{ hashFiles('package-lock.json') }}
+```
+
+References:
+
+- <https://github.com/actions/cache#cache-version>
+- <https://github.com/actions/cache/blob/main/tips-and-workarounds.md#cross-os-cache>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#runner-context>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#cache-key-matching>
+
+<a id="caching-pr-branch-cache-save"></a>
+
+### caching/pr-branch-cache-save
+
+A workflow that only runs on `pull_request` saves caches no other pull request or branch can restore.
+
+**Why:** A cache saved by a pull_request run is scoped to its merge ref and can be useful on subsequent commits or reruns of that pull request, but cannot seed other pull requests or the base branch. PR runs can also restore accessible base/default-branch caches with compatible keys and versions. No recognized non-PR writer in the inspected repository does not prove no cache exists: history, external workflows and other cache actions may supply one. Compare hit rates, transfer cost and storage policy before adding trusted-branch warming; do not remove useful PR writes automatically.
+
+- Kind: insight; default severity: info; impact: medium
+- Presets: `insights`, `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+on: pull_request
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+```
+
+After:
+
+```yaml
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#usage-limits-and-eviction-policy>
+- <https://github.com/actions/cache/blob/main/tips-and-workarounds.md#use-cache-across-feature-branches>
+- <https://github.com/actions/cache/blob/main/tips-and-workarounds.md#force-deletion-of-caches-overriding-default-cache-eviction-policy>
+
 <a id="caching-setup-cache"></a>
 
 ### caching/setup-cache
@@ -662,6 +1022,41 @@ References:
 - <https://github.com/actions/setup-java#caching-packages-dependencies>
 - <https://github.com/actions/setup-go#caching-dependency-files-and-build-outputs>
 - <https://github.com/actions/setup-dotnet#caching-nuget-packages>
+
+<a id="caching-uncompressed-artifact-upload"></a>
+
+### caching/uncompressed-artifact-upload
+
+Artifacts that only contain already-compressed files should be uploaded with `compression-level: 0`.
+
+**Why:** Recognized actions/upload-artifact versions default to compression-level 6. Extensions such as .gz and .zip commonly identify compressed content, but archives may contain uncompressed entries and extension alone is not evidence of actual bytes or upload-time savings. Level 0 preserves extracted file contents but changes archive bytes, size and digest. Compare representative transfer/storage cost and consumer expectations before manually changing compression policy.
+
+- Kind: practice; default severity: info; impact: low
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- uses: actions/upload-artifact@v7
+  with:
+    name: bundle
+    path: dist/app.tar.gz
+```
+
+After:
+
+```yaml
+- uses: actions/upload-artifact@v7
+  with:
+    name: bundle
+    path: dist/app.tar.gz
+    compression-level: 0
+```
+
+References:
+
+- <https://github.com/actions/upload-artifact#altering-compressions-level-speed-v-size>
+- <https://github.com/actions/upload-artifact/blob/main/action.yml>
 
 ## Ruleset: hermeticity
 
@@ -852,6 +1247,43 @@ References:
 - <https://docs.docker.com/build/cache/optimize/#use-cache-mounts>
 - <https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper#Local_Cache>
 
+<a id="containers-buildx-load-multiplatform"></a>
+
+### containers/buildx-load-multiplatform
+
+Multi-platform image builds must not be loaded into the classic Docker image store of a GitHub-hosted runner.
+
+**Why:** The classic Docker image store cannot hold multi-platform images. Loading a multi-platform build therefore requires a compatible exporter and containerd image store, or a separate single-platform test build. Runner labels alone do not prove which store is enabled: hosted images change and workflows can address custom daemons. This is a compatibility check to verify, not a prediction that every such job fails.
+
+- Kind: insight; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- uses: docker/build-push-action@v7
+  with:
+    platforms: linux/amd64,linux/arm64
+    load: true
+    tags: app:test
+```
+
+After:
+
+```yaml
+- uses: docker/build-push-action@v7
+  with:
+    platforms: linux/amd64
+    load: true
+    tags: app:test
+```
+
+References:
+
+- <https://docs.docker.com/reference/cli/docker/buildx/build/#load>
+- <https://docs.docker.com/build/ci/github-actions/multi-platform/>
+- <https://docs.docker.com/build/building/multi-platform/>
+
 <a id="containers-cache-mount"></a>
 
 ### containers/cache-mount
@@ -886,6 +1318,37 @@ References:
 - <https://docs.docker.com/reference/dockerfile/#run---mounttypecache>
 - <https://docs.docker.com/build/ci/github-actions/cache/#cache-mounts>
 - <https://pnpm.io/docker>
+
+<a id="containers-curl-pipe-shell"></a>
+
+### containers/curl-pipe-shell
+
+A script is downloaded and executed in one go (`curl | sh`, `bash <(curl ...)`) without checksum or signature verification.
+
+**Why:** A direct download-to-interpreter stream executes bytes before the complete payload can be checked locally. A checksum command elsewhere in the step, or a check after execution, does not verify that stream. Download to a file and require successful verification of that exact file before execution. Use an independently trusted expected digest or signing key. Verification authenticates payload bytes; it does not make the script, its network dependencies or the overall build hermetic.
+
+- Kind: policy; default severity: error; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: curl -fsSL https://example.com/install.sh | sh
+```
+
+After:
+
+```yaml
+- run: |
+    curl -fsSLo install.sh https://example.com/install.sh && \
+    echo "<trusted-sha256>  install.sh" | sha256sum -c - && \
+    sh install.sh
+```
+
+References:
+
+- <https://docs.docker.com/reference/dockerfile/#verifying-a-remote-file-checksum-add---checksum>
+- <https://curl.se/docs/manpage.html>
 
 <a id="containers-dependency-layer"></a>
 
@@ -926,6 +1389,47 @@ References:
 - <https://pnpm.io/cli/fetch>
 - <https://turborepo.com/docs/guides/tools/docker>
 
+<a id="containers-docker-no-cache-build"></a>
+
+### containers/docker-no-cache-build
+
+Push and pull-request image builds should not pass --no-cache when they import a cache (cache-from) or run on a persistent self-hosted builder.
+
+**Why:** `--no-cache` bypasses reusable instruction results for the stages built; unused stages need not run, and cache mounts or external dependency caches can still help. A declared cache import or self-hosted builder does not prove a usable hit. `--pull` refreshes base-image resolution but does not refresh an otherwise cached RUN apt-get install or other mutable download. Preserve the project's freshness policy; measure cache hits and use intentional full or selected-stage rebuilds when required.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+on: pull_request
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: docker buildx build --no-cache --cache-from type=gha --cache-to type=gha,mode=max -t app .
+```
+
+After:
+
+```yaml
+on: pull_request
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: docker buildx build --pull --cache-from type=gha --cache-to type=gha,mode=max -t app .
+# plus a weekly `on: schedule` workflow running `docker buildx build --pull --no-cache -t app .`
+```
+
+References:
+
+- <https://docs.docker.com/build/building/best-practices/#rebuild-your-images-often>
+- <https://docs.docker.com/reference/cli/docker/buildx/build/#no-cache-filter>
+- <https://github.com/docker/build-push-action#inputs>
+- <https://docs.github.com/en/actions/concepts/runners/github-hosted-runners>
+
 <a id="containers-dockerignore"></a>
 
 ### containers/dockerignore
@@ -959,6 +1463,85 @@ References:
 
 - <https://docs.docker.com/build/concepts/context/#dockerignore-files>
 - <https://docs.docker.com/build/cache/invalidation/>
+
+<a id="containers-gha-cache-missing-scope"></a>
+
+### containers/gha-cache-missing-scope
+
+Consider distinct gha cache scopes for modeled build variants that can replace each other's cache index.
+
+**Why:** The gha backend's scope defaults to buildkit. Multiple exports sharing that scope can replace its index within the same repository/branch cache namespace. Some layers, local builder caches or other imports can still be reused; replacement is not proof of rebuilding from scratch. Scope expressions should distinguish relevant image/platform variants and agree across every importer/exporter. That cross-file contract is not established by this detector, so changes require review rather than automatic edits.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+strategy:
+  matrix:
+    platform: [linux/amd64, linux/arm64]
+steps:
+  - uses: docker/build-push-action@v7
+    with:
+      platforms: ${{ matrix.platform }}
+      cache-from: type=gha
+      cache-to: type=gha,mode=max
+```
+
+After:
+
+```yaml
+strategy:
+  matrix:
+    platform: [linux/amd64, linux/arm64]
+steps:
+  - uses: docker/build-push-action@v7
+    with:
+      platforms: ${{ matrix.platform }}
+      cache-from: type=gha,scope=${{ matrix.platform }}
+      cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+```
+
+References:
+
+- <https://docs.docker.com/build/cache/backends/gha/>
+- <https://docs.docker.com/build/ci/github-actions/cache/#github-cache>
+
+<a id="containers-gha-cache-mode-min"></a>
+
+### containers/gha-cache-mode-min
+
+A multi-stage build exports a minimal cache that omits intermediate-stage layers.
+
+**Why:** BuildKit's mode=min export includes layers in the resulting image, not all intermediate-stage layers. A fresh builder relying only on that export may repeat intermediate work; local caches and other exporters can still avoid it. mode=max exports intermediate layers too, which can increase transfer/storage and disclose source or sensitive files intentionally omitted from the final image. Review cache access, secret handling and measured benefit before opting in; this is not a safe automatic edit.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `strict`
+
+Before:
+
+```yaml
+# Dockerfile: FROM golang AS build ... RUN go build ... FROM scratch COPY --from=build ...
+- uses: docker/build-push-action@v7
+  with:
+    cache-from: type=gha
+    cache-to: type=gha
+```
+
+After:
+
+```yaml
+- uses: docker/build-push-action@v7
+  with:
+    cache-from: type=gha
+    cache-to: type=gha,mode=max
+```
+
+References:
+
+- <https://docs.docker.com/build/cache/backends/#cache-mode>
+- <https://docs.docker.com/build/cache/backends/gha/>
 
 <a id="containers-multi-stage"></a>
 
@@ -1002,6 +1585,131 @@ References:
 - <https://docs.docker.com/build/building/best-practices/#use-multi-stage-builds>
 - <https://github.com/GoogleContainerTools/distroless>
 
+<a id="containers-pnpm-fetch-docker-layer"></a>
+
+### containers/pnpm-fetch-docker-layer
+
+A pnpm-workspace Dockerfile copies every workspace package.json before `pnpm install` instead of warming the store with `pnpm fetch`.
+
+**Why:** Copying workspace manifests before installation can invalidate the install layer on non-dependency edits. A warm pnpm store or cache mount may already avoid downloads. pnpm fetch can separate dependency fetching from manifest changes, but also depends on pnpm version, workspace configuration, patches, authentication and relevant build inputs. An offline install still performs linking and may run lifecycle scripts. Preserve frozen-lock policy and all required inputs, then benchmark.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `strict`
+
+Before:
+
+```yaml
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/api/package.json packages/api/
+COPY packages/web/package.json packages/web/
+RUN pnpm install --frozen-lockfile
+COPY . .
+```
+
+After:
+
+```yaml
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+# Also supply required patches/non-secret config; use secret mounts for authentication.
+RUN pnpm fetch --frozen-lockfile
+COPY . .
+RUN pnpm install -r --offline --frozen-lockfile
+```
+
+References:
+
+- <https://pnpm.io/cli/fetch>
+- <https://github.com/pnpm/pnpm/blob/v10.11.0/pkg-manager/plugin-commands-installation/src/fetch.ts>
+- <https://docs.docker.com/build/cache/optimize/#order-your-layers>
+
+<a id="containers-qemu-emulated-multiarch"></a>
+
+### containers/qemu-emulated-multiarch
+
+Potentially emulated multi-platform builds are candidates for measured native-runner or cross-compilation alternatives.
+
+**Why:** Registering QEMU and requesting a foreign platform does not establish that build steps execute under emulation: native remote nodes, fixed-platform stages, cross-compilation, pruning and cache hits may avoid it. Where measurements show emulated compilation/compression, native nodes or cross-compilation can help. Compare full build and publication costs, verify hosted-runner availability, and preserve every platform, tag, artifact and test requirement.
+
+- Kind: insight; default severity: info; impact: high
+- Presets: `strict`
+
+Before:
+
+```yaml
+runs-on: ubuntu-24.04
+steps:
+  - uses: docker/setup-qemu-action@v4
+  - uses: docker/setup-buildx-action@v4
+  - uses: docker/build-push-action@v7
+    with:
+      platforms: linux/amd64,linux/arm64
+      push: true
+```
+
+After:
+
+```yaml
+strategy:
+  matrix:
+    include:
+      - { platform: linux/amd64, runner: ubuntu-24.04 }
+      - { platform: linux/arm64, runner: ubuntu-24.04-arm }
+runs-on: ${{ matrix.runner }}
+steps:
+  - uses: docker/build-push-action@v7
+    with:
+      platforms: ${{ matrix.platform }}
+      outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+# merge job: docker buildx imagetools create -t <image>:<tag> <image>@sha256:<amd64> <image>@sha256:<arm64>
+```
+
+References:
+
+- <https://docs.docker.com/build/building/multi-platform/>
+- <https://docs.docker.com/build/ci/github-actions/multi-platform/>
+- <https://docs.github.com/en/actions/reference/runners/github-hosted-runners>
+- <https://docs.docker.com/reference/cli/docker/buildx/imagetools/create/>
+
+<a id="containers-runtime-tool-install-vs-container"></a>
+
+### containers/runtime-tool-install-vs-container
+
+The same tools are installed at runtime in several jobs instead of being baked into a job container image.
+
+**Why:** Repeated tool installation specifications may be worth consolidating, but downloads can already be cached and versions may already be pinned. A job container replaces installation work with image build/pull/maintenance costs and changes OS, user, shell, networking and action compatibility. Tags are mutable: a reviewed image digest identifies the intended image. Benchmark and validate the migration; repeated command text is not proof of repeated network work or equivalent artifacts.
+
+- Kind: insight; default severity: info; impact: low
+- Presets: `insights`
+- Options: `minJobs` (default `2`)
+
+Before:
+
+```yaml
+lint:
+  runs-on: ubuntu-latest
+  steps:
+    - run: sudo apt-get install -y shellcheck jq
+test:
+  runs-on: ubuntu-latest
+  steps:
+    - run: sudo apt-get install -y jq shellcheck
+```
+
+After:
+
+```yaml
+lint:
+  runs-on: ubuntu-latest
+  container: ghcr.io/acme/app/ci-tools@sha256:<reviewed-digest>
+  steps:
+    - run: shellcheck scripts/*.sh
+```
+
+References:
+
+- <https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/run-jobs-in-a-container>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainer>
+
 <a id="containers-shared-base"></a>
 
 ### containers/shared-base
@@ -1035,6 +1743,49 @@ References:
 - <https://docs.docker.com/build/building/base-images/>
 - <https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry>
 - <https://docs.docker.com/build/building/best-practices/#pin-base-image-versions>
+
+<a id="containers-sleep-polling-health-check"></a>
+
+### containers/sleep-polling-health-check
+
+A job with service containers waits for them with a fixed `sleep` instead of a `--health-cmd` health check.
+
+**Why:** A fixed sleep may wait longer than a useful readiness probe or fail on a slow start. However, the image may already define HEALTHCHECK and the sleep may await unrelated work. An explicit probe helps only if it tests the same readiness condition; polling intervals, retries and credentials affect correctness and latency. This rule observes a sleep and absent workflow-level health command, not the image's configuration or the sleep's purpose.
+
+- Kind: insight; default severity: info; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+- Options: `minSeconds` (default `5`)
+
+Before:
+
+```yaml
+services:
+  postgres:
+    image: postgres:16
+steps:
+  - run: sleep 15
+  - run: npm test
+```
+
+After:
+
+```yaml
+services:
+  postgres:
+    image: postgres:16
+    options: >-
+      --health-cmd pg_isready
+      --health-interval 2s
+      --health-timeout 5s
+      --health-retries 30
+steps:
+  - run: npm test
+```
+
+References:
+
+- <https://docs.github.com/en/actions/tutorials/use-containerized-services/create-postgresql-service-containers>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservicesservice_idoptions>
 
 ## Ruleset: packages
 
@@ -2359,3 +3110,1701 @@ References:
 - <https://docs.github.com/en/actions/use-cases-and-examples/using-containerized-services/about-service-containers>
 - <https://docs.docker.com/reference/cli/docker/compose/up/>
 - <https://www.npmjs.com/package/wait-on>
+
+## Ruleset: nix
+
+<a id="nix-accept-flake-config-untrusted"></a>
+
+### nix/accept-flake-config-untrusted
+
+Nix accepts `nixConfig` from flakes that a pull request can modify.
+
+**Why:** accept-flake-config allows eligible nixConfig settings from an evaluated flake without the usual confirmation. If a pull request controls that flake, it can influence settings such as substituters and trusted keys. Which settings take effect, and with what privilege, depends on Nix version, single-user versus daemon installation, trusted-user policy and CLI overrides; this detector does not establish root execution or cache compromise. Keep configuration policy outside untrusted flake content, especially when pull_request_target checks out the head or a persistent runner/cache is exposed. Disabling this setting alone does not make executing untrusted workflow code safe.
+
+- Kind: policy; default severity: error; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+on: pull_request_target
+...
+- uses: actions/checkout@v5
+  with:
+    ref: ${{ github.event.pull_request.head.sha }}
+- uses: cachix/install-nix-action@v31
+  with:
+    extra_nix_config: |
+      accept-flake-config = true
+- run: nix flake check
+```
+
+After:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+  with:
+    extra_nix_config: |
+      accept-flake-config = false
+      extra-substituters = https://mycache.cachix.org
+      extra-trusted-public-keys = mycache.cachix.org-1:<key>
+- run: nix flake check
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-accept-flake-config>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#flake-format>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-trusted-users>
+- <https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/>
+
+<a id="nix-builtins-fetchurl-unverified"></a>
+
+### nix/builtins-fetchurl-unverified
+
+`builtins.fetchurl` downloads at evaluation time without an integrity check; pin it with `sha256` or use the `pkgs.fetchurl` fixed-output fetcher.
+
+**Why:** When demanded, an unpinned builtins.fetchurl call lacks a declared expected content digest. Download/cache behavior depends on Nix settings and availability, and pure evaluation rejects an unpinned demanded fetch. Importing the result may evaluate remote Nix code. A reviewed digest constrains bytes, not source trust or whole-build reproducibility. pkgs.fetchurl is a build-time fixed-output fetcher; substituting it into evaluation-time code can introduce IFD, so it is not a universally equivalent replacement.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+src = builtins.fetchurl "https://example.org/tool-1.2.tar.gz";
+```
+
+After:
+
+```yaml
+src = pkgs.fetchurl {
+  url = "https://example.org/tool-1.2.tar.gz";
+  hash = "sha256-<from: nix store prefetch-file https://example.org/tool-1.2.tar.gz>";
+};
+```
+
+References:
+
+- <https://nix.dev/manual/nix/stable/language/builtins.html#builtins-fetchurl>
+- <https://nixos.org/manual/nixpkgs/stable/#sec-pkgs-fetchers-fetchurl>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-tarball-ttl>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-pure-eval>
+
+<a id="nix-channel-in-ci"></a>
+
+### nix/channel-in-ci
+
+`nix-channel --add/--update` in CI makes evaluation depend on a channel that moves.
+
+**Why:** Channel subscriptions live outside the Nix expressions consuming them. A mutable channel URL can resolve differently after an update, while immutable snapshots, explicit search paths and recorded revisions can constrain or document the selection. Adding a channel alone does not establish that a build uses it. Prefer an explicit, reviewed dependency policy where frozen inputs are required; this detector does not establish reproducibility or the presence/absence of runtime provenance.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: |
+    nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs
+    nix-channel --update
+    nix-build '<nixpkgs>' -A hello
+```
+
+After:
+
+```yaml
+- run: nix-build '<nixpkgs>' -A hello
+  env:
+    NIX_PATH: nixpkgs=https://github.com/NixOS/nixpkgs/archive/<commit>.tar.gz
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/nix-channel>
+- <https://nix.dev/tutorials/first-steps/towards-reproducibility-pinning-nixpkgs>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-nix-path>
+
+<a id="nix-current-system-builtin"></a>
+
+### nix/current-system-builtin
+
+Nix expressions should not read `builtins.currentSystem`, the platform of the machine running the evaluation.
+
+**Why:** builtins.currentSystem reads the evaluator's system/eval-system setting, not necessarily a remote builder's platform. If the value influences a derivation, different settings can select different outputs. Pure evaluation removes this constant, so a demanded reference fails; unused lazy expressions need not fail. Passing a system explicitly documents platform selection, but does not make different target platforms equivalent or prove reproducibility.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+let pkgs = import nixpkgs { system = builtins.currentSystem; }; in pkgs.hello
+```
+
+After:
+
+```yaml
+{ nixpkgs, ... }: {
+  packages = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system: {
+    default = nixpkgs.legacyPackages.${system}.hello;
+  });
+}
+```
+
+References:
+
+- <https://nix.dev/manual/nix/stable/language/builtins.html#builtins-currentSystem>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-pure-eval>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-eval-system>
+
+<a id="nix-dev-shell-reinvoked-per-step"></a>
+
+### nix/dev-shell-reinvoked-per-step
+
+Several steps of one job each start the same `nix develop` / `nix-shell` environment.
+
+**Why:** Every `nix develop --command` or `nix-shell --run` step starts Nix from scratch: it re-resolves the flake (or re-evaluates `shell.nix`, which has no evaluation cache and typically imports all of nixpkgs), realises the dev-shell environment, spawns a new bash that sources the stdenv setup, and re-runs the shell's `shellHook`, so hooks that install tools, create virtualenvs or print banners execute once per step. Loading the environment once with `nicknovitski/nix-develop` exports the shell's variables to `GITHUB_ENV` and its PATH entries to `GITHUB_PATH`, so later `run:` steps and third-party `uses:` actions see the toolchain without another Nix start. A job-level `defaults.run.shell: nix develop --command bash -e {0}` removes the repetition from the YAML but still starts `nix develop` in every step.
+
+- Kind: practice; default severity: info; impact: low
+- Presets: `strict`
+- Options: `minSteps` (default `2`)
+
+Before:
+
+```yaml
+- run: nix develop --command cargo fmt --check
+- run: nix develop --command cargo clippy
+- run: nix develop --command cargo test
+```
+
+After:
+
+```yaml
+- uses: nicknovitski/nix-develop@v1
+- run: cargo fmt --check
+- run: cargo clippy
+- run: cargo test
+```
+
+References:
+
+- <https://github.com/nicknovitski/nix-develop#usage>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-develop>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-eval-cache>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#defaultsrunshell>
+
+<a id="nix-dockertools-single-layer-image"></a>
+
+### nix/dockertools-single-layer-image
+
+Container images built with `dockerTools.buildImage` put the whole closure in a single layer.
+
+**Why:** buildImage adds a single layer above any reused base layers. A changed added layer can require transferring more data than a carefully layered image, unless the destination already has the blob. Layered builders separate selected store paths up to their layer limit and group the rest; resulting boundaries and reuse depend on the closure and settings. copyToRoot/contents and runAsRoot/fakeRootCommands are not equivalent APIs. Validate file layout, ownership, permissions and runtime behavior, then measure transfer sizes before migrating.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `strict`, `insights`
+- Options: `allow` (default `[]`)
+
+Before:
+
+```yaml
+pkgs.dockerTools.buildImage {
+  name = "api";
+  copyToRoot = [ api pkgs.cacert ];
+  config.Cmd = [ "/bin/api" ];
+}
+```
+
+After:
+
+```yaml
+pkgs.dockerTools.streamLayeredImage {
+  name = "api";
+  contents = [ api pkgs.cacert ];
+  config.Cmd = [ "/bin/api" ];
+}
+```
+
+References:
+
+- <https://nixos.org/manual/nixpkgs/stable/#ssec-pkgs-dockerTools-buildImage>
+- <https://nixos.org/manual/nixpkgs/stable/#ssec-pkgs-dockerTools-streamLayeredImage>
+- <https://nixos.org/manual/nixpkgs/stable/#ssec-pkgs-dockerTools-buildLayeredImage>
+- <https://github.com/nlewo/nix2container>
+
+<a id="nix-duplicate-nixpkgs-nodes"></a>
+
+### nix/duplicate-nixpkgs-nodes
+
+A flake input brings its own nixpkgs revision instead of following the flake's `nixpkgs`, so flake.lock holds several nixpkgs copies.
+
+**Why:** Distinct nixpkgs revisions can add source fetches, evaluation work and different derivations when those inputs are used. They do not imply that every package differs: unchanged derivations can still share store paths. A follows declaration changes the dependency revision and requires regenerating flake.lock; sharing a channel name does not establish compatibility. Review and test that change, including upstream binary-cache coverage, rather than applying it automatically.
+
+- Kind: insight; default severity: info; impact: medium
+- Presets: `strict`
+
+Before:
+
+```yaml
+inputs.home-manager.url = "github:nix-community/home-manager";
+```
+
+After:
+
+```yaml
+inputs.home-manager.url = "github:nix-community/home-manager";
+inputs.home-manager.inputs.nixpkgs.follows = "nixpkgs";
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#flake-inputs>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#lock-files>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake-lock>
+
+<a id="nix-fake-hash-committed"></a>
+
+### nix/fake-hash-committed
+
+Placeholder hashes (`lib.fakeHash`, `""`, all-zero or `sha256-AAAA…` values) must not be committed.
+
+**Why:** The fake-hash workflow uses an empty or well-known placeholder digest to make a fixed-output build print its actual digest. Such values normally cause a mismatch if the corresponding derivation is built; static syntax alone cannot establish that an expression is evaluated or really feeds a fetcher. Templates can intentionally contain placeholders. Review the downloaded source independently before accepting a newly printed digest. vendorHash = null is not treated as a placeholder.
+
+- Kind: policy; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+- Options: `ignorePaths` (default `[]`)
+
+Before:
+
+```yaml
+rustPlatform.buildRustPackage {
+  pname = "tool";
+  cargoHash = lib.fakeHash;
+}
+```
+
+After:
+
+```yaml
+rustPlatform.buildRustPackage {
+  pname = "tool";
+  cargoHash = "sha256-<hash printed as `got:` by the failed build>";
+}
+```
+
+References:
+
+- <https://nixos.org/manual/nixpkgs/stable/#sec-pkgs-fetchers-updating-source-hashes-fakehash-method>
+- <https://nixos.org/manual/nixpkgs/stable/#var-go-vendorHash>
+- <https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo>
+
+<a id="nix-fetchgit-missing-rev"></a>
+
+### nix/fetchgit-missing-rev
+
+`builtins.fetchGit` of a remote repository should declare a revision or supported content-hash pin.
+
+**Why:** fetchGit resolves a remote ref during evaluation. Without a revision or supported content-hash pin, a mutable branch or tag can select different source over time. Pure evaluation rejects unlocked inputs if evaluated. A full revision identifies a Git object, but does not guarantee local cache presence, remote availability, identical fetcher metadata across options or deterministic downstream builds.
+
+- Kind: policy; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+src = builtins.fetchGit { url = "https://github.com/example/lib.git"; ref = "main"; };
+```
+
+After:
+
+```yaml
+src = builtins.fetchGit {
+  url = "https://github.com/example/lib.git";
+  ref = "main";
+  rev = "0123456789abcdef0123456789abcdef01234567";
+};
+```
+
+References:
+
+- <https://nix.dev/manual/nix/stable/language/builtins.html#builtins-fetchGit>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-tarball-ttl>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-pure-eval>
+
+<a id="nix-fetchtarball-no-hash"></a>
+
+### nix/fetchtarball-no-hash
+
+`builtins.fetchTarball` should declare the expected unpacked-source `sha256`.
+
+**Why:** fetchTarball downloads and unpacks during evaluation. Without an expected sha256, mutable URLs may yield different sources when cache entries expire; cache and offline settings affect revalidation. Pure evaluation rejects unpinned calls when evaluated. A declared digest checks unpacked source identity and permits reuse while the matching store object exists, but does not prevent garbage collection, guarantee availability or authenticate an unreviewed digest.
+
+- Kind: policy; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/nixos-24.05.tar.gz") { }
+```
+
+After:
+
+```yaml
+import (builtins.fetchTarball {
+  url = "https://github.com/NixOS/nixpkgs/archive/0123456789abcdef0123456789abcdef01234567.tar.gz";
+  sha256 = "1lbvpvp3f2rqq5zgzk3wkjzgq1v6p1lrzc4brb62kg7v4hlpz9vy";
+}) { }
+```
+
+References:
+
+- <https://nix.dev/manual/nix/stable/language/builtins.html#builtins-fetchTarball>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-tarball-ttl>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-pure-eval>
+- <https://nix.dev/guides/best-practices#search-path>
+
+<a id="nix-flake-check-missing-parallel-evaluator"></a>
+
+### nix/flake-check-missing-parallel-evaluator
+
+`nix flake check` runs on a flake with many outputs without a parallel evaluator or a per-output job matrix.
+
+**Why:** Evaluation can be a bottleneck for flakes with many expensive outputs. This detector counts output-shaped source bindings, not evaluated outputs, elapsed time or CPU use; helper functions, lazy branches, systems and Nix versions can change the work. Parallel evaluators or job matrices may help but add overhead. Building checks with another tool does not replace flake-check validation of other output types: retain nix flake check --no-build with equivalent system/options coverage and test the combined behavior. Pin and review any additional tooling.
+
+- Kind: insight; default severity: info; impact: medium
+- Presets: `insights`
+- Options: `threshold` (default `10`)
+
+Before:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+- run: nix flake check   # flake.nix defines 40 packages and checks
+```
+
+After:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+- run: nix flake check --no-build
+# Then build the same check set with a reviewed, lock-pinned parallel evaluator.
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake-check>
+- <https://github.com/Mic92/nix-fast-build>
+- <https://github.com/nix-community/nix-github-actions>
+- <https://docs.determinate.systems/determinate-nix/parallel-eval/>
+
+<a id="nix-flake-lock-missing-input"></a>
+
+### nix/flake-lock-missing-input
+
+flake.lock is out of date with flake.nix: an input has no lock entry, was changed without re-locking, or a node reference dangles.
+
+**Why:** An added or changed input may require lock regeneration; mutable references can then resolve differently, while immutable references need not. --no-update-lock-file rejects required updates, whereas --no-write-lock-file alone does not freeze resolution. This rule compares only supported literal source forms and reports direct references to missing nodes. A consistent lock constrains sources, not all build behavior.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+# flake.nix
+inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+inputs.rust-overlay.url = "github:oxalica/rust-overlay";
+# flake.lock root inputs: { "nixpkgs": "nixpkgs" }
+```
+
+After:
+
+```yaml
+# after `nix flake lock`
+# flake.lock root inputs: { "nixpkgs": "nixpkgs", "rust-overlay": "rust-overlay" }
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#lock-files>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake-lock>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-build#opt-no-update-lock-file>
+- <https://github.com/NixOS/nix/blob/2.24.0/src/libflake/flake/lockfile.cc>
+
+<a id="nix-flake-nixconfig-cache-not-trusted"></a>
+
+### nix/flake-nixconfig-cache-not-trusted
+
+A flake names an additional binary cache without recognized configuration at a CI command building it.
+
+**Why:** Flake-provided substituters need appropriate acceptance and trust, or equivalent configuration outside the flake. This rule compares visible preceding installer/actions, per-command configuration and local flake targets on recognized hosted runners. External trust decisions, daemon policy and other cache sources may still provide reuse. A complete inventory is required, but it does not reveal runtime state or prove cache misses. Prefer explicitly reviewed cache URLs/keys to broadly accepting pull-request-controlled flake settings.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+# flake.nix
+nixConfig.extra-substituters = [ "https://demo.cachix.org" ];
+# .github/workflows/ci.yml
+- uses: cachix/install-nix-action@v31
+- run: nix build
+```
+
+After:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+  with:
+    extra_nix_config: |
+      extra-substituters = https://demo.cachix.org
+      extra-trusted-public-keys = demo.cachix.org-1:<key>
+- run: nix build
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake.html#flake-format>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-accept-flake-config>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-substituters>
+- <https://github.com/cachix/cachix-action>
+
+<a id="nix-flake-update-in-build-job"></a>
+
+### nix/flake-update-in-build-job
+
+A push/pull_request CI job runs `nix flake update` (or `--update-input`/`--recreate-lock-file`) before building.
+
+**Why:** Updating a lock in ordinary push/PR CI can resolve mutable inputs differently from the committed lock. Pinned or unchanged inputs need not change, other steps may preserve the result, and neither a lock nor this detector proves reproducible builds. Separating reviewed dependency updates from frozen-lock build checks makes the tested source set clearer. Explicit local-input refreshes and recognized publication paths can be intentional.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+on: [push, pull_request]
+jobs:
+  build:
+    steps:
+      - uses: cachix/install-nix-action@v31
+      - run: nix flake update
+      - run: nix build
+```
+
+After:
+
+```yaml
+on: [push, pull_request]
+jobs:
+  build:
+    steps:
+      - uses: cachix/install-nix-action@v31
+      - run: nix build --no-update-lock-file
+# plus a scheduled workflow running DeterminateSystems/update-flake-lock
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake-update>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake-lock>
+- <https://github.com/DeterminateSystems/update-flake-lock>
+
+<a id="nix-get-env-builtin"></a>
+
+### nix/get-env-builtin
+
+Nix expressions should not read environment variables with `builtins.getEnv` during evaluation.
+
+**Why:** A demanded `builtins.getEnv` call can make evaluation depend on the calling process's environment. Under pure or restricted evaluation it returns an empty string. This can change derived results, but an unused lazy reference need not be called or affect a derivation. Values embedded in derivation attributes can be serialized into `.drv` files in the normally world-readable Nix store; merely using a value in a condition does not imply the original value is stored. Pass non-secret configuration explicitly and keep secrets outside derivations.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `strict`
+- Options: `allow` (default `[]`)
+
+Before:
+
+```yaml
+let version = builtins.getEnv "APP_VERSION"; in pkgs.callPackage ./app.nix { inherit version; }
+```
+
+After:
+
+```yaml
+{ version ? "0.0.0-dev" }:
+pkgs.callPackage ./app.nix { inherit version; }
+# nix-build --argstr version "$APP_VERSION"
+```
+
+References:
+
+- <https://nix.dev/manual/nix/stable/language/builtins.html#builtins-getEnv>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-pure-eval>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-restrict-eval>
+
+<a id="nix-git-input-for-github"></a>
+
+### nix/git-input-for-github
+
+A flake input fetches a github.com repository with `git+https://` or `git+ssh://` instead of the `github:` tarball fetcher.
+
+**Why:** A `git+…` flake reference uses Git, while `github:` downloads a commit tarball. The Nix manual describes the tarball fetcher as often faster and smaller; shallow Git fetches and warm caches reduce that difference. Fetcher changes can affect authentication, source metadata such as revCount and lockfile contents, so review and re-lock them rather than treating them as behavior-preserving edits.
+
+- Kind: practice; default severity: info; impact: low
+- Presets: `strict`
+
+Before:
+
+```yaml
+inputs.devshell.url = "git+https://github.com/numtide/devshell?ref=main";
+```
+
+After:
+
+```yaml
+inputs.devshell.url = "github:numtide/devshell/main";
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#types>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#flake-references>
+- <https://github.com/cachix/install-nix-action#inputs>
+
+<a id="nix-imperative-install"></a>
+
+### nix/imperative-install
+
+`nix-env -i` / `nix profile install` installs CI tools from a channel, branch or registry entry that moves.
+
+**Why:** `nix-env -i` without `-f` evaluates `~/.nix-defexpr`, i.e. the user's channels, whose nixpkgs revision is whatever the image or the last `nix-channel --update` fetched; `-f channel:…` or a branch tarball fetches the branch head again whenever the cached tarball expires. `nix profile install nixpkgs#pkg` resolves the indirect `nixpkgs` reference through the flake registry (the global registry maps it to `github:NixOS/nixpkgs/nixpkgs-unstable`), and `github:owner/repo` without a commit follows that repository's default branch. None of these record the revision in the repository, so the tool version — and its dependency closure — changes with upstream pushes rather than with the commit under test, and an old commit cannot be re-run with the tools it was tested with. The install also mutates a user profile, which outlives the job on self-hosted runners. Taking nixpkgs from the repository's `flake.lock` (`--inputs-from .`), a commit tarball, or a `devShells` entry used through `nix develop` keeps the tools pinned and reviewable.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+- run: nix profile install nixpkgs#jq
+- run: jq . report.json
+```
+
+After:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+- run: nix shell --inputs-from . nixpkgs#jq --command jq . report.json
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/nix-env/install>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-profile-install>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-registry>
+- <https://nix.dev/tutorials/first-steps/towards-reproducibility-pinning-nixpkgs>
+
+<a id="nix-import-from-derivation"></a>
+
+### nix/import-from-derivation
+
+Nix expressions should not import or read files produced by a derivation during evaluation (import from derivation).
+
+**Why:** IFD demands derivation output during evaluation. If unavailable, it may need realization before evaluation continues, and evaluators disabling IFD reject demanded uses. Existing store outputs or substitutes can avoid rebuilding. This lexical detector recognizes conventional producers/readers and selected helpers; it cannot resolve arbitrary bindings, laziness or runtime cost. IFD is not itself proof of impurity. Committing generated code or moving generation to build time can remove an evaluation dependency, but needs regeneration policy and behavioral testing.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+- Options: `allow` (default `[]`)
+
+Before:
+
+```yaml
+let
+  generated = pkgs.runCommand "deps.nix" { } "${pkgs.mytool}/bin/gen > $out";
+in
+import generated { inherit pkgs; }
+```
+
+After:
+
+```yaml
+# Run the generator once and commit its output:
+#   mytool > nix/deps.nix
+import ./nix/deps.nix { inherit pkgs; }
+```
+
+References:
+
+- <https://nix.dev/manual/nix/stable/language/import-from-derivation.html>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-allow-import-from-derivation>
+- <https://nixos.org/manual/nixpkgs/stable/#haskell-import-from-derivation>
+- <https://nixos.org/manual/nixpkgs/stable/#ssec-dart-applications>
+- <https://nixos.org/manual/nixpkgs/stable/#javascript-yarn-v1>
+
+<a id="nix-impure-flag-in-ci"></a>
+
+### nix/impure-flag-in-ci
+
+`--impure` (or `--no-pure-eval`) on a Nix command in CI lets evaluation depend on unrecorded runner state.
+
+**Why:** Flake commands evaluate in pure mode: the result is a function of the flake source and the revisions pinned in flake.lock, which is what makes a CI result reproducible and lets a binary cache serve the same outputs everywhere. `--impure` ("Allow access to mutable paths and repositories"), `--no-pure-eval` and `--option pure-eval false` switch that off, so the expression may read environment variables through `builtins.getEnv` (the usual reason is `NIXPKGS_ALLOW_UNFREE=1`), resolve `<nixpkgs>` from whatever `NIX_PATH` the runner has, use `builtins.currentSystem`/`builtins.currentTime`, read files outside the flake by absolute path, and fetch URLs without a hash. None of that is recorded in flake.lock, so the same commit can evaluate to different derivations on another runner or a later rerun, and the impurity silently spreads to every output that depends on it. Each of these needs has a pure equivalent: nixpkgs `config` in the flake, systems enumerated in `outputs`, inputs declared and locked.
+
+- Kind: practice; default severity: error; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- run: NIXPKGS_ALLOW_UNFREE=1 nix build --impure .#app
+```
+
+After:
+
+```yaml
+# flake.nix: pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
+- run: nix build .#app
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-build>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-pure-eval>
+- <https://nix.dev/manual/nix/2.24/language/builtins>
+
+<a id="nix-indirect-input"></a>
+
+### nix/indirect-input
+
+A flake input is an indirect reference (`nixpkgs`, `flake:nixpkgs`, or no `url` at all) that Nix resolves through the mutable flake registries.
+
+**Why:** An indirect flake reference names a registry entry instead of a source. Nix resolves it through the flake registries: the global registry (downloaded from the `flake-registry` setting and refreshed when older than `tarball-ttl`), then `/etc/nix/registry.json` (NixOS `nix.registry`), then `~/.config/nix/registry.json`, then `--override-flake`, the later taking precedence. flake.lock records what it resolved to once, but every `nix flake update` or re-lock resolves it again on whichever machine runs it, so a developer's `nix registry pin`, a NixOS `nix.registry` entry or a change to the global registry silently changes the source CI builds. An input with no `url`/`type`, or an `outputs` argument that is not declared under `inputs`, is the same indirect reference.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+inputs.nixpkgs.url = "nixpkgs/nixos-26.05";
+```
+
+After:
+
+```yaml
+inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#flake-inputs>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#types>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-registry>
+- <https://github.com/NixOS/flake-registry>
+
+<a id="nix-installer-unpinned-nix-version"></a>
+
+### nix/installer-unpinned-nix-version
+
+A pinned nix-installer-action still installs whatever Nix version is newest at run time.
+
+**Why:** DeterminateSystems/nix-installer-action downloads the most recent Determinate Nix Installer on every run, even when the action itself is pinned to a tag or commit, so the Nix version (evaluator, store schema, default settings, built-in fetchers) changes underneath a workflow whose author pinned the action for reproducibility. A Nix upgrade can change evaluation results, error on deprecated syntax, or alter `flake.lock` handling without any change in the repository. determinate-nix-action is tagged for every Determinate Nix release, so `@vX.Y.Z` installs exactly that release and Dependabot can propose upgrades as reviewable pull requests; alternatively `source-tag` pins the installer binary used by nix-installer-action.
+
+- Kind: practice; default severity: info; impact: low
+- Presets: `strict`, `insights`
+
+Before:
+
+```yaml
+- uses: DeterminateSystems/nix-installer-action@v23
+```
+
+After:
+
+```yaml
+- uses: DeterminateSystems/determinate-nix-action@v3.24.2
+```
+
+References:
+
+- <https://github.com/DeterminateSystems/nix-installer-action#pinning-the-version>
+- <https://github.com/DeterminateSystems/determinate-nix-action#-version-pinning-lock-it-down>
+- <https://github.com/DeterminateSystems/nix-installer-action/blob/main/action.yml>
+
+<a id="nix-max-jobs-pinned-low"></a>
+
+### nix/max-jobs-pinned-low
+
+Nix's `max-jobs` is pinned to a very small number on a GitHub-hosted runner.
+
+**Why:** max-jobs limits concurrent local derivation builds; cores separately controls the parallelism a builder may use. A low explicit limit may leave capacity unused when independent uncached derivations are single-threaded. It can also be necessary to avoid memory exhaustion or oversubscription. This detector follows observed configuration precedence at build commands, but does not measure resource use, dependency parallelism or remote-daemon policy. Tune only after measuring representative builds.
+
+- Kind: insight; default severity: info; impact: medium
+- Presets: `strict`
+- Options: `max` (default `1`)
+
+Before:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+  with:
+    extra_nix_config: |
+      max-jobs = 1
+- run: nix build -j 1 .#default
+```
+
+After:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+  with:
+    extra_nix_config: |
+      max-jobs = auto
+- run: nix build .#default
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-max-jobs>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-cores>
+- <https://nix.dev/manual/nix/2.24/command-ref/opt-common#opt-max-jobs>
+- <https://github.com/cachix/install-nix-action>
+
+<a id="nix-missing-flake-lock"></a>
+
+### nix/missing-flake-lock
+
+A flake.nix with inputs has no flake.lock committed next to it.
+
+**Why:** flake.lock records resolved input identities. Without it, mutable references can resolve differently between runs, unless an external lock policy or explicit immutable inputs constrain them. Local or already revision-pinned inputs do not necessarily move. Committing and reviewing the lock improves source traceability; it does not prove deterministic outputs or cache hits. This absence check requires a complete repository inventory.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+# flake.nix committed, flake.lock missing (or listed in .gitignore)
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+  outputs = { self, nixpkgs }: { };
+}
+```
+
+After:
+
+```yaml
+# flake.nix and flake.lock both committed
+$ nix flake lock
+$ git add flake.nix flake.lock
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#lock-files>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake-lock>
+
+<a id="nix-nix-build-inside-docker"></a>
+
+### nix/nix-build-inside-docker
+
+Review Nix sandboxing and store-cache reuse when Dockerfile RUN instructions build with a nixos/nix-named base.
+
+**Why:** Docker's isolation boundary is not the Nix build sandbox. Some nixos/nix releases disable Nix sandboxing for container compatibility, but a name, mirror or tag does not establish the running configuration or namespace capabilities. A missed BuildKit layer can repeat Nix work, while parent layers, cache mounts and substituters may still provide reuse. Moving image construction outside Docker changes build/runtime assumptions and must be validated; it does not automatically enable sandboxing or guarantee one layer per store path.
+
+- Kind: insight; default severity: info; impact: medium
+- Presets: `strict`
+
+Before:
+
+```yaml
+FROM nixos/nix:2.24.0 AS builder
+COPY . /src
+WORKDIR /src
+RUN nix --extra-experimental-features 'nix-command flakes' build .#app
+```
+
+After:
+
+```yaml
+# flake.nix
+packages.x86_64-linux.image = pkgs.dockerTools.streamLayeredImage {
+  name = "app";
+  tag = "latest";
+  contents = [ app ];
+  config.Cmd = [ "${app}/bin/app" ];
+};
+# CI: nix build .#image && ./result | docker image load
+```
+
+References:
+
+- <https://hub.docker.com/r/nixos/nix>
+- <https://github.com/NixOS/nix/blob/master/docker.nix>
+- <https://nix.dev/manual/nix/latest/command-ref/conf-file.html#conf-sandbox>
+- <https://nixos.org/manual/nixpkgs/stable/#ssec-pkgs-dockerTools-streamLayeredImage>
+- <https://nix.dev/tutorials/nixos/building-and-running-docker-images>
+- <https://github.com/nlewo/nix2container>
+- <https://docs.docker.com/reference/dockerfile/#run---mounttypecache>
+
+<a id="nix-nix-shell-dash-p-unpinned"></a>
+
+### nix/nix-shell-dash-p-unpinned
+
+Ad-hoc `nix-shell -p` / `nix run nixpkgs#…` / `nix shell nixpkgs#…` tools come from a moving nixpkgs branch.
+
+**Why:** `nix-shell -p pkg` evaluates `with import <nixpkgs> {}; …`, so the packages come from whatever the `nixpkgs` entry of the search path (`-I`, then `NIX_PATH`, then the `nix-path` setting) points at; a `channel:nixos-unstable` or `…/archive/nixos-unstable.tar.gz` entry is downloaded afresh once the tarball cache expires and follows the branch. Likewise `nix run nixpkgs#pkg` and `nix shell nixpkgs#pkg` resolve the indirect `nixpkgs` reference through the flake registry, whose global entry is `github:NixOS/nixpkgs/nixpkgs-unstable`, and nothing records the revision used. Either way the tool version (and every dependency of it) changes with upstream pushes rather than with the commit under test, so a rerun of an old commit can build or lint differently and cache hits are lost whenever the branch moves. Pinning nixpkgs to a commit, or resolving `nixpkgs` from the repository's own `flake.lock` with `--inputs-from .`, makes the tool part of the reviewed inputs.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+  with:
+    nix_path: nixpkgs=channel:nixos-unstable
+- run: nix-shell -p shellcheck --run 'shellcheck scripts/*.sh'
+```
+
+After:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+- run: nix shell --inputs-from . nixpkgs#shellcheck --command shellcheck scripts/*.sh
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/nix-shell>
+- <https://nix.dev/manual/nix/2.24/command-ref/env-common#env-NIX_PATH>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-registry>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-env-shell>
+- <https://nix.dev/tutorials/first-steps/towards-reproducibility-pinning-nixpkgs>
+
+<a id="nix-nixpkgs-angle-bracket-path"></a>
+
+### nix/nixpkgs-angle-bracket-path
+
+Nix expressions should not use `<nixpkgs>`-style lookup paths, which resolve through the machine's NIX_PATH.
+
+**Why:** Lookup paths resolve through search-path configuration, including NIX_PATH, nix-path and -I flags. That configuration may be pinned externally or may follow a mutable channel; this file-level detector does not establish which. Explicit pinned inputs make the dependency easier to audit. Pure evaluation disables ordinary external search-path resolution. A source pin is not a proof of deterministic builds or cache hits.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+- Options: `ignore` (default `[]`)
+
+Before:
+
+```yaml
+{ pkgs ? import <nixpkgs> { } }:
+pkgs.hello
+```
+
+After:
+
+```yaml
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+  outputs = { nixpkgs, ... }: {
+    packages.x86_64-linux.default = nixpkgs.legacyPackages.x86_64-linux.hello;
+  };
+}
+```
+
+References:
+
+- <https://nix.dev/manual/nix/stable/language/constructs/lookup-path.html>
+- <https://nix.dev/guides/best-practices#search-path>
+- <https://nix.dev/manual/nix/stable/command-ref/conf-file.html#conf-pure-eval>
+
+<a id="nix-nixpkgs-input-not-channel"></a>
+
+### nix/nixpkgs-input-not-channel
+
+A nixpkgs flake input tracks `master`, a `release-*` or `staging*` branch instead of a channel branch.
+
+**Why:** Development branches can advance before channel release gates finish. Channel branches are gated by selected jobs, not every package, architecture, license configuration or overlay. A development-branch lock may already have substitutes, and a channel lock may still require local builds. Inspect the chosen revision's actual substitutes before switching source policy, then review and test the changed lock.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+inputs.nixpkgs.url = "github:NixOS/nixpkgs";  # default branch: master
+```
+
+After:
+
+```yaml
+inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+```
+
+References:
+
+- <https://wiki.nixos.org/wiki/Channel_branches>
+- <https://nix.dev/concepts/faq#channel-branches>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#flake-references>
+
+<a id="nix-no-binary-cache-configured"></a>
+
+### nix/no-binary-cache-configured
+
+A hosted job builds local Nix targets with no additional binary cache visible before the build.
+
+**Why:** A cache can avoid rebuilding outputs unavailable from the default substituter on fresh runners. A local target may simply reuse nixpkgs packages already in cache.nixos.org, and external machine configuration may provide another cache, so absence in the inspected repository is not proof of cache misses. Measure repeated uncached builds before adopting authenticated cache persistence; scope write credentials to trusted jobs and account for storage, transfer and exposure costs.
+
+- Kind: insight; default severity: info; impact: high
+- Presets: `recommended`, `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+steps:
+  - uses: actions/checkout@v5
+  - uses: cachix/install-nix-action@v31
+  - run: nix build .#default
+```
+
+After:
+
+```yaml
+steps:
+  - uses: actions/checkout@v5
+  - uses: cachix/install-nix-action@v31
+  - uses: cachix/cachix-action@v17
+    with:
+      name: <your-cache>
+      authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+  - run: nix build .#default
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-substituters>
+- <https://nix.dev/guides/recipes/continuous-integration-github-actions>
+- <https://github.com/cachix/cachix-action>
+- <https://github.com/nix-community/cache-nix-action>
+- <https://github.com/DeterminateSystems/flakehub-cache-action>
+
+<a id="nix-no-lock-update-automation"></a>
+
+### nix/no-lock-update-automation
+
+A committed flake.lock has no Dependabot, Renovate or scheduled workflow keeping it up to date.
+
+**Why:** Committed locks require deliberate maintenance. Repository-visible Dependabot, Renovate or update workflows can make that maintenance reviewable, but external services and manual targeted updates may already provide it. A commit timestamp is not a vulnerability assessment or proof of neglect. Even a small update can change a large build closure; automation does not guarantee smaller cache misses. Review and test update pull requests before merging.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+# flake.lock committed; .github/dependabot.yml only covers github-actions
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+```
+
+After:
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "nix"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+```
+
+References:
+
+- <https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference#package-ecosystem->
+- <https://docs.renovatebot.com/modules/manager/nix/>
+- <https://github.com/DeterminateSystems/update-flake-lock>
+
+<a id="nix-outdated-magic-nix-cache"></a>
+
+### nix/outdated-magic-nix-cache
+
+Review Magic Nix Cache action refs that predate v11's restored support.
+
+**Why:** Upstream v11 explicitly restored support, removed the retirement warning and added GITHUB_CONTEXT to the downloaded daemon's environment. The action wrapper version alone does not determine the downloaded binary or prove an actual cache failure: source overrides, service configuration and GitHub Enterprise Server differ. Review runtime logs and supported versions before an upgrade or migration; neither is an unattended behavior-preserving fix.
+
+- Kind: insight; default severity: info; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- uses: DeterminateSystems/magic-nix-cache-action@v8
+```
+
+After:
+
+```yaml
+- uses: DeterminateSystems/magic-nix-cache-action@v15
+```
+
+References:
+
+- <https://determinate.systems/blog/bringing-back-magic-nix-cache-action/>
+- <https://determinate.systems/blog/magic-nix-cache-free-tier-eol/>
+- <https://github.com/DeterminateSystems/magic-nix-cache-action>
+- <https://github.com/DeterminateSystems/magic-nix-cache-action/releases/tag/v11>
+- <https://github.blog/changelog/2024-09-16-notice-of-upcoming-deprecations-and-changes-in-github-actions-services/>
+
+<a id="nix-overlay-overrides-foundational-package"></a>
+
+### nix/overlay-overrides-foundational-package
+
+Overlays should not globally replace foundational packages such as `stdenv`, `glibc`, `openssl` or `zlib`.
+
+**Why:** A package-set overlay can change inputs widely, especially foundational libraries and bootstrap packages. Rebinding alone does not establish changed derivations: metadata-only overrides or equivalent values can retain store paths, and changed outputs may already exist in a cache. Evaluate the before/after derivation graph and substitutability before deciding whether to narrow an intentional override. Scoped overrides also change dependency policy and require testing.
+
+- Kind: insight; default severity: warn; impact: high
+- Presets: `strict`, `insights`
+- Options: `packages` (default `["stdenv","glibc","openssl","zlib","gcc","binutils","bash","coreutils","python3","perl","curl","systemd"]`), `allow` (default `[]`)
+
+Before:
+
+```yaml
+overlays.default = final: prev: {
+  openssl = prev.openssl.overrideAttrs (old: { configureFlags = old.configureFlags ++ [ "no-weak-ssl-ciphers" ]; });
+};
+```
+
+After:
+
+```yaml
+overlays.default = final: prev: {
+  myApp = prev.myApp.override {
+    openssl = final.openssl.overrideAttrs (old: { configureFlags = old.configureFlags ++ [ "no-weak-ssl-ciphers" ]; });
+  };
+};
+```
+
+References:
+
+- <https://nixos.org/manual/nixpkgs/stable/#sec-overlays-definition>
+- <https://nixos.org/manual/nixpkgs/stable/#sec-pkg-override>
+- <https://nixos.org/manual/nixpkgs/stable/#how-to-override-a-python-package-for-all-python-versions-using-extensions>
+- <https://github.com/NixOS/nixpkgs/blob/master/pkgs/stdenv/booter.nix>
+- <https://github.com/NixOS/nixpkgs/blob/master/pkgs/top-level/stage.nix>
+
+<a id="nix-quick-install-implicit-flake-config-trust"></a>
+
+### nix/quick-install-implicit-flake-config-trust
+
+nixbuild/nix-quick-install-action silently enables `accept-flake-config`.
+
+**Why:** The recognized nix-quick-install-action releases append accept-flake-config = true after nix_conf when installing Nix newer than 2.13 (including 2.13.6). Flake-evaluating commands can then accept eligible top-level nixConfig settings without confirmation. This is a single-user installer, not evidence that a root-owned daemon honors every option. A false setting inside nix_conf is overwritten by the appended line; an effective NIX_CONFIG or CLI setting can override it. Review trust deliberately and preserve existing configuration when changing it. Unknown releases, dynamic versions and opaque configuration writes are not treated as established trust.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `strict`
+
+Before:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: nixbuild/nix-quick-install-action@v30
+        with:
+          nix_conf: accept-flake-config = false
+      - run: nix run github:owner/tool
+```
+
+After:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NIX_CONFIG: accept-flake-config = false
+    steps:
+      - uses: nixbuild/nix-quick-install-action@v30
+      - run: nix run github:owner/tool
+```
+
+References:
+
+- <https://github.com/nixbuild/nix-quick-install-action/blob/v30/nix-quick-install.sh>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-accept-flake-config>
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-flake#flake-format>
+
+<a id="nix-raw-store-cache"></a>
+
+### nix/raw-store-cache
+
+Do not cache `/nix/store` or `/nix/var/nix` with actions/cache; use a Nix-aware cache.
+
+**Why:** The Nix store is only consistent together with its SQLite database (`/nix/var/nix/db/db.sqlite`), which records which store paths are valid and their references. actions/cache archives and extracts plain files as the runner user: on a multi-user install `/nix/store` is root-owned and read-only, so extraction can fail with permission errors, and restoring the store without the database (or a stale database over the one the installer just created) leaves paths Nix does not consider valid or registrations for paths that are missing. Nothing is garbage-collected before saving, so every save carries the whole store towards the 10 GB repository cache limit. nix-community/cache-nix-action merges the restored and current databases and can collect garbage before saving; a binary cache (Cachix, Attic, FlakeHub Cache) substitutes individual paths through Nix itself.
+
+- Kind: practice; default severity: error; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: /nix/store
+    key: nix-${{ hashFiles('flake.lock') }}
+```
+
+After:
+
+```yaml
+- uses: nix-community/cache-nix-action@v7
+  with:
+    primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+    restore-prefixes-first-match: nix-${{ runner.os }}-
+    gc-max-store-size-linux: 1G
+```
+
+References:
+
+- <https://github.com/nix-community/cache-nix-action#restoring-files>
+- <https://nix.dev/manual/nix/2.24/store/types/local-store>
+- <https://github.com/cachix/cachix-action>
+
+<a id="nix-rust-two-phase-build"></a>
+
+### nix/rust-two-phase-build
+
+Rust crates built from local source should compile dependencies in a separate, cacheable derivation.
+
+**Why:** Standard buildRustPackage separates dependency source fetching from package compilation, not necessarily dependency compilation from workspace compilation. When included local source changes, the package derivation can change, and a cache miss may rebuild dependency crates. Two-phase builders such as crane can reuse compatible compiled artifacts, but their inputs also include toolchains, features, native dependencies and build scripts, not only Cargo.lock. Custom phases and compiler caches can already provide reuse. Measure representative builds and preserve all build behavior before migrating.
+
+- Kind: insight; default severity: info; impact: medium
+- Presets: `strict`, `insights`
+- Options: `allow` (default `[]`)
+
+Before:
+
+```yaml
+rustPlatform.buildRustPackage {
+  pname = "app";
+  version = "0.1.0";
+  src = ./.;
+  cargoLock.lockFile = ./Cargo.lock;
+}
+```
+
+After:
+
+```yaml
+let
+  craneLib = crane.mkLib pkgs;
+  src = craneLib.cleanCargoSource ./.;
+  commonArgs = { inherit src; strictDeps = true; };
+  cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+in
+craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; })
+```
+
+References:
+
+- <https://crane.dev/API.html#cranelibbuilddepsonly>
+- <https://crane.dev/introduction/artifact-reuse.html>
+- <https://nixos.org/manual/nixpkgs/stable/#compiling-rust-applications-with-cargo>
+
+<a id="nix-sandbox-disabled"></a>
+
+### nix/sandbox-disabled
+
+The Nix build sandbox is turned off or relaxed in CI, in flake nixConfig, or by `__noChroot`.
+
+**Why:** Nix sandboxing restricts access to undeclared host state. Disabling or relaxing it can make additional inputs available, but does not establish that a derivation uses them or produces different bytes. Input-addressed store paths identify declared inputs, not a proof of deterministic output. This rule follows observed configuration precedence at build commands and also reports explicit flake requests and recognizable derivation __noChroot attributes. Restricted daemon settings, remote builders, unsupported shell code and container namespace support cannot be established statically. macOS and container jobs are conservatively omitted rather than assuming Linux defaults apply. No isolation change is automatic.
+
+- Kind: policy; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+  with:
+    extra_nix_config: |
+      sandbox = false
+- run: nix build .#app
+```
+
+After:
+
+```yaml
+- uses: cachix/install-nix-action@v31
+- run: nix build .#app
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-sandbox>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-sandbox-paths>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-accept-flake-config>
+
+<a id="nix-separate-nix-build-invocations"></a>
+
+### nix/separate-nix-build-invocations
+
+Consecutive `nix build` commands in one job that could be a single `nix build` of all installables.
+
+**Why:** Each `nix build` is a separate Nix process: it locks and evaluates the flake again (shared work such as importing nixpkgs is repeated, because the evaluation cache only records final attribute values), then realises that installable's closure before the shell moves on. The next invocation cannot start building until the previous closure is finished, so while the last few derivations of one installable build, cores that `max-jobs` would let Nix use for the next one stay idle. `nix build .#a .#b` evaluates both installables in one evaluator and hands the union of their closures to one scheduler, which builds independent derivations concurrently and shares common dependencies. Out links become `result`, `result-1`, ... in installable order.
+
+- Kind: practice; default severity: info; impact: low
+- Presets: `strict`
+- Options: `minBuilds` (default `2`)
+
+Before:
+
+```yaml
+- run: nix build .#server
+- run: nix build .#client
+- run: nix build .#docs
+```
+
+After:
+
+```yaml
+- run: nix build .#server .#client .#docs
+```
+
+References:
+
+- <https://nix.dev/manual/nix/2.24/command-ref/new-cli/nix3-build>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-max-jobs>
+- <https://nix.dev/manual/nix/2.24/command-ref/conf-file#conf-eval-cache>
+
+<a id="nix-src-whole-repo"></a>
+
+### nix/src-whole-repo
+
+Derivations should not use the whole repository (`src = ./.`) as their source.
+
+**Why:** A broad source path can include files unrelated to the build. Changes to included files affect the source store path and can invalidate derivation reuse, although another cache may already contain the new result. Git-flake filtering and builder-specific filtering affect the actual file set. Selecting all necessary inputs with a fileset can reduce invalidation; omitting a required build script, fixture or generated input changes behavior. Measure and test rather than applying a guessed file list automatically.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+- Options: `allow` (default `[]`)
+
+Before:
+
+```yaml
+rustPlatform.buildRustPackage {
+  pname = "app";
+  version = "0.1.0";
+  src = ./.;
+  cargoLock.lockFile = ./Cargo.lock;
+}
+```
+
+After:
+
+```yaml
+rustPlatform.buildRustPackage {
+  pname = "app";
+  version = "0.1.0";
+  src = lib.fileset.toSource {
+    root = ./.;
+    fileset = lib.fileset.unions [ ./Cargo.toml ./Cargo.lock ./src ];
+  };
+  cargoLock.lockFile = ./Cargo.lock;
+}
+```
+
+References:
+
+- <https://nix.dev/tutorials/working-with-local-files>
+- <https://nixos.org/manual/nixpkgs/stable/#function-library-lib.fileset.toSource>
+- <https://nixos.org/manual/nixpkgs/stable/#function-library-lib.fileset.unions>
+- <https://nixos.org/manual/nixpkgs/stable/#function-library-lib.sources.cleanSourceWith>
+
+## Ruleset: toolchains
+
+<a id="toolchains-gradle-build-cache-disabled"></a>
+
+### toolchains/gradle-build-cache-disabled
+
+Gradle builds run in CI should enable the build cache with `org.gradle.caching=true`.
+
+**Why:** Gradle's build cache is opt-in. It can reuse eligible task outputs when matching cache entries are available; ordinary up-to-date checks and existing outputs can still avoid work without it. Reuse across ephemeral runners requires cache persistence or a remote cache. Custom tasks must declare their inputs correctly before caching is safe. This detector only sees repository configuration and workflow invocations, not user-home properties, external init scripts or runtime cache hits.
+
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+# gradle.properties
+org.gradle.jvmargs=-Xmx2g
+
+# workflow
+- run: ./gradlew build
+```
+
+After:
+
+```yaml
+# gradle.properties
+org.gradle.jvmargs=-Xmx2g
+org.gradle.caching=true
+
+# workflow
+- run: ./gradlew build
+```
+
+References:
+
+- <https://docs.gradle.org/current/userguide/build_cache.html#sec:build_cache_enable>
+- <https://docs.gradle.org/current/userguide/build_environment.html#sec:gradle_configuration_properties>
+- <https://github.com/gradle/actions/blob/main/docs/setup-gradle.md#caching-build-state-between-jobs>
+
+<a id="toolchains-gradle-configuration-cache-disabled"></a>
+
+### toolchains/gradle-configuration-cache-disabled
+
+Gradle 8.1+ builds run in CI could enable the configuration cache with `org.gradle.configuration-cache=true`.
+
+**Why:** A compatible configuration-cache entry can avoid repeating configuration for matching tasks and inputs and allow more task concurrency. Entry availability, worker limits, task dependencies and plugin compatibility determine the benefit. The cache became stable in Gradle 8.1; this detector sees repository properties and explicit invocation options, not all user-home/init-script configuration. Validate isolation, secret handling and persistence before opting in.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+# gradle.properties
+org.gradle.caching=true
+
+# workflow
+- run: ./gradlew build
+```
+
+After:
+
+```yaml
+# gradle.properties
+org.gradle.caching=true
+org.gradle.configuration-cache=true
+
+# workflow
+- run: ./gradlew build
+```
+
+References:
+
+- <https://docs.gradle.org/current/userguide/configuration_cache.html>
+- <https://docs.gradle.org/current/userguide/build_environment.html#sec:gradle_configuration_properties>
+- <https://docs.gradle.org/8.1/release-notes.html>
+- <https://github.com/gradle/actions/blob/main/docs/setup-gradle.md#cache-encryption-key>
+
+<a id="toolchains-gradle-parallel-disabled"></a>
+
+### toolchains/gradle-parallel-disabled
+
+Multi-project Gradle builds run in CI could execute independent subprojects in parallel with `org.gradle.parallel=true`.
+
+**Why:** Enabling parallel project execution can overlap independent subproject tasks, subject to task dependencies, worker limits and shared-resource constraints. Other concurrency, including worker APIs or configuration-cache task execution, may already exist. Source-level include declarations do not establish an independent runtime task graph. Measure representative builds and validate shared mutable state before changing scheduling.
+
+- Kind: practice; default severity: info; impact: medium
+- Presets: `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+# settings.gradle.kts
+include(":app", ":core", ":data")
+
+# gradle.properties
+org.gradle.caching=true
+```
+
+After:
+
+```yaml
+# settings.gradle.kts
+include(":app", ":core", ":data")
+
+# gradle.properties
+org.gradle.caching=true
+org.gradle.parallel=true
+```
+
+References:
+
+- <https://docs.gradle.org/current/userguide/performance.html#sec:enable_parallel_execution>
+- <https://docs.gradle.org/current/userguide/build_environment.html#sec:gradle_configuration_properties>
+
+<a id="toolchains-bazel-missing-version-pin"></a>
+
+### toolchains/bazel-missing-version-pin
+
+Bazel workspaces built in CI should pin the Bazel version in a checked-in `.bazelversion` file.
+
+**Why:** Bazelisk resolves Bazel using its environment/configuration and version file. Without a visible choice, its fallback can track newer releases; floating labels intentionally do so. Plain Bazel does not select versions this way, so only explicit bazelisk commands or bazel commands after a recognized Bazelisk setup are considered. External configuration, cache state and installer versions can change resolution. An exact reviewed release constrains the tool version, not whole-build reproducibility.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+# MODULE.bazel present, no .bazelversion
+- uses: bazel-contrib/setup-bazel@0.19.1
+- run: bazel test //...
+```
+
+After:
+
+```yaml
+# .bazelversion
+8.4.2
+
+# workflow
+- uses: bazel-contrib/setup-bazel@0.19.1
+- run: bazel test //...
+```
+
+References:
+
+- <https://github.com/bazelbuild/bazelisk#how-does-bazelisk-know-which-bazel-version-to-run>
+- <https://bazel.build/install/bazelisk>
+- <https://github.com/bazel-contrib/setup-bazel#bazelisk-cache>
+
+<a id="toolchains-rust-missing-locked-flag"></a>
+
+### toolchains/rust-missing-locked-flag
+
+Cargo commands in CI should pass `--locked` so the committed `Cargo.lock` is enforced instead of silently rewritten.
+
+**Why:** Cargo normally reuses a compatible lockfile, but may resolve dependencies and rewrite it when manifests or configuration require a change. Absence of --locked is permission to change the lock, not evidence that it changes or that dependencies were unreviewed. --locked rejects a missing/changed lockfile; it does not prove a reproducible build or forbid network access. Apply this policy only where CI is intended to enforce a frozen dependency graph.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+# Cargo.lock is committed
+- run: cargo test --all-features
+```
+
+After:
+
+```yaml
+# Cargo.lock is committed
+- run: cargo test --locked --all-features
+```
+
+References:
+
+- <https://doc.rust-lang.org/cargo/commands/cargo-build.html#manifest-options>
+- <https://doc.rust-lang.org/cargo/commands/cargo-test.html#manifest-options>
+- <https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html>
+
+<a id="toolchains-rust-cargo-incremental-in-ci"></a>
+
+### toolchains/rust-cargo-incremental-in-ci
+
+Review incremental compilation tradeoffs in CI jobs that cache Cargo's `target/` directory.
+
+**Why:** Incremental compilation writes session data that can help subsequent builds, including multiple compilations within the same CI job. Persisting it across runs may cost more than it saves; Swatinem/rust-cache removes it before saving. CARGO_INCREMENTAL=1 forces it on regardless of profile settings. Cargo 1.99 introduced a CI default of off, while older dev/test profiles default on absent overrides. Paths and cache behavior depend on toolchain/action versions. Benchmark before disabling incremental compilation; this is a tradeoff, not proof of wasted work.
+
+- Kind: practice; default severity: info; impact: low
+- Presets: `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+- uses: Swatinem/rust-cache@v2
+- run: cargo test
+  env:
+    CARGO_INCREMENTAL: 1
+```
+
+After:
+
+```yaml
+- uses: Swatinem/rust-cache@v2
+- run: cargo test
+  env:
+    CARGO_INCREMENTAL: 0
+```
+
+References:
+
+- <https://doc.rust-lang.org/cargo/reference/config.html#buildincremental>
+- <https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-reads>
+- <https://doc.rust-lang.org/cargo/reference/profiles.html#incremental>
+- <https://doc.rust-lang.org/cargo/CHANGELOG.html#cargo-199-2026-10-01>
+- <https://github.com/Swatinem/rust-cache#cache-details>
+
+<a id="toolchains-go-mod-mutable-override"></a>
+
+### toolchains/go-mod-mutable-override
+
+CI should not let Go build commands rewrite go.mod and go.sum (`-mod=mod`, GOFLAGS, or a `go get` before building).
+
+**Why:** In modern module-aware Go builds, -mod=mod permits go.mod updates when module loading needs them. Since Go 1.16 the ordinary default is readonly unless automatic vendor mode or other configuration applies. Readonly restricts go.mod updates, not every go.sum write; go mod download may also update sums. These flags do not prove an actual graph change or absence of review. If both files must remain unchanged, verify their diff after all resolving commands.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+env:
+  GOFLAGS: -mod=mod
+steps:
+  - run: go test ./...
+```
+
+After:
+
+```yaml
+steps:
+  - run: go test ./...  # -mod=readonly is the default since Go 1.16
+```
+
+References:
+
+- <https://go.dev/ref/mod#build-commands>
+- <https://go.dev/ref/mod#go-mod-file-updates>
+- <https://go.dev/ref/mod#resolve-pkg-mod>
+- <https://pkg.go.dev/cmd/go#hdr-Environment_variables>
+
+<a id="toolchains-python-pip-no-hash-check"></a>
+
+### toolchains/python-pip-no-hash-check
+
+CI installs fully pinned requirements files with pip without hash-checking mode (`--hash` entries and `--require-hashes`).
+
+**Why:** A version pin does not identify a unique distribution archive. Hash-checking mode checks downloaded requirement artifacts against independently reviewed hashes, rather than relying only on hashes supplied by the index. Every requirement and transitive dependency needs a pin and hash. Multiple allowed wheels, platforms and source-build dependencies can still produce different environments: hash checking is an artifact-integrity control, not a proof of reproducible or hermetic builds. External pip configuration is not evaluated.
+
+- Kind: practice; default severity: info; impact: low
+- Presets: `strict`
+
+Before:
+
+```yaml
+# requirements.txt
+requests==2.32.3
+# workflow
+- run: pip install -r requirements.txt
+```
+
+After:
+
+```yaml
+# requirements.txt (generated with --generate-hashes)
+requests==2.32.3 \
+    --hash=sha256:<hash>
+# workflow
+- run: pip install --require-hashes -r requirements.txt
+```
+
+References:
+
+- <https://pip.pypa.io/en/stable/topics/secure-installs/#hash-checking-mode>
+- <https://pip.pypa.io/en/stable/topics/secure-installs/#forcing-hash-checking-mode>
+- <https://docs.astral.sh/uv/reference/cli/#uv-pip-compile--generate-hashes>
+
+<a id="toolchains-uv-sync-unlocked"></a>
+
+### toolchains/uv-sync-unlocked
+
+`uv sync` and `uv run` in CI should pass `--locked` so the committed `uv.lock` is enforced instead of silently re-locked.
+
+**Why:** Project-mode uv sync/run can update uv.lock when freshness checks require it; a compatible existing lock need not change. --locked rejects required lock changes, whereas --frozen skips freshness checks and --no-sync avoids synchronization. Environment equivalents depend on uv version and boolean values. This rule observes visible lock policy, not actual resolution, review history or whole-build reproducibility.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+# uv.lock is committed
+- run: uv sync --all-extras
+- run: uv run pytest
+```
+
+After:
+
+```yaml
+# uv.lock is committed
+- run: uv sync --locked --all-extras
+- run: uv run --locked pytest
+```
+
+References:
+
+- <https://docs.astral.sh/uv/concepts/projects/sync/>
+- <https://docs.astral.sh/uv/reference/cli/#uv-sync--locked>
+- <https://docs.astral.sh/uv/reference/environment/#uv_locked>
+
+<a id="toolchains-rust-toolchain-unpinned"></a>
+
+### toolchains/rust-toolchain-unpinned
+
+CI should build Rust with a pinned toolchain release rather than the floating `stable`/`nightly` channel.
+
+**Why:** Floating stable/beta/nightly selections can pick newer compiler and bundled-tool releases without a repository change. Deliberate compatibility jobs may want this. A reviewed version/date selection constrains the toolchain but does not prove reproducibility. Rust cache keys can incorporate compiler identity, while fallback/seeded entries may still provide reuse. Scoped toolchain files and explicit command/environment overrides take precedence according to rustup and installer behavior.
+
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`, `agentic`, `strict`
+- Requires: `complete-inventory`
+
+Before:
+
+```yaml
+# Cargo.toml present, no rust-toolchain.toml
+- uses: dtolnay/rust-toolchain@stable
+- uses: Swatinem/rust-cache@v2
+- run: cargo test --locked
+```
+
+After:
+
+```yaml
+# rust-toolchain.toml
+[toolchain]
+channel = "1.89.0"
+
+# workflow
+- uses: dtolnay/rust-toolchain@1.89.0
+- uses: Swatinem/rust-cache@v2
+- run: cargo test --locked
+```
+
+References:
+
+- <https://rust-lang.github.io/rustup/overrides.html#the-toolchain-file>
+- <https://github.com/dtolnay/rust-toolchain#inputs>
+- <https://github.com/actions-rust-lang/setup-rust-toolchain#inputs>
+- <https://github.com/Swatinem/rust-cache#cache-details>

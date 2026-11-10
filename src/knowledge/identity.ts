@@ -15,7 +15,7 @@ function canonical(value: unknown): unknown {
 export const identity = (value: unknown): string => hash(JSON.stringify(canonical(value)));
 
 export const inventoryPolicyDigest = (config: Pick<LintConfig, "ignorePaths" | "limits">): string =>
-  identity(["knowledge-inventory-v1", [...new Set(config.ignorePaths)].sort(), config.limits]);
+  identity(["knowledge-inventory-v2", [...new Set(config.ignorePaths)].sort(), config.limits]);
 
 export function validateScope(scope: KnowledgeScope): void {
   const host = new URL(scope.host);

@@ -38,11 +38,12 @@ describe("withoutSandboxFlags", () => {
 });
 
 describe("suggestions", () => {
-  it("rewrites the command without the flag and explains fixed-output derivations", () => {
+  it("qualifies a manual flag change with builder policy and isolation requirements", () => {
     const [diagnostic] = runRule(rule, { files: job("      - run: nix build --option sandbox false .#app") });
     expect(diagnostic?.suggestion).toContain("run: nix build .#app");
-    expect(diagnostic?.suggestion).toContain("extra-sandbox-paths = /path/it/needs");
-    expect(diagnostic?.confidence).toBe("high");
+    expect(diagnostic?.suggestion).toContain("narrowly scoped extra-sandbox-paths");
+    expect(diagnostic?.suggestion).toContain("Sandboxing alone is not a reproducibility proof");
+    expect(diagnostic?.confidence).toBe("medium");
     expect(diagnostic?.fix).toBeUndefined();
   });
   it("reports settings inside a composite action a job uses with medium confidence", () => {
@@ -84,7 +85,7 @@ ruleTester(rule, {
     {
       name: "sandbox = false in install-nix-action's extra_nix_config",
       files: installer("max-jobs = auto", "sandbox = false"),
-      errors: [{ line: 10, messageIncludes: "`sandbox = false` (set by the `extra_nix_config` input of cachix/install-nix-action) turns the Nix build sandbox off" }],
+      errors: [{ line: 10, messageIncludes: "`sandbox = false` (set by the `extra_nix_config` input of cachix/install-nix-action) requests that the Nix build sandbox be disabled for an inspected build command. If the builder or trusted daemon honors it, undeclared host dependencies become possible. This observation does not establish that outputs differ or that a daemon accepted the request." }],
     },
     {
       name: "sandbox = relaxed in the job's NIX_CONFIG",
@@ -101,7 +102,7 @@ ruleTester(rule, {
         "      - uses: cachix/install-nix-action@v31",
         "      - run: nix build .#app",
       ),
-      errors: [{ line: 8, messageIncludes: "`sandbox = relaxed` (set by job `NIX_CONFIG`) keeps the sandbox for ordinary builds but builds fixed-output derivations and every derivation that sets `__noChroot = true` outside it" }],
+      errors: [{ line: 8, messageIncludes: "`sandbox = relaxed` (set by job `NIX_CONFIG`) requests relaxed sandboxing for an inspected build command, allowing fixed-output and __noChroot derivations outside the sandbox. If the builder or trusted daemon honors it, undeclared host dependencies become possible. This observation does not establish that outputs differ or that a daemon accepted the request." }],
     },
     {
       name: "--option sandbox false on nix build",
@@ -120,7 +121,7 @@ ruleTester(rule, {
     },
     {
       name: "a shell write to nix.conf",
-      files: job('      - run: echo "sandbox = false" | sudo tee -a /etc/nix/nix.conf'),
+      files: job('      - run: echo "sandbox = false" | sudo tee -a /etc/nix/nix.conf', "      - run: nix build .#app"),
       errors: [{ line: 7, messageIncludes: "(set by a shell write to nix.conf)" }],
     },
     {
@@ -131,7 +132,7 @@ ruleTester(rule, {
     {
       name: "flake nixConfig.sandbox = false",
       files: flake("{", '  description = "app";', "  nixConfig.sandbox = false;", "  outputs = { self }: { };", "}"),
-      errors: [{ line: 3, messageIncludes: "`nixConfig.sandbox = false` in flake.nix asks every consumer of this flake to turn the build sandbox off" }],
+      errors: [{ line: 3, messageIncludes: "`nixConfig.sandbox = false` in flake.nix asks consumers to turn the build sandbox off. It only takes effect when accepted and honored by the installation; no actual impurity or daemon privilege is established by this declaration." }],
     },
     {
       name: "flake nixConfig attrset with sandbox = relaxed",
@@ -141,7 +142,7 @@ ruleTester(rule, {
     {
       name: "__noChroot = true in a derivation",
       files: nixFile("{ stdenv }:", "stdenv.mkDerivation {", '  name = "foo";', "  __noChroot = true;", "}"),
-      errors: [{ line: 4, messageIncludes: "`__noChroot = true` in pkgs/foo.nix asks Nix to build this derivation outside the sandbox" }],
+      errors: [{ line: 4, messageIncludes: "`__noChroot = true` in pkgs/foo.nix requests an unsandboxed build if passed to Nix's derivation primitive." }],
     },
   ],
 });

@@ -69,7 +69,7 @@ ruleTester(rule, {
         {
           line: 7,
           path: WORKFLOW,
-          messageIncludes: "`pip install -r requirements.txt` installs 2 requirements pinned with `==` from `requirements.txt` without hash-checking mode",
+          messageIncludes: "`pip install -r requirements.txt` installs 2 requirements pinned with `==` from `requirements.txt`, with no hashes or hash-checking mode visible in the inspected inputs. Version pins alone do not authenticate archive bytes; verify whether external pip policy already enforces this.",
         },
       ],
     },

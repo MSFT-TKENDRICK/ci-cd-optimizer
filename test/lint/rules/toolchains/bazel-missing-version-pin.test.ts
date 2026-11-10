@@ -10,12 +10,16 @@ const MODULE = 'module(name = "demo")\n';
 ruleTester(rule, {
   valid: [
     {
+      name: "plain bazel may be provisioned without Bazelisk",
+      files: { [WORKFLOW]: job("      - run: bazel test //..."), "MODULE.bazel": MODULE },
+    },
+    {
       name: ".bazelversion pins an exact release",
-      files: { [WORKFLOW]: job("      - run: bazel test //..."), "MODULE.bazel": MODULE, ".bazelversion": "8.4.2\n" },
+      files: { [WORKFLOW]: job("      - run: bazelisk test //..."), "MODULE.bazel": MODULE, ".bazelversion": "8.4.2\n" },
     },
     {
       name: ".bazeliskrc pins USE_BAZEL_VERSION",
-      files: { [WORKFLOW]: job("      - run: bazel build //..."), "WORKSPACE": "", ".bazeliskrc": "USE_BAZEL_VERSION=7.6.1\n" },
+      files: { [WORKFLOW]: job("      - run: bazelisk build //..."), "WORKSPACE": "", ".bazeliskrc": "USE_BAZEL_VERSION=7.6.1\n" },
     },
     {
       name: "USE_BAZEL_VERSION set in the workflow environment",
@@ -28,14 +32,14 @@ ruleTester(rule, {
           "  build:",
           "    runs-on: ubuntu-24.04",
           "    steps:",
-          "      - run: bazel test //...",
+          "      - run: bazelisk test //...",
         ),
         "MODULE.bazel": MODULE,
       },
     },
     {
       name: "trap: fork-qualified exact version is a pin",
-      files: { [WORKFLOW]: job("      - run: bazel test //..."), "MODULE.bazel": MODULE, ".bazelversion": "mycompany/8.4.2\n" },
+      files: { [WORKFLOW]: job("      - run: bazelisk test //..."), "MODULE.bazel": MODULE, ".bazelversion": "mycompany/8.4.2\n" },
     },
     {
       name: "trap: bazel invoked in a repository without a Bazel workspace",
@@ -43,31 +47,31 @@ ruleTester(rule, {
     },
     {
       name: "trap: incomplete inventory cannot prove .bazelversion is absent",
-      files: { [WORKFLOW]: job("      - run: bazel test //..."), "MODULE.bazel": MODULE },
+      files: { [WORKFLOW]: job("      - run: bazelisk test //..."), "MODULE.bazel": MODULE },
       inventoryComplete: false,
     },
   ],
   invalid: [
     {
       name: "MODULE.bazel workspace without any version pin",
-      files: { [WORKFLOW]: job("      - run: bazel test //..."), "MODULE.bazel": MODULE },
+      files: { [WORKFLOW]: job("      - run: bazelisk test //..."), "MODULE.bazel": MODULE },
       errors: [
         {
           line: 7,
           path: WORKFLOW,
-          messageIncludes: "The root Bazel workspace has no `.bazelversion`, no `USE_BAZEL_VERSION` in `.bazeliskrc`",
+          messageIncludes: "The root Bazel workspace has no `.bazelversion`, no `USE_BAZEL_VERSION` in the inspected `.bazeliskrc` and no visible version/fallback environment setting for `bazelisk test //...`. Standard Bazelisk fallback may choose a newer release; inspect external configuration before adding a pin.",
         },
       ],
     },
     {
       name: ".bazelversion with the floating `latest` label",
-      files: { [WORKFLOW]: job("      - run: bazel test //..."), "MODULE.bazel": MODULE, ".bazelversion": "latest\n" },
+      files: { [WORKFLOW]: job("      - run: bazelisk test //..."), "MODULE.bazel": MODULE, ".bazelversion": "latest\n" },
       errors: [{ line: 1, path: ".bazelversion", messageIncludes: "selects the floating Bazel label `latest`" }],
     },
     {
       name: ".bazeliskrc with a major-version wildcard",
       files: {
-        [WORKFLOW]: job("      - run: bazel build //..."),
+        [WORKFLOW]: job("      - run: bazelisk build //..."),
         "MODULE.bazel": MODULE,
         ".bazeliskrc": "# CI Bazel\nUSE_BAZEL_VERSION=7.x\n",
       },
@@ -85,7 +89,7 @@ ruleTester(rule, {
         ),
         "tools/MODULE.bazel": MODULE,
       },
-      errors: [{ line: 7, messageIncludes: "The Bazel workspace in `tools/` has no `.bazelversion`" }],
+      errors: [{ line: 10, messageIncludes: "The Bazel workspace in `tools/` has no `.bazelversion`" }],
     },
   ],
 });

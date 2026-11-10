@@ -58,7 +58,7 @@ ruleTester(rule, {
     {
       name: "nix flake update before the build",
       files: job("      - run: nix flake update", "      - run: nix build"),
-      errors: [{ line: 7, messageIncludes: "`nix flake update` in job `build` (triggered by push/pull_request) re-resolves every flake input" }],
+      errors: [{ line: 7, messageIncludes: "`nix flake update` in job `build` (enabled for push/pull_request) requests an update of the flake's inputs. Mutable references may differ from the committed lock, and no recognized later publication of this update is visible. Confirm that testing updated dependencies is intentional." }],
     },
     {
       name: "update nested in nix develop -c",
@@ -73,7 +73,7 @@ ruleTester(rule, {
     {
       name: "--recreate-lock-file on a build",
       files: workflow("on: merge_group", "      - run: nix build --recreate-lock-file .#app"),
-      errors: [{ line: 7, messageIncludes: "`nix build --recreate-lock-file` in job `build` (triggered by merge_group)" }],
+      errors: [{ line: 7, messageIncludes: "`nix build --recreate-lock-file` in job `build` (enabled for merge_group) requests an update of the flake's inputs. Mutable references may differ from the committed lock, and no recognized later publication of this update is visible. Confirm that testing updated dependencies is intentional." }],
     },
     {
       name: "a local input together with a remote one is still reported",

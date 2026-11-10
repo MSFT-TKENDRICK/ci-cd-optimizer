@@ -1,6 +1,6 @@
 import { identsNamed } from "../../parsers/nix.js";
 import { defineRule } from "../helpers.js";
-import { inheritStatements, inLambdaDefault, isValueUse, lintableNixFiles } from "./expr.js";
+import { inheritStatements, inLambdaDefault, isShadowed, isValueUse, lintableNixFiles } from "./expr.js";
 
 const SUGGESTION = [
   "Make the platform an explicit input instead of reading it from the evaluating machine.",
@@ -36,10 +36,11 @@ export default defineRule({
     for (const file of lintableNixFiles(project)) {
       const hits: { offset: number; line: number; text: string }[] = [];
       for (const ident of identsNamed(file, "builtins.currentSystem", "__currentSystem")) {
+        if (isShadowed(file, ident.segments[0] ?? ident.text)) continue;
         if (isValueUse(file, ident)) hits.push({ offset: ident.offset, line: ident.line, text: ident.text });
       }
       for (const statement of inheritStatements(file)) {
-        if (statement.source !== "builtins") continue;
+        if (statement.source !== "builtins" || isShadowed(file, "builtins")) continue;
         const name = statement.names.find((entry) => entry.name === "currentSystem");
         if (name) hits.push({ offset: name.offset, line: file.lineOf(name.offset), text: "inherit (builtins) currentSystem" });
       }

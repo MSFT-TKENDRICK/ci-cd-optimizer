@@ -3,6 +3,7 @@ import type { ProjectModel } from "../../project.js";
 import type { ReportDescriptor } from "../../types.js";
 import {
   NIX_INSTALLER_ACTIONS,
+  commandTokens,
   floatingNixSource,
   nestedInvocations,
   nixCommandSites,
@@ -86,6 +87,10 @@ function installsWithAction(project: ProjectModel, site: NixCommandSite): boolea
 function addsChannel(project: ProjectModel, site: NixCommandSite): boolean {
   return siteCommands(project, site).some(({ command }) => {
     const nix = nixInvocation(command, 0);
+    if (!nix) {
+      const words = commandTokens(command).map((token) => token.value);
+      if (words.some((word) => word.split("/").at(-1) === "nix-channel") && words.includes("--add")) return true;
+    }
     return (nix ? nestedInvocations(nix) : []).some((entry) => entry.binary === "nix-channel" && channelArgs(entry.args).mode === "--add");
   });
 }

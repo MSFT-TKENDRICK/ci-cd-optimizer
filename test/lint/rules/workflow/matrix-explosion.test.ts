@@ -89,7 +89,7 @@ ruleTester(rule, {
     {
       name: "3 OS x 4 versions x 2 databases",
       files: job(...OS_NODE_DB),
-      errors: [{ line: 6, messageIncludes: "Matrix of job `test` expands to 24 jobs (os 3 × node 4 × db 2). That is above the 20-job budget" }],
+      errors: [{ line: 6, messageIncludes: "Matrix of job `test` expands to 24 jobs (os 3 × node 4 × db 2). That is above the configured 20-job budget; actual queueing depends on available runners and account limits." }],
     },
     {
       name: "include rows that add new combinations count as jobs",
@@ -116,13 +116,13 @@ ruleTester(rule, {
       name: "custom maxJobs budget is exceeded",
       files: job("        os: [ubuntu-latest, windows-latest, macos-latest]", "        node: [20, 22, 24]"),
       options: { maxJobs: 6 },
-      errors: [{ line: 6, messageIncludes: "expands to 9 jobs (os 3 × node 3). That is above the 6-job budget." }],
+      errors: [{ line: 6, messageIncludes: "Matrix of job `test` expands to 9 jobs (os 3 × node 3). That is above the configured 6-job budget; actual queueing depends on available runners and account limits." }],
     },
   ],
 });
 
 describe("workflow/matrix-explosion suggestion", () => {
-  it("proposes a sparse matrix that keeps the extremes and one leg per extra runner", () => {
+  it("requires a coverage decision and preserves every database on every runner", () => {
     const [diagnostic] = runRule(rule, { files: job(...OS_NODE_DB) });
     expect(diagnostic?.suggestion).toContain(
       [
@@ -132,11 +132,15 @@ describe("workflow/matrix-explosion suggestion", () => {
         "    node: [18, 24]",
         "    db: [postgres, mysql]",
         "    include:",
+        "      - { os: windows-latest, node: 24, db: postgres }",
         "      - { os: windows-latest, node: 24, db: mysql }",
+        "      - { os: macos-latest, node: 24, db: postgres }",
         "      - { os: macos-latest, node: 24, db: mysql }",
       ].join("\n"),
     );
-    expect(diagnostic?.suggestion).toContain("(6 jobs)");
+    expect(diagnostic?.suggestion).toContain("(8 jobs)");
+    expect(diagnostic?.suggestion).toContain("coverage tradeoff, not an equivalent replacement");
+    expect(diagnostic?.fix).toBeUndefined();
   });
 
   it("keeps quoted version text such as \"3.10\"", () => {

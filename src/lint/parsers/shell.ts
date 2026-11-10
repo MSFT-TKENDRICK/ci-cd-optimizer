@@ -16,6 +16,10 @@ export function shellTokens(command: string): ShellToken[] {
   };
   for (let index = 0; index < command.length; index += 1) {
     const char = command.charAt(index);
+    if (char === "\\" && quote !== "'" && (command.charAt(index + 1) === "\n" || command.slice(index + 1, index + 3) === "\r\n")) {
+      index += command.charAt(index + 1) === "\r" ? 2 : 1;
+      continue;
+    }
     if (quote) {
       if (char === quote) quote = undefined;
       else if (char === "\\" && quote === '"' && /[$`"\\]/.test(command.charAt(index + 1))) {
@@ -31,6 +35,7 @@ export function shellTokens(command: string): ShellToken[] {
       index = close + 1;
       continue;
     }
+    if (char === "`" || command.startsWith("$(", index) || command.startsWith("<(", index) || command.startsWith(">(", index)) return [];
     if (/\s/.test(char)) {
       flush(index);
       continue;
@@ -73,7 +78,7 @@ export function commandTokens(command: string): ShellToken[] {
       while ((tokens[index]?.value ?? "").startsWith("-")) {
         const option = tokens[index]?.value ?? "";
         if (option === "--help" || option === "--version" || (word === "command" && /^-[p]*[vV]/.test(option)) ||
-            (word === "sudo" && /^(?:-[vVl]|--list|--validate)$/.test(option))) return [];
+            (word === "sudo" && /^(?:-[^-]*[vVlK]|--list|--validate)/.test(option))) return [];
         index += values?.has(option) ? 2 : 1;
         if (option === "--") break;
       }
@@ -86,8 +91,30 @@ export function shellWords(command: string): string[] {
   return commandTokens(command).map((token) => token.value);
 }
 
+function withoutContinuations(text: string): string {
+  let result = "";
+  let quote: string | undefined;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text.charAt(index);
+    if (char === "\\" && quote !== "'") {
+      if (text.charAt(index + 1) === "\n" || text.slice(index + 1, index + 3) === "\r\n") {
+        index += text.charAt(index + 1) === "\r" ? 2 : 1;
+        continue;
+      }
+      result += char + text.charAt(++index);
+      continue;
+    }
+    if (quote === char) quote = undefined;
+    else if (!quote && ["'", '"', "`"].includes(char)) quote = char;
+    result += char;
+  }
+  return result;
+}
+
 /** Commands separated outside quotes, substitutions and heredoc bodies, with original source offsets. */
 export function splitShellCommands(script: string): Array<{ command: string; offset: number }> {
+  // Definitions can shadow tool names, and their bodies do not execute at declaration time.
+  if (/(?:^|[\n;])\s*(?:(?:function\s+[\w-]+(?:\s*\(\s*\))?|[\w-]+\s*\(\s*\))\s*\{|(?:alias|unalias)\s)/.test(script)) return [];
   const result: Array<{ command: string; offset: number }> = [];
   let start = 0;
   let quote: string | undefined;
@@ -96,7 +123,7 @@ export function splitShellCommands(script: string): Array<{ command: string; off
   const emit = (end: number): void => {
     const raw = script.slice(start, end);
     const leading = raw.length - raw.trimStart().length;
-    const command = raw.trim().replace(/\\\r?\n/g, " ");
+    const command = withoutContinuations(raw.trim());
     if (command) result.push({ command, offset: start + leading });
   };
   for (let index = 0; index < script.length; index += 1) {

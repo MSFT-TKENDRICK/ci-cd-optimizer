@@ -47,7 +47,7 @@ ruleTester(rule, {
     {
       name: "plain string URL",
       files: { "default.nix": nix("let", '  data = builtins.fetchurl "https://example.org/data.json";', "in builtins.readFile data") },
-      errors: [{ line: 2, messageIncludes: '`builtins.fetchurl "https://example.org/data.json"` downloads at evaluation time with no `sha256`' }],
+      errors: [{ line: 2, messageIncludes: "`builtins.fetchurl \"https://example.org/data.json\"` has no declared `sha256` for verifying the expected bytes. Cache freshness can depend on `tarball-ttl` (1 hour by default); pure evaluation rejects the unpinned call if it is demanded." }],
     },
     {
       name: "imported remote Nix code",

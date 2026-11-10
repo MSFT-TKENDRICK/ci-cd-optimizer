@@ -76,7 +76,7 @@ ruleTester(rule, {
       name: "default mode on a multi-stage build",
       files: { ".github/workflows/ci.yml": buildPush("cache-from: type=gha", "cache-to: type=gha"), Dockerfile: MULTI_STAGE },
       errors: [{ line: 9, messageIncludes: "`cache-to` entry `type=gha` uses the default `mode=min`" }],
-      output: { ".github/workflows/ci.yml": buildPush("cache-from: type=gha", "cache-to: type=gha,mode=max") },
+      output: null,
     },
     {
       name: "explicit mode=min with a target",
@@ -84,14 +84,14 @@ ruleTester(rule, {
         ".github/workflows/ci.yml": buildPush("target: runtime", "cache-to: type=gha,mode=min,scope=app"),
         Dockerfile: `${MULTI_STAGE}FROM gcr.io/distroless/static AS runtime\nCOPY --from=build /out/app /app\n`,
       },
-      errors: [{ line: 9, messageIncludes: "uses `mode=min`, which caches only layers exported into the resulting image, but Dockerfile (target `runtime`) builds intermediate stage(s) `build` with 2 RUN" }],
-      output: { ".github/workflows/ci.yml": buildPush("target: runtime", "cache-to: type=gha,mode=max,scope=app") },
+      errors: [{ line: 9, messageIncludes: "`cache-to` entry `type=gha,mode=min,scope=app` uses `mode=min`. Dockerfile (target `runtime`) builds intermediate stage(s) `build` with 2 RUN instruction(s) omitted from this export; a fresh builder relying on it may repeat that work." }],
+      output: null,
     },
     {
-      name: "bare registry reference is rewritten to the attribute form",
+      name: "bare registry reference gets a manual attribute-form recommendation",
       files: { ".github/workflows/ci.yml": buildPush("cache-to: ghcr.io/o/app:buildcache"), Dockerfile: MULTI_STAGE },
       errors: [{ line: 8, messageIncludes: "entry `ghcr.io/o/app:buildcache`" }],
-      output: { ".github/workflows/ci.yml": buildPush("cache-to: type=registry,ref=ghcr.io/o/app:buildcache,mode=max") },
+      output: null,
     },
     {
       name: "CLI build in a subdirectory",
@@ -107,16 +107,7 @@ ruleTester(rule, {
         "svc/Dockerfile": MULTI_STAGE,
       },
       errors: [{ line: 6, messageIncludes: "`--cache-to` entry `type=gha` uses the default `mode=min`" }],
-      output: {
-        ".github/workflows/ci.yml": yml(
-          "on: push",
-          "jobs:",
-          "  image:",
-          "    runs-on: ubuntu-24.04",
-          "    steps:",
-          "      - run: docker buildx build --cache-from type=gha --cache-to type=gha,mode=max -t app svc",
-        ),
-      },
+      output: null,
     },
   ],
 });

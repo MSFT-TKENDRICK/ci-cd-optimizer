@@ -76,7 +76,7 @@ ruleTester(rule, {
         {
           line: 7,
           messageIncludes:
-            "`pnpm install --frozen-lockfile` in stage `0` is keyed on 2 workspace manifests (`packages/api/package.json`, `packages/web/package.json`)",
+            "`pnpm install --frozen-lockfile` in stage `0` follows copies of 2 workspace manifests (`packages/api/package.json`, `packages/web/package.json`). Manifest edits can invalidate this layer; they do not necessarily re-download dependencies from a warm store. Consider measuring a separate `pnpm fetch` layer for workspace `pnpm-workspace.yaml`.",
         },
       ],
     },
@@ -98,7 +98,7 @@ ruleTester(rule, {
         {
           path: "apps/api/Dockerfile",
           line: 6,
-          messageIncludes: "in stage `deps` is keyed on 1 workspace manifest (`apps/api/package.json`)",
+          messageIncludes: "`pnpm i --frozen-lockfile` in stage `deps` follows copies of 1 workspace manifest (`apps/api/package.json`). Manifest edits can invalidate this layer; they do not necessarily re-download dependencies from a warm store. Consider measuring a separate `pnpm fetch` layer for workspace `pnpm-workspace.yaml`.",
         },
       ],
     },
@@ -116,7 +116,7 @@ ruleTester(rule, {
           "RUN pnpm install",
         ),
       },
-      errors: [{ line: 7, messageIncludes: "keyed on 4 workspace manifests (`packages/a/package.json`, `packages/b/package.json`, `packages/c/package.json` and 1 more)" }],
+      errors: [{ line: 7, messageIncludes: "`pnpm install` in stage `deps` follows copies of 4 workspace manifests (`packages/a/package.json`, `packages/b/package.json`, `packages/c/package.json` and 1 more). Manifest edits can invalidate this layer; they do not necessarily re-download dependencies from a warm store. Consider measuring a separate `pnpm fetch` layer for workspace `pnpm-workspace.yaml`." }],
     },
   ],
 });

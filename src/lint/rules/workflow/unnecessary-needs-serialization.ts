@@ -129,7 +129,7 @@ export default defineRule({
             path: workflow.path,
             line: needsLine(workflow, job, dependency),
             key: `${job.key}.needs.${dependency}`,
-            message: `Job \`${job.id}\` needs \`${dependency}\`, whose visible steps ${did}, with no recognized outputs, artifacts or cache transfer. The edge still success-gates and orders \`${job.id}\`; review whether that behavior is intentional before considering parallel execution.`,
+            message: `Job \`${job.id}\` needs \`${dependency}\`, whose visible steps are limited to: ${did}, with no recognized outputs, artifacts or cache transfer. The edge still success-gates and orders \`${job.id}\`; review whether that behavior is intentional before considering parallel execution.`,
             suggestion: `Only if the ordering and success gate are unnecessary, consider the following behavior change: ${
               remaining.length === 0
                 ? `Remove \`needs: ${dependency}\` from \`${job.id}\``

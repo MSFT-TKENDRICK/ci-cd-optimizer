@@ -6,6 +6,7 @@ import { attrsetOf, callArgument, enclosingOpen, lintableNixFiles } from "./expr
 import {
   NIX_CONF_INPUTS,
   cliConf,
+  commandTokens,
   envConf,
   effectiveNixConf,
   hasOption,
@@ -13,8 +14,10 @@ import {
   nestedInvocations,
   nixInvocation,
   nixJobs,
+  optionArity,
   runnerLabels,
   shellConfWrites,
+  shellTokens,
   type NixConfSetting,
   type NixInvocation,
 } from "./shared.js";
@@ -69,10 +72,37 @@ function settingLine(project: ProjectModel, setting: NixConfSetting, from: numbe
 
 /** The command with the flags that weaken the sandbox removed. */
 export function withoutSandboxFlags(command: string): string {
-  return command
-    .replace(/\s+--(?:extra-)?option\s+(?:sandbox|build-use-sandbox|build-use-chroot)\s+["']?(?:false|relaxed)["']?(?=\s|$)/g, "")
-    .replace(/\s+--(?:no|relaxed)-sandbox(?=\s|$)/g, "")
-    .trim();
+  const invocation = nixInvocation(command, 1);
+  if (!invocation) return command;
+  const all = shellTokens(command);
+  const tokens = commandTokens(command);
+  let end = 0;
+  const spans = all.map((token) => {
+    const start = command.indexOf(token.raw, end);
+    end = start + token.raw.length;
+    return { start, end };
+  }).slice(all.length - tokens.length);
+  const removals: Array<{ start: number; end: number }> = [];
+  for (let index = 1; index < tokens.length; index += 1) {
+    const word = tokens[index]?.value ?? "";
+    if (["--", "--command", "-c", "--run"].includes(word)) break;
+    const count = ["--no-sandbox", "--relaxed-sandbox"].includes(word) ? 1 :
+      ["--option", "--extra-option"].includes(word) && SANDBOX_KEYS.has(tokens[index + 1]?.value ?? "") &&
+      sandboxMode(tokens[index + 2]?.value ?? "") ? 3 : 0;
+    if (count > 0) {
+      const first = spans[index];
+      const last = spans[index + count - 1];
+      if (first && last && first.start >= 0) {
+        let start = first.start;
+        while (start > 0 && /\s/.test(command.charAt(start - 1))) start -= 1;
+        removals.push({ start, end: last.end });
+      }
+    }
+    if (word.startsWith("-") && !word.includes("=")) index += optionArity(invocation, word);
+  }
+  let result = command;
+  for (const removal of removals.reverse()) result = result.slice(0, removal.start) + result.slice(removal.end);
+  return result;
 }
 
 function describe(invocation: NixInvocation): string {
@@ -97,7 +127,7 @@ function envFound(env: Record<string, unknown>, path: string, line: number, scop
     setting,
     mode,
     where: `${scope} \`NIX_CONFIG\``,
-    fix: "Delete the line from `NIX_CONFIG` (the default is `sandbox = true` on Linux), or state it explicitly:\nenv:\n  NIX_CONFIG: |\n    sandbox = true",
+    fix: "Review removing the line from `NIX_CONFIG` only if the resulting effective policy enables sandboxing, or request it explicitly:\nenv:\n  NIX_CONFIG: |\n    sandbox = true",
   }));
 }
 
@@ -109,7 +139,7 @@ function stepFound(step: StepModel, path: string): Found[] {
     setting,
     mode,
     where: `the \`${input ?? "nix.conf"}\` input of ${action}`,
-    fix: `Delete \`${setting.key} = ${setting.value}\` from \`${input ?? "nix.conf"}\` (the installer keeps the Linux default, \`sandbox = true\`), or state it explicitly:\nwith:\n  ${input ?? "extra_nix_config"}: |\n    sandbox = true`,
+    fix: `Review replacing \`${setting.key} = ${setting.value}\` in \`${input ?? "nix.conf"}\` with an explicit request, retaining other settings:\nwith:\n  ${input ?? "extra_nix_config"}: |\n    sandbox = true`,
   }));
   const commands = commandsOf(step).flatMap(({ command, line }) => {
     const nix = nixInvocation(command, line);
@@ -118,7 +148,7 @@ function stepFound(step: StepModel, path: string): Found[] {
         setting,
         mode,
         where: "a shell write to nix.conf",
-        fix: "Delete the command that appends the setting to nix.conf; the default is `sandbox = true` on Linux.",
+        fix: "Review removing only the write that disables sandboxing, then inspect the remaining effective configuration; removing a write does not establish a daemon's policy.",
       }));
     }
     return nestedInvocations(nix).flatMap((invocation) =>
@@ -127,7 +157,7 @@ function stepFound(step: StepModel, path: string): Found[] {
         mode,
         written: cliFlag(invocation, setting),
         where: `the ${describe(invocation)} command line`,
-        fix: `Drop the flag so the build runs sandboxed:\nrun: ${withoutSandboxFlags(command)}`,
+        fix: `Review removing only the matching sandbox override; verify that lower-precedence settings and the daemon then enable sandboxing. A nested invocation may need a separate edit:\nrun: ${withoutSandboxFlags(command)}`,
       })),
     );
   });
@@ -171,7 +201,7 @@ function flakeReports(project: ProjectModel): ReportDescriptor[] {
           path,
           line: entry.line,
           message: `\`nixConfig.${key} = ${entry.raw.replace(/;$/, "")}\` in ${path} asks consumers to ${mode === "false" ? "turn the build sandbox off" : "run `__noChroot` and fixed-output derivations outside the build sandbox"}. It only takes effect when accepted and honored by the installation; no actual impurity or daemon privilege is established by this declaration.`,
-          suggestion: `Remove \`${key}\` from \`nixConfig\` in ${path}. Fetch network resources with a fixed-output fetcher (e.g. \`pkgs.fetchurl { url = "..."; hash = "sha256-..."; }\`), which keeps network access inside the sandbox, and leave sandbox policy to the machine's nix.conf.`,
+          suggestion: `Review whether to remove \`${key}\` from \`nixConfig\` in ${path} after checking the builders' requirements. A reviewed fixed-output fetcher declares an expected digest for network resources; availability and isolation remain installation-dependent. Keep effective sandbox policy explicit on the builders.`,
           confidence: "medium" as const,
         },
       ];
@@ -192,9 +222,9 @@ function noChrootReports(project: ProjectModel): ReportDescriptor[] {
     return [...file.masked.matchAll(NO_CHROOT)].filter((match) => derivations.has(enclosingOpen(file.masked, match.index))).map((match) => ({
       path: file.path,
       line: file.lineOf(match.index),
-      message: `\`__noChroot = true\` in ${file.path} asks Nix to build this derivation outside the sandbox. With the Linux default \`sandbox = true\` Nix refuses the build ("derivation '…' has '__noChroot' set, but that's not allowed when 'sandbox' is 'true'"), so it only builds where \`sandbox = relaxed\` or \`false\` is configured, and there the builder reads the host filesystem and network while the output keeps the same store path.`,
+      message: `\`__noChroot = true\` in ${file.path} requests an unsandboxed build if passed to Nix's derivation primitive. On Linux, \`sandbox = true\` rejects this request; relaxed sandboxing can permit it. Effective policy and whether a host resource is read depend on the builder; the declaration is not evidence that outputs vary.`,
       suggestion:
-        'Remove `__noChroot` and declare what the build reaches for: download network resources with a fixed-output fetcher (`pkgs.fetchurl { url = "..."; hash = "sha256-..."; }`, or set `outputHash`/`outputHashMode` on the derivation), and add host tools as `nativeBuildInputs`. If a host path is unavoidable, expose only that path on the builders (`extra-sandbox-paths = /path/it/needs`) instead of disabling isolation.',
+        'Review removal of `__noChroot` after declaring dependencies and checking builder compatibility. Use reviewed fixed-output fetchers for network resources and declare required host tools as `nativeBuildInputs`. If a host path is unavoidable, review a narrowly scoped `extra-sandbox-paths` setting on supported builders instead of disabling isolation.',
       confidence: "medium" as const,
     }));
   });
@@ -241,7 +271,9 @@ export default defineRule({
         if (!site.nix) continue;
         for (const invocation of nestedInvocations(site.nix)) {
           if (hasOption(invocation, "--dry-run", "--no-build") || (invocation.binary !== "nix-build" && !["build", "flake check", "develop", "run", "shell"].includes(invocation.subcommand))) continue;
-          const last = effectiveNixConf(model, site, invocation)?.filter((setting) => SANDBOX_KEYS.has(setting.key)).at(-1);
+          const settings = effectiveNixConf(model, site, invocation) ??
+            (site.nix.command !== invocation.command ? cliConf(invocation, site.path) : undefined);
+          const last = settings?.filter((setting) => SANDBOX_KEYS.has(setting.key)).at(-1);
           if (last) effective.add(identity(last));
         }
       }

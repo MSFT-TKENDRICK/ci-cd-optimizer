@@ -198,15 +198,10 @@ ruleTester(rule, {
   ],
   invalid: [
     {
-      name: "home-manager pulls its own nixos-unstable: fix inserts follows inside the inputs block",
+      name: "home-manager pulls its own nixos-unstable: follows requires dependency review and re-locking",
       files: { "flake.nix": BLOCK_FLAKE, "flake.lock": DUPLICATE_LOCK },
       errors: [{ path: "flake.nix", line: 5, messageIncludes: "`home-manager` locks its own nixpkgs (`nixpkgs` → lock node `nixpkgs_2`" }],
-      output: {
-        "flake.nix": BLOCK_FLAKE.replace(
-          '    home-manager.url = "github:nix-community/home-manager";\n',
-          '    home-manager.url = "github:nix-community/home-manager";\n    home-manager.inputs.nixpkgs.follows = "nixpkgs";\n',
-        ),
-      },
+      output: null,
     },
     {
       name: "top-level inputs.<x>.url bindings and a dependency that follows a stable root input",
@@ -232,17 +227,7 @@ ruleTester(rule, {
         ),
       },
       errors: [{ line: 4, messageIncludes: "instead of following `nixpkgs-stable`; flake.lock holds 3 distinct nixpkgs revisions" }],
-      output: {
-        "flake.nix": nix(
-          "{",
-          '  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";',
-          '  inputs.nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-24.11";',
-          '  inputs.sops-nix.url = "github:Mic92/sops-nix"; # secrets',
-          '  inputs.sops-nix.inputs.nixpkgs-stable.follows = "nixpkgs-stable";',
-          "  outputs = { self, nixpkgs, nixpkgs-stable, sops-nix }: { };",
-          "}",
-        ),
-      },
+      output: null,
     },
     {
       name: "input attribute set: the follows line is added inside it",
@@ -261,20 +246,7 @@ ruleTester(rule, {
         "flake.lock": DUPLICATE_LOCK,
       },
       errors: [{ line: 5, messageIncludes: "`home-manager`" }],
-      output: {
-        "flake.nix": nix(
-          "{",
-          "  inputs = {",
-          '    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";',
-          "    home-manager = {",
-          '      url = "github:nix-community/home-manager";',
-          '      inputs.nixpkgs.follows = "nixpkgs";',
-          "    };",
-          "  };",
-          "  outputs = { self, nixpkgs, home-manager }: { };",
-          "}",
-        ),
-      },
+      output: null,
     },
     {
       name: "different release: reported with a compatibility warning and no autofix",
@@ -286,7 +258,7 @@ ruleTester(rule, {
         ),
       },
       errors: [{ line: 5, messageIncludes: "It asks for `github:NixOS/nixpkgs/nixos-unstable` at a3c0b3b" }],
-      output: { "flake.nix": BLOCK_FLAKE.replace("nixos-unstable", "nixos-24.11") },
+      output: null,
     },
     {
       name: "flake.nix the parser cannot read (let ... in): reported on the lock node",

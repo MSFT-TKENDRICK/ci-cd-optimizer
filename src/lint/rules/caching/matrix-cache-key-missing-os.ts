@@ -1,4 +1,5 @@
 import type { JobModel, StepModel, WorkflowModel } from "../../parsers/workflow.js";
+import { matrixCombinations } from "../../parsers/matrix.js";
 import { defineRule } from "../helpers.js";
 import { isTrue, listOf, usesAction } from "./shared.js";
 
@@ -12,16 +13,13 @@ interface Leg {
   combo: Combo;
 }
 
-/** Abort expansion beyond this many combinations; the rule then stays silent. */
-const COMBINATION_CAP = 1000;
-
 /** Contexts whose value can differ between matrix legs (or between steps), after string literals are removed. */
 const LEG_DEPENDENT =
   /\b(?:matrix|runner|env|steps|needs|strategy|job|jobs)\b|\bgithub\.(?:workspace|action_path|action|path|env|output|step_summary)\b/;
 
 /**
- * Download caches whose contents are platform-neutral (package tarballs, jars, module sources). Sharing them between
- * operating systems is harmless, so the rule stays silent when a cache holds only these.
+ * Conventional download-cache paths are excluded from this native-output detector. This is a conservative
+ * reporting choice, not a guarantee that every file stored there is portable across operating systems.
  */
 const NEUTRAL_PATHS = new Set([
   "~/.npm",
@@ -45,52 +43,6 @@ const NEUTRAL_PATHS = new Set([
 ]);
 
 const isPrimitive = (value: unknown): boolean => value === null || ["string", "number", "boolean"].includes(typeof value);
-const same = (a: unknown, b: unknown): boolean => isPrimitive(a) && isPrimitive(b) && a === b;
-
-function records(value: unknown): Combo[] | undefined {
-  if (value === undefined || value === null) return [];
-  if (!Array.isArray(value)) return undefined;
-  return value.every((entry) => entry !== null && typeof entry === "object" && !Array.isArray(entry)) ? (value as Combo[]) : undefined;
-}
-
-/**
- * GitHub's documented expansion: cross product, then `exclude` (partial match), then each `include` entry is merged
- * into every original combination it does not contradict on an original key, or appended as a new combination.
- */
-function combinations(matrix: Record<string, unknown>): Combo[] | undefined {
-  if ("__expression" in matrix) return undefined;
-  const includes = records(matrix.include);
-  const excludes = records(matrix.exclude);
-  if (!includes || !excludes) return undefined;
-  const dimensions = Object.entries(matrix).filter(([name]) => name !== "include" && name !== "exclude");
-  if (dimensions.some(([, values]) => !Array.isArray(values) || values.length === 0 || values.some((value) => typeof value === "string" && value.includes("${{")))) return undefined;
-  const product = dimensions.reduce((total, [, values]) => total * (values as unknown[]).length, 1);
-  if (product > COMBINATION_CAP) return undefined;
-  if (excludes.some((entry) => Object.values(entry).some((value) => !isPrimitive(value)))) return undefined;
-  const original = new Set(dimensions.map(([name]) => name));
-  if (includes.some((entry) => Object.entries(entry).some(([key, value]) => original.has(key) && !isPrimitive(value)))) return undefined;
-  let combos: Combo[] = dimensions.length > 0 ? [{}] : [];
-  for (const [name, values] of dimensions) {
-    combos = combos.flatMap((combo) => (values as unknown[]).map((value) => ({ ...combo, [name]: value })));
-  }
-  combos = combos.filter((combo) => !excludes.some((entry) => Object.entries(entry).every(([key, value]) => same(combo[key], value))));
-  const base = combos.length;
-  const added: Combo[] = [];
-  for (const entry of includes) {
-    let matched = false;
-    for (let index = 0; index < base; index += 1) {
-      const combo = combos[index] ?? {};
-      if (Object.entries(entry).every(([key, value]) => !original.has(key) || same(combo[key], value))) {
-        combos[index] = { ...combo, ...entry };
-        matched = true;
-      }
-    }
-    if (!matched) added.push({ ...entry });
-  }
-  const all = [...combos, ...added];
-  return all.length <= COMBINATION_CAP ? all : undefined;
-}
-
 /** `matrix.a.b` → the value in the combination; missing properties evaluate to an empty string. */
 function matrixValue(combo: Combo, path: string): string | undefined {
   let value: unknown = combo;
@@ -133,7 +85,7 @@ function platformOf(label: string): Pick<Leg, "os" | "arch"> | undefined {
 function legsOf(job: JobModel): Leg[] {
   const runsOn = job.runsOn?.value;
   if (!job.matrix || typeof runsOn !== "string" || !/\$\{\{[^}]*\bmatrix\./.test(runsOn)) return [];
-  const combos = combinations(job.matrix) ?? [];
+  const combos = matrixCombinations(job.matrix) ?? [];
   const legs: Leg[] = [];
   for (const combo of combos) {
     const label = substitute(runsOn, (expression) => {
@@ -175,7 +127,7 @@ function evaluate(text: string, leg: Leg, env: (name: string) => string | undefi
 }
 
 interface Target {
-  /** Step whose `key` (and `restore-keys`) is analyzed and fixed. */
+  /** Step whose key is analyzed; no automatic key rewrite is safe across all callers. */
   keyStep: StepModel;
   /** Step that saves the cache; its `path` is part of the cache version. */
   saveStep: StepModel;
@@ -204,7 +156,7 @@ export default defineRule({
   meta: {
     id: "caching/matrix-cache-key-missing-os",
     ruleset: "caching",
-    description: "`actions/cache` keys in a matrix that spans operating systems or CPU architectures must include `runner.os`/`runner.arch`.",
+    description: "Native-output cache keys should distinguish matrix platforms when modeled cache versions can overlap.",
     rationale:
       "Cache matching depends on key, version and accessible branch scope. Versions include configured paths and compression details; Windows has additional cross-OS handling. Under the modeled hosted-runner/action behavior, equal visible inputs can permit incompatible native outputs to share a key. Custom compression, action versions or external configuration can change the version. Concurrent cold runs may all miss before a later run restores the winning cache. Changing keys must preserve every paired restore/save expression and caller, so no automatic rewrite is offered.",
     kind: "practice",

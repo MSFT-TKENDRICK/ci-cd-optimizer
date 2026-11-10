@@ -122,7 +122,7 @@ ruleTester(rule, {
     {
       name: "scalar needs on a checkout+install job",
       files: workflow(...PREPARE, ...UNIT("    needs: prepare")),
-      errors: [{ line: 9, messageIncludes: "Job `unit` needs `prepare`, but `prepare` only checks out, installs dependencies" }],
+      errors: [{ line: 9, messageIncludes: "Job `unit` needs `prepare`, whose visible steps are limited to: checks out, installs dependencies, with no recognized outputs, artifacts or cache transfer. The edge still success-gates and orders `unit`; review whether that behavior is intentional before considering parallel execution." }],
     },
     {
       name: "only the inert edge of a needs list is reported",
@@ -148,7 +148,7 @@ ruleTester(rule, {
         "      - run: node --version",
         ...UNIT("    needs:", "      - tools"),
       ),
-      errors: [{ line: 12, messageIncludes: "only sets up a toolchain, prints information" }],
+      errors: [{ line: 12, messageIncludes: "Job `unit` needs `tools`, whose visible steps are limited to: sets up a toolchain, prints information, with no recognized outputs, artifacts or cache transfer. The edge still success-gates and orders `unit`; review whether that behavior is intentional before considering parallel execution." }],
     },
     {
       name: "echo-only upstream",
@@ -159,7 +159,7 @@ ruleTester(rule, {
         "      - run: echo \"starting\" >> \"$GITHUB_STEP_SUMMARY\"",
         ...UNIT("    needs: hello"),
       ),
-      errors: [{ line: 8, messageIncludes: "consider removing the edge" }],
+      errors: [{ line: 8, messageIncludes: "Job `unit` needs `hello`, whose visible steps are limited to: prints information, with no recognized outputs, artifacts or cache transfer. The edge still success-gates and orders `unit`; review whether that behavior is intentional before considering parallel execution." }],
     },
   ],
 });

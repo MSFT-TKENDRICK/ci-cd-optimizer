@@ -49,31 +49,22 @@ ruleTester(rule, {
   ],
   invalid: [
     {
-      name: "single tarball: fix appends after the last entry",
+      name: "single tarball: compression is a manual resource tradeoff",
       files: job(...upload("v4", "          name: bundle", "          path: dist/app.tar.gz")),
       errors: [
         {
           line: 7,
           messageIncludes:
-            "`actions/upload-artifact` recompresses `dist/app.tar.gz` at the default `compression-level: 6`, but this file is already compressed",
+            "`actions/upload-artifact` uses default `compression-level: 6` for `dist/app.tar.gz`, whose extensions commonly identify already-compressed files. Measure compressibility and transfer cost; the filenames do not prove a speed or size benefit from level 0.",
         },
       ],
-      output: job(...upload("v4", "          name: bundle", "          path: dist/app.tar.gz", "          compression-level: 0")),
+      output: null,
     },
     {
-      name: "block-scalar path: fix inserts before the first entry",
+      name: "block-scalar path: compression recommendation leaves YAML unchanged",
       files: job(...upload("v5", "          name: packages", "          path: |", "            dist/*.whl", "            dist/*.TAR.GZ")),
-      errors: [{ line: 7, messageIncludes: "recompresses `dist/*.whl`, `dist/*.TAR.GZ` at the default" }],
-      output: job(
-        ...upload(
-          "v5",
-          "          compression-level: 0",
-          "          name: packages",
-          "          path: |",
-          "            dist/*.whl",
-          "            dist/*.TAR.GZ",
-        ),
-      ),
+      errors: [{ line: 7, messageIncludes: "`actions/upload-artifact` uses default `compression-level: 6` for `dist/*.whl`, `dist/*.TAR.GZ`, whose extensions commonly identify already-compressed files. Measure compressibility and transfer cost; the filenames do not prove a speed or size benefit from level 0." }],
+      output: null,
     },
     {
       name: "negated entries are ignored, pinned SHA with a version comment",
@@ -87,18 +78,8 @@ ruleTester(rule, {
           "          retention-days: 3",
         ),
       ),
-      errors: [{ line: 7, messageIncludes: "recompresses `shots/**/*.png` at the default" }],
-      output: job(
-        ...upload(
-          "ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2",
-          "          name: screenshots",
-          "          path: |",
-          "            shots/**/*.png",
-          "            !shots/tmp/*.png",
-          "          retention-days: 3",
-          "          compression-level: 0",
-        ),
-      ),
+      errors: [{ line: 7, messageIncludes: "`actions/upload-artifact` uses default `compression-level: 6` for `shots/**/*.png`, whose extensions commonly identify already-compressed files. Measure compressibility and transfer cost; the filenames do not prove a speed or size benefit from level 0." }],
+      output: null,
     },
   ],
 });

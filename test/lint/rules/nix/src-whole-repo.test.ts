@@ -74,7 +74,7 @@ ruleTester(rule, {
       files: {
         "default.nix": nix("{ stdenv }:", "stdenv.mkDerivation (finalAttrs: {", '  pname = "app";', '  version = "1.0";', "  src = ./.;", "})"),
       },
-      errors: [{ line: 5, messageIncludes: "`src = ./.` in `mkDerivation` copies the repository root" }],
+      errors: [{ line: 5, messageIncludes: "`src = ./.` in `mkDerivation` selects the repository root as source. Changes to included but unused files (possibly docs, CI workflows or flake.lock) can change the source hash and reduce cache reuse. Actual filtering and required inputs need review." }],
     },
     {
       name: "nested package reaching the repository root and a sub-flake root",
@@ -84,7 +84,7 @@ ruleTester(rule, {
         "tools/cli/default.nix": nix("{ rustPlatform }:", "rustPlatform.buildRustPackage {", '  pname = "cli";', "  src = ./.;", "}"),
       },
       errors: [
-        { path: "pkgs/app/default.nix", line: 4, messageIncludes: "`src = ../..` in `buildGoModule` copies the repository root" },
+        { path: "pkgs/app/default.nix", line: 4, messageIncludes: "`src = ../..` in `buildGoModule` selects the repository root as source. Changes to included but unused files (possibly docs, CI workflows or flake.lock) can change the source hash and reduce cache reuse. Actual filtering and required inputs need review." },
         { path: "tools/cli/default.nix", line: 4, messageIncludes: "`tools/cli/`, the flake root" },
       ],
     },

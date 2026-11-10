@@ -81,7 +81,7 @@ ruleTester(rule, {
     {
       name: "root flake without flake.lock",
       files: { "flake.nix": FLAKE },
-      errors: [{ path: "flake.nix", line: 1, messageIncludes: "`flake.lock` is not committed" }],
+      errors: [{ path: "flake.nix", line: 1, messageIncludes: "`flake.nix` declares input `nixpkgs`, but `flake.lock` is absent from the complete inspected inventory. Mutable references may be resolved differently between runs unless constrained elsewhere." }],
     },
     {
       name: "subdirectory flake is checked against its own directory",

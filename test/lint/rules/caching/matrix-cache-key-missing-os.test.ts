@@ -79,31 +79,28 @@ ruleTester(rule, {
       errors: [
         {
           line: 13,
-          messageIncludes: `Cache key \`modules-${LOCK}\` in matrix job \`test\` resolves to the same key and cache version on \`ubuntu-latest\` (Linux X64) and \`macos-latest\` (macOS ARM64)`,
+          messageIncludes: "Cache key `modules-${{ hashFiles('package-lock.json') }}` in matrix job `test` has matching modeled key/version inputs on `ubuntu-latest` (Linux X64) and `macos-latest` (macOS ARM64). If the actual versions and branch scopes also match, a later restore can receive another platform's native files. Verify archive compatibility rather than assuming a guaranteed collision.",
         },
       ],
-      output: matrixJob("ubuntu-latest, macos-latest", ...cache(`\${{ runner.os }}-modules-${LOCK}`)),
+      output: null,
     },
     {
-      name: "quoted key and block restore-keys are both prefixed",
+      name: "quoted key and block restore-keys require a coordinated manual change",
       files: matrixJob(
         "ubuntu-latest, macos-latest, windows-latest",
         ...cache(`"venv-${LOCK}"`, ".venv", "          restore-keys: |", "            venv-"),
       ),
       errors: [{ line: 13, messageIncludes: "`macos-latest` (macOS ARM64)" }],
-      output: matrixJob(
-        "ubuntu-latest, macos-latest, windows-latest",
-        ...cache(`"\${{ runner.os }}-venv-${LOCK}"`, ".venv", "          restore-keys: |", "            ${{ runner.os }}-venv-"),
-      ),
+      output: null,
     },
     {
       name: "x64 and arm64 Linux legs need runner.arch",
       files: matrixJob("ubuntu-24.04, ubuntu-24.04-arm", ...cache(`target-${LOCK}`, "target")),
       errors: [{ line: 13, messageIncludes: "`ubuntu-24.04` (Linux X64) and `ubuntu-24.04-arm` (Linux ARM64)" }],
-      output: matrixJob("ubuntu-24.04, ubuntu-24.04-arm", ...cache(`\${{ runner.arch }}-target-${LOCK}`, "target")),
+      output: null,
     },
     {
-      name: "restore/save pair: the restore key is reported and fixed",
+      name: "restore/save pair: the restore key is reported without an automatic rewrite",
       files: matrixJob(
         "ubuntu-latest, macos-latest",
         "      - id: restore",
@@ -118,19 +115,7 @@ ruleTester(rule, {
         "          key: ${{ steps.restore.outputs.cache-primary-key }}",
       ),
       errors: [{ line: 14, messageIncludes: `Cache key \`build-${LOCK}\`` }],
-      output: matrixJob(
-        "ubuntu-latest, macos-latest",
-        "      - id: restore",
-        "        uses: actions/cache/restore@v6",
-        "        with:",
-        "          path: build",
-        `          key: \${{ runner.os }}-build-${LOCK}`,
-        "      - run: make",
-        "      - uses: actions/cache/save@v6",
-        "        with:",
-        "          path: build",
-        "          key: ${{ steps.restore.outputs.cache-primary-key }}",
-      ),
+      output: null,
     },
   ],
 });

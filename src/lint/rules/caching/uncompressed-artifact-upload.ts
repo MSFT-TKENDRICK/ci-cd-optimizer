@@ -13,7 +13,7 @@ export default defineRule({
     ruleset: "caching",
     description: "Artifacts that only contain already-compressed files should be uploaded with `compression-level: 0`.",
     rationale:
-      "Recognized actions/upload-artifact versions default to compression-level 6. Extensions such as .gz and .zip commonly identify compressed content, but archives may contain uncompressed entries and extension alone is not evidence of actual bytes or upload-time savings. Level 0 preserves extracted file contents but changes archive bytes, size and digest. Compare representative transfer/storage cost and consumer expectations before applying the optional edit.",
+      "Recognized actions/upload-artifact versions default to compression-level 6. Extensions such as .gz and .zip commonly identify compressed content, but archives may contain uncompressed entries and extension alone is not evidence of actual bytes or upload-time savings. Level 0 preserves extracted file contents but changes archive bytes, size and digest. Compare representative transfer/storage cost and consumer expectations before manually changing compression policy.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["recommended", "agentic", "strict"],

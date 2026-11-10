@@ -1,7 +1,7 @@
 import { identsNamed, nixBindings } from "../../parsers/nix.js";
 import type { NixArgument, NixFile, NixIdent, NixString } from "../../parsers/nix.js";
 import { defineRule } from "../helpers.js";
-import { attrKeys, attrsetOf, bindingNamed, callArgument, isShadowed, leadingString, lintableNixFiles, snippet, stringAt, unwrapParens } from "./expr.js";
+import { attrKeys, attrsetOf, bindingNamed, callArgument, inheritedFromBuiltins, isShadowed, leadingString, lintableNixFiles, snippet, stringAt, unwrapParens } from "./expr.js";
 
 const REMOTE = /^(?:(?:git\+)?(?:https?|ssh|git):\/\/|[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:)/;
 
@@ -15,7 +15,6 @@ function remoteUrl(string: NixString | undefined): string | undefined {
 interface Finding {
   url: string;
   ref?: string;
-  narHash: boolean;
   shown: string;
 }
 
@@ -24,7 +23,7 @@ function unlocked(file: NixFile, arg: NixArgument): Finding | undefined {
   const literal = leadingString(file, arg);
   if (literal) {
     const url = remoteUrl(literal);
-    return url ? { url, narHash: false, shown } : undefined;
+    return url ? { url, shown } : undefined;
   }
   const open = attrsetOf(file, unwrapParens(file, arg));
   if (open === undefined) return undefined;
@@ -36,14 +35,14 @@ function unlocked(file: NixFile, arg: NixArgument): Finding | undefined {
   if (!url) return undefined;
   const refBinding = bindingNamed(file, open, "ref");
   const ref = refBinding ? stringAt(file, refBinding.valueStart) : undefined;
-  return { url, ...(ref && !ref.interpolated ? { ref: ref.value } : {}), narHash: keys.has("narHash"), shown };
+  return { url, ...(ref && !ref.interpolated ? { ref: ref.value } : {}), shown };
 }
 
 export default defineRule({
   meta: {
     id: "nix/fetchgit-missing-rev",
     ruleset: "nix",
-    description: "`builtins.fetchGit` of a remote repository must pin a commit with `rev`.",
+    description: "`builtins.fetchGit` of a remote repository should declare a revision or supported content-hash pin.",
     rationale:
       "fetchGit resolves a remote ref during evaluation. Without a revision or supported content-hash pin, a mutable branch or tag can select different source over time. Pure evaluation rejects unlocked inputs if evaluated. A full revision identifies a Git object, but does not guarantee local cache presence, remote availability, identical fetcher metadata across options or deterministic downstream builds.",
     kind: "policy",
@@ -65,10 +64,11 @@ export default defineRule({
   check({ project, report }) {
     for (const file of lintableNixFiles(project)) {
       const calls: NixIdent[] = identsNamed(file, "builtins.fetchGit");
-      if (!isShadowed(file, "fetchGit")) calls.push(...identsNamed(file, "fetchGit"));
+      if (!isShadowed(file, "fetchGit") && inheritedFromBuiltins(file).has("fetchGit")) calls.push(...identsNamed(file, "fetchGit"));
       calls.sort((a, b) => a.offset - b.offset);
       let count = 0;
       for (const ident of calls) {
+        if (ident.segments[0] === "builtins" && isShadowed(file, "builtins")) continue;
         const arg = callArgument(file, ident);
         if (!arg) continue;
         const finding = unlocked(file, arg);
@@ -82,9 +82,7 @@ export default defineRule({
         report({
           path: file.path,
           line: ident.line,
-          message: `\`${ident.text} ${finding.shown}\` has no \`rev\`, so it fetches ${target}: the source changes whenever the remote moves (re-resolved after \`tarball-ttl\`, 1 hour by default), and pure evaluation (the flake default) refuses this unlocked input.${
-            finding.narHash ? " `narHash` only detects the change after the fact; it does not pin a commit." : ""
-          }`,
+          message: `\`${ident.text} ${finding.shown}\` declares neither \`rev\` nor \`narHash\`, so it selects ${target}. The source can change when that reference moves; cache freshness also depends on \`tarball-ttl\` (1 hour by default). Pure evaluation rejects this unlocked call if demanded; no downstream build difference or cache miss is established.`,
           suggestion: [
             `${ident.text} {`,
             `  url = "${finding.url}";`,
@@ -94,7 +92,7 @@ export default defineRule({
             "",
             "Add `allRefs = true;` if the commit is not reachable from `ref`. Alternatively declare a flake input (`inputs.<name> = { url = \"git+https://...\"; flake = false; };`) so flake.lock records the revision.",
           ].join("\n"),
-          confidence: finding.narHash ? "medium" : "high",
+          confidence: "medium",
           key: `fetchGit#${count}`,
         });
       }

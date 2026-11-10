@@ -55,7 +55,7 @@ ruleTester(rule, {
     {
       name: "moving channel URL as a plain string",
       files: { "default.nix": nix("let", '  nixpkgs = fetchTarball "https://nixos.org/channels/nixos-24.11/nixexprs.tar.xz";', "in import nixpkgs { }") },
-      errors: [{ line: 2, messageIncludes: "fetches a moving URL (`https://nixos.org/channels/nixos-24.11/nixexprs.tar.xz`)" }],
+      errors: [{ line: 2, messageIncludes: "`fetchTarball \"https://nixos.org/channels/nixos-24.11/nixexprs.tar.xz\"` fetches `https://nixos.org/channels/nixos-24.11/nixexprs.tar.xz` without an expected `sha256`; the URL may be immutable, but the expected unpacked bytes are not declared. Cache freshness can depend on `tarball-ttl` (1 hour by default); pure evaluation rejects this unpinned call if demanded." }],
     },
     {
       name: "commit URL in an attrset without sha256",
@@ -68,7 +68,7 @@ ruleTester(rule, {
           "in pkgs.mkShell { }",
         ),
       },
-      errors: [{ line: 2, messageIncludes: "pins commit 0123456789ab but has no `sha256`" }],
+      errors: [{ line: 2, messageIncludes: "pins commit 0123456789ab but declares no expected `sha256`" }],
     },
     {
       name: "branch archive with interpolation and a parenthesised concatenation",
@@ -82,8 +82,8 @@ ruleTester(rule, {
         ),
       },
       errors: [
-        { line: 3, messageIncludes: "has no `sha256`" },
-        { line: 4, messageIncludes: "has no `sha256`" },
+        { line: 3, messageIncludes: "declares no expected `sha256`" },
+        { line: 4, messageIncludes: "declares no expected `sha256`" },
       ],
     },
   ],

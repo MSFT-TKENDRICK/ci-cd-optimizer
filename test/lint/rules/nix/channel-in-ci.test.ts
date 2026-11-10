@@ -79,7 +79,7 @@ ruleTester(rule, {
     {
       name: "--update of the container image's channels",
       files: container("      - run: nix-channel --update nixpkgs"),
-      errors: [{ line: 8, messageIncludes: "`nix-channel --update nixpkgs` downloads the current head of channel `nixpkgs`" }],
+      errors: [{ line: 8, messageIncludes: "`nix-channel --update nixpkgs` refreshes channel `nixpkgs`. If those subscriptions are mutable and used by later evaluation, dependencies can change independently of the repository. Existing pinned subscriptions, empty channel lists or explicit search-path overrides may avoid that effect." }],
     },
     {
       name: "--update on a self-hosted runner without an installer",

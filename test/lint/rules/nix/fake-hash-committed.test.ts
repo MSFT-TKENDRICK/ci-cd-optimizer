@@ -71,7 +71,7 @@ ruleTester(rule, {
           "}",
         ),
       },
-      errors: [{ line: 6, messageIncludes: "`hash = lib.fakeHash` is a placeholder hash" }],
+      errors: [{ line: 6, messageIncludes: "`hash = lib.fakeHash` matches a well-known placeholder hash. If used as a fixed-output derivation's expected digest, it normally causes a hash mismatch when that derivation is built. Confirm it is not intentional test data and review the fetched content before replacing it." }],
     },
     {
       name: "empty cargoHash and vendorHash",

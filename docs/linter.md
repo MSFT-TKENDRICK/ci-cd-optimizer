@@ -10,11 +10,13 @@ The same built-in rules power [developer-agent skills, MCP, and ACP](agents.md).
 unsaved content and return exact fix previews without writing files or importing repository-local rules.
 The ordinary CLI's `--fix` and `--allow-local-rules` are separate, explicit opt-ins; no protocol write API exists.
 
-It reads GitHub Actions workflows, composite actions, Dockerfiles, and package manifests and lockfiles, and reports
-build and release optimizations. The [rule catalog](rules.md) lists every rule.
+It reads GitHub Actions workflows, composite actions, Dockerfiles, Nix expressions/flakes, and package/toolchain
+configuration. Findings identify declared practices and potential improvements, not proven speedups or universally
+equivalent rewrites. The [rule catalog](rules.md) lists every rule; the [Nix guide](nix.md) explains its static model.
 
 - [Quick start](#quick-start)
 - [Command line](#command-line)
+- [Supported inputs](#supported-inputs)
 - [Output formats and editors](#output-formats-and-editors)
 - [Configuration](#configuration)
 - [Suppressions](#suppressions)
@@ -54,7 +56,7 @@ cicd-lint path/to/repo                      # a single directory becomes the lin
 cicd-lint .github/workflows/ci.yml          # report one file
 cicd-lint ".github/workflows/*.yml" Dockerfile
 cicd-lint --base origin/main                # only findings this change introduces
-cicd-lint --fix                             # apply safe autofixes, then report what remains
+cicd-lint --fix                             # apply available autofixes; review and test the diff
 cat ci.yml | cicd-lint --stdin --stdin-filename .github/workflows/ci.yml
 ```
 
@@ -83,7 +85,7 @@ applies fixes for the diagnostics that survive the filter.
 | `--max-warnings <n>` | Exit 1 when more than `n` warnings are reported |
 | `--base <ref>` | Compare with a git ref and report only introduced findings |
 | `--scope <scope>` | `all`, `changed`, or `introduced` (default: `introduced` with `--base`, else `all`) |
-| `--fix` | Apply safe autofixes in place |
+| `--fix` | Apply available autofixes in place; review and test the diff |
 | `-q, --quiet` | Report errors only |
 | `--stdin` | Lint standard input in place of the file named by `--stdin-filename` |
 | `--stdin-filename <path>` | Root-relative path for `--stdin` content; required with `--stdin`; decides which rules apply |
@@ -96,6 +98,36 @@ applies fixes for the diagnostics that survive the filter.
 
 `--stdin` content replaces the file of the same name in the inventory, or adds it. Only that path is reported, and it
 cannot be combined with `--fix` or with path arguments.
+
+### Supported inputs
+
+The CLI, Git-revision baseline, GitHub App/API scan and Action use the same inventory selection:
+
+| Family | Recognized input |
+|---|---|
+| Actions | `.github/workflows/*.yml` / `*.yaml`, composite `action.yml` / `action.yaml`, optimizer/Dependabot/Renovate configuration |
+| Containers | `Dockerfile` / `Containerfile` and suffixed variants, `*.dockerfile` / `*.containerfile`, `.dockerignore` / `*.dockerignore`, Compose and Bake configuration |
+| Nix | `*.nix` (case-insensitive), `flake.lock`, `.envrc`, `devenv.yaml`, `devenv.lock` |
+| Packages | Supported Node, Python, Cargo, Go and .NET manifests/locks; `pnpm-workspace.yaml`; `requirements*.txt` and `requirements/*.txt` |
+| Toolchains/build tools | `.nvmrc`, `.node-version`, `.tool-versions`, `.python-version`, `.go-version`, `.java-version`, `.sdkmanrc`, `rust-toolchain[.toml]`, `.cargo/config[.toml]`, Gradle files/properties/wrapper properties, Bazel files/version/config, Maven/SBT and other supported build-tool markers |
+
+Inventory support may mean content parsing, cross-file context, or presence-only evidence; it does not mean every
+file format has a full parser or dedicated rule. Generated dependency/build directories are excluded. Explicit
+`ignorePaths` further defines scope. Symlinks and submodules are not followed.
+
+Absence-based findings require the loader to assert a complete inventory within that scope. File-count/size limits,
+API path filters/truncated trees, unreadable files and unignored opaque entries disable that inference. Large ordinary
+lockfiles can retain only their header; Nix/devenv locks require their full content. API callers supplying partial
+`AnalysisInput` must not claim `inventoryComplete: true`.
+
+The internal repository loader separately records completeness within a caller's selected scope. Run-knowledge
+collection uses that narrower metadata only for its fixed declaration inventory and cache policy; it does not mark
+the filtered linter input complete. Opaque entries and collection limits still prevent complete knowledge reuse.
+
+The built-in rules do not execute shell scripts, evaluate Nix, resolve arbitrary expressions, build containers or
+run package managers. Unsupported/dynamic constructs are often left unanalyzed. A clean report is not proof of
+correctness, complete coverage, hermeticity, or performance. Manual recommendations can change trust, dependencies,
+coverage, lock policy and resource usage; validate those decisions in the target environment.
 
 ### Exit codes
 

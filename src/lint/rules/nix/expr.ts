@@ -238,6 +238,7 @@ export function inheritStatements(file: NixFile): InheritStatement[] {
 /** Names brought into scope from `builtins` by `inherit (builtins) ...;`. */
 export function inheritedFromBuiltins(file: NixFile): Set<string> {
   const names = new Set<string>();
+  if (isShadowed(file, "builtins")) return names;
   for (const statement of inheritStatements(file)) {
     if (statement.source === "builtins") for (const { name } of statement.names) names.add(name);
   }
@@ -287,7 +288,7 @@ export function isShadowed(file: NixFile, name: string): boolean {
       return true;
     }
   }
-  return file.idents.some((ident) => ident.text === name && !inInherit(file.masked, ident.offset) && !isValueUse(file, ident));
+  return file.idents.some((ident) => ident.segments[0] === name && !inInherit(file.masked, ident.offset) && !isValueUse(file, ident));
 }
 
 /** Whether `offset` lies in a default value of a function pattern (`{ pkgs ? import <nixpkgs> { } }:`). */

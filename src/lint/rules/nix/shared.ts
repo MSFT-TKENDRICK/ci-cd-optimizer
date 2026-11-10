@@ -142,6 +142,7 @@ function unquote(text: string): string {
 /** Recognises a Nix CLI invocation (after `sudo`/`env`/`VAR=` prefixes). Arguments are quote-aware and end at a pipe or redirection. */
 export function nixInvocation(command: string, line: number): NixInvocation | undefined {
   const tokens = commandTokens(command);
+  if (tokens.some((token) => /[$`]/.test(token.value) && !/^'[^']*'$/.test(token.raw))) return undefined;
   const binary = (tokens[0]?.value ?? "").split("/").pop() ?? "";
   if (!NIX_BINARIES.has(binary)) return undefined;
   let rest = tokens.slice(1);
@@ -391,6 +392,18 @@ const NIX_CONF_WRITE = /(?:>>?|\btee\b[^|>]*?)\s*["']?[^\s"']*\bnix\.conf\b/;
  */
 export function shellConfWrites(command: string, path: string, line: number): NixConfSetting[] {
   if (!NIX_CONF_WRITE.test(command)) return [];
+  const tokens = shellTokens(command);
+  let end = 0;
+  for (const token of tokens) {
+    const start = command.indexOf(token.raw, end);
+    if (start < 0) return [];
+    end = start + token.raw.length;
+  }
+  const sink = /^(?:>>?|\|\s*(?:sudo\s+)?tee(?:\s+-a)?)\s*(?:"([^"]+)"|'([^']+)'|(\S+))\s*$/.exec(command.slice(end).trim());
+  const target = sink?.[1] ?? sink?.[2] ?? sink?.[3];
+  if (!target || !/^(?:\/etc\/nix|(?:~|\$HOME|\$\{HOME\})\/\.config\/nix)\/nix\.conf$/.test(target)) return [];
+  if ((target.startsWith("~") && (sink?.[1] !== undefined || sink?.[2] !== undefined)) ||
+      (target.startsWith("$") && sink?.[2] !== undefined)) return [];
   const words = shellWords(command);
   if (words[0] !== "echo" && words[0] !== "printf") return [];
   let text: string;
@@ -400,10 +413,9 @@ export function shellConfWrites(command: string, path: string, line: number): Ni
     else return [];
   } else {
     const args = words.slice(1);
-    const option = /^-[neE]+$/.test(args[0] ?? "") ? args.shift() : undefined;
+    if (/^-[neE]+$/.test(args[0] ?? "")) return [];
     text = args.join(" ");
-    if (text.includes("\\") && !option?.includes("e")) return [];
-    if (option?.includes("e")) text = text.replace(/\\n/g, "\n");
+    if (text.includes("\\")) return [];
   }
   if (/[$`]/.test(text)) return [];
   return parseNixConf(text, path, line, "shell").map((setting) => ({ ...setting, line }));
@@ -599,17 +611,18 @@ export const QUICK_INSTALL = "nixbuild/nix-quick-install-action";
 
 /**
  * True when a nix-quick-install-action step appends `accept-flake-config = true` to nix.conf after its `nix_conf`
- * input: inspected release families v25–v35 do so for Nix newer than 2.13. Uncommented SHA pins and moving refs
- * are treated as unknown (false).
+ * input: inspected release families v25–v35 do so for Nix newer than 2.13; v20–v24 do not.
+ * Uncommented SHA pins, other releases and moving refs remain unknown, not false.
  */
-export function quickInstallTrusts(step: StepModel, file?: SourceFile): boolean {
+export function quickInstallTrusts(step: StepModel, file?: SourceFile): boolean | undefined {
   if (!usesAction(step, QUICK_INSTALL)) return false;
   const release = actionVersion(step, file);
-  if (!release || release.major < 25 || release.major > 35) return false;
+  if (!release || release.major < 20 || release.major > 35) return undefined;
+  if (release.major < 25) return false;
   const version = step.with.get("nix_version");
   if (!version) return true;
   const match = /^(\d+)\.(\d+)(?:\.(\d+))?$/.exec(String(version.value).trim());
-  if (!match) return false;
+  if (!match) return undefined;
   const [major, minor, patch] = [Number(match[1]), Number(match[2]), Number(match[3] ?? 0)];
   return major > 2 || (major === 2 && (minor > 13 || (minor === 13 && patch > 0)));
 }
@@ -643,9 +656,19 @@ export function stepIsSkipped(entry: ExpandedStep): boolean {
 /** Settings visible at one command, following installer/write order and file < environment < CLI precedence. */
 export function effectiveNixConf(model: NixJob, site: NixCommand, nix: NixInvocation): NixConfSetting[] | undefined {
   const { workflow, job } = model;
-  if (/^(?:\s*\w+=\S+\s+)*sudo\b/.test(site.command) ||
-      /\benv\s+(?:-i|--ignore-environment|-u\s+NIX_CONFIG|--unset(?:=|\s+)NIX_CONFIG)\b/.test(site.command)) return undefined;
+  // develop/shell can replace the child's environment. Outer CLI settings are not a child configuration proof.
+  if (site.nix && site.nix.command !== nix.command) return undefined;
+  const allTokens = shellTokens(site.command);
+  const prefixTokens = allTokens.slice(0, allTokens.length - commandTokens(site.command).length);
+  const assignments = prefixAssignments(site.command);
+  if (prefixTokens.some((token) => ["sudo", "su", "doas"].includes(token.value)) ||
+      (prefixTokens.some((token) => token.value === "env") &&
+        prefixTokens.some((token) => token.value.startsWith("-") && token.value !== "--"))) return undefined;
+  if (["NIX_CONF_DIR", "NIX_USER_CONF_FILES", "XDG_CONFIG_HOME", "HOME"].some((key) =>
+    assignments.has(key) || envValue(workflow, job, site.step, key) !== undefined || site.owner.env[key] !== undefined,
+  )) return undefined;
   const settings: NixConfSetting[] = [];
+  let installers = 0;
   let env = envValue(workflow, job, undefined, "NIX_CONFIG");
   let envPath = workflow.path;
   let envLine = job.env.NIX_CONFIG !== undefined ? job.line : workflow.triggersLine;
@@ -653,6 +676,8 @@ export function effectiveNixConf(model: NixJob, site: NixCommand, nix: NixInvoca
     const same = entry.step === site.step && entry.owner === site.owner;
     if (same) break;
     if (stepIsSkipped(entry)) continue;
+    if (NIX_INSTALLER_ACTIONS.has(entry.step.uses?.action.name ?? "") && ++installers > 1) return undefined;
+    if (quickInstallTrusts(entry.step, entry.direct ? model.file : undefined) === undefined) return undefined;
     const conf = installerConf(entry.step, entry.path);
     if ((entry.step.if || entry.owner.if) && (conf.length > 0 || quickInstallTrusts(entry.step, entry.direct ? model.file : undefined))) return undefined;
     if ((NIX_CONF_INPUTS[entry.step.uses?.action.name ?? ""] ?? [])
@@ -663,12 +688,16 @@ export function effectiveNixConf(model: NixJob, site: NixCommand, nix: NixInvoca
       settings.push({ key: "accept-flake-config", value: "true", path: entry.path, line: stepLine(entry.step), source: "installer", implicitStep: entry.step });
     }
     for (const command of model.commands.filter((item) => item.step === entry.step && item.owner === entry.owner)) {
+      if (["source", ".", "eval"].includes(shellWords(command.command)[0] ?? "")) return undefined;
+      if (shellTokens(command.command).length === 0 && /\b(?:NIX_CONFIG|NIX_CONF_DIR|NIX_USER_CONF_FILES|XDG_CONFIG_HOME|HOME)\b/.test(command.command)) return undefined;
       const written = shellConfWrites(command.command, command.path, command.line);
       if (NIX_CONF_WRITE.test(command.command) && (!/>>|\btee\s+-a\b/.test(command.command) || written.length === 0)) return undefined;
-      if (written.length > 0 && (entry.step.if || entry.owner.if || written.some((setting) => /[$`]/.test(setting.value)))) return undefined;
+      if (written.length > 0 && (entry.step.if || entry.owner.if ||
+          /(?:^|[\n;])\s*(?:if|then|elif|else|case|for|while|until)\b|\|\|/.test(entry.step.run?.value ?? "") ||
+          written.some((setting) => /[$`]/.test(setting.value)))) return undefined;
       settings.push(...written);
-      if (/\bGITHUB_ENV\b/.test(command.command) && /\bNIX_CONFIG\b/.test(command.command)) {
-        // Multi-line/environment-file writes need shell evaluation; do not infer a trusted effective setting.
+      if (/\bGITHUB_ENV\b/.test(command.command)) {
+        // External/multi-line environment-file writes can change both settings and config search paths.
         return undefined;
       }
     }
@@ -686,11 +715,16 @@ export function effectiveNixConf(model: NixJob, site: NixCommand, nix: NixInvoca
   for (const command of model.commands) {
     if (command === site || (command.step === site.step && command.owner === site.owner && site.command === "")) break;
     if (command.step !== site.step || command.owner !== site.owner) continue;
+    if (["source", ".", "eval"].includes(shellWords(command.command)[0] ?? "")) return undefined;
     const written = shellConfWrites(command.command, command.path, command.line);
     if (NIX_CONF_WRITE.test(command.command) && (!/>>|\btee\s+-a\b/.test(command.command) || written.length === 0)) return undefined;
     if (/\|\||^\s*(?:if|then|elif|else|case|for|while|until)\b/.test(command.command) && /NIX_CONFIG|nix\.conf/.test(site.step.run?.value ?? "")) return undefined;
     settings.push(...written);
     const tokens = shellTokens(command.command);
+    if (tokens.length === 0 && /\b(?:NIX_CONFIG|NIX_CONF_DIR|NIX_USER_CONF_FILES|XDG_CONFIG_HOME|HOME)\b/.test(command.command)) return undefined;
+    if (["export", "unset"].includes(tokens[0]?.value ?? "") && tokens.slice(1).some((token) =>
+      /^(?:NIX_CONF_DIR|NIX_USER_CONF_FILES|XDG_CONFIG_HOME|HOME)(?:=|$)/.test(token.value),
+    )) return undefined;
     if (tokens[0]?.value === "export") {
       for (const token of tokens.slice(1)) {
         if (!token.value.startsWith("NIX_CONFIG=")) continue;
@@ -701,7 +735,7 @@ export function effectiveNixConf(model: NixJob, site: NixCommand, nix: NixInvoca
     }
     if (tokens[0]?.value === "unset" && tokens.some((token) => token.value === "NIX_CONFIG")) return undefined;
   }
-  const prefix = prefixAssignments(site.command).get("NIX_CONFIG");
+  const prefix = assignments.get("NIX_CONFIG");
   if (prefix !== undefined) {
     env = prefix;
     envPath = site.path;

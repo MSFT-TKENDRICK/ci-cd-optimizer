@@ -66,6 +66,7 @@ export default defineRule({
       calls.sort((a, b) => a.offset - b.offset);
       let count = 0;
       for (const ident of calls) {
+        if (ident.segments[0] === "builtins" && isShadowed(file, "builtins")) continue;
         const arg = callArgument(file, ident);
         if (!arg) continue;
         const finding = unpinned(file, arg);
@@ -74,10 +75,10 @@ export default defineRule({
         const url = finding.url && !finding.url.interpolated ? finding.url.value : undefined;
         const commit = url ? COMMIT.exec(url)?.[0] : undefined;
         const problem = commit
-          ? `pins commit ${commit.slice(0, 12)} but has no \`sha256\`, so the download is never verified`
+          ? `pins commit ${commit.slice(0, 12)} but declares no expected \`sha256\` for the unpacked bytes`
           : url
             ? `fetches \`${url}\` without an expected \`sha256\`; the URL may be immutable, but the expected unpacked bytes are not declared`
-            : "has no `sha256`, so the download is never verified";
+            : "declares no expected `sha256` for the unpacked bytes";
         const targetUrl = url ? pinnedUrl(url) : "https://github.com/<owner>/<repo>/archive/<commit-sha>.tar.gz";
         report({
           path: file.path,

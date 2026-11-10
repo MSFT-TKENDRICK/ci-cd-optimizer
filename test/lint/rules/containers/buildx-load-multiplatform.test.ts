@@ -91,7 +91,7 @@ ruleTester(rule, {
         "          echo building",
         "          docker buildx build --platform linux/amd64,linux/arm64 --load -t app:test .",
       ),
-      errors: [{ line: 9, messageIncludes: '"does not support loading multi-platform images"' }],
+      errors: [{ line: 9, messageIncludes: "`--load` with 2 platforms (`linux/amd64,linux/arm64`) on `ubuntu-latest` requires a multi-platform-compatible Docker image store/exporter. If the daemon still uses the classic image store, loading fails; verify the actual daemon rather than inferring it from the runner label." }],
     },
     {
       name: "repeated --platform flags with --output type=docker",

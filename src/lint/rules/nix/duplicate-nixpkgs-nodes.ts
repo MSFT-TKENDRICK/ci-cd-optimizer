@@ -73,7 +73,7 @@ function cacheNames(project: ProjectModel, flake: NixFlake): Set<string> {
   return new Set([...names].map((name) => name.replace(/[^a-z0-9]/g, "")).filter((name) => name.length >= 4));
 }
 
-/** True when the input appears to publish its own binary cache that the repository uses; following would forfeit its hits. */
+/** Potential upstream-cache usage is a conservative opt-out, not evidence of actual cache hits. */
 function hasOwnCache(input: string, caches: Set<string>): boolean {
   const name = input.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (name.length < 4) return false;

@@ -77,7 +77,7 @@ ruleTester(rule, {
         "gradle.properties": "org.gradle.jvmargs=-Xmx2g\n",
       },
       errors: [{ line: 7, path: WORKFLOW, messageIncludes: "`gradle.properties` does not set `org.gradle.caching=true`" }],
-      output: { "gradle.properties": "org.gradle.jvmargs=-Xmx2g\norg.gradle.caching=true\n" },
+      output: null,
     },
     {
       name: "gradle.properties without a trailing newline",
@@ -87,7 +87,7 @@ ruleTester(rule, {
         "gradle.properties": "org.gradle.jvmargs=-Xmx2g",
       },
       errors: [{ line: 7, messageIncludes: "`gradle test` does not pass `--build-cache`" }],
-      output: { "gradle.properties": "org.gradle.jvmargs=-Xmx2g\norg.gradle.caching=true\n" },
+      output: null,
     },
     {
       name: "no gradle.properties at all (suggestion only)",
@@ -102,7 +102,7 @@ ruleTester(rule, {
         "android/gradle.properties": "android.useAndroidX=true\n",
       },
       errors: [{ line: 7, messageIncludes: "the Gradle build in `android/`" }],
-      output: { "android/gradle.properties": "android.useAndroidX=true\norg.gradle.caching=true\n" },
+      output: null,
     },
     {
       name: "one report per build even with several invocations",

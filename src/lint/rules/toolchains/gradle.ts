@@ -1,4 +1,5 @@
 import type { ProjectModel } from "../../project.js";
+import { shellTokens } from "../../parsers/shell.js";
 import type { Location, SourceFile } from "../../types.js";
 import { basename } from "../caching/shared.js";
 import type { JobCommand } from "../helpers.js";
@@ -79,7 +80,8 @@ export interface GradleBuild {
 function parseInvocation(ctx: JobContext, command: JobCommand): { dir: string; invocation: GradleInvocation } | undefined {
   if (unknownCommandEnvironment(ctx, command)) return undefined;
   const env = effectiveEnv(ctx, command, command);
-  if (env.has("GRADLE_USER_HOME") || ["GRADLE_OPTS", "JAVA_OPTS", "JAVA_TOOL_OPTIONS"]
+  if (["GRADLE_USER_HOME", "HOME", "USERPROFILE"].some((key) => env.has(key)) ||
+      ["GRADLE_OPTS", "JAVA_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"]
     .some((key) => /[$`]/.test(env.get(key) ?? ""))) return undefined;
   const list = words(command.command).map((word) => word.replace(/\\/g, "/"));
   let start = 0;
@@ -170,12 +172,21 @@ export function gradleBuilds(project: ProjectModel): GradleBuild[] {
 
 /** Relevant invocation environments and preceding configuration writes, never unrelated jobs. */
 export function buildMentions(build: GradleBuild, text: string): boolean {
-  return build.invocations.some(({ ctx, command }) =>
-    [...effectiveEnv(ctx, command, command).values()].some((value) => value.includes(text)) ||
-    ctx.commands.slice(0, ctx.commands.indexOf(command)).some((entry) =>
-      entry.command.includes(text) && /gradle\.properties|GITHUB_ENV/.test(entry.command),
-    ),
-  );
+  return build.invocations.some(({ ctx, command }) => {
+    const env = effectiveEnv(ctx, command, command);
+    if (env.has(`ORG_GRADLE_PROJECT_${text}`)) return true;
+    if (["GRADLE_OPTS", "JAVA_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"]
+      .some((key) => words(env.get(key) ?? "").some((word) => word === `-D${text}` || word.startsWith(`-D${text}=`)))) return true;
+    return ctx.commands.slice(0, ctx.commands.indexOf(command)).some((entry) => {
+      if (!entry.command.includes(text) || !entry.command.includes("gradle.properties")) return false;
+      const tokens = shellTokens(entry.command);
+      if (["sed", "perl"].includes(basename(tokens[0]?.value ?? ""))) return true;
+      if (!["echo", "printf"].includes(tokens[0]?.value ?? "")) return false;
+      let end = 0;
+      for (const token of tokens) end = entry.command.indexOf(token.raw, end) + token.raw.length;
+      return /^(?:>>?|\|\s*tee(?:\s+-a)?)\s*['"]?[^<>\r\n]*gradle\.properties['"]?\s*$/.test(entry.command.slice(end).trim());
+    });
+  });
 }
 
 /** True when an invocation passes one of the flags or sets one of the properties with `-D`. */

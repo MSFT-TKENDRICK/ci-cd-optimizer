@@ -62,13 +62,13 @@ ruleTester(rule, {
   ],
   invalid: [
     {
-      name: "bare push is fixed with the default branch",
+      name: "bare push is reported for manual trigger-policy review",
       files: workflow("on:", "  push:", "  pull_request:"),
       errors: [{ line: 2, messageIncludes: "`push` has no `branches` filter" }],
-      output: workflow("on:", "  push:", "    branches: [main]", "  pull_request:"),
+      output: null,
     },
     {
-      name: "push with only a paths filter gets branches inserted before its first key, using PR target branches",
+      name: "push with a paths filter gets a manual branch-policy recommendation",
       files: workflow(
         "on:",
         "  push:",
@@ -76,40 +76,33 @@ ruleTester(rule, {
         "  pull_request:",
         "    branches: [develop]",
       ),
-      errors: [{ line: 2, messageIncludes: "runs this workflow twice" }],
-      output: workflow(
-        "on:",
-        "  push:",
-        "    branches: [develop]",
-        "    paths: ['src/**']",
-        "  pull_request:",
-        "    branches: [develop]",
-      ),
+      errors: [{ line: 2, messageIncludes: "`push` has no `branches` filter and `pull_request` is also a trigger, so pushes to open same-repository pull requests may trigger overlapping work. Push and PR merge refs are different; this does not prove duplicate coverage." }],
+      output: null,
     },
     {
       name: "configured default branches and 4-space indentation",
       files: workflow("on:", "    push:", "    pull_request:"),
       options: { defaultBranches: ["main", "release"] },
       errors: [{ line: 2 }],
-      output: workflow("on:", "    push:", "        branches: [main, release]", "    pull_request:"),
+      output: null,
     },
     {
       name: "all-branches glob is reported without a fix",
       files: workflow("on:", "  push:", "    branches: ['**']", "  pull_request:"),
       errors: [{ line: 2, messageIncludes: "`push` matches `branches: [**]`" }],
-      output: workflow("on:", "  push:", "    branches: ['**']", "  pull_request:"),
+      output: null,
     },
     {
       name: "flow-sequence triggers are reported without a fix",
       files: workflow("on: [push, pull_request]"),
       errors: [{ line: 1, messageIncludes: "no `branches` filter" }],
-      output: workflow("on: [push, pull_request]"),
+      output: null,
     },
     {
       name: "pull_request types that include synchronize still duplicate",
       files: workflow("on:", "  push:", "  pull_request:", "    types: [opened, synchronize]"),
       errors: [{ line: 2 }],
-      output: workflow("on:", "  push:", "    branches: [main]", "  pull_request:", "    types: [opened, synchronize]"),
+      output: null,
     },
   ],
 });

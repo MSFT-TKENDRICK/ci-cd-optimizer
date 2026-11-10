@@ -61,6 +61,13 @@ const forAllSystemsFlake = nix(
 
 ruleTester(rule, {
   valid: [
+    {
+      name: "dev-shell child configuration is not inferred from the outer installer",
+      files: {
+        ".github/workflows/ci.yml": yml(...head("DeterminateSystems/nix-installer-action@v16"), "      - run: nix develop -c nix flake check"),
+        "flake.nix": checksFlake(10),
+      },
+    },
     { name: "fewer outputs than the threshold", files: { ".github/workflows/ci.yml": workflow("      - run: nix flake check"), "flake.nix": checksFlake(9) } },
     {
       name: "nix-fast-build already used in the workflow",
@@ -135,24 +142,24 @@ ruleTester(rule, {
     {
       name: "an attribute set of checks",
       files: { ".github/workflows/ci.yml": workflow("      - run: nix flake check -L"), "flake.nix": checksFlake(10) },
-      errors: [{ line: 7, messageIncludes: "`nix flake check -L` in job `check` checks `flake.nix`, which defines at least 10 outputs (checks)" }],
+      errors: [{ line: 7, messageIncludes: "`nix flake check -L` in job `check` checks `flake.nix`, with 10 syntactically recognized output names (checks). This is not an evaluated-output count or timing measurement; profile evaluation before considering a parallel evaluator." }],
     },
     {
       name: "dotted output paths across systems are merged",
       files: { ".github/workflows/ci.yml": workflow("      - run: nix flake check"), "flake.nix": dottedFlake },
-      errors: [{ line: 7, messageIncludes: "at least 10 outputs (packages, devShells)" }],
+      errors: [{ line: 7, messageIncludes: "`nix flake check` in job `check` checks `flake.nix`, with 10 syntactically recognized output names (packages, devShells). This is not an evaluated-output count or timing measurement; profile evaluation before considering a parallel evaluator." }],
     },
     {
       name: "flake-utils style outputs with a lower threshold",
       options: { threshold: 6 },
       files: { ".github/workflows/ci.yml": workflow("      - run: nix flake check"), "flake.nix": flakeUtilsFlake },
-      errors: [{ line: 7, messageIncludes: "at least 6 outputs" }],
+      errors: [{ line: 7, messageIncludes: "`nix flake check` in job `check` checks `flake.nix`, with 6 syntactically recognized output names (checks, packages, devShells). This is not an evaluated-output count or timing measurement; profile evaluation before considering a parallel evaluator." }],
     },
     {
       name: "per-system helper functions",
       options: { threshold: 5 },
       files: { ".github/workflows/ci.yml": workflow("      - run: nix flake check"), "flake.nix": forAllSystemsFlake },
-      errors: [{ line: 7, messageIncludes: "at least 5 outputs" }],
+      errors: [{ line: 7, messageIncludes: "`nix flake check` in job `check` checks `flake.nix`, with 5 syntactically recognized output names (checks, packages). This is not an evaluated-output count or timing measurement; profile evaluation before considering a parallel evaluator." }],
     },
     {
       name: "a subdirectory flake checked through working-directory",
@@ -167,14 +174,6 @@ ruleTester(rule, {
       files: { ".github/workflows/ci.yml": workflow("      - run: nix flake check ./nix"), "nix/flake.nix": checksFlake(12) },
       errors: [{ line: 7, messageIncludes: "`nix flake check ./nix`" }],
     },
-    {
-      name: "inside a dev shell, on an older nix-installer-action that installs upstream Nix",
-      files: {
-        ".github/workflows/ci.yml": yml(...head("DeterminateSystems/nix-installer-action@v16"), "      - run: nix develop -c nix flake check"),
-        "flake.nix": checksFlake(10),
-      },
-      errors: [{ line: 7, messageIncludes: "`nix flake check` in job `check`" }],
-    },
   ],
 });
 
@@ -187,14 +186,18 @@ describe("nix-fast-build suggestion", () => {
       },
     })[0]?.suggestion;
 
-  it("needs no --flake when run in the flake's directory", () => {
-    expect(suggestion(undefined, "nix flake check", "flake.nix")).toContain("--skip-cached --no-nom\n");
-    expect(suggestion("nix", "nix flake check", "nix/flake.nix")).toContain("--skip-cached --no-nom\n");
+  it("selects local checks without recommending execution of a floating evaluator", () => {
+    for (const text of [suggestion(undefined, "nix flake check", "flake.nix"), suggestion("nix", "nix flake check", "nix/flake.nix")]) {
+      expect(text).toContain("`--flake .#checks`");
+      expect(text).toContain("reviewed, lock-pinned");
+      expect(text).toContain("Retain `nix flake check --no-build`");
+      expect(text).not.toContain("nix run github:");
+    }
   });
 
   it("points --flake at a subdirectory flake", () => {
-    expect(suggestion(undefined, "nix flake check ./nix", "nix/flake.nix")).toContain("--skip-cached --no-nom --flake ./nix#checks\n");
-    expect(suggestion("tools", "nix flake check ../nix", "nix/flake.nix")).toContain("--flake ../nix#checks\n");
+    expect(suggestion(undefined, "nix flake check ./nix", "nix/flake.nix")).toContain("`--flake ./nix#checks`");
+    expect(suggestion("tools", "nix flake check ../nix", "nix/flake.nix")).toContain("`--flake ../nix#checks`");
   });
 });
 

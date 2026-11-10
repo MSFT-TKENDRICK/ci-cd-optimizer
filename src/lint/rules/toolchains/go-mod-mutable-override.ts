@@ -1,14 +1,10 @@
 import type { ProjectModel } from "../../project.js";
 import { basename } from "../caching/shared.js";
 import { defineRule, type JobCommand } from "../helpers.js";
-import { commandDirectory, effectiveEnv, envSource, findUp, findUpFrom, jobContexts, toolCommands, words, type JobContext } from "./shared.js";
+import { commandDirectory, effectiveEnv, envSource, findUp, jobContexts, toolCommands, withReplacedToken, words, type JobContext } from "./shared.js";
 
 /** Module-aware commands that build or run code (and therefore resolve imports against go.mod). */
 const BUILD_SUBCOMMANDS = new Set(["build", "test", "vet", "run", "install"]);
-/** `-mod=mod` / `--mod=mod` as one GOFLAGS entry or command-line word. */
-const MOD_MOD_ENTRY = /(?:^|[\s"'])--?mod=mod(?=$|[\s"'])/;
-/** The same flag as written on a line, including the two-word `-mod mod` form. */
-const MOD_MOD_TEXT = /(?<![\w-])(--?mod)([= ])mod(?![\w.=/-])/g;
 /** Jobs that change or inspect go.mod on purpose: tidy checks, dependency bumps, bots that commit the result. */
 const MUTATING_JOB =
   /\bgit\s+(?:commit|push|diff|status)\b|\bgo\s+mod\s+(?:tidy|vendor|edit)\b|\bgo\s+get\b[^\n|;&]*\s-u\b|\bgo\s+work\b/;
@@ -17,8 +13,6 @@ const MUTATING_ACTIONS = [
   "stefanzweifel/git-auto-commit-action",
   "endbug/add-and-commit",
 ];
-const GO_ENV_WRITE = /\bgo\s+env\s+-w\s+(?:[^\n]*\s)?GOFLAGS=("[^"]*"|'[^']*'|\S*)/;
-const GO_ENV_UNSET = /\bgo\s+env\s+-u\s+(?:[^\n]*\s)?GOFLAGS\b/;
 const GET_FLAGS = /^(?:-v|-t|-d|-x|-insecure)$/;
 const LOCAL_PATTERN = /^(?:\.|\.\.?\/[^@\s]*|all)$/;
 const VALUE_OPTIONS = new Set(["-mod", "--mod", "-modfile", "-overlay", "-tags", "-ldflags", "-gcflags", "-asmflags", "-gccgoflags", "-toolexec", "-p", "-o", "-C", "-coverpkg", "-run", "-bench", "-count", "-timeout", "-cpu", "-parallel"]);
@@ -62,6 +56,14 @@ function modFlag(args: string[]): string | undefined {
   return value;
 }
 
+/** GOFLAGS requires one flag per word; two-word values and unevaluated shell expressions are not settings. */
+function goflagsMode(text: string): string | undefined {
+  if (/['"$`\\]/.test(text)) return undefined;
+  const flags = text.trim().split(/\s+/).filter(Boolean);
+  if (flags.some((flag) => !/^--?[A-Za-z][\w-]*(?:=\S*)?$/.test(flag) || VALUE_OPTIONS.has(flag))) return undefined;
+  return modFlag(flags);
+}
+
 function isBuild(parsed: GoCommand | undefined): parsed is GoCommand {
   // `go install pkg@version` / `go run pkg@version` ignore the main module, so -mod does not apply to them.
   return parsed !== undefined && BUILD_SUBCOMMANDS.has(parsed.subcommand) && !parsed.args.some((word) => word.includes("@"));
@@ -74,13 +76,14 @@ function moduleFile(project: ProjectModel, ctx: JobContext, command: JobCommand,
   const gowork = env.get("GOWORK");
   const changesDir = args.some((word) => word === "-C" || word.startsWith("-C="));
   const dir = changesDir ? undefined : commandDirectory(ctx, command);
+  if (dir === undefined) return undefined;
   if (gowork !== "off") {
     if (gowork !== undefined && gowork !== "") return undefined;
-    if (dir === undefined ? [...project.files.keys()].some((path) => basename(path) === "go.work") : findUp(project, dir, "go.work")) {
+    if (findUp(project, dir, "go.work")) {
       return undefined;
     }
   }
-  return findUpFrom(project, dir, "go.mod", "go.mod");
+  return findUp(project, dir, "go.mod");
 }
 
 interface FlagSource {
@@ -93,18 +96,26 @@ interface FlagSource {
 function goflagsSource(project: ProjectModel, ctx: JobContext, command: JobCommand): FlagSource | undefined {
   const fromEnv = envSource(project, ctx, command, "GOFLAGS");
   if (fromEnv !== undefined) {
-    if (!MOD_MOD_ENTRY.test(fromEnv.value)) return undefined;
+    if (goflagsMode(fromEnv.value) !== "mod") return undefined;
     return { path: fromEnv.path, line: fromEnv.line ?? command.line, text: fromEnv.value };
   }
   // The environment variable overrides the go env file, so `go env -w` only matters when GOFLAGS is not exported.
   let written: FlagSource | undefined;
   for (const other of ctx.commands) {
     if (other === command) break;
-    const set = GO_ENV_WRITE.exec(other.command);
-    if (set) written = { path: other.path, line: other.line, text: (set[1] ?? "").replace(/^(["'])(.*)\1$/, "$2") };
-    else if (GO_ENV_UNSET.test(other.command)) written = undefined;
+    const list = words(other.command);
+    if (basename(list[0] ?? "") !== "go" || list[1] !== "env") continue;
+    const target = list.slice(3).filter((word) => word.startsWith("GOFLAGS=")).at(-1);
+    if ((list[2] === "-w" && target) || (list[2] === "-u" && list.includes("GOFLAGS"))) {
+      const current = effectiveEnv(ctx, command, command);
+      const previous = effectiveEnv(ctx, other, other);
+      const unknown = ["GOENV", "HOME", "APPDATA", "XDG_CONFIG_HOME"].some((key) => current.get(key) !== previous.get(key));
+      written = other.step.if || other.owner.if || current.get("GOENV") === "off" || unknown ||
+        /\|\||(?:^|[\n;])\s*(?:if|then|elif|else|case|for|while|until)\b/.test(other.step.run?.value ?? "") ? undefined :
+        list[2] === "-w" && target ? { path: other.path, line: other.line, text: target.slice("GOFLAGS=".length) } : undefined;
+    }
   }
-  return written !== undefined && MOD_MOD_ENTRY.test(written.text) ? written : undefined;
+  return written !== undefined && goflagsMode(written.text) === "mod" ? written : undefined;
 }
 
 function mutatingJob(ctx: JobContext): boolean {
@@ -114,8 +125,18 @@ function mutatingJob(ctx: JobContext): boolean {
   );
 }
 
-function withoutModMod(raw: string): string {
-  return raw.replace(MOD_MOD_TEXT, (_match, flag: string, separator: string) => `${flag}${separator}readonly`);
+function withoutModMod(raw: string, command: boolean): string {
+  const list = words(raw);
+  const args = command ? parseGo(list)?.args ?? [] : list;
+  const offset = command ? 2 : 0;
+  let replacement: { index: number; text: string } | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const word = args[index] ?? "";
+    if (/^--?mod=mod$/.test(word)) replacement = { index: offset + index, text: word.replace(/=mod$/, "=readonly") };
+    else if (/^--?mod$/.test(word) && args[index + 1] === "mod") replacement = { index: offset + index + 1, text: "readonly" };
+    if (VALUE_OPTIONS.has(word)) index += 1;
+  }
+  return replacement ? withReplacedToken(raw, replacement.index, replacement.text) ?? raw : raw;
 }
 
 export default defineRule({
@@ -179,7 +200,7 @@ export default defineRule({
             line: command.line,
             key: `go-mod-flag:${command.path}:${command.line}`,
             message: `\`${raw}\` passes \`-mod=mod\`, permitting necessary updates to \`${module}\`. This does not establish that the graph changes. Readonly mode rejects required go.mod updates but can still write go.sum.`,
-            suggestion: `If CI should reject required go.mod changes, test an explicit readonly policy:\n\n${withoutModMod(raw)}\n\nReview vendor/toolchain behavior before changing defaults. To enforce unchanged go.mod and go.sum, check their diff after all resolving commands; readonly alone is not that guarantee.`,
+            suggestion: `If CI should reject required go.mod changes, test an explicit readonly policy:\n\n${withoutModMod(raw, true)}\n\nReview vendor/toolchain behavior before changing defaults. To enforce unchanged go.mod and go.sum, check their diff after all resolving commands; readonly alone is not that guarantee.`,
           });
           continue;
         }
@@ -193,7 +214,7 @@ export default defineRule({
           line: source.line,
           key: `goflags:${source.path}:${source.line}`,
           message: `GOFLAGS is \`${source.text}\`, so \`${raw}\` may run with \`-mod=mod\` and update \`${module}\` if needed. That is permission, not an observed graph change; readonly still permits some go.sum writes.`,
-          suggestion: `If CI should reject required go.mod changes, test \`GOFLAGS: ${withoutModMod(source.text)}\` with the intended vendor/toolchain policy. Separately check go.mod/go.sum after all resolving commands if both must remain unchanged.`,
+          suggestion: `If CI should reject required go.mod changes, test \`GOFLAGS: ${withoutModMod(source.text, false)}\` with the intended vendor/toolchain policy. Separately check go.mod/go.sum after all resolving commands if both must remain unchanged.`,
           ...(elsewhere ? { related: [{ path: command.path, line: command.line }] } : {}),
         });
       }

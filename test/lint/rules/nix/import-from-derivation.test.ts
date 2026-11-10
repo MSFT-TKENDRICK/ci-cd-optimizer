@@ -84,7 +84,7 @@ ruleTester(rule, {
       },
       errors: [
         { line: 8, messageIncludes: "`generated` (built by `pkgs.runCommand` on line 3)" },
-        { line: 9, messageIncludes: "`pkgs.runCommand` is a derivation, so evaluation pauses until it is built" },
+        { line: 9, messageIncludes: "`import (pkgs.runCommand \"x.nix\" { } \"echo {} > $out\")` matches import from derivation (IFD): assuming the recognized functions have their standard semantics, `pkgs.runCommand` supplies a derivation output. If demanded and not already available, evaluation waits for it to be built. Evaluators with `allow-import-from-derivation = false` reject demanded IFD; this does not establish how much work a cached evaluation performs." },
         { line: 10, messageIncludes: "`builtins.readFile" },
       ],
     },
@@ -94,7 +94,7 @@ ruleTester(rule, {
         "default.nix": nix(
           "{ pkgs, haskellPackages, fetchFromGitHub }:",
           "let",
-          `  src = fetchFromGitHub { owner = "o"; repo = "r"; rev = "v1"; hash = "${HASH}"; };`,
+          `  src = pkgs.fetchFromGitHub { owner = "o"; repo = "r"; rev = "v1"; hash = "${HASH}"; };`,
           "in",
           "{",
           '  app = haskellPackages.callCabal2nix "app" ./. { };',
@@ -104,9 +104,9 @@ ruleTester(rule, {
         ),
       },
       errors: [
-        { line: 6, messageIncludes: "`haskellPackages.callCabal2nix` is import from derivation" },
-        { line: 7, messageIncludes: "`src` (built by `fetchFromGitHub` on line 3) is a derivation, so evaluation pauses until it is fetched" },
-        { line: 8, messageIncludes: "`pkgs.haskell.packages.ghc96.callHackage` is import from derivation (IFD): it runs `cabal2nix` in a derivation over the Hackage package index" },
+        { line: 6, messageIncludes: "`haskellPackages.callCabal2nix` matches a standard Haskell import-from-derivation (IFD) helper: it normally runs `cabal2nix` in a derivation and imports the result when demanded. Available outputs may avoid rebuilding. Confirm the binding and IFD policy before changing it." },
+        { line: 7, messageIncludes: "`src` (built by `pkgs.fetchFromGitHub` on line 3) supplies a derivation output" },
+        { line: 8, messageIncludes: "`pkgs.haskell.packages.ghc96.callHackage` matches a standard Haskell import-from-derivation (IFD) helper: it normally runs `cabal2nix` in a derivation over the Hackage package index and imports the result when demanded. Available outputs may avoid rebuilding. Confirm the binding and IFD policy before changing it." },
       ],
     },
     {
@@ -128,9 +128,9 @@ ruleTester(rule, {
       },
       errors: [
         { line: 3, messageIncludes: "`pkgs.mkYarnPackage` without `offlineCache` or `yarnNix`" },
-        { line: 7, messageIncludes: "`autoPubspecLock` is import from derivation" },
-        { line: 9, messageIncludes: "`tools.appliedCargoNix` is import from derivation" },
-        { line: 10, messageIncludes: "`tools.generatedCargoNix` is a derivation" },
+        { line: 7, messageIncludes: "`autoPubspecLock` in a recognized Dart/Flutter builder matches a conventional import-from-derivation path. Confirm the builder version and binding: demanded conversion may require a derivation output during evaluation, subject to the evaluator's IFD policy and available outputs." },
+        { line: 9, messageIncludes: "`tools.appliedCargoNix` matches crate2nix's import-from-derivation helper. With its standard semantics, demanded evaluation may need generated Cargo.nix before continuing; cached outputs and custom bindings can avoid the assumed work." },
+        { line: 10, messageIncludes: "assuming the recognized functions have their standard semantics, `tools.generatedCargoNix` supplies a derivation output" },
       ],
     },
   ],

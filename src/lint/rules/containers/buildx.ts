@@ -37,9 +37,17 @@ export interface CacheEntry {
 
 export function parseCacheEntry(text: string): CacheEntry {
   const attributes = new Map<string, string>();
-  for (const part of text.split(",")) {
+  const field = /"((?:[^"]|"")*)"|([^",]*)/y;
+  for (let index = 0; index <= text.length;) {
+    field.lastIndex = index;
+    const match = field.exec(text);
+    if (!match || (field.lastIndex < text.length && text[field.lastIndex] !== ",")) {
+      return { type: "", attributes: new Map(), text };
+    }
+    const part = match[1] === undefined ? match[2] ?? "" : match[1].replace(/""/g, '"');
     const eq = part.indexOf("=");
     if (eq > 0) attributes.set(part.slice(0, eq).trim().toLowerCase(), part.slice(eq + 1).trim());
+    index = field.lastIndex + 1;
   }
   const type = attributes.get("type") ?? (text.includes("=") ? "" : "registry");
   return { type: type.toLowerCase(), attributes, text };
@@ -136,10 +144,6 @@ export function dockerBuildIndex(words: string[]): number {
   return words[index] === "build" || words[index] === "b" ? index : -1;
 }
 
-function unquote(word: string): string {
-  return word.replace(/^(["'])(.*)\1$/, "$2");
-}
-
 export function parseBuildCommand(command: string): BuildCommand | undefined {
   const all = commandWords(command);
   const end = all.findIndex((word) => /^(\||\d?>>?|<|&)/.test(word));
@@ -149,11 +153,18 @@ export function parseBuildCommand(command: string): BuildCommand | undefined {
   const flags = new Map<string, string[]>();
   const positional: string[] = [];
   const add = (name: string, value: string): void => {
-    flags.set(name, [...(flags.get(name) ?? []), unquote(value)]);
+    flags.set(name, [...(flags.get(name) ?? []), value]);
   };
+  if (words[1] === "buildx" && words[2] === "--builder" && words[3]) add("builder", words[3]);
+  else if (words[1] === "buildx" && words[2]?.startsWith("--builder=")) add("builder", words[2].slice("--builder=".length));
   const args = words.slice(index + 1);
   for (let position = 0; position < args.length; position += 1) {
     const word = args[position] ?? "";
+    if (word === "--") {
+      positional.push(...args.slice(position + 1));
+      break;
+    }
+    if (["--help", "--version", "-h"].includes(word) || /^[$`]/.test(word)) return undefined;
     let name: string | undefined;
     let inline: string | undefined;
     const long = /^--([a-z][a-z0-9-]*)(?:=(.*))?$/i.exec(word);
@@ -165,7 +176,7 @@ export function parseBuildCommand(command: string): BuildCommand | undefined {
       name = SHORT_FLAGS[short[1]] ?? short[1];
       inline = short[2] === "" ? undefined : short[2]?.replace(/^=/, "");
     } else {
-      positional.push(unquote(word));
+      positional.push(word);
       continue;
     }
     if (inline !== undefined) add(name, inline);
@@ -271,7 +282,7 @@ export function siteDockerfile(project: ProjectModel, site: BuildSite): Dockerfi
   return resolveDockerfile(project, file, context);
 }
 
-/** True when any stage is pinned to the build platform (`FROM --platform=$BUILDPLATFORM`), i.e. it cross-compiles. */
+/** A build-platform-pinned stage is a possible cross-compilation design, not proof that it cross-compiles. */
 export function crossCompiles(model: DockerfileModel): boolean {
   return model.instructions.some(
     (instruction) => instruction.keyword === "FROM" && (instruction.flags.get("platform") ?? []).some((value) => value.includes("BUILDPLATFORM")),

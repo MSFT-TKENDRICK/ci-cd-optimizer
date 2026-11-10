@@ -7,7 +7,7 @@ const SHA = "a3a2b6d8e7f0c1b2a3d4e5f60718293a4b5c6d7e";
 
 ruleTester(rule, {
   valid: [
-    { name: "first fixed major", files: job("      - uses: DeterminateSystems/magic-nix-cache-action@v10") },
+    { name: "first wrapper release documenting restored support", files: job("      - uses: DeterminateSystems/magic-nix-cache-action@v11") },
     { name: "current major", files: job("      - uses: DeterminateSystems/magic-nix-cache-action@v13") },
     { name: "branch ref", files: job("      - uses: DeterminateSystems/magic-nix-cache-action@main") },
     { name: "uncommented SHA cannot be dated", files: job(`      - uses: DeterminateSystems/magic-nix-cache-action@${SHA}`) },
@@ -16,22 +16,28 @@ ruleTester(rule, {
   ],
   invalid: [
     {
-      name: "plain major tag is fixed",
-      files: job("      - uses: DeterminateSystems/nix-installer-action@v17", "      - uses: DeterminateSystems/magic-nix-cache-action@v8"),
-      errors: [{ line: 7, messageIncludes: "pinned to `v8`" }],
-      output: job("      - uses: DeterminateSystems/nix-installer-action@v17", "      - uses: DeterminateSystems/magic-nix-cache-action@v15"),
+      name: "v10 still precedes the v11 restored-support release",
+      files: job("      - uses: DeterminateSystems/magic-nix-cache-action@v10"),
+      errors: [{ line: 6, messageIncludes: "magic-nix-cache-action is pinned to `v10`, predating v11's restored support and daemon context changes. This does not establish a cache failure; check the host, downloaded binary and actual cache logs before upgrading." }],
+      output: null,
     },
     {
-      name: "lower-case owner is fixed",
+      name: "plain major tag receives an advisory upgrade recommendation",
+      files: job("      - uses: DeterminateSystems/nix-installer-action@v17", "      - uses: DeterminateSystems/magic-nix-cache-action@v8"),
+      errors: [{ line: 7, messageIncludes: "pinned to `v8`" }],
+      output: null,
+    },
+    {
+      name: "lower-case owner is recognized without an automatic upgrade",
       files: job("      - uses: determinatesystems/magic-nix-cache-action@v2"),
       errors: [{ line: 6, messageIncludes: "`v2`" }],
-      output: job("      - uses: determinatesystems/magic-nix-cache-action@v15"),
+      output: null,
     },
     {
       name: "full version tag is reported without a fix",
       files: job("      - uses: DeterminateSystems/magic-nix-cache-action@v9.1.0"),
       errors: [{ line: 6, messageIncludes: "`v9.1.0`" }],
-      output: job("      - uses: DeterminateSystems/magic-nix-cache-action@v9.1.0"),
+      output: null,
     },
     {
       name: "SHA pin resolved via its version comment",

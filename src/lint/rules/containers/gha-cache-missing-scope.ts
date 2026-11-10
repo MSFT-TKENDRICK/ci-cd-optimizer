@@ -1,5 +1,6 @@
 import type { JobModel, StepModel, WorkflowModel } from "../../parsers/workflow.js";
 import type { ProjectModel } from "../../project.js";
+import { matrixCombinations, matrixText } from "../../parsers/matrix.js";
 import { defineRule } from "../helpers.js";
 import {
   isBuildPush,
@@ -86,7 +87,7 @@ export default defineRule({
   meta: {
     id: "containers/gha-cache-missing-scope",
     ruleset: "containers",
-    description: "Builds that export a `type=gha` layer cache from matrix legs or for different images must each use their own `scope`.",
+    description: "Consider distinct gha cache scopes for modeled build variants that can replace each other's cache index.",
     rationale:
       "The gha backend's scope defaults to buildkit. Multiple exports sharing that scope can replace its index within the same repository/branch cache namespace. Some layers, local builder caches or other imports can still be reused; replacement is not proof of rebuilding from scratch. Scope expressions should distinguish relevant image/platform variants and agree across every importer/exporter. That cross-file contract is not established by this detector, so changes require review rather than automatic edits.",
     kind: "practice",
@@ -107,6 +108,8 @@ export default defineRule({
     for (const workflow of project.workflows) {
       for (const job of workflow.jobs) {
         if (!job.matrix) continue;
+        const combinations = matrixCombinations(job.matrix);
+        if (!combinations || combinations.length < 2) continue;
         const varying = varyingDimensions(job);
         for (const site of jobBuilds(workflow, job)) {
           const referenced = referencedDimensions(job, site.step, site.command?.text).filter((name) => varying === undefined || varying.has(name));
@@ -117,6 +120,14 @@ export default defineRule({
             const scopedDimensions = new Set([...(scope ?? "").matchAll(MATRIX_REFERENCE)].flatMap((match) => match[1] ?? []));
             const missing = referenced.filter((name) => !scopedDimensions.has(name));
             if (missing.length === 0 || (scope !== undefined && isDynamic(scope) && scopedDimensions.size === 0)) continue;
+            const resolved = combinations.map((combination) => ({
+              scope: matrixText(scope ?? "buildkit", combination),
+              variants: referenced.map((name) => JSON.stringify(combination[name])),
+            }));
+            if (resolved.some((leg) => leg.scope === undefined)) continue;
+            if (!resolved.some((leg, index) => resolved.slice(index + 1).some((other) =>
+              leg.scope === other.scope && leg.variants.some((value, dimension) => value !== other.variants[dimension]),
+            ))) continue;
             const value = missing.map((name) => `\${{ matrix.${name} }}`).join("-");
             const line = entryLine(project, site, entry);
             reported.add(`${workflow.path}:${site.step.key}:${line}`);

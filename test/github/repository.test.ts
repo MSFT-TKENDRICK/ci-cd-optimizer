@@ -72,6 +72,7 @@ describe("loadRepositorySnapshot", () => {
     const snapshot = await loadRepositorySnapshot(fake, repo, { ref: "main", config: DEFAULT_CONFIG });
     expect(snapshot.input.files.map((file) => file.path)).toContain(".github/workflows/ci.yml");
     expect(snapshot.input.files.map((file) => file.path)).not.toContain(".github/workflows/linked.yml");
+    expect(snapshot.input.inventoryComplete).toBe(false);
     expect(fake.calls.some((call) => call.parameters.file_sha === "l1")).toBe(false);
   });
 
@@ -80,5 +81,53 @@ describe("loadRepositorySnapshot", () => {
     const snapshot = await loadRepositorySnapshot(client(true), repo, { ref: "main", config: DEFAULT_CONFIG, change: change as never });
     expect(snapshot.input.inventoryComplete).toBe(false);
     expect(snapshot.input.change).toEqual(change);
+    expect(snapshot.selectionComplete).toBe(false);
+  });
+
+  it("marks a filtered API input incomplete even when the full tree is available", async () => {
+    const fake = client();
+    const snapshot = await loadRepositorySnapshot(fake, repo, {
+      ref: "main", config: DEFAULT_CONFIG, pathFilter: (path) => path.startsWith(".github/workflows/"),
+    });
+    expect(snapshot.input.inventoryComplete).toBe(false);
+    expect(snapshot.selectionComplete).toBe(true);
+    expect(snapshot.input.files.map((file) => file.path)).toEqual([".github/workflows/ci.yml"]);
+    expect(fake.calls.filter((call) => call.route.includes("/git/blobs/"))).toHaveLength(1);
+  });
+
+  it.each([
+    { path: "other-project", type: "commit", mode: "160000", sha: "module" },
+    { path: "linked-directory", type: "blob", mode: "120000", sha: "link" },
+  ])("cannot hide opaque entries behind a narrower selection: $path", async (entry) => {
+    const fake = fakeClient((route) => {
+      if (route.includes("/commits/")) return { sha: "c1", commit: { tree: { sha: "root" } } };
+      if (route.includes("/git/trees/")) return { tree: [entry] };
+      throw new Error(`Unexpected blob read ${route}`);
+    });
+    const snapshot = await loadRepositorySnapshot(fake, repo, {
+      ref: "main", config: DEFAULT_CONFIG, pathFilter: (path) => path === "package.json",
+    });
+    expect(snapshot.input.files).toEqual([]);
+    expect(snapshot.input.inventoryComplete).toBe(false);
+    expect(snapshot.selectionComplete).toBe(false);
+  });
+
+  it("keeps a narrowed selection incomplete when its own limits are reached", async () => {
+    const snapshot = await loadRepositorySnapshot(client(), repo, {
+      ref: "main", config: { ...DEFAULT_CONFIG, limits: { ...DEFAULT_CONFIG.limits, maxFiles: 1 } }, pathFilter: () => true,
+    });
+    expect(snapshot.selectionComplete).toBe(false);
+    expect(snapshot.input.inventoryComplete).toBe(false);
+  });
+
+  it("does not fetch gitlinks and does not infer files absent inside them", async () => {
+    const fake = fakeClient((route) => {
+      if (route.includes("/commits/")) return { sha: "c1", commit: { tree: { sha: "root" } } };
+      if (route.includes("/git/trees/")) return { tree: [{ path: "project", type: "commit", mode: "160000", sha: "module" }] };
+      throw new Error(`Unexpected blob read ${route}`);
+    });
+    const snapshot = await loadRepositorySnapshot(fake, repo, { ref: "main", config: DEFAULT_CONFIG });
+    expect(snapshot.input.files).toEqual([]);
+    expect(snapshot.input.inventoryComplete).toBe(false);
   });
 });

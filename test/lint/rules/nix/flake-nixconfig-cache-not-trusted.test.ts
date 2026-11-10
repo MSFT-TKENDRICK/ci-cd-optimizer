@@ -50,6 +50,10 @@ const files = (wf: string, extra: Record<string, string> = {}): Record<string, s
 ruleTester(rule, {
   valid: [
     {
+      name: "nested dev-shell build has an unknown child cache configuration",
+      files: files(workflow([CHECKOUT, INSTALL, "      - run: nix develop -c nix build ./sub#app"]), { "flake.nix": PLAIN_FLAKE, "sub/flake.nix": FLAKE }),
+    },
+    {
       name: "the installer's extra_nix_config adds the substituter and key",
       files: files(
         workflow([
@@ -255,11 +259,6 @@ ruleTester(rule, {
       errors: [{ path: "sub/flake.nix", line: 4, messageIncludes: "runs `nix build`" }],
     },
     {
-      name: "a nested nix build inside nix develop targets a subdirectory flake",
-      files: files(workflow([CHECKOUT, INSTALL, "      - run: nix develop -c nix build ./sub#app"]), { "flake.nix": PLAIN_FLAKE, "sub/flake.nix": FLAKE }),
-      errors: [{ path: "sub/flake.nix", line: 4, messageIncludes: "runs `nix build ./sub#app`" }],
-    },
-    {
       name: "a ?dir= flake reference targets a subdirectory flake",
       files: files(workflow([CHECKOUT, INSTALL, '      - run: nix build ".?dir=nix/ci#checks"']), { "flake.nix": PLAIN_FLAKE, "nix/ci/flake.nix": FLAKE }),
       errors: [{ path: "nix/ci/flake.nix", line: 4 }],
@@ -327,7 +326,8 @@ describe("nix/flake-nixconfig-cache-not-trusted suggestions", () => {
     );
     expect(diagnostic?.suggestion).toContain("append these lines to the existing `extra-conf`");
     expect(diagnostic?.suggestion).toContain("`cachix/cachix-action@v17` step with `name: demo`");
-    expect(diagnostic?.suggestion).toContain("Prefer this to `accept-flake-config = true`");
+    expect(diagnostic?.suggestion).toContain("Review the cache operator and public key independently");
+    expect(diagnostic?.suggestion).toContain("Prefer explicit settings to `accept-flake-config = true`");
   });
 
   it("points related locations at the other jobs", () => {

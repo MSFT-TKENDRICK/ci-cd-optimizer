@@ -70,6 +70,7 @@ export function parseCargo(list: string[]): CargoCommand | undefined {
   let manifestPath: string | undefined;
   for (let position = 0; position < args.length; position += 1) {
     const word = args[position] ?? "";
+    if (word === "-h" || word === "--help" || word === "--version") return undefined;
     if (word === "--locked" || word === "--frozen") locked = true;
     if (word === "--manifest-path") manifestPath = args[position + 1];
     else if (word.startsWith("--manifest-path=")) manifestPath = word.slice("--manifest-path=".length);

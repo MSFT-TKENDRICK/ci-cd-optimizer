@@ -51,20 +51,20 @@ ruleTester(rule, {
     {
       name: "-mod=mod on go build",
       files: { [WORKFLOW]: job("      - run: go build -mod=mod ./..."), ...GOMOD },
-      errors: [{ line: 7, path: WORKFLOW, messageIncludes: "`go build -mod=mod ./...` passes `-mod=mod`, which lets the go command add missing requirements and rewrite `go.mod`" }],
-      output: { [WORKFLOW]: job("      - run: go build -mod=readonly ./...") },
+      errors: [{ line: 7, path: WORKFLOW, messageIncludes: "`go build -mod=mod ./...` passes `-mod=mod`, permitting necessary updates to `go.mod`. This does not establish that the graph changes. Readonly mode rejects required go.mod updates but can still write go.sum." }],
+      output: null,
     },
     {
       name: "GOFLAGS=-mod=mod in workflow env",
       files: { [WORKFLOW]: withGoflags("-mod=mod", "      - run: go test ./..."), ...GOMOD },
-      errors: [{ line: 3, messageIncludes: "GOFLAGS is `-mod=mod`, so `go test ./...` runs with `-mod=mod`" }],
-      output: { [WORKFLOW]: withGoflags("-mod=readonly", "      - run: go test ./...") },
+      errors: [{ line: 3, messageIncludes: "GOFLAGS is `-mod=mod`, so `go test ./...` may run with `-mod=mod` and update `go.mod` if needed. That is permission, not an observed graph change; readonly still permits some go.sum writes." }],
+      output: null,
     },
     {
       name: "go env -w GOFLAGS before go vet",
       files: { [WORKFLOW]: job("      - run: go env -w GOFLAGS=-mod=mod", "      - run: go vet ./..."), ...GOMOD },
       errors: [{ line: 7, messageIncludes: "GOFLAGS is `-mod=mod`, so `go vet ./...`" }],
-      output: { [WORKFLOW]: job("      - run: go env -w GOFLAGS=-mod=readonly", "      - run: go vet ./...") },
+      output: null,
     },
     {
       name: "go get . before the build",

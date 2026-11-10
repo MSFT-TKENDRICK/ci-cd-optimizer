@@ -74,8 +74,10 @@ function conditionalScript(script: string): boolean {
 
 /** Prefix/environment effects requiring shell or external configuration evaluation. */
 export function unknownCommandEnvironment(ctx: JobContext, command: JobCommand): boolean {
-  const first = commandTokens(command.command)[0];
+  const parsed = commandTokens(command.command);
+  const first = parsed[0];
   if (!first) return true;
+  if (parsed.some((token) => /[$`]/.test(token.value) && !/^'[^']*'$/.test(token.raw))) return true;
   const all = shellTokens(command.command);
   const prefix = all.slice(0, all.length - commandTokens(command.command).length);
   if (prefix.some((token) => ["sudo", "doas", "su"].includes(basename(token.value)))) return true;
@@ -83,7 +85,10 @@ export function unknownCommandEnvironment(ctx: JobContext, command: JobCommand):
       prefix.some((token) => token.value.startsWith("-") && token.value !== "--")) return true;
   const before = ctx.commands.slice(0, ctx.commands.indexOf(command))
     .filter((other) => other.step === command.step && other.owner === command.owner);
+  if (ctx.commands.some((other) => entryIndex(ctx, other) < entryIndex(ctx, command) &&
+      /\$(?:GITHUB_ENV|\{GITHUB_ENV\})/.test(other.command) && githubEnvPairs(other.command).size === 0)) return true;
   return before.some((other) => /^(?:source|\.|eval|unset)\s/.test(other.command) ||
+      shellTokens(other.command).length === 0 ||
       (shellTokens(other.command).length > 0 && commandTokens(other.command).length === 0)) ||
     (before.length > 0 && conditionalScript(command.step.run?.value ?? ""));
 }
@@ -95,8 +100,14 @@ function stringValue(value: unknown): string {
 /** `NAME=value` pairs one command appends to `$GITHUB_ENV` (empty when it does not write that file). */
 export function githubEnvPairs(command: string): Map<string, string> {
   const result = new Map<string, string>();
-  if (!/>>?\s*"?\$(?:GITHUB_ENV|\{GITHUB_ENV\})"?\s*$/.test(command)) return result;
   const tokens = shellTokens(command);
+  let end = 0;
+  for (const token of tokens) {
+    const start = command.indexOf(token.raw, end);
+    if (start < 0) return result;
+    end = start + token.raw.length;
+  }
+  if (!/^>>?\s*(?:"\$(?:GITHUB_ENV|\{GITHUB_ENV\})"|\$(?:GITHUB_ENV|\{GITHUB_ENV\}))\s*$/.test(command.slice(end).trim())) return result;
   const verb = tokens[0]?.value;
   const payload = verb === "echo" ? tokens.slice(1) : verb === "printf" && tokens[1]?.value === "%s\\n" ? tokens.slice(2) : [];
   if (payload.length !== 1) return result;
@@ -366,15 +377,38 @@ export function insertAfterWords(file: SourceFile, line: number, prefix: string[
 }
 
 /**
- * The raw command with `text` inserted right after its prefix words (for suggestions); rebuilt from the parsed words
- * when the prefix cannot be found in the text as written.
+ * The raw command with `text` inserted after its prefix words, retaining quoting and wrappers.
  */
 export function withInserted(raw: string, list: string[], prefix: string[], text: string): string {
-  const pattern = new RegExp(`(?<![\\w./-])${prefix.map(escapeRegExp).join("\\s+")}(?![\\w=-])`);
-  const match = pattern.exec(raw);
-  if (!match) return [...prefix, text.trim(), ...list.slice(prefix.length)].join(" ");
-  const end = match.index + match[0].length;
+  const all = shellTokens(raw);
+  const command = commandTokens(raw);
+  if (prefix.length === 0 || !prefix.every((word, index) => command[index]?.value === word) || command.length !== list.length) {
+    return `# Add ${text.trim()} after checking the tool's argument boundaries:\n${raw}`;
+  }
+  const count = all.length - command.length + prefix.length;
+  let end = 0;
+  for (const token of all.slice(0, count)) {
+    const start = raw.indexOf(token.raw, end);
+    if (start < 0) return `# Add ${text.trim()} after checking the tool's argument boundaries:\n${raw}`;
+    end = start + token.raw.length;
+  }
   return `${raw.slice(0, end)}${text}${raw.slice(end)}`;
+}
+
+/** Replace one actual command token, leaving wrappers, other arguments and their quoting untouched. */
+export function withReplacedToken(raw: string, index: number, replacement: string): string | undefined {
+  const all = shellTokens(raw);
+  const command = commandTokens(raw);
+  if (index < 0 || index >= command.length) return undefined;
+  const target = all.length - command.length + index;
+  let end = 0;
+  for (const [position, token] of all.entries()) {
+    const start = raw.indexOf(token.raw, end);
+    if (start < 0) return undefined;
+    end = start + token.raw.length;
+    if (position === target) return raw.slice(0, start) + replacement + raw.slice(end);
+  }
+  return undefined;
 }
 
 /** The run commands of a job whose first word is the given tool (by basename, so `./gradlew` matches `gradlew`). */

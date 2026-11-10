@@ -47,7 +47,7 @@ Presets:
 
 | Preset | Intent |
 |---|---|
-| `recommended` | High-confidence speed and reproducibility rules; the default. |
+| `recommended` | Common build, cache and reproducibility checks; the default. Confidence and runtime assumptions remain rule-specific. |
 | `agentic` | Adds rules that matter at high change volume: merge queue, change detection, cache mounts, `exports` maps. |
 | `strict` | Stricter hermeticity and checkout hygiene, such as SHA-pinned actions and sparse checkout everywhere. |
 | `github` | Recommends GHCR and the GitHub npm registry for organization-wide reuse. |
@@ -56,6 +56,15 @@ Presets:
 
 Rule options and defaults are listed per rule in [rules.md](rules.md). Generated gh-aw `.lock.yml` workflows are
 ignored by default. Fix the `.md` source and recompile instead.
+
+The 14 rulesets include `nix` and `toolchains`; these work through every built-in entry point, with no separate
+plugin or Nix/toolchain executable required. `rulesets: { nix: warn }` selects all 37 Nix rules regardless of preset;
+individual `rules` entries can then narrow them. See [Nix behavior and assumptions](nix.md).
+
+Absence-based rules need a complete inventory within the configured scope. File limits, oversized content-bearing
+files, API filtering/truncation, unreadable entries, and unignored symlinks/submodules can make that inventory
+incomplete. Large presence-only lockfiles retain a header; oversized `flake.lock` and `devenv.lock` do not.
+Explicit ignores define the analysis scope, not evidence about the ignored files.
 
 Suppression comments, `--init`, `--print-config`, and writing local rules are covered in [linter.md](linter.md).
 
@@ -114,7 +123,9 @@ issues:
 
 ## Fix pull requests (`fixes`)
 
-Groups safe autofixes into Dependabot-style pull requests. Disabled by default.
+Groups available autofixes into Dependabot-style pull requests. Disabled by default. Review and test each diff:
+fixability does not establish semantic equivalence or measured performance improvement. Nix and toolchain rules
+are advisory and do not produce automatic edits.
 
 ```yaml
 fixes:

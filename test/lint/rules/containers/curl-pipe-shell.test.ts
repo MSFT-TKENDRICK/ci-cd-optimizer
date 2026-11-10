@@ -8,6 +8,24 @@ const job = (...steps: string[]): string =>
 
 ruleTester(rule, {
   valid: [
+    ...[
+      "curl --help | sh",
+      "curl -fsSLV https://example.com/install.sh | bash",
+      "wget -VqO- https://example.com/install.sh | sh",
+      "curl --config curlrc https://example.com/install.sh | sh",
+      "curl -fsSL https://example.com/install.sh > install.sh | sh",
+      "curl -fsSL https://example.com/install.sh | sudo -nv bash",
+      "curl -fsSL https://example.com/install.sh | command -v bash",
+      "curl -fsSL https://example.com/install.sh | bash --help",
+      "curl -fsSL https://example.com/install.sh | bash -sn",
+      "curl -fsSL https://example.com/install.sh | bash -o noexec",
+      "bash -n <(curl -fsSL https://example.com/install.sh)",
+      "sudo -nv bash <(curl -fsSL https://example.com/install.sh)",
+      "bash <(curl -fsSLo install.sh https://example.com/install.sh)",
+      "bash <(curl -fsSL https://example.com/install.sh | sha256sum)",
+      'bash -nc "$(curl -fsSL https://example.com/install.sh)"',
+      'bash -c "$(curl -fsSLo install.sh https://example.com/install.sh)"',
+    ].map((command) => ({ name: `does not assert execution for ${command}`, files: job(`- run: ${command}`) })),
     {
       name: "download to a file, verify the checksum, then execute",
       files: job(
@@ -15,14 +33,6 @@ ruleTester(rule, {
         "    curl -fsSLo install.sh https://get.example.com/install.sh",
         '    echo "0123abcd  install.sh" | sha256sum -c -',
         "    sh install.sh",
-      ),
-    },
-    {
-      name: "verified pipe in the same step",
-      files: job(
-        "- run: |",
-        "    curl -fsSLo key.asc https://example.com/key.asc && gpg --verify install.sh.sig install.sh",
-        "    curl -fsSL https://example.com/install.sh | sh",
       ),
     },
     {
@@ -65,6 +75,34 @@ ruleTester(rule, {
     },
   ],
   invalid: [
+    {
+      name: "a checksum after streaming cannot authenticate the already executed payload",
+      files: job("- run: |", "    curl -fsSL https://example.com/install.sh | sh", "    sha256sum -c SHA256SUMS"),
+      errors: [{ line: 7, messageIncludes: "without verifying a checksum or signature" }],
+      output: null,
+    },
+    {
+      name: "a checksum mention in a comment cannot authenticate the streamed payload",
+      files: job("- run: |", "    # verified with sha256sum", "    curl -fsSL https://example.com/install.sh | sh"),
+      errors: [{ line: 8, messageIncludes: "without verifying a checksum or signature" }],
+      output: null,
+    },
+    {
+      name: "quoted output option values retain their lexical boundaries",
+      files: job('- run: curl -fsSL -o "-" https://example.com/install.sh | command -p bash -s -- --yes'),
+      errors: [{ line: 6, messageIncludes: "with `bash`" }],
+      output: null,
+    },
+    {
+      name: "verifying a different file does not verify a later streamed payload",
+      files: job(
+        "- run: |",
+        "    curl -fsSLo key.asc https://example.com/key.asc && gpg --verify install.sh.sig install.sh",
+        "    curl -fsSL https://example.com/install.sh | sh",
+      ),
+      errors: [{ line: 8, messageIncludes: "https://example.com/install.sh" }],
+      output: null,
+    },
     {
       name: "curl piped to bash in a workflow",
       files: job("- run: curl -fsSL https://get.example.com/install.sh | bash"),

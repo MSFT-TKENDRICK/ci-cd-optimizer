@@ -49,7 +49,7 @@ ruleTester(rule, {
   ],
   invalid: [
     {
-      name: "git+https with a branch is rewritten to github:",
+      name: "git+https with a branch gets a manual github input recommendation",
       files: {
         "flake.nix": flake(
           'nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";',
@@ -57,33 +57,28 @@ ruleTester(rule, {
         ),
       },
       errors: [{ path: "flake.nix", line: 5, messageIncludes: "`github:numtide/devshell/main`" }],
-      output: {
-        "flake.nix": flake(
-          'nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";',
-          'devshell.url = "github:numtide/devshell/main";',
-        ),
-      },
+      output: null,
     },
     {
-      name: "pinned rev, .git suffix and shallow=1 collapse to a github: rev",
+      name: "pinned rev, .git suffix and shallow=1 require a reviewed transport change",
       files: { "flake.nix": flake(`tools = { url = "git+https://github.com/acme/tools.git?shallow=1&rev=${REV}"; flake = false; };`) },
       errors: [{ line: 4, messageIncludes: "Input `tools`" }],
-      output: { "flake.nix": flake(`tools = { url = "github:acme/tools/${REV}"; flake = false; };`) },
+      output: null,
     },
     {
       name: "dir parameter is carried over",
       files: { "flake.nix": flake('infra.url = "git+https://github.com/acme/infra?ref=v2&dir=nix";') },
       errors: [{ line: 4, messageIncludes: "`github:acme/infra/v2?dir=nix`" }],
-      output: { "flake.nix": flake('infra.url = "github:acme/infra/v2?dir=nix";') },
+      output: null,
     },
     {
       name: "git+ssh is reported without a fix: it likely relies on an SSH key",
       files: { "flake.nix": flake('secrets.url = "git+ssh://git@github.com/acme/secrets.git?ref=main";') },
       errors: [{ line: 4, messageIncludes: "`github:acme/secrets/main`" }],
-      output: { "flake.nix": flake('secrets.url = "git+ssh://git@github.com/acme/secrets.git?ref=main";') },
+      output: null,
     },
     {
-      name: "outputs reading revCount suppress the fix",
+      name: "outputs reading revCount require preserving fetcher metadata",
       files: {
         "flake.nix": nix(
           "{",
@@ -93,20 +88,13 @@ ruleTester(rule, {
         ),
       },
       errors: [{ line: 2, messageIncludes: "`github:acme/lib`" }],
-      output: {
-        "flake.nix": nix(
-          "{",
-          '  inputs.lib.url = "git+https://github.com/acme/lib";',
-          "  outputs = { self, lib }: { version = toString lib.revCount; };",
-          "}",
-        ),
-      },
+      output: null,
     },
     {
       name: "a branch name containing a slash moves to ?ref= and is not auto-fixed",
       files: { "flake.nix": flake('feature.url = "git+https://github.com/acme/app?ref=feature/cache";') },
       errors: [{ line: 4, messageIncludes: "`github:acme/app?ref=feature/cache`" }],
-      output: { "flake.nix": flake('feature.url = "git+https://github.com/acme/app?ref=feature/cache";') },
+      output: null,
     },
     {
       name: "subflake inputs are checked too",

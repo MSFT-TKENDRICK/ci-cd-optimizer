@@ -155,7 +155,7 @@ describe("nix/indirect-input", () => {
             { mytool: "mytool" },
           ),
         },
-        errors: [{ path: "flake.nix", line: 4, messageIncludes: "e.g. `github:acme/mytool`" }],
+        errors: [{ path: "flake.nix", line: 4, messageIncludes: "Input `mytool` uses the indirect flake reference `mytool`, which Nix resolves through whichever flake registry wins on the machine (~/.config/nix/registry.json, then /etc/nix/registry.json, then the downloaded global registry); every `nix flake update` re-resolves it there. Declare the source explicitly, e.g. `github:acme/mytool/0f0d5e0e8f1b2c3d4e5f60718293a4b5c6d7e8f9`." }],
       },
       {
         name: "unregistered id without a lock gets a placeholder owner",

@@ -113,26 +113,18 @@ export default defineRule({
         for (const invocation of nestedInvocations(entry.nix)) {
           if (hasOption(invocation, "--dry-run", "--no-build") || (invocation.binary !== "nix-build" && !["build", "flake check", "develop", "run", "shell"].includes(invocation.subcommand))) continue;
           const current = effectiveNixConf(model, entry, invocation);
-          if (!current || confValues(current, "builders", true).some((setting) => setting.value.trim() !== "") || confValues(current, "cores", true).length > 0) continue;
+          if (!current || confValues(current, "builders", true).some((setting) => setting.value.trim() !== "") ||
+              confValues(current, "cores", true).length > 0 || confValues(current, "build-cores", true).length > 0) continue;
           const last = current.filter((setting) => MAX_JOBS_KEYS.has(setting.key)).at(-1);
           if (last) effective.add(identity(last));
         }
       }
-      // Remote builders or explicit `cores` tuning mean the parallelism split was chosen deliberately.
-      const conf = [...model.conf, ...settings.map((candidate) => candidate.setting)];
-      if (confValues(conf, "builders", true).some((setting) => setting.value.trim() !== "")) continue;
-      if (confValues(conf, "cores").length > 0 || confValues(conf, "build-cores").length > 0) continue;
       const candidates = settings.filter((candidate) => MAX_JOBS_KEYS.has(candidate.setting.key) && effective.has(identity(candidate.setting)));
-
-      // A higher or `auto` value set anywhere in the job may override a low nix.conf value; stay quiet when unsure.
-      const raised = candidates.some((candidate) => lowJobs(candidate.setting.value, max) === undefined && candidate.setting.value.trim() !== "0");
       const labels = runnerLabels(job).join(", ");
-      const installsWithAuto = model.installers.some((step) => step.uses?.action.name === "cachix/install-nix-action");
       for (const candidate of candidates) {
         const { setting } = candidate;
         const jobs = lowJobs(setting.value, max);
         if (jobs === undefined) continue;
-        if (setting.source !== "cli" && raised) continue;
         const file = project.files.get(setting.path);
         let line = setting.line;
         if (file && candidate.envAnchor !== undefined) {
@@ -145,10 +137,8 @@ export default defineRule({
         const written = setting.source === "cli" ? `\`${setting.key} ${setting.value}\`` : `\`${setting.key} = ${setting.value}\``;
         const suggestion =
           setting.source === "cli"
-            ? installsWithAuto
-              ? "Drop the flag: cachix/install-nix-action already writes `max-jobs = auto` to nix.conf. Or set it explicitly:\n  --max-jobs auto"
-              : "Let Nix run one build job per CPU:\n  --max-jobs auto"
-            : "Let Nix run one build job per CPU:\n  max-jobs = auto";
+            ? "Consider an explicit per-invocation limit:\n  --max-jobs auto"
+            : "Consider an explicit effective configuration:\n  max-jobs = auto";
         report({
           path: setting.path,
           line,

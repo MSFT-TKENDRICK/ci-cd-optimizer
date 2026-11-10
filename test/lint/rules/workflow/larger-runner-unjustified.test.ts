@@ -66,7 +66,7 @@ ruleTester(rule, {
         {
           line: 4,
           messageIncludes:
-            "Job `format` runs on larger runner `ubuntu-24.04-16core` but only checks out, sets up tools, installs dependencies and runs formatters or linters, which gain little from extra cores. If it is a GitHub-hosted linux x64 16-core runner it bills $0.042/min versus $0.006/min for a standard Linux 2-core (x64) runner",
+            "Job `format` uses larger-looking runner label `ubuntu-24.04-16core` with recognized setup/install/format/lint commands. These names do not prove low CPU or memory use: installation hooks and native dependencies may be expensive. Measure before changing runner size.",
         },
       ],
     },
@@ -75,17 +75,17 @@ ruleTester(rule, {
       files: withManifest(job("windows-2025-8-cores", "      - run: npm ci", "      - run: npm run format:check"), {
         "format:check": "prettier --check . && actionlint",
       }),
-      errors: [{ line: 4, messageIncludes: "$0.042/min versus $0.01/min for a standard Windows 2-core (x64) runner" }],
+      errors: [{ line: 4, messageIncludes: "Job `format` uses larger-looking runner label `windows-2025-8-cores` with recognized setup/install/format/lint commands. These names do not prove low CPU or memory use: installation hooks and native dependencies may be expensive. Measure before changing runner size." }],
     },
     {
       name: "macOS xlarge runner that only prints information",
       files: job("macos-15-xlarge", "      - run: sw_vers --version", "      - run: echo done"),
-      errors: [{ line: 4, messageIncludes: "$0.102/min versus $0.062/min" }],
+      errors: [{ line: 4, messageIncludes: "Job `format` uses larger-looking runner label `macos-15-xlarge` with recognized setup/install/format/lint commands. These names do not prove low CPU or memory use: installation hooks and native dependencies may be expensive. Measure before changing runner size." }],
     },
     {
       name: "custom larger-runner name without a known platform",
       files: job("[org-32-cores]", "      - run: npx --yes markdownlint-cli2 '**/*.md'"),
-      errors: [{ line: 4, messageIncludes: "larger runner `org-32-cores`" }],
+      errors: [{ line: 4, messageIncludes: "Job `format` uses larger-looking runner label `org-32-cores` with recognized setup/install/format/lint commands. These names do not prove low CPU or memory use: installation hooks and native dependencies may be expensive. Measure before changing runner size." }],
     },
   ],
 });

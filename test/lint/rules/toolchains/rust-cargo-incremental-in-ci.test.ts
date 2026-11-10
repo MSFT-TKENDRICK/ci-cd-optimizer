@@ -76,10 +76,10 @@ ruleTester(rule, {
         {
           line: 10,
           path: WORKFLOW,
-          messageIncludes: "`CARGO_INCREMENTAL: 1` forces incremental compilation on for `cargo test` in a job that caches `target/`: Swatinem/rust-cache sets",
+          messageIncludes: "`CARGO_INCREMENTAL: 1` forces incremental compilation on for `cargo test` in a job that caches `target/`: Swatinem/rust-cache normally sets `CARGO_INCREMENTAL=0` and deletes incremental artifacts before saving; the data can still be reused by subsequent compilations within this job.",
         },
       ],
-      output: { [WORKFLOW]: job("      - uses: Swatinem/rust-cache@v2", "      - run: cargo test", "        env:", "          CARGO_INCREMENTAL: 0") },
+      output: null,
     },
     {
       name: "job env forces incremental on while actions/cache saves target/",
@@ -97,26 +97,14 @@ ruleTester(rule, {
         ),
         ...CRATE,
       },
-      errors: [{ line: 6, messageIncludes: "and `actions/cache` saves and restores it" }],
-      output: {
-        [WORKFLOW]: yml(
-          "on: push",
-          "jobs:",
-          "  build:",
-          "    runs-on: ubuntu-24.04",
-          "    env:",
-          '      CARGO_INCREMENTAL: "0"',
-          "    steps:",
-          ...TARGET_CACHE,
-          "      - run: cargo build",
-        ),
-      },
+      errors: [{ line: 6, messageIncludes: "covered by `actions/cache`'s configured path" }],
+      output: null,
     },
     {
       name: "inline assignment on the command",
       files: { [WORKFLOW]: job("      - uses: Swatinem/rust-cache@v2", "      - run: CARGO_INCREMENTAL=1 cargo clippy"), ...CRATE },
       errors: [{ line: 8, messageIncludes: "`CARGO_INCREMENTAL=1` forces incremental compilation on for `CARGO_INCREMENTAL=1 cargo clippy`" }],
-      output: { [WORKFLOW]: job("      - uses: Swatinem/rust-cache@v2", "      - run: CARGO_INCREMENTAL=0 cargo clippy") },
+      output: null,
     },
     {
       name: "build.incremental = true in .cargo/config.toml with a target/ cache",

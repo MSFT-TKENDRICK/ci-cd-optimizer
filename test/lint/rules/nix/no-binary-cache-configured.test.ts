@@ -8,6 +8,7 @@ const install = "      - uses: cachix/install-nix-action@v31";
 
 ruleTester(rule, {
   valid: [
+    { name: "dev-shell child cache settings are unknown", files: job(install, "      - run: nix develop -c nix-build release.nix") },
     { name: "cachix-action configured", files: job(install, "      - uses: cachix/cachix-action@v17", "        with:", "          name: mycache", "      - run: nix build .#default") },
     { name: "cache-nix-action restores the store", files: job(install, "      - uses: nix-community/cache-nix-action@v7", "        with:", "          primary-key: nix-${{ hashFiles('flake.lock') }}", "      - run: nix flake check") },
     {
@@ -36,13 +37,8 @@ ruleTester(rule, {
     },
     {
       name: "reported once per job at the first build",
-      files: job("      - uses: DeterminateSystems/nix-installer-action@v23", "      - run: |", "          nix flake check", "          nix build .#a"),
-      errors: [{ line: 8, messageIncludes: "`nix flake check`" }],
-    },
-    {
-      name: "build wrapped in a dev shell",
-      files: job(install, "      - run: nix develop -c nix-build release.nix"),
-      errors: [{ line: 7, messageIncludes: "`nix-build release.nix`" }],
+      files: job("      - uses: DeterminateSystems/nix-installer-action@v23", "      - run: |", "          nix flake check .", "          nix build .#a"),
+      errors: [{ line: 8, messageIncludes: "`nix flake check .`" }],
     },
     {
       name: "untrusted flake nixConfig substituter does not count",
@@ -50,7 +46,7 @@ ruleTester(rule, {
         ".github/workflows/ci.yml": job(install, "      - run: nix build"),
         "flake.nix": '{\n  nixConfig.extra-substituters = [ "https://mycache.cachix.org" ];\n  outputs = { self }: { };\n}\n',
       },
-      errors: [{ line: 7, messageIncludes: "no binary cache besides cache.nixos.org" }],
+      errors: [{ line: 7, messageIncludes: "Job `build` runs `nix build` against local targets with no additional binary cache visible before this build. Outputs absent from default or externally configured caches may be rebuilt on fresh runners." }],
     },
     {
       name: "hosted matrix runners",
@@ -64,7 +60,7 @@ ruleTester(rule, {
         "    runs-on: ${{ matrix.os }}",
         "    steps:",
         install,
-        "      - run: nix build",
+        "      - run: nix build .#app",
       ),
       errors: [{ line: 10, messageIncludes: "Job `build`" }],
     },

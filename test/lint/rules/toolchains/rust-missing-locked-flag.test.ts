@@ -18,10 +18,6 @@ ruleTester(rule, {
       files: { [WORKFLOW]: job("      - run: cargo --locked build", "      - run: cargo build --frozen --release"), ...CRATE },
     },
     {
-      name: "trap: later commands reuse the lockfile verified by the first one",
-      files: { [WORKFLOW]: job("      - run: cargo fetch --locked", "      - run: cargo test", "      - run: cargo clippy"), ...CRATE },
-    },
-    {
       name: "trap: no committed Cargo.lock (library crate)",
       files: { [WORKFLOW]: job("      - run: cargo test"), "Cargo.toml": '[package]\nname = "demo"\n' },
     },
@@ -40,16 +36,22 @@ ruleTester(rule, {
   ],
   invalid: [
     {
+      name: "a prior locked command does not enforce the policy on later invocations",
+      files: { [WORKFLOW]: job("      - run: cargo fetch --locked", "      - run: cargo test", "      - run: cargo clippy"), ...CRATE },
+      errors: [{ line: 8, messageIncludes: "`cargo test` runs without `--locked`" }],
+      output: null,
+    },
+    {
       name: "cargo test without --locked",
       files: { [WORKFLOW]: job("      - run: cargo test --all-features"), ...CRATE },
-      errors: [{ line: 7, path: WORKFLOW, messageIncludes: "`cargo test --all-features` runs without `--locked` although `Cargo.lock` is committed" }],
-      output: { [WORKFLOW]: job("      - run: cargo test --locked --all-features") },
+      errors: [{ line: 7, path: WORKFLOW, messageIncludes: "`cargo test --all-features` runs without `--locked` although `Cargo.lock` is present in the inspected repository. Cargo may resolve dependencies and rewrite the lock when necessary instead of rejecting the change; a compatible lock may remain unchanged." }],
+      output: null,
     },
     {
       name: "trap: --locked after `--` is passed to clippy-driver, not Cargo",
       files: { [WORKFLOW]: job("      - run: cargo +nightly clippy -- --locked -D warnings"), ...CRATE },
       errors: [{ line: 7, messageIncludes: "`cargo +nightly clippy -- --locked -D warnings` runs without `--locked`" }],
-      output: { [WORKFLOW]: job("      - run: cargo +nightly clippy --locked -- --locked -D warnings") },
+      output: null,
     },
     {
       name: "workspace member uses the workspace root lockfile",
@@ -59,14 +61,14 @@ ruleTester(rule, {
         "Cargo.lock": "version = 4\n",
         "crates/cli/Cargo.toml": '[package]\nname = "cli"\n',
       },
-      errors: [{ line: 7, messageIncludes: "although `Cargo.lock` is committed" }],
-      output: { [WORKFLOW]: job("      - run: cargo build --locked --release", "        working-directory: crates/cli") },
+      errors: [{ line: 7, messageIncludes: "`cargo build --release` runs without `--locked` although `Cargo.lock` is present in the inspected repository. Cargo may resolve dependencies and rewrite the lock when necessary instead of rejecting the change; a compatible lock may remain unchanged." }],
+      output: null,
     },
     {
       name: "multi-line run block, only the first cargo command is reported",
       files: { [WORKFLOW]: job("      - run: |", "          cargo build", "          cargo test"), ...CRATE },
       errors: [{ line: 8, messageIncludes: "`cargo build` runs without `--locked`" }],
-      output: { [WORKFLOW]: job("      - run: |", "          cargo build --locked", "          cargo test") },
+      output: null,
     },
   ],
 });

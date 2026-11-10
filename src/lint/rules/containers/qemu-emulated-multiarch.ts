@@ -6,13 +6,21 @@ import { archOf, crossCompiles, isDynamic, jobBuilds, literalWith, platformList,
 const NATIVE_RUNNER: Record<string, string> = { amd64: "ubuntu-24.04", arm64: "ubuntu-24.04-arm" };
 
 /** `docker/setup-qemu-action` or `docker run --privileged tonistiigi/binfmt --install ...`. */
-function registersQemu(job: JobModel, site: BuildSite): string | undefined {
+function registersQemu(job: JobModel, site: BuildSite, foreign: string[]): string | undefined {
+  const covers = (value: string): boolean =>
+    !isDynamic(value) && platformList(value).some((platform) => platform === "all" || foreign.some((target) => archOf(target) === archOf(platform)));
   for (const step of job.steps.slice(0, job.steps.indexOf(site.step))) {
     if (step.if) continue;
-    if (step.uses?.action.name === "docker/setup-qemu-action") return "docker/setup-qemu-action";
+    if (step.uses?.action.name === "docker/setup-qemu-action" &&
+        (!step.with.has("platforms") || covers(literalWith(step, "platforms") ?? ""))) return "docker/setup-qemu-action";
     for (const { command } of commandsOf(step)) {
       const words = commandWords(command);
-      if (words.some((word) => word.startsWith("tonistiigi/binfmt")) && words.includes("--install")) return "tonistiigi/binfmt --install";
+      const image = words.findIndex((word) => /^(?:docker\.io\/)?tonistiigi\/binfmt(?::[^/]+|@sha256:[a-f0-9]{64})?$/.test(word));
+      const options = words.slice(2, image);
+      if (words[0] === "docker" && words[1] === "run" && image >= 3 &&
+          options.every((option) => /^--(?:privileged|rm)(?:=true)?$/.test(option)) &&
+          options.some((option) => /^--privileged(?:=true)?$/.test(option)) &&
+          words[image + 1] === "--install" && covers(words[image + 2] ?? "")) return "tonistiigi/binfmt --install";
     }
   }
   return undefined;
@@ -32,7 +40,7 @@ function platformsOf(site: BuildSite): { platforms: string[]; line: number } | u
 function imageName(site: BuildSite): string {
   const tags = site.command ? (site.command.build.flags.get("tag") ?? []).join("\n") : (literalWith(site.step, "tags") ?? "");
   const first = platformList(tags)[0];
-  if (first === undefined || isDynamic(first)) return "ghcr.io/OWNER/IMAGE";
+  if (first === undefined || isDynamic(first) || !/^[A-Za-z0-9][A-Za-z0-9._:/-]*(?:@sha256:[a-f0-9]{64})?$/.test(first)) return "ghcr.io/OWNER/IMAGE";
   return first.replace(/@.*$/, "").replace(/:[^/:]+$/, "");
 }
 
@@ -79,7 +87,11 @@ function matrixSnippet(image: string, platforms: string[]): string {
     "          merge-multiple: true",
     "      - uses: docker/setup-buildx-action@v4",
     "      - working-directory: .ci-digests",
-    `        run: docker buildx imagetools create -t ${image}:<original-tag> $(printf '${image}@sha256:%s ' *)`,
+    "        shell: bash",
+    "        run: |",
+    '          : "${ORIGINAL_TAG:?Provide an original tag and retain every publication tag}"',
+    '          for digest in *; do [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || exit 1; done',
+    `          docker buildx imagetools create -t "${image}:$ORIGINAL_TAG" $(printf '${image}@sha256:%s ' *)`,
   ].join("\n");
 }
 
@@ -87,7 +99,7 @@ export default defineRule({
   meta: {
     id: "containers/qemu-emulated-multiarch",
     ruleset: "containers",
-    description: "Multi-platform image builds should run each architecture on a native runner instead of under QEMU emulation.",
+    description: "Potentially emulated multi-platform builds are candidates for measured native-runner or cross-compilation alternatives.",
     rationale:
       "Registering QEMU and requesting a foreign platform does not establish that build steps execute under emulation: native remote nodes, fixed-platform stages, cross-compilation, pruning and cache hits may avoid it. Where measurements show emulated compilation/compression, native nodes or cross-compilation can help. Compare full build and publication costs, verify hosted-runner availability, and preserve every platform, tag, artifact and test requirement.",
     kind: "insight",
@@ -115,8 +127,6 @@ export default defineRule({
         if (native === undefined) continue;
         const runner = jobRunsOnLabels(job).join(", ");
         for (const site of jobBuilds(workflow, job)) {
-          const qemu = registersQemu(job, site);
-          if (!qemu) continue;
           if ([workflow.env, job.env, site.step.env].some((env) =>
             ["DOCKER_HOST", "DOCKER_CONTEXT", "BUILDX_BUILDER"].some((key) => key in env))) continue;
           if (site.step.with.has("builder") || site.command?.build.flags.has("builder")) continue;
@@ -133,6 +143,8 @@ export default defineRule({
             return (arch === "amd64" || arch === "arm64") && arch !== native;
           });
           if (emulated.length === 0) continue;
+          const qemu = registersQemu(job, site, emulated);
+          if (!qemu) continue;
           const dockerfile = siteDockerfile(project, site);
           if (!dockerfile || crossCompiles(dockerfile)) continue;
           const runs = dockerfile.stages.flatMap((stage) => {

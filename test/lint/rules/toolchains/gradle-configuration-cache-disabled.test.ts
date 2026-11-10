@@ -80,7 +80,7 @@ ruleTester(rule, {
         [WRAPPER]: wrapper("8.10.2"),
       },
       errors: [{ line: 7, path: WORKFLOW, messageIncludes: "(Gradle 8.10): `gradle.properties` does not set `org.gradle.configuration-cache`" }],
-      output: { "gradle.properties": "org.gradle.caching=true\norg.gradle.configuration-cache=true\n" },
+      output: null,
     },
     {
       name: "Gradle 9 build, message carries the plugin-compatibility caveat",
@@ -90,8 +90,8 @@ ruleTester(rule, {
         "gradle.properties": "org.gradle.jvmargs=-Xmx2g",
         [WRAPPER]: wrapper("9.1.0"),
       },
-      errors: [{ line: 7, messageIncludes: "Some plugins are not compatible yet" }],
-      output: { "gradle.properties": "org.gradle.jvmargs=-Xmx2g\norg.gradle.configuration-cache=true\n" },
+      errors: [{ line: 7, messageIncludes: "The inspected configuration does not enable the configuration cache for the root Gradle build (Gradle 9.1): `gradle.properties` does not set `org.gradle.configuration-cache` and `./gradlew test --build-cache` does not pass `--configuration-cache`. Without external configuration, each invocation repeats configuration. Plugin compatibility and task isolation must be tested before opting in." }],
+      output: null,
     },
     {
       name: "nested build",
@@ -102,7 +102,7 @@ ruleTester(rule, {
         "backend/gradle/wrapper/gradle-wrapper.properties": wrapper("8.14.3"),
       },
       errors: [{ line: 7, messageIncludes: "the Gradle build in `backend/`" }],
-      output: { "backend/gradle.properties": "org.gradle.caching=true\norg.gradle.configuration-cache=true\n" },
+      output: null,
     },
   ],
 });

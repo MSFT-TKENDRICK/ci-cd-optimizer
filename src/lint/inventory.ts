@@ -209,9 +209,9 @@ export async function loadGitRevision(root: string, ref: string, config: Pick<Li
 /** Paths changed between the merge base of `base` and the working tree (committed, staged, and unstaged). */
 export async function changedSince(root: string, base: string): Promise<ChangeContext> {
   const mergeBase = (await git(root, ["merge-base", base, "HEAD"])).trim();
-  const committed = await git(root, ["diff", "--name-only", "--no-renames", mergeBase]);
-  const untracked = await git(root, ["ls-files", "--others", "--exclude-standard"]);
-  const changedPaths = [...new Set([...committed.split("\n"), ...untracked.split("\n")].map((line) => line.trim()).filter(Boolean))];
+  const committed = await git(root, ["diff", "--name-only", "-z", "--no-renames", mergeBase]);
+  const untracked = await git(root, ["ls-files", "--others", "--exclude-standard", "-z"]);
+  const changedPaths = [...new Set([...committed.split("\0"), ...untracked.split("\0")].filter(Boolean))];
   const head = (await git(root, ["rev-parse", "HEAD"])).trim();
   return { event: "pull_request", baseSha: mergeBase, headSha: head, changedPaths };
 }

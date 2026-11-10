@@ -75,7 +75,7 @@ ruleTester(rule, {
       errors: [
         {
           line: 2,
-          messageIncludes: "`pkgs.dockerTools.buildImage` (image `api`) packs the image's entire Nix closure into a single layer",
+          messageIncludes: "`pkgs.dockerTools.buildImage` (image `api`) adds its contents in a single layer. If that layer changes and is absent at the destination, the whole changed blob must transfer; reused base layers are unaffected. Note: adapt `copyToRoot` to `contents` carefully: copying files versus linking store paths can change the root filesystem.",
         },
       ],
     },
@@ -109,8 +109,8 @@ ruleTester(rule, {
         "b.nix": nix("{ pkgs }:", "with pkgs.dockerTools;", "buildImage {", "  copyToRoot = [ pkgs.hello ];", "}"),
       },
       errors: [
-        { path: "a.nix", line: 5, messageIncludes: "`buildImage` (image `a`) packs" },
-        { path: "b.nix", line: 3, messageIncludes: "`buildImage` packs the image's entire Nix closure into a single layer" },
+        { path: "a.nix", line: 5, messageIncludes: "`buildImage` (image `a`) adds its contents in a single layer. If that layer changes and is absent at the destination, the whole changed blob must transfer; reused base layers are unaffected. Note: adapt `copyToRoot` to `contents` carefully: copying files versus linking store paths can change the root filesystem." },
+        { path: "b.nix", line: 3, messageIncludes: "`buildImage` adds its contents in a single layer. If that layer changes and is absent at the destination, the whole changed blob must transfer; reused base layers are unaffected. Note: adapt `copyToRoot` to `contents` carefully: copying files versus linking store paths can change the root filesystem." },
       ],
     },
   ],

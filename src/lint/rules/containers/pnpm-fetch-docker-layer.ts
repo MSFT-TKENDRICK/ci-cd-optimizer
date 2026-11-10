@@ -39,7 +39,11 @@ export default defineRule({
     presets: ["strict"],
     requires: [],
     defaultOptions: {},
-    references: ["https://pnpm.io/cli/fetch", "https://docs.docker.com/build/cache/optimize/#order-your-layers"],
+    references: [
+      "https://pnpm.io/cli/fetch",
+      "https://github.com/pnpm/pnpm/blob/v10.11.0/pkg-manager/plugin-commands-installation/src/fetch.ts",
+      "https://docs.docker.com/build/cache/optimize/#order-your-layers",
+    ],
     impact: "medium",
     fixable: false,
     example: {

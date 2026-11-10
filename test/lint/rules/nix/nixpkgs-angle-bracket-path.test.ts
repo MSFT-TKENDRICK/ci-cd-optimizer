@@ -44,11 +44,22 @@ ruleTester(rule, {
       name: "vendored nixpkgs tree is skipped",
       files: {
         "third_party/nixpkgs/pkgs/top-level/all-packages.nix": nix("{ }"),
+        "third_party/nixpkgs/lib/default.nix": nix("{ }"),
+        "third_party/nixpkgs/pkgs/stdenv/generic/default.nix": nix("{ }"),
+        "third_party/nixpkgs/nixos/modules/module-list.nix": nix("[ ]"),
         "third_party/nixpkgs/nixos/default.nix": nix("import <nixpkgs/nixos/lib/eval-config.nix>"),
       },
     },
   ],
   invalid: [
+    {
+      name: "a similarly named project with only one marker is still linted",
+      files: {
+        "third_party/nixpkgs/pkgs/top-level/all-packages.nix": nix("{ }"),
+        "third_party/nixpkgs/shell.nix": nix("import <nixpkgs> { }"),
+      },
+      errors: [{ path: "third_party/nixpkgs/shell.nix", line: 1, messageIncludes: "NIX_PATH" }],
+    },
     {
       name: "import <nixpkgs> at top level",
       files: { "default.nix": nix("let", "  pkgs = import <nixpkgs> { };", "in", "pkgs.hello") },
@@ -71,7 +82,7 @@ ruleTester(rule, {
       },
       errors: [
         { line: 2, messageIncludes: "`<nixpkgs/nixos>`" },
-        { line: 3, messageIncludes: "`unstable` revision" },
+        { line: 3, messageIncludes: "`<unstable>` is resolved from NIX_PATH on the machine that evaluates this file, including explicit search-path flags. Unless that configuration is pinned, the selected source can vary independently of this file; ordinary external lookup is unavailable in pure evaluation." },
       ],
     },
     {
