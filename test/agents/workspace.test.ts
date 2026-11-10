@@ -110,6 +110,29 @@ describe("lintWorkspace", () => {
     await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("does not treat an ignored lock as absent, including an unsaved flake overlay", async () => {
+    const flake = '{ outputs = { self, nixpkgs }: {}; }';
+    await write(root, "flake.nix", flake);
+    const lock = await write(root, "flake.lock", '{"version":7,"root":"root","nodes":{"root":{}}}');
+    await write(root, ".github/ci-cd-optimizer.yml", "schemaVersion: 1\nextends: [recommended]\nignorePaths: [flake.lock]\n");
+    const summary = await lintWorkspace({ root });
+    const overlay = await lintWorkspace({ root, content: [{ path: "flake.nix", text: flake }] });
+    for (const result of [summary, overlay]) {
+      expect(result.inventoryComplete).toBe(false);
+      expect(result.diagnostics.some((entry) => entry.ruleId === "nix/missing-flake-lock")).toBe(false);
+    }
+    expect(await readFile(lock, "utf8")).toBe('{"version":7,"root":"root","nodes":{"root":{}}}');
+  });
+
+  it("keeps unfollowed directory links opaque rather than asserting complete absence", async () => {
+    await write(root, "real/flake.nix", "{ outputs = { self, nixpkgs }: {}; }");
+    await symlink(join(root, "real"), join(root, "linked"), process.platform === "win32" ? "junction" : "dir");
+    const summary = await lintWorkspace({ root });
+    expect(summary.inventoryComplete).toBe(false);
+    expect(summary.diagnostics.some((entry) => entry.ruleId === "nix/missing-flake-lock")).toBe(false);
+    expect(summary.filesAnalyzed).toBe(1);
+  });
+
   it("rejects duplicate overrides, oversized configuration, and oversized requests", async () => {
     const content = { path: WORKFLOW, text: MISSING_TIMEOUT };
     await expect(lintWorkspace({ root, content: [content, content] })).rejects.toThrow("unique paths");

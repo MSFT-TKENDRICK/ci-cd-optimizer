@@ -61,10 +61,13 @@ The 14 rulesets include `nix` and `toolchains`; these work through every built-i
 plugin or Nix/toolchain executable required. `rulesets: { nix: warn }` selects all 37 Nix rules regardless of preset;
 individual `rules` entries can then narrow them. See [Nix behavior and assumptions](nix.md).
 
-Absence-based rules need a complete inventory within the configured scope. File limits, oversized content-bearing
-files, API filtering/truncation, unreadable entries, and unignored symlinks/submodules can make that inventory
-incomplete. Large presence-only lockfiles retain a header; oversized `flake.lock` and `devenv.lock` do not.
-Explicit ignores define the analysis scope, not evidence about the ignored files.
+Absence-based rules need a complete inventory of relevant repository files. File limits, oversized content-bearing
+files, API filtering/truncation, unreadable entries, and symlinks/submodules can make that inventory incomplete.
+Excluding an existing relevant file with `ignorePaths` also makes absence unknown: ignoring `flake.lock`, a version
+file, or an updater workflow must not become evidence that it is missing. This conservatively skips complete-inventory
+rules even when an exclusion seems unrelated to a particular finding. Large presence-only lockfiles retain a header;
+oversized `flake.lock` and `devenv.lock` do not. Ignore patterns with no matching relevant entries do not alone make
+the inventory incomplete; an explicitly ignored expected flake lock is not reported missing either way.
 
 Suppression comments, `--init`, `--print-config`, and writing local rules are covered in [linter.md](linter.md).
 

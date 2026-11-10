@@ -1,0 +1,110 @@
+import { describe, expect, it } from "vitest";
+import { lint } from "../../../src/lint/api.js";
+import { matchingClose, nixBindings, nixStructure, parseNix } from "../../../src/lint/parsers/nix.js";
+import { callArgument, calledAttrset, enclosingOpen, inheritStatements, isLambdaPattern } from "../../../src/lint/rules/nix/expr.js";
+
+describe("shared Nix structural index", () => {
+  it.each([
+    "{ pkgs }: { a = pkgs.stdenv.mkDerivation { name = \"a\"; src = ./src; }; }",
+    "{ a ? f { x = 1; }, b ? [ (f {}) ] }@args: { inherit (args) a b; }",
+    "{ a = \"[ not code } ${f { name = \"}\"; }}\"; # unmatched }\n b = ''\n [ not code ) ''${literal} ${f { x = 1; }}\n''; }",
+    "{ a = /* } ) ] */ { b = [ (1) ]; }; c = let x = 1; in with p; assert true; x; }",
+    "{([)]}", "({]}[{}])", "{ a = ({ x = 1; });", ")]}", "{(x)[y]} [z", "{[(]} {})",
+  ])("preserves legacy delimiter and enclosing semantics for %s", (source) => {
+    const file = parseNix("default.nix", source);
+    for (let offset = 0; offset <= file.masked.length; offset += 1) {
+      expect(matchingClose(file, offset), `closing ${offset}`).toBe(matchingClose(file.masked, offset));
+      expect(enclosingOpen(file, offset), `enclosing ${offset}`).toBe(enclosingOpen(file.masked, offset));
+      expect(isLambdaPattern(file, offset), `lambda ${offset}`).toBe(isLambdaPattern(file.masked, offset));
+    }
+  });
+
+  it("does not validate an outer span across a mismatch, but still recognizes later valid spans", () => {
+    const file = parseNix("default.nix", "{ ([)] {} }");
+    expect(matchingClose(file, 0)).toBe(-1);
+    expect(matchingClose(file, file.masked.indexOf("{}"))).toBe(file.masked.indexOf("{}") + 1);
+  });
+
+  it("reuses scope, delimiter, builder, binding and inherit facts without reading source again", () => {
+    const source = "{ pkgs }: {\n" + Array.from({ length: 600 }, (_, index) =>
+      `  p${index} = pkgs.stdenv.mkDerivation { name="p${index}";src=./src; };\n`,
+    ).join("") + `}\n/* ${"trailing comment ".repeat(1000)} */`;
+    let sourceReads = 0;
+    const file = new Proxy(parseNix("default.nix", source), {
+      get(target, key, receiver) {
+        if (key === "masked") sourceReads += 1;
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    const structure = nixStructure(file);
+    const inherits = inheritStatements(file);
+    const builders = file.idents.filter((ident) => ident.text === "pkgs.stdenv.mkDerivation");
+    expect(builders).toHaveLength(600);
+    const facts = builders.map((ident) => {
+      const argument = callArgument(file, ident);
+      const open = calledAttrset(file, ident);
+      expect(argument?.kind).toBe("attrs");
+      expect(open).toBe(argument?.start);
+      return { ident, argument, open: open!, bindings: nixBindings(file, open!) };
+    });
+    expect(sourceReads).toBeGreaterThan(0);
+    sourceReads = 0;
+    for (const { ident, argument, open, bindings } of facts) {
+      expect(nixStructure(file)).toBe(structure);
+      expect(callArgument(file, ident)).toBe(argument);
+      expect(calledAttrset(file, ident)).toBe(open);
+      expect(nixBindings(file, open)).toBe(bindings);
+      expect(inheritStatements(file)).toBe(inherits);
+      expect(matchingClose(file, open)).toBe(argument!.end - 1);
+      expect(enclosingOpen(file, ident.offset)).toBe(source.indexOf("{", source.indexOf(":")));
+      expect(isLambdaPattern(file, enclosingOpen(file, ident.offset))).toBe(false);
+    }
+    expect(sourceReads).toBe(0);
+    expect(structure.closes.length).toBe(source.length);
+    expect(structure.enclosing.length).toBe(source.length + 1);
+  });
+
+  it("caches negative builder facts without repeating source reads", () => {
+    let sourceReads = 0;
+    const file = new Proxy(parseNix("default.nix", "{ mkDerivation = other; inherit mkDerivation; }"), {
+      get(target, key, receiver) {
+        if (key === "masked") sourceReads += 1;
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    const builders = file.idents.filter((ident) => ident.text === "mkDerivation");
+    expect(builders).toHaveLength(2);
+    for (const ident of builders) expect(calledAttrset(file, ident)).toBeUndefined();
+    expect(sourceReads).toBeGreaterThan(0);
+    sourceReads = 0;
+    for (const ident of builders) {
+      expect(callArgument(file, ident)).toBeUndefined();
+      expect(calledAttrset(file, ident)).toBeUndefined();
+    }
+    expect(sourceReads).toBe(0);
+  });
+
+  it("isolates cached facts by parsed file and keeps caller prefixes out of cached bindings", () => {
+    const first = parseNix("default.nix", "{ a = { b = 1; }; }");
+    const second = parseNix("default.nix", "{ c = 2; }");
+    const bindings = nixBindings(first, 0);
+    expect(nixBindings(first, 0, ["outer"]).map((binding) => binding.path)).toEqual([["outer", "a"], ["outer", "a", "b"]]);
+    expect(bindings.map((binding) => binding.path)).toEqual([["a"], ["a", "b"]]);
+    expect(nixBindings(first, 0)).toBe(bindings);
+    expect(nixBindings(second, 0).map((binding) => binding.path)).toEqual([["c"]]);
+    expect(nixStructure(first)).not.toBe(nixStructure(second));
+    expect(matchingClose(first, 0)).not.toBe(matchingClose(second, 0));
+  });
+
+  it.each([600, 1200, 2400])("keeps default public-API analysis clean for %i sibling derivations", (count) => {
+    const content = "{ pkgs }: {\n" + Array.from({ length: count }, (_, index) =>
+      `  p${index} = pkgs.stdenv.mkDerivation { name="p${index}";src=./src; };\n`,
+    ).join("") + "}";
+    expect(Buffer.byteLength(content)).toBeLessThan(512_000);
+    const result = lint({ input: { files: [{ path: "default.nix", content }], mode: "repository", inventoryComplete: true } });
+    expect(result.diagnostics).toEqual([]);
+    expect(result.parseProblems).toEqual([]);
+    expect(result.skipped.some((entry) => entry.reason.includes("crashed"))).toBe(false);
+    expect(result.rulesRun).toBeGreaterThan(0);
+  });
+});

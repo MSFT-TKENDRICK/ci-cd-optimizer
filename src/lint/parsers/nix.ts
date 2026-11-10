@@ -314,8 +314,46 @@ export function parseNix(path: string, content: string): NixFile {
   };
 }
 
-/** Index of the bracket closing the one at `open` (any of `{([`), or -1. Works on masked text. */
-export function matchingClose(masked: string, open: number): number {
+export interface NixStructure {
+  /** Closing offsets, or -1 for non-openers, unmatched or mismatched spans. */
+  closes: Int32Array;
+  /** Innermost unclosed delimiter immediately before each offset, including EOF. */
+  enclosing: Int32Array;
+}
+
+const structureCache = new WeakMap<NixFile, NixStructure>();
+const bindingsCache = new WeakMap<NixFile, Map<number, NixBinding[]>>();
+
+/** One masked-source pass per file; shared by every rule rather than rescanning each enclosing attrset. */
+export function nixStructure(file: NixFile): NixStructure {
+  const cached = structureCache.get(file);
+  if (cached) return cached;
+  const { masked } = file;
+  const closes = new Int32Array(masked.length).fill(-1);
+  const enclosing = new Int32Array(masked.length + 1).fill(-1);
+  const stack: { offset: number; epoch: number }[] = [];
+  let epoch = 0;
+  for (let index = 0; index < masked.length; index += 1) {
+    enclosing[index] = stack.at(-1)?.offset ?? -1;
+    const char = masked[index];
+    if (char === "{" || char === "(" || char === "[") stack.push({ offset: index, epoch });
+    else if (char === "}" || char === ")" || char === "]") {
+      const open = stack.pop();
+      const expected = char === "}" ? "{" : char === ")" ? "(" : "[";
+      if (!open || masked[open.offset] !== expected) epoch += 1;
+      else if (open.epoch === epoch) closes[open.offset] = index;
+    }
+  }
+  enclosing[masked.length] = stack.at(-1)?.offset ?? -1;
+  const structure = { closes, enclosing };
+  structureCache.set(file, structure);
+  return structure;
+}
+
+/** Index of the closing bracket, or -1. Passing a parsed file uses its shared delimiter index. */
+export function matchingClose(source: string | NixFile, open: number): number {
+  if (typeof source !== "string") return nixStructure(source).closes[open] ?? -1;
+  const masked = source;
   if (!"{([".includes(masked[open] ?? "\0")) return -1;
   const stack: string[] = [];
   const pairs: Record<string, string> = { "}": "{", ")": "(", "]": "[" };
@@ -397,7 +435,7 @@ export function argumentAfter(file: NixFile, end: number): NixArgument | undefin
   const char = file.masked[start];
   if (char === undefined) return undefined;
   if (char === "{" || char === "(" || char === "[") {
-    const close = matchingClose(file.masked, start);
+    const close = matchingClose(file, start);
     if (close < 0) return undefined;
     return { kind: char === "{" ? "attrs" : char === "(" ? "paren" : "list", start, end: close + 1 };
   }
@@ -422,7 +460,7 @@ function readAttrPath(file: NixFile, start: number): { segments: string[]; end: 
       segments.push(string.interpolated ? "${}" : string.value);
       index = string.end;
     } else if (char === "$" && masked[index + 1] === "{") {
-      const close = matchingClose(masked, index + 1);
+      const close = matchingClose(file, index + 1);
       if (close < 0) return undefined;
       segments.push("${}");
       index = close + 1;
@@ -449,8 +487,19 @@ function readAttrPath(file: NixFile, start: number): { segments: string[]; end: 
  * kept too. Returns an empty list for function patterns such as `{ pkgs, lib, ... }:`.
  */
 export function nixBindings(file: NixFile, open: number, prefix: string[] = []): NixBinding[] {
+  let cache = bindingsCache.get(file);
+  if (!cache) { cache = new Map(); bindingsCache.set(file, cache); }
+  let bindings = cache.get(open);
+  if (!bindings) {
+    bindings = readBindings(file, open);
+    cache.set(open, bindings);
+  }
+  return prefix.length === 0 ? bindings : bindings.map((binding) => ({ ...binding, path: [...prefix, ...binding.path] }));
+}
+
+function readBindings(file: NixFile, open: number): NixBinding[] {
   const { masked } = file;
-  const close = matchingClose(masked, open);
+  const close = matchingClose(file, open);
   if (close < 0) return [];
   const bindings: NixBinding[] = [];
   let index = open + 1;
@@ -467,12 +516,12 @@ export function nixBindings(file: NixFile, open: number, prefix: string[] = []):
     if (!attrPath || masked[attrPath.end] !== "=" || masked[attrPath.end + 1] === "=") break;
     const valueStart = skipSpace(masked, attrPath.end + 1);
     const valueEnd = Math.min(exprEnd(masked, valueStart), close);
-    const path = [...prefix, ...attrPath.segments];
+    const path = attrPath.segments;
     bindings.push({ path, line: file.lineOf(keyStart), keyStart, valueStart, valueEnd });
     const nested = /^(?:rec\s+)?\{/.exec(masked.slice(valueStart, valueStart + 8));
     if (nested) {
       const brace = valueStart + nested[0].length - 1;
-      const nestedClose = matchingClose(masked, brace);
+      const nestedClose = matchingClose(file, brace);
       if (nestedClose >= 0 && masked.slice(nestedClose + 1, valueEnd).trim() === "") {
         bindings.push(...nixBindings(file, brace, path));
       }
@@ -486,7 +535,7 @@ export function nixBindings(file: NixFile, open: number, prefix: string[] = []):
 export function topLevelAttrset(file: NixFile): number | undefined {
   const open = skipSpace(file.masked, 0);
   if (file.masked[open] !== "{") return undefined;
-  const close = matchingClose(file.masked, open);
+  const close = matchingClose(file, open);
   if (close < 0) return undefined;
   const after = skipSpace(file.masked, close + 1);
   if (after < file.masked.length) return undefined;

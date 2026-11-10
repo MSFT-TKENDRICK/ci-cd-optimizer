@@ -1,4 +1,4 @@
-import { argumentAfter, matchingClose, nixBindings } from "../../parsers/nix.js";
+import { argumentAfter, matchingClose, nixBindings, nixStructure } from "../../parsers/nix.js";
 import type { NixArgument, NixBinding, NixFile, NixIdent, NixString } from "../../parsers/nix.js";
 import type { ProjectModel } from "../../project.js";
 
@@ -88,7 +88,9 @@ export function validateStringLists(options: Record<string, unknown>, ...names: 
 }
 
 /** Offset of the innermost unclosed `{`, `(` or `[` before `offset`, or -1 at top level. */
-export function enclosingOpen(masked: string, offset: number): number {
+export function enclosingOpen(source: string | NixFile, offset: number): number {
+  if (typeof source !== "string") return nixStructure(source).enclosing[offset] ?? -1;
+  const masked = source;
   let depth = 0;
   for (let index = offset - 1; index >= 0; index -= 1) {
     const char = masked[index];
@@ -101,13 +103,22 @@ export function enclosingOpen(masked: string, offset: number): number {
   return -1;
 }
 
+const lambdaPatternCache = new WeakMap<NixFile, Map<number, boolean>>();
+
 /** Whether the `{` at `open` starts a function pattern (`{ a, b ? 1 }:` or `{ ... }@args:`). */
-export function isLambdaPattern(masked: string, open: number): boolean {
-  if (masked[open] !== "{") return false;
-  const close = matchingClose(masked, open);
-  if (close < 0) return false;
-  const after = masked[skipSpace(masked, close + 1)];
-  return after === ":" || after === "@";
+export function isLambdaPattern(source: string | NixFile, open: number): boolean {
+  let cache: Map<number, boolean> | undefined;
+  if (typeof source !== "string") {
+    cache = lambdaPatternCache.get(source);
+    if (!cache) { cache = new Map(); lambdaPatternCache.set(source, cache); }
+    if (cache.has(open)) return cache.get(open) as boolean;
+  }
+  const masked = typeof source === "string" ? source : source.masked;
+  const close = masked[open] === "{" ? matchingClose(source, open) : -1;
+  const after = close < 0 ? undefined : masked[skipSpace(masked, close + 1)];
+  const result = after === ":" || after === "@";
+  cache?.set(open, result);
+  return result;
 }
 
 /** Whether `offset` lies in the names of an `inherit ...;` statement (not inside its `(source)`). */
@@ -146,19 +157,29 @@ export function isValueUse(file: NixFile, ident: NixIdent): boolean {
   const next = masked[after];
   if (next === "=" && masked[after + 1] !== "=") return false;
   if (next === ":" || next === "@") return false;
-  const open = enclosingOpen(masked, ident.offset);
-  if (open >= 0 && isLambdaPattern(masked, open)) {
+  const open = enclosingOpen(file, ident.offset);
+  if (open >= 0 && isLambdaPattern(file, open)) {
     const before = masked[previousNonSpace(masked, ident.offset)];
     if (before === "{" || before === ",") return false;
   }
   return !inInherit(masked, ident.offset);
 }
 
+const argumentCache = new WeakMap<NixFile, Map<NixIdent, NixArgument | undefined>>();
+const attrsetCache = new WeakMap<NixFile, Map<NixIdent, number | undefined>>();
+
 /**
  * The argument the identifier is applied to, when it is called (`f "x"`, `f { ... }`, `f (...)`,
  * `f rec { ... }`). Returns undefined for non-value uses and when an operator or keyword follows.
  */
 export function callArgument(file: NixFile, ident: NixIdent): NixArgument | undefined {
+  let cache = argumentCache.get(file);
+  if (!cache) { cache = new Map(); argumentCache.set(file, cache); }
+  if (!cache.has(ident)) cache.set(ident, readCallArgument(file, ident));
+  return cache.get(ident);
+}
+
+function readCallArgument(file: NixFile, ident: NixIdent): NixArgument | undefined {
   if (!isValueUse(file, ident)) return undefined;
   const arg = argumentAfter(file, ident.end);
   if (!arg) return undefined;
@@ -170,6 +191,17 @@ export function callArgument(file: NixFile, ident: NixIdent): NixArgument | unde
   }
   if (KEYWORDS.has(text) || OPERATOR.test(text)) return undefined;
   return arg;
+}
+
+/** Shared builder-call facts, including negative results, for source and sandbox analysis. */
+export function calledAttrset(file: NixFile, ident: NixIdent): number | undefined {
+  let cache = attrsetCache.get(file);
+  if (!cache) { cache = new Map(); attrsetCache.set(file, cache); }
+  if (!cache.has(ident)) {
+    const argument = callArgument(file, ident);
+    cache.set(ident, argument ? attrsetOf(file, argument) : undefined);
+  }
+  return cache.get(ident);
 }
 
 /** Strips redundant parentheses: `((x))` yields the argument for `x`. */
@@ -210,7 +242,7 @@ export function attrsetOf(file: NixFile, arg: NixArgument): number | undefined {
   const head = /^\(\s*(?:[A-Za-z_][A-Za-z0-9_'-]*\s*:\s*)?(?:rec\s+)?\{/.exec(masked.slice(arg.start, arg.end));
   if (!head) return undefined;
   const brace = arg.start + head[0].length - 1;
-  const close = matchingClose(masked, brace);
+  const close = matchingClose(file, brace);
   if (close < 0 || skipSpace(masked, close + 1) !== arg.end - 1) return undefined;
   return brace;
 }
@@ -222,7 +254,11 @@ export interface InheritStatement {
   names: { name: string; offset: number }[];
 }
 
+const inheritCache = new WeakMap<NixFile, InheritStatement[]>();
+
 export function inheritStatements(file: NixFile): InheritStatement[] {
+  const cached = inheritCache.get(file);
+  if (cached) return cached;
   const found: InheritStatement[] = [];
   for (const match of file.masked.matchAll(/(?<![A-Za-z0-9_'.-])inherit(?![A-Za-z0-9_'-])\s*(?:\(([^()]*)\))?([^;]*);/g)) {
     const names: { name: string; offset: number }[] = [];
@@ -232,6 +268,7 @@ export function inheritStatements(file: NixFile): InheritStatement[] {
     const source = match[1]?.trim();
     found.push({ ...(source !== undefined ? { source } : {}), offset: match.index, names });
   }
+  inheritCache.set(file, found);
   return found;
 }
 
@@ -253,7 +290,7 @@ export function attrKeys(file: NixFile, open: number): Set<string> {
     if (first) keys.add(first);
   }
   for (const statement of inheritStatements(file)) {
-    if (enclosingOpen(file.masked, statement.offset) !== open) continue;
+    if (enclosingOpen(file, statement.offset) !== open) continue;
     for (const { name } of statement.names) keys.add(name);
   }
   return keys;
@@ -292,11 +329,11 @@ export function isShadowed(file: NixFile, name: string): boolean {
 }
 
 /** Whether `offset` lies in a default value of a function pattern (`{ pkgs ? import <nixpkgs> { } }:`). */
-export function inLambdaDefault(masked: string, offset: number): boolean {
-  let open = enclosingOpen(masked, offset);
+export function inLambdaDefault(source: string | NixFile, offset: number): boolean {
+  let open = enclosingOpen(source, offset);
   while (open >= 0) {
-    if (isLambdaPattern(masked, open)) return true;
-    open = enclosingOpen(masked, open);
+    if (isLambdaPattern(source, open)) return true;
+    open = enclosingOpen(source, open);
   }
   return false;
 }
@@ -313,16 +350,16 @@ export function assignedKey(masked: string, offset: number): string | undefined 
  * (`["overlays", "default"]` for a lambda in `overlays.default = final: prev: { ... };`).
  */
 export function enclosingBindingPath(file: NixFile, offset: number): string[] | undefined {
-  let open = enclosingOpen(file.masked, offset);
+  let open = enclosingOpen(file, offset);
   while (open >= 0) {
-    if (file.masked[open] === "{" && !isLambdaPattern(file.masked, open)) {
+    if (file.masked[open] === "{" && !isLambdaPattern(file, open)) {
       let best: NixBinding | undefined;
       for (const binding of nixBindings(file, open)) {
         if (binding.valueStart <= offset && offset <= binding.valueEnd && (!best || binding.valueStart >= best.valueStart)) best = binding;
       }
       if (best) return best.path;
     }
-    open = enclosingOpen(file.masked, open);
+    open = enclosingOpen(file, open);
   }
   return undefined;
 }

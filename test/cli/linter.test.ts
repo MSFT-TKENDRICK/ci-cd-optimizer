@@ -164,6 +164,25 @@ describe("path arguments", () => {
 });
 
 describe("--stdin", () => {
+  it("does not mistake an ignored lock for absence in directory or stdin analysis", async () => {
+    const flake = "{ outputs = { self }: {}; }\n";
+    const lock = '{"version":7,"root":"root","nodes":{"root":{}}}\n';
+    await write("flake.nix", flake);
+    await write("flake.lock", lock);
+    await write(CONFIG, "schemaVersion: 1\nextends: []\nignorePaths: [flake.lock]\nrules:\n  nix/missing-flake-lock: warn\n");
+    for (const args of [[], ["--stdin", "--stdin-filename", "flake.nix"]]) {
+      const c = cli({ stdin: async () => flake });
+      expect(await c.run("lint", ...args, "-f", "json")).toBe(0);
+      expect(result(c.stdout).diagnostics).toEqual([]);
+      expect(result(c.stdout).parseProblems).toEqual([]);
+      expect(result(c.stdout).filesAnalyzed).toBe(2);
+      expect(result(c.stdout).skipped.map((entry) => entry.ruleId)).toContain("nix/missing-flake-lock");
+      expect(c.stderr).toContain("Inventory is incomplete");
+      expect(c.stderr).not.toContain("truncated by limits");
+    }
+    expect(await readFile(join(root, "flake.lock"), "utf8")).toBe(lock);
+  });
+
   it("lints stdin content in place of the file on disk and reports only that path", async () => {
     await write(WORKFLOW, CLEAN);
     await write(RELEASE, workflow({ name: "release" }));

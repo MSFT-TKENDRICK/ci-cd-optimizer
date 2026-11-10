@@ -474,7 +474,7 @@ export async function lintCommand(rawArgs: string[], io: CliIO): Promise<number>
     parseProblems: result.parseProblems.filter((problem) => selected(problem.path)),
     ...(unusedDirectives ? { unusedDirectives } : {}),
   };
-  if (!input.inventoryComplete) io.stderr("Inventory was truncated by limits; rules that check for missing files were skipped.");
+  if (!input.inventoryComplete) io.stderr("Inventory is incomplete; rules requiring complete inventory were skipped.");
 
   const reportRules = [...rules, UNUSED_DIRECTIVE_RULE];
   await writeText(io, values.output, format(formatName, shown, reportRules, VERSION));

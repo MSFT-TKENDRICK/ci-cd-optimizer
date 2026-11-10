@@ -75,10 +75,12 @@ Files are analyzed statically and in their repository-relative context. Recogniz
 multiple structural markers before package-expression checks are excluded; one similarly named user file does
 not exclude a normal project.
 
-Rules that infer absence require a complete inventory within the configured scope. Limits, unreadable entries,
-API filtering/truncation and unignored links/submodules can make it incomplete. Symlinks/submodules are not
-followed. Oversized Nix/devenv locks are not treated as complete merely because their names were listed.
-Explicit ignores define the analysis scope; they do not prove anything about omitted content.
+Rules that infer absence require a complete inventory of relevant repository files. Limits, unreadable entries,
+API filtering/truncation, links/submodules and exclusions of existing relevant files can make it incomplete.
+Symlinks/submodules are not followed. Oversized Nix/devenv locks are not treated as complete merely because their
+names were listed. Ignoring a lock, configuration or updater workflow cannot turn it into evidence of absence.
+Complete-inventory rules are conservatively skipped after such exclusions; an expected flake lock whose exact path
+matches an ignore pattern is also never reported missing.
 
 Providing a few files to the engine is not equivalent to loading a complete repository. An API caller must only
 set `inventoryComplete: true` when that claim is warranted. `ENGINE_API_VERSION = 1` remains the API compatibility
@@ -90,7 +92,8 @@ marker, not an assurance level.
   selected bindings and lock graphs. It is not the Nix evaluator, full grammar/type checker or a complete name
   resolver. Recognizable rebinding suppresses builtin assumptions. Dynamic attributes, arbitrary functions and
   unresolved inputs can prevent a finding. Builtin-specific messages assume the identified builtin's documented
-  behavior; unused lazy expressions need not execute.
+  behavior; unused lazy expressions need not execute. Delimiter/enclosing-scope indexes and builder/binding facts
+  are reused per parsed file; they describe the masked source, not evaluated Nix semantics.
 - **Shell commands:** recognizable invocations, quoting, wrappers and literal arguments are inspected without
   interpreting the shell. Definitions, substitutions and opaque environment changes can leave behavior unknown.
   Quoted examples, help/version queries and arguments belonging to another command are not build executions.

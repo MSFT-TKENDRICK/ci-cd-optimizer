@@ -3,9 +3,9 @@ import { lstat, open, opendir, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
 import type { LintConfig } from "../lint/config.js";
 import { isInventoryPath, isLockfile, selectInventory, type InventoryEntry, type LoadedInput } from "../lint/inventory.js";
+import { SKIP_DIRS } from "../lint/inventory-paths.js";
 import { AgentError, LIMITS } from "./safety.js";
 
-const SKIP = new Set([".git", "node_modules", ".pnpm-store", ".yarn", ".venv", "venv", "__pycache__", ".turbo", ".nx", "target", ".gradle"]);
 export const within = (parent: string, child: string): boolean => {
   const path = relative(parent, child);
   return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
@@ -59,7 +59,8 @@ export async function loadAgentDirectory(root: string, config: LintConfig, signa
       visited += 1;
       if (visited > LIMITS.entries) { complete = false; break; }
       const full = join(directory, entry.name);
-      if (entry.isDirectory() && !SKIP.has(entry.name)) await walk(full, depth + 1);
+      if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) await walk(full, depth + 1);
+      else if (entry.isSymbolicLink()) entries.push({ path: relative(root, full).split(sep).join("/"), opaque: true });
       else if (entry.isFile()) {
         const path = relative(root, full).split(sep).join("/");
         if (isInventoryPath(path)) entries.push({ path, size: (await lstat(full)).size });

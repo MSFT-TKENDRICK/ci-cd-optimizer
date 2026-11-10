@@ -86,7 +86,7 @@ function localSource(file: NixFile, open: number): LocalSource | undefined {
     return { text: snippet(file, binding.valueStart, binding.valueEnd, 50), line: binding.line };
   }
   const inheritsSrc = inheritStatements(file).some(
-    (statement) => statement.source === undefined && enclosingOpen(file.masked, statement.offset) === open && statement.names.some(({ name }) => name === "src"),
+    (statement) => statement.source === undefined && enclosingOpen(file, statement.offset) === open && statement.names.some(({ name }) => name === "src"),
   );
   if (!inheritsSrc) return undefined;
   const outer = uniqueSrcBinding(file);

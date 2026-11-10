@@ -82,9 +82,9 @@ function uniqueBinding(file: NixFile, name: string, reference: number): number |
   const starts: number[] = [];
   for (const offset of wordOffsets(file, name)) {
     if (file.masked[offset - 1] === "." || !isBindingKey(file.masked, offset, name.length)) continue;
-    const scope = enclosingOpen(file.masked, offset);
-    let enclosing = enclosingOpen(file.masked, reference);
-    while (enclosing >= 0 && enclosing !== scope) enclosing = enclosingOpen(file.masked, enclosing);
+    const scope = enclosingOpen(file, offset);
+    let enclosing = enclosingOpen(file, reference);
+    while (enclosing >= 0 && enclosing !== scope) enclosing = enclosingOpen(file, enclosing);
     if (scope !== enclosing) continue;
     starts.push(skipSpace(file.masked, skipSpace(file.masked, offset + name.length) + 1));
   }
@@ -252,7 +252,7 @@ function helperFindings(file: NixFile): Finding[] {
     if (file.masked[offset - 1] === "." || !isBindingKey(file.masked, offset, "autoPubspecLock".length)) continue;
     const value = skipSpace(file.masked, skipSpace(file.masked, offset + "autoPubspecLock".length) + 1);
     if (/^(?:true|false|null)\b/.test(file.masked.slice(value))) continue;
-    const open = enclosingOpen(file.masked, offset);
+    const open = enclosingOpen(file, offset);
     const builder = file.idents.some((ident) => {
       if (!["buildDartApplication", "buildFlutterApplication"].includes(ident.segments.at(-1) ?? "")) return false;
       const arg = callArgument(file, ident);

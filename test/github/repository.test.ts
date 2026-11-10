@@ -95,6 +95,17 @@ describe("loadRepositorySnapshot", () => {
     expect(fake.calls.filter((call) => call.route.includes("/git/blobs/"))).toHaveLength(1);
   });
 
+  it("keeps excluded-file absence unknown without invalidating complete fixed-scope collection", async () => {
+    const fake = client();
+    const snapshot = await loadRepositorySnapshot(fake, repo, {
+      ref: "main", config: { ...DEFAULT_CONFIG, ignorePaths: ["bun.lockb"] },
+    });
+    expect(snapshot.input.inventoryComplete).toBe(false);
+    expect(snapshot.selectionComplete).toBe(true);
+    expect(snapshot.input.files.map((file) => file.path)).toEqual([".github/workflows/ci.yml"]);
+    expect(fake.calls.some((call) => call.parameters.file_sha === "b3")).toBe(false);
+  });
+
   it.each([
     { path: "other-project", type: "commit", mode: "160000", sha: "module" },
     { path: "linked-directory", type: "blob", mode: "120000", sha: "link" },

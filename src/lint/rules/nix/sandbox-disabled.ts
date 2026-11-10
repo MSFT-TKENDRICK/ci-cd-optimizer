@@ -2,7 +2,7 @@ import { commandsOf, defineRule, expandedJobSteps } from "../helpers.js";
 import type { ProjectModel } from "../../project.js";
 import type { JobModel, StepModel } from "../../parsers/workflow.js";
 import type { ReportDescriptor } from "../../types.js";
-import { attrsetOf, callArgument, enclosingOpen, lintableNixFiles } from "./expr.js";
+import { calledAttrset, enclosingOpen, lintableNixFiles } from "./expr.js";
 import {
   NIX_CONF_INPUTS,
   cliConf,
@@ -215,11 +215,10 @@ function noChrootReports(project: ProjectModel): ReportDescriptor[] {
   return lintableNixFiles(project).flatMap((file) => {
     const derivations = new Set(file.idents.filter((ident) => /(?:^|\.)(?:mkDerivation|derivation)$/.test(ident.text))
       .flatMap((ident) => {
-        const argument = callArgument(file, ident);
-        const open = argument ? attrsetOf(file, argument) : undefined;
+        const open = calledAttrset(file, ident);
         return open === undefined ? [] : [open];
       }));
-    return [...file.masked.matchAll(NO_CHROOT)].filter((match) => derivations.has(enclosingOpen(file.masked, match.index))).map((match) => ({
+    return [...file.masked.matchAll(NO_CHROOT)].filter((match) => derivations.has(enclosingOpen(file, match.index))).map((match) => ({
       path: file.path,
       line: file.lineOf(match.index),
       message: `\`__noChroot = true\` in ${file.path} requests an unsandboxed build if passed to Nix's derivation primitive. On Linux, \`sandbox = true\` rejects this request; relaxed sandboxing can permit it. Effective policy and whether a host resource is read depend on the builder; the declaration is not evidence that outputs vary.`,

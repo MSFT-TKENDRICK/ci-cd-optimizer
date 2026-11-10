@@ -54,7 +54,7 @@ export default defineRule({
         if (root === "nix" || ignored.has(lookup.name) || ignored.has(root)) continue;
         const count = (seen.get(lookup.name) ?? 0) + 1;
         seen.set(lookup.name, count);
-        const isDefault = inLambdaDefault(file.masked, lookup.offset);
+        const isDefault = inLambdaDefault(file, lookup.offset);
         report({
           path: file.path,
           line: lookup.line,

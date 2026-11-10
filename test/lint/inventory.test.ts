@@ -18,7 +18,7 @@ const paths = [
   "rust-toolchain.toml", ".bazelversion", ".bazeliskrc", ".python-version", ".go-version", ".java-version",
   ".sdkmanrc", "gradle.properties", "gradle/wrapper/gradle-wrapper.properties", "go.work", "uv.lock",
   "requirements/ci.txt", "requirements-extra.txt", "docker/app.containerfile", "docker/app.dockerignore",
-  ".github/renovate.json5", ".renovaterc.json", "pnpm-workspace.yaml",
+  ".github/renovate.json5", ".renovaterc.json", ".renovaterc.json5", "pnpm-workspace.yaml",
 ];
 const contents: Record<string, string> = Object.fromEntries(paths.map((path) => [path, "\n"]));
 Object.assign(contents, {
@@ -79,11 +79,32 @@ describe("shared repository inventory", () => {
     expect(revision.files).toEqual(local.files);
     expect(api.files).toEqual(local.files);
     const results = [local, revision, api].map((input) => lint(input, { config: DEFAULT_CONFIG, rules: allRules }));
+    expect(results.map((result) => result.filesAnalyzed)).toEqual([paths.length, paths.length, paths.length]);
     expect(results[0]?.diagnostics).toEqual(results[1]?.diagnostics);
     expect(results[0]?.diagnostics).toEqual(results[2]?.diagnostics);
     expect(results[0]?.diagnostics.some((diagnostic) => diagnostic.ruleId === "toolchains/rust-missing-locked-flag")).toBe(true);
     expect(results[0]?.diagnostics.some((diagnostic) => diagnostic.path === "sub/UPPER.NIX")).toBe(true);
     expect(results.flatMap((result) => result.skipped).filter((entry) => entry.reason.startsWith("rule crashed"))).toEqual([]);
+  }, 30_000);
+
+  it("preserves ignored lock uncertainty identically in directory, git-tree and API inventories", async () => {
+    const files = { "flake.nix": '{ outputs = { self, nixpkgs }: {}; }', "flake.lock": contents["flake.lock"]! };
+    const root = await fixture(files);
+    const tree = await git(root, "write-tree");
+    const config = { ...DEFAULT_CONFIG, ignorePaths: ["flake.lock"] };
+    const remote = fakeClient((route, parameters) => {
+      if (route.includes("/commits/")) return { sha: "commit", commit: { tree: { sha: tree } } };
+      if (route.includes("/git/trees/")) return { tree: Object.keys(files).map((path) => ({ path, type: "blob", mode: "100644", sha: path })) };
+      if (route.includes("/git/blobs/") && parameters.file_sha === "flake.nix") return { content: files["flake.nix"], encoding: "utf-8" };
+      throw new Error(`Unexpected read of excluded content: ${route}`);
+    });
+    const snapshot = await loadRepositorySnapshot(remote, repo, { ref: "main", config });
+    expect(snapshot.selectionComplete).toBe(true);
+    for (const input of [await loadDirectory(root, config), await loadGitRevision(root, tree, config), snapshot.input]) {
+      expect(input.inventoryComplete).toBe(false);
+      expect(input.files).toEqual([{ path: "flake.nix", content: files["flake.nix"] }]);
+      expect(lint(input, { config, rules: allRules }).diagnostics.filter((entry) => entry.ruleId === "nix/missing-flake-lock")).toEqual([]);
+    }
   }, 30_000);
 
   it("does not traverse directory links or mistake their absence for complete input", async () => {
@@ -92,7 +113,7 @@ describe("shared repository inventory", () => {
     const input = await loadDirectory(root, DEFAULT_CONFIG);
     expect(input.files.map((file) => file.path)).toEqual(["real/flake.nix"]);
     expect(input.inventoryComplete).toBe(false);
-    expect((await loadDirectory(root, { ...DEFAULT_CONFIG, ignorePaths: ["linked"] })).inventoryComplete).toBe(true);
+    expect((await loadDirectory(root, { ...DEFAULT_CONFIG, ignorePaths: ["linked"] })).inventoryComplete).toBe(false);
   });
 
   it("preserves whitespace and non-ASCII names in staged and untracked changes", async () => {
@@ -122,7 +143,7 @@ describe("shared repository inventory", () => {
   it("distinguishes content-bearing Nix locks from presence-only oversized locks", async () => {
     const config = { ...DEFAULT_CONFIG, limits: { ...DEFAULT_CONFIG.limits, maxFileBytes: 16 } };
     const entries = ["Cargo.lock", "flake.lock", "devenv.lock"].map((path) => ({ path, size: 20_000 }));
-    expect(selectInventory(entries, config)).toEqual({ paths: ["Cargo.lock"], truncated: ["Cargo.lock"], complete: false });
+    expect(selectInventory(entries, config)).toEqual({ paths: ["Cargo.lock"], truncated: ["Cargo.lock"], complete: false, selectionComplete: false });
     const root = await fixture({ "Cargo.lock": "x".repeat(20_000) });
     const input = await loadDirectory(root, config);
     expect(input.inventoryComplete).toBe(true);
@@ -134,7 +155,7 @@ describe("shared repository inventory", () => {
     const config = { ...DEFAULT_CONFIG, limits: { ...DEFAULT_CONFIG.limits, maxFiles: 1 } };
     const entries = [{ path: "flake.nix" }, { path: "sub/flake.nix" }];
     expect(selectInventory(entries, config).complete).toBe(false);
-    expect(selectInventory(entries, { ...config, ignorePaths: ["sub"] })).toEqual({ paths: ["flake.nix"], truncated: [], complete: true });
+    expect(selectInventory(entries, { ...config, ignorePaths: ["sub"] })).toEqual({ paths: ["flake.nix"], truncated: [], complete: false, selectionComplete: true });
     expect(selectInventory([{ path: "node_modules/link", opaque: true }], config).complete).toBe(true);
   });
 });

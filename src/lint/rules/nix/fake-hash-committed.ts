@@ -56,7 +56,7 @@ function findings(file: NixFile): Finding[] {
   };
   for (const name of FAKE_NAMES) {
     for (const ident of identsEndingWith(file, name)) {
-      if (!isValueUse(file, ident) || comparedWith(file, ident.offset, ident.end) || inLambdaDefault(file.masked, ident.offset)) continue;
+      if (!isValueUse(file, ident) || comparedWith(file, ident.offset, ident.end) || inLambdaDefault(file, ident.offset)) continue;
       if (!/^(?:(?:pkgs\.)?lib\.)?(?:fakeHash|fakeSha256|fakeSha512)$/.test(ident.text)) continue;
       if (ident.segments.length === 1 && isShadowed(file, name)) continue;
       const key = assignedKey(file.masked, ident.offset);

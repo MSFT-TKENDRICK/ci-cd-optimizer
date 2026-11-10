@@ -62,6 +62,7 @@ describe("complete built-in rule registration", () => {
       presets: ["all"],
     });
     expect(result.parseProblems).toEqual([]);
+    expect(result.filesAnalyzed).toBe(5);
     expect(result.skipped.filter((entry) => entry.reason.startsWith("rule crashed"))).toEqual([]);
     expect(result.diagnostics.map((diagnostic) => diagnostic.ruleId)).toEqual(expect.arrayContaining([
       "nix/missing-flake-lock", "toolchains/rust-missing-locked-flag", "containers/curl-pipe-shell",

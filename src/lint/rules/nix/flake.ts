@@ -152,8 +152,8 @@ export function inputsFullyKnown(file: NixFile, bindings: NixBinding[]): boolean
     else if (binding.path.length === 1 && binding.path[0] === "inputs") return false;
   }
   return scopes.every((brace) => {
-    if (inheritStatements(file).some((statement) => enclosingOpen(file.masked, statement.offset) === brace)) return false;
-    const close = matchingClose(file.masked, brace);
+    if (inheritStatements(file).some((statement) => enclosingOpen(file, statement.offset) === brace)) return false;
+    const close = matchingClose(file, brace);
     const inside = bindings.filter((binding) => binding.keyStart > brace && binding.keyStart < close);
     const last = Math.max(brace, ...inside.map((binding) => binding.valueEnd));
     return /^(?:\s*inherit\b[^;]*;)*\s*$/.test(file.masked.slice(last + 1, close));
@@ -165,7 +165,7 @@ function attrsetLiteral(file: NixFile, binding: NixBinding): number | undefined 
   const open = /^(?:rec\s+)?\{/.exec(file.masked.slice(binding.valueStart, binding.valueStart + 8));
   if (!open) return undefined;
   const brace = binding.valueStart + open[0].length - 1;
-  const close = matchingClose(file.masked, brace);
+  const close = matchingClose(file, brace);
   return close >= 0 && file.masked.slice(close + 1, binding.valueEnd).trim() === "" ? brace : undefined;
 }
 

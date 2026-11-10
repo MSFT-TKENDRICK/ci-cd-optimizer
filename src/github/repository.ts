@@ -114,7 +114,7 @@ export async function loadRepositorySnapshot(
   return {
     ref: options.ref,
     sha: commit.sha,
-    selectionComplete: selection.complete && treeData.truncated !== true,
+    selectionComplete: selection.selectionComplete && treeData.truncated !== true,
     input: {
       files,
       mode: "repository",

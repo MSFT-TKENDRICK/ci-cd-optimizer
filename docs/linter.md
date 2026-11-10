@@ -115,14 +115,17 @@ Inventory support may mean content parsing, cross-file context, or presence-only
 file format has a full parser or dedicated rule. Generated dependency/build directories are excluded. Explicit
 `ignorePaths` further defines scope. Symlinks and submodules are not followed.
 
-Absence-based findings require the loader to assert a complete inventory within that scope. File-count/size limits,
-API path filters/truncated trees, unreadable files and unignored opaque entries disable that inference. Large ordinary
-lockfiles can retain only their header; Nix/devenv locks require their full content. API callers supplying partial
-`AnalysisInput` must not claim `inventoryComplete: true`.
+Absence-based findings require a complete inventory of relevant repository files. File-count/size limits, API path
+filters/truncated trees, unreadable files, opaque entries and explicitly excluded relevant files disable that inference.
+Excluding an existing lock, version file, configuration or updater workflow does not establish that it is absent.
+The engine also downgrades completeness when filtering files supplied directly through the API. Large ordinary
+lockfiles can retain only their header; Nix/devenv locks require their full content. API callers supplying already-filtered
+or partial `AnalysisInput` must not claim `inventoryComplete: true`.
 
 The internal repository loader separately records completeness within a caller's selected scope. Run-knowledge
-collection uses that narrower metadata only for its fixed declaration inventory and cache policy; it does not mark
-the filtered linter input complete. Opaque entries and collection limits still prevent complete knowledge reuse.
+collection uses that narrower metadata only for its fixed declaration inventory and cache policy; explicit exclusions
+do not make that selected scope incomplete or mark the filtered linter input globally complete. Unignored opaque
+entries and collection limits still prevent complete knowledge reuse.
 
 The built-in rules do not execute shell scripts, evaluate Nix, resolve arbitrary expressions, build containers or
 run package managers. Unsupported/dynamic constructs are often left unanalyzed. A clean report is not proof of

@@ -48,7 +48,7 @@ export default defineRule({
       let count = 0;
       for (const hit of hits) {
         count += 1;
-        const isDefault = inLambdaDefault(file.masked, hit.offset);
+        const isDefault = inLambdaDefault(file, hit.offset);
         report({
           path: file.path,
           line: hit.line,

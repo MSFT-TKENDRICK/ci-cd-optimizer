@@ -42,7 +42,7 @@ function unverified(file: NixFile, arg: NixArgument): Finding | undefined {
 
 /** `import (builtins.fetchurl ...)`: the fetched file is evaluated as Nix code. */
 function importer(file: NixFile, ident: NixIdent): string | undefined {
-  const open = enclosingOpen(file.masked, ident.offset);
+  const open = enclosingOpen(file, ident.offset);
   if (open < 0 || file.masked[open] !== "(") return undefined;
   const word = previousWord(file.masked, open);
   return word && IMPORTERS.has(word) ? word : undefined;

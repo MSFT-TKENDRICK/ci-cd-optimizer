@@ -4,105 +4,13 @@ import { join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { matchesGlob } from "../utils.js";
 import type { LintConfig } from "./config.js";
+import { isInventoryPath, isLockfile, SKIP_DIRS } from "./inventory-paths.js";
 import type { AnalysisInput, ChangeContext, SourceFile } from "./types.js";
 
 const run = promisify(execFile);
 
-/** Files whose presence or content rules depend on. Everything else in a repository is irrelevant to the linter. */
-const BASENAMES = new Set([
-  "package.json",
-  "package-lock.json",
-  "npm-shrinkwrap.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-  "yarn.lock",
-  "bun.lock",
-  "bun.lockb",
-  ".npmrc",
-  ".yarnrc.yml",
-  ".npmignore",
-  ".nvmrc",
-  ".node-version",
-  ".tool-versions",
-  "tsconfig.json",
-  "nx.json",
-  "turbo.json",
-  "lerna.json",
-  "rush.json",
-  "MODULE.bazel",
-  "WORKSPACE",
-  "WORKSPACE.bazel",
-  ".bazelrc",
-  ".bazelversion",
-  ".bazeliskrc",
-  "pants.toml",
-  "settings.gradle",
-  "settings.gradle.kts",
-  "build.gradle",
-  "build.gradle.kts",
-  "gradle.properties",
-  "pom.xml",
-  "build.sbt",
-  "Cargo.toml",
-  "Cargo.lock",
-  "go.mod",
-  "go.sum",
-  "go.work",
-  "pyproject.toml",
-  "poetry.lock",
-  "Pipfile",
-  "Pipfile.lock",
-  "uv.lock",
-  "packages.lock.json",
-  "Directory.Packages.props",
-  "global.json",
-  "docker-bake.hcl",
-  "docker-compose.yml",
-  "docker-compose.yaml",
-  "compose.yml",
-  "compose.yaml",
-  ".dockerignore",
-  "action.yml",
-  "action.yaml",
-  "flake.lock",
-  ".envrc",
-  "devenv.yaml",
-  "devenv.lock",
-  "CMakeLists.txt",
-  "meson.build",
-  ".python-version",
-  ".go-version",
-  ".java-version",
-  ".sdkmanrc",
-  "rust-toolchain",
-  "rust-toolchain.toml",
-  "renovate.json",
-  "renovate.json5",
-  ".renovaterc",
-  ".renovaterc.json",
-]);
-
-/** Lockfiles are often larger than the per-file limit, but rules only need their presence and header. */
-const LOCKFILES = new Set(["package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb", "Cargo.lock", "go.sum", "poetry.lock", "Pipfile.lock", "uv.lock", "packages.lock.json"]);
+export { isInventoryPath, isLockfile } from "./inventory-paths.js";
 const LOCKFILE_HEAD_BYTES = 8192;
-const SKIP_DIRS = new Set([".git", "node_modules", ".pnpm-store", ".yarn", ".venv", "venv", "__pycache__", ".turbo", ".nx", "target", ".gradle", ".direnv"]);
-
-export function isInventoryPath(path: string): boolean {
-  if (path.split("/").slice(0, -1).some((part) => SKIP_DIRS.has(part))) return false;
-  if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
-  if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
-  if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;
-  if (/(^|\/)\.cargo\/config(\.toml)?$/.test(path) || /(^|\/)gradle\/wrapper\/gradle-wrapper\.properties$/.test(path)) return true;
-  const name = path.slice(path.lastIndexOf("/") + 1);
-  if (BASENAMES.has(name)) return true;
-  if (/^(Dockerfile|Containerfile)(\.[^/]+)?$/i.test(name) || /\.(dockerfile|containerfile|dockerignore)$/i.test(name)) return true;
-  if (/^requirements.*\.txt$/i.test(name) || /(^|\/)requirements\/[^/]+\.txt$/i.test(path)) return true;
-  if (/\.bazelrc$/i.test(name) || /\.(csproj|fsproj|sln)$/i.test(name)) return true;
-  if (/\.nix$/i.test(name)) return true;
-  return path === ".changeset/config.json";
-}
-
-export const isLockfile = (path: string) => LOCKFILES.has(path.slice(path.lastIndexOf("/") + 1));
 
 export interface InventoryEntry {
   path: string;
@@ -115,7 +23,9 @@ export interface InventorySelection {
   paths: string[];
   /** Paths whose content should be truncated to their head (oversized lockfiles). */
   truncated: string[];
-  /** false when the file limit was hit or an oversized non-lockfile was dropped, so absence is not meaningful. */
+  /** Whether every selected-scope file was available, independently of explicit exclusions. */
+  selectionComplete: boolean;
+  /** False when relevant files were excluded, limited, oversized or opaque; global absence is then unknown. */
   complete: boolean;
 }
 
@@ -124,9 +34,13 @@ export function selectInventory(entries: readonly InventoryEntry[], config: Pick
   const paths: string[] = [];
   const truncated: string[] = [];
   let complete = true;
+  let excluded = false;
   const ignored = (path: string) => config.ignorePaths.some((glob) => matchesGlob(path, glob) || matchesGlob(path, `${glob}/**`));
   for (const entry of [...entries].sort((a, b) => a.path.localeCompare(b.path))) {
-    if (ignored(entry.path)) continue;
+    if (ignored(entry.path)) {
+      if (isInventoryPath(entry.path) || (entry.opaque && !entry.path.split("/").some((part) => SKIP_DIRS.has(part)))) excluded = true;
+      continue;
+    }
     if (entry.opaque) {
       if (!entry.path.split("/").some((part) => SKIP_DIRS.has(part))) complete = false;
       continue;
@@ -145,7 +59,7 @@ export function selectInventory(entries: readonly InventoryEntry[], config: Pick
     }
     paths.push(entry.path);
   }
-  return { paths, truncated, complete };
+  return { paths, truncated, selectionComplete: complete, complete: complete && !excluded };
 }
 
 export function truncateContent(content: string): string {

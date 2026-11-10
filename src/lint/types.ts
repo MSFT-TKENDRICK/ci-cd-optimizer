@@ -118,6 +118,8 @@ export interface RuleContext<O> {
   options: O;
   project: ProjectModel;
   input: AnalysisInput;
+  /** An excluded expected path cannot support an absence finding, even when it was not listed. */
+  isPathIgnored?(path: string): boolean;
   report(descriptor: ReportDescriptor): void;
 }
 

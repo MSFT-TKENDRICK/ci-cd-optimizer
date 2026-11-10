@@ -37,7 +37,7 @@ function isOverlayContext(file: NixFile, lambda: number): boolean {
   const key = assignedKey(masked, lambda);
   if (key !== undefined && NON_OVERLAY_KEY.test(key)) return false;
   if (key !== undefined && /overlay/i.test(key)) return true;
-  const open = enclosingOpen(masked, lambda);
+  const open = enclosingOpen(file, lambda);
   if (open < 0) {
     const before = previousNonSpace(masked, lambda);
     const topLevel = before < 0 || masked[before] === ":" || previousWord(masked, lambda) === "in";
@@ -45,7 +45,7 @@ function isOverlayContext(file: NixFile, lambda: number): boolean {
   }
   if (masked[open] === "(") {
     if (/(?:^|\.)(?:extend|composeExtensions)$/.test(callHead(masked, open) ?? "")) return true;
-    const list = enclosingOpen(masked, open);
+    const list = enclosingOpen(file, open);
     if (list >= 0 && masked[list] === "[" && /(?:^|\.)(?:appendOverlays|composeManyExtensions)$/.test(callHead(masked, list) ?? "")) return true;
   }
   const path = enclosingBindingPath(file, lambda);
@@ -74,7 +74,7 @@ function rebindings(file: NixFile, open: number, watched: ReadonlySet<string>): 
     found.push({ name, offset: binding.keyStart, shown: `${name} = ${snippet(file, binding.valueStart, binding.valueEnd, 50).replace(/;$/, "")}` });
   }
   for (const statement of inheritStatements(file)) {
-    if (statement.source === undefined || PACKAGE_SETS.has(statement.source) || enclosingOpen(file.masked, statement.offset) !== open) continue;
+    if (statement.source === undefined || PACKAGE_SETS.has(statement.source) || enclosingOpen(file, statement.offset) !== open) continue;
     for (const entry of statement.names) {
       if (watched.has(entry.name)) found.push({ name: entry.name, offset: entry.offset, shown: `inherit (${statement.source}) ${entry.name}` });
     }

@@ -23,11 +23,11 @@ export default defineRule({
       good: "# flake.nix and flake.lock both committed\n$ nix flake lock\n$ git add flake.nix flake.lock",
     },
   },
-  check({ project, report }) {
+  check({ project, isPathIgnored, report }) {
     for (const flake of project.nix.flakes) {
       if (!flake.nix || !flake.info || flake.lock) continue;
       const lockPath = flakePath(flake.dir, "flake.lock");
-      if (project.files.has(lockPath)) continue;
+      if (project.files.has(lockPath) || isPathIgnored?.(lockPath)) continue;
       if (SAMPLE_DIR.test(flake.dir) || isSubflake(project, flake.dir)) continue;
       const inputs = [...flake.info.inputs.keys()].filter((name) => name !== "self");
       const names = [...inputs, ...implicitInputs(flake.info)];

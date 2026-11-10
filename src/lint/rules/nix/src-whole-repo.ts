@@ -2,7 +2,7 @@ import { exprEnd, matchingClose } from "../../parsers/nix.js";
 import type { NixFile } from "../../parsers/nix.js";
 import type { ProjectModel } from "../../project.js";
 import { defineRule } from "../helpers.js";
-import { attrsetOf, bindingNamed, callArgument, enclosingOpen, inheritStatements, lintableNixFiles, previousWord, skipLetIn, skipSpace, validateStringLists } from "./expr.js";
+import { bindingNamed, calledAttrset, enclosingOpen, inheritStatements, lintableNixFiles, previousWord, skipLetIn, skipSpace, validateStringLists } from "./expr.js";
 
 const BUILDERS = new Set([
   "mkDerivation",
@@ -83,22 +83,22 @@ function builderCalls(file: NixFile): { builder: string; open: number }[] {
   for (const ident of file.idents) {
     const last = ident.segments.at(-1) ?? "";
     if (!BUILDERS.has(last) && !(QUALIFIED_BUILDERS.has(last) && ident.segments.length >= 2)) continue;
-    const arg = callArgument(file, ident);
-    const open = arg ? attrsetOf(file, arg) : undefined;
+    const open = calledAttrset(file, ident);
     if (open !== undefined) calls.push({ builder: last, open });
   }
   return calls;
 }
 
 /** Where a binding at `index` is visible: the body of its `let ... in`, or its `rec { }` attribute set. */
-function bindingScope(masked: string, index: number): { start: number; end: number } | undefined {
-  const container = enclosingOpen(masked, index);
-  const containerEnd = container < 0 ? masked.length : matchingClose(masked, container);
+function bindingScope(file: NixFile, index: number): { start: number; end: number } | undefined {
+  const { masked } = file;
+  const container = enclosingOpen(file, index);
+  const containerEnd = container < 0 ? masked.length : matchingClose(file, container);
   const end = containerEnd < 0 ? masked.length : containerEnd;
   if (container >= 0 && masked[container] === "{" && previousWord(masked, container) === "rec") return { start: container, end };
   const lets = [...masked.slice(0, index).matchAll(/(?<![A-Za-z0-9_'.-])let(?![A-Za-z0-9_'-])/g)].reverse();
   for (const keyword of lets) {
-    if (enclosingOpen(masked, keyword.index) !== container) continue;
+    if (enclosingOpen(file, keyword.index) !== container) continue;
     const body = skipLetIn(masked, keyword.index);
     if (body > index) return { start: body, end: exprEnd(masked, body) };
   }
@@ -109,7 +109,7 @@ function bindingScope(masked: string, index: number): { start: number; end: numb
 function sourceLiterals(file: NixFile, open: number): string[] {
   const found: string[] = [];
   for (const match of file.masked.matchAll(/(?<![A-Za-z0-9_'.-])src\s*=\s*(\.{1,2}(?:\/\.{1,2})+)\s*;/g)) {
-    const scope = bindingScope(file.masked, match.index);
+    const scope = bindingScope(file, match.index);
     if (scope && scope.start < open && open < scope.end) found.push(match[1] ?? "");
   }
   return found;
@@ -138,7 +138,7 @@ function findings(project: ProjectModel, file: NixFile): Finding[] {
       continue;
     }
     const inherited = inheritStatements(file).find(
-      (statement) => statement.source === undefined && enclosingOpen(file.masked, statement.offset) === open && statement.names.some((entry) => entry.name === "src"),
+      (statement) => statement.source === undefined && enclosingOpen(file, statement.offset) === open && statement.names.some((entry) => entry.name === "src"),
     );
     if (!inherited) continue;
     const literals = [...new Set(sourceLiterals(file, open))];
