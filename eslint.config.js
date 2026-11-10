@@ -5,7 +5,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist/**", "dist-action/**", "dist-setup/**", "coverage/**", "corpus/**"],
+    ignores: ["dist/**", "dist-action/**", "dist-setup/**", "plugins/*/server/**", "coverage/**", "corpus/**", ".agent-artifacts/**", ".agent-test-workspaces/**"],
   },
   {
     files: ["scripts/*.mjs", "mcp/*.mjs", "test/setup/*.mjs"],

@@ -4,6 +4,7 @@ import { httpStatus } from "../github/client.js";
 import type { DeliveryQueue, PostgresWebhookQueue } from "./postgres-queue.js";
 import { createReadinessCheck } from "./readiness.js";
 import { registerDurableIngress } from "./worker.js";
+import type { HttpHandler } from "../agents/hosted.js";
 
 const MAX_PAYLOAD_BYTES = 25 * 1024 * 1024;
 export const INGRESS_TIMEOUT_MS = 5000;
@@ -132,17 +133,19 @@ export async function createDurableMiddleware(
 export async function startDurableServer(
   probot: Probot,
   queue: Pick<PostgresWebhookQueue, "enqueue" | "checkReadiness">,
-  { host = "localhost", port = 3000 }: { host?: string; port?: number } = {},
+  { host = "localhost", port = 3000, agentHandler }: { host?: string; port?: number; agentHandler?: HttpHandler } = {},
 ): Promise<{ port: number; stop(): Promise<void> }> {
   const middleware = await createDurableMiddleware(probot, queue);
   const path = probot.webhookPath.replace(/\/+$/, "") || "/";
   if (path === "/ping" || path === "/ready") throw new Error("Durable webhook paths /ping and /ready are reserved for health probes");
+  if (agentHandler && path === "/acp") throw new Error("The webhook path must not conflict with /acp.");
   const checkReadiness = createReadinessCheck(queue, probot.log);
   let stopping = false;
   let closed: Promise<void> | undefined;
   const server = createServer((request, response) => {
     void middleware(request, response).then(async (handled) => {
       if (handled) return;
+      if (agentHandler && await agentHandler(request, response)) return;
       if (request.method === "GET" && request.url === "/ping") response.writeHead(200, { "content-type": "text/plain" }).end("PONG");
       else if (request.method === "GET" && request.url === "/ready") {
         const ready = !stopping && await checkReadiness() && !stopping;

@@ -8,6 +8,8 @@ significant slowdowns, and runs hill-climbing experiments with GitHub Agentic Wo
 your pipelines.
 
 It is tuned for agentic development, where many small, agent-authored changes make CI latency the bottleneck.
+Developer agents can use the [canonical plugin and skills, local MCP/ACP, or opt-in authenticated hosted ACP](docs/agents.md)
+to inspect findings and exact fix previews without executing repository code or receiving write APIs.
 
 One rule engine runs behind every entry point: a standalone linter, a CLI, a GitHub Action and reusable workflow, git
 hooks, a self-hosted GitHub App, and an [OSS-Fuzz](https://github.com/google/oss-fuzz)-style review program that
@@ -42,6 +44,8 @@ reviews other projects' CI/CD from a pull request and publishes signed daily rep
 
 | Entry point | What you get | Start with | Docs |
 |---|---|---|---|
+| **Developer-agent plugin** | Canonical optimization/triage/run-analysis skills and a bundled read-only MCP server | [Install the plugin](docs/agents.md#canonical-plugin-and-skills); Node.js 22+, no build needed | [agents.md](docs/agents.md) |
+| **MCP / ACP** | Local workspace tools/commands and exact previews; opt-in GitHub reads and authenticated hosted ACP | `cicd-mcp --root <workspace>`, `cicd-acp`, or [hosted configuration](docs/agents.md#hosted-acp-on-your-own-app-deployment) | [agents.md](docs/agents.md) |
 | **`cicd-lint`** | Offline linter for a checkout: paths, globs, stdin, `--base` diffs, `--fix`, SARIF, suppressions, local rules | `cicd-lint` after [installing the CLI](#install-the-cli) | [linter.md](docs/linter.md) |
 | **`ci-cd-optimizer` CLI** | Every command in the [table below](#cli-commands), from a terminal or any CI system | `ci-cd-optimizer <command>`, or `npm run cli -- <command>` in a clone | `ci-cd-optimizer help <command>` |
 | **GitHub Action** | Any CLI command as a workflow step, selected with `command:` (default `lint`) | `uses: MSFT-TKENDRICK/ci-cd-optimizer@<full commit SHA>` | [action.yml](action.yml), [examples](examples/workflows/) |
@@ -65,7 +69,7 @@ Requires Node.js 22 or later.
 git clone https://github.com/MSFT-TKENDRICK/ci-cd-optimizer
 cd ci-cd-optimizer
 npm ci && npm run build
-npm link                     # puts cicd-lint and ci-cd-optimizer on PATH
+npm link                     # puts cicd-lint, ci-cd-optimizer, cicd-mcp, and cicd-acp on PATH
 
 cd ~/src/my-service
 cicd-lint                    # lint the current directory; exits 1 on errors

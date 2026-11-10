@@ -21531,11 +21531,17 @@ function matchesGlob(path, glob) {
 async function mapLimit(items2, limit3, fn) {
   const results = new Array(items2.length);
   let next = 0;
+  let stopped = false;
   const worker = async () => {
-    while (next < items2.length) {
+    while (!stopped && next < items2.length) {
       const index = next;
       next += 1;
-      results[index] = await fn(items2[index]);
+      try {
+        results[index] = await fn(items2[index]);
+      } catch (error2) {
+        stopped = true;
+        throw error2;
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit3, items2.length) }, worker));
@@ -23542,7 +23548,7 @@ async function changedSince(root, base2) {
 
 // src/cli/lint.ts
 import { mkdir as mkdir2, readFile as readFile3, stat as stat4, writeFile as writeFile2 } from "node:fs/promises";
-import { dirname as dirname2, isAbsolute as isAbsolute4, join as join6, posix as posix3, relative as relative5 } from "node:path";
+import { dirname as dirname2, join as join6 } from "node:path";
 import { parseArgs } from "node:util";
 
 // src/lint/formatters/index.ts
@@ -23686,9 +23692,70 @@ function format(name, result, rules13, version) {
   }
 }
 
+// src/lint/workspace.ts
+import { isAbsolute as isAbsolute3, posix as posix2, relative as relative4 } from "node:path";
+var LintInputError = class extends Error {
+  name = "LintInputError";
+};
+function toSelector(root, value2, label, hint = "; pass --root <dir>") {
+  const raw = isAbsolute3(value2) ? relative4(root, value2) : value2;
+  const path = posix2.normalize(raw.replace(/\\/g, "/")).replace(/\/+$/, "");
+  if (path === "." || path === "") return "";
+  if (path === ".." || path.startsWith("../") || posix2.isAbsolute(path) || isAbsolute3(path)) {
+    throw new LintInputError(`${label} "${value2}" is outside the lint root ${root}${hint}.`);
+  }
+  return path;
+}
+var isGlob = (selector) => /[*?]/.test(selector);
+function selects(selector, path) {
+  if (selector === "") return true;
+  if (isGlob(selector)) return matchesGlob(path, selector) || matchesGlob(path, `${selector}/**`);
+  return path === selector || path.startsWith(`${selector}/`);
+}
+function withFile(input2, file, limits, label = "--stdin content") {
+  const oversized = Buffer.byteLength(file.content, "utf8") > limits.maxFileBytes;
+  if (oversized && !isLockfile(file.path)) throw new LintInputError(`${label} exceeds limits.maxFileBytes (${limits.maxFileBytes} bytes).`);
+  const replacement = oversized ? { path: file.path, content: truncateContent(file.content) } : file;
+  const files = [...input2.files.filter((existing) => existing.path !== file.path), replacement].sort((left, right) => left.path.localeCompare(right.path));
+  const truncated = input2.truncated.filter((path) => path !== file.path);
+  return { ...input2, files, truncated: oversized ? [...truncated, file.path] : truncated };
+}
+function effectiveSeverities(config, rules13, presets) {
+  const severities = new Map(rules13.map((rule) => [rule.meta.id, "off"]));
+  for (const { rule, severity } of resolveRules(config, [...rules13], presets)) severities.set(rule.meta.id, severity);
+  return severities;
+}
+function unknownRuleMessage(label, id, rules13) {
+  return `${label}: unknown rule "${id}".${didYouMean(id, rules13.map((candidate) => candidate.meta.id))}`;
+}
+function explainRuleText(id, rules13, severities) {
+  const rule = rules13.find((candidate) => candidate.meta.id === id);
+  if (!rule) return void 0;
+  const { meta } = rule;
+  const indent = (text4) => text4.replace(/\n$/, "").split("\n").map((line) => `    ${line}`).join("\n");
+  const lines = [
+    meta.id,
+    "",
+    `  Ruleset:   ${meta.ruleset}`,
+    `  Kind:      ${meta.kind}`,
+    `  Severity:  ${severities.get(meta.id) ?? "off"} (default: ${meta.defaultSeverity})`,
+    `  Presets:   ${meta.presets.length > 0 ? meta.presets.join(", ") : "(none)"}`,
+    `  Fixable:   ${meta.fixable ? "yes" : "no"}`,
+    `  Impact:    ${meta.impact}`,
+    ...meta.requires.length > 0 ? [`  Requires:  ${meta.requires.join(", ")}`] : [],
+    "",
+    meta.description
+  ];
+  if (meta.rationale) lines.push("", meta.rationale);
+  if (meta.example) lines.push("", "  Before:", indent(meta.example.bad), "", "  After:", indent(meta.example.good));
+  if (meta.references.length > 0) lines.push("", "References:", ...meta.references.map((reference) => `  ${reference}`));
+  lines.push("", `Docs: ${meta.docsUrl ?? docsUrl(meta.id)}`);
+  return lines.join("\n");
+}
+
 // src/cli/local-rules.ts
 import { realpath, stat as stat3 } from "node:fs/promises";
-import { isAbsolute as isAbsolute3, join as join5, posix as posix2, relative as relative4, win32 } from "node:path";
+import { isAbsolute as isAbsolute4, join as join5, posix as posix3, relative as relative5, win32 } from "node:path";
 import { pathToFileURL } from "node:url";
 var LOCAL_RULE_ID = /^local\/[a-z0-9][a-z0-9-]*$/;
 var SCHEME = /^[a-z][a-z0-9+.-]{1,}:/i;
@@ -23697,22 +23764,22 @@ var KINDS = ["practice", "policy", "insight"];
 var IMPACTS2 = ["high", "medium", "low"];
 var CAPABILITIES = ["repository", "complete-inventory", "change-set"];
 var isRecord2 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
-var escapes = (path) => path === ".." || path.startsWith("../") || path.startsWith("..\\") || isAbsolute3(path);
+var escapes = (path) => path === ".." || path.startsWith("../") || path.startsWith("..\\") || isAbsolute4(path);
 async function resolveModule(root, entry2) {
   const fail = (reason) => new UsageError(`localRules: "${entry2}" ${reason}`);
   if (SCHEME.test(entry2)) throw fail("must be a repository-relative path, not a URL.");
-  if (isAbsolute3(entry2) || win32.isAbsolute(entry2) || posix2.isAbsolute(entry2) || /^[\\/]/.test(entry2)) {
+  if (isAbsolute4(entry2) || win32.isAbsolute(entry2) || posix3.isAbsolute(entry2) || /^[\\/]/.test(entry2)) {
     throw fail("must be a repository-relative path, not an absolute path.");
   }
   if (entry2.includes(":")) throw fail("must be a repository-relative path without drive letters or colons.");
-  const normalized = posix2.normalize(entry2.replace(/\\/g, "/"));
+  const normalized = posix3.normalize(entry2.replace(/\\/g, "/"));
   if (normalized === ".." || normalized.startsWith("../")) throw fail("must stay inside the repository.");
   if (!/\.(m?js)$/.test(normalized)) throw fail("must be a .js or .mjs file.");
   const file = join5(root, normalized);
   const info = await stat3(file).catch(() => void 0);
   if (!info?.isFile()) throw fail("does not exist.");
   const [realRoot, realFile] = await Promise.all([realpath(root), realpath(file)]);
-  if (escapes(relative4(realRoot, realFile))) throw fail("resolves outside the repository (symbolic link).");
+  if (escapes(relative5(realRoot, realFile))) throw fail("resolves outside the repository (symbolic link).");
   return realFile;
 }
 function validateRule(entry2, value2) {
@@ -23960,20 +24027,13 @@ async function resolveTarget(io, rootFlag, positionals2) {
   if (positionals2.length === 1 && only !== void 0 && await isDirectory(resolvePath(io, only))) return { root: resolvePath(io, only), paths: [] };
   return { root: resolvePath(io, "."), paths: positionals2 };
 }
-function toSelector(root, value2, label) {
-  const raw = isAbsolute4(value2) ? relative5(root, value2) : value2;
-  const path = posix3.normalize(raw.replace(/\\/g, "/")).replace(/\/+$/, "");
-  if (path === "." || path === "") return "";
-  if (path === ".." || path.startsWith("../") || posix3.isAbsolute(path) || isAbsolute4(path)) {
-    throw new UsageError(`${label} "${value2}" is outside the lint root ${root}; pass --root <dir>.`);
+function usage(action) {
+  try {
+    return action();
+  } catch (error2) {
+    if (error2 instanceof LintInputError) throw new UsageError(error2.message);
+    throw error2;
   }
-  return path;
-}
-var isGlob = (selector) => /[*?]/.test(selector);
-function selects(selector, path) {
-  if (selector === "") return true;
-  if (isGlob(selector)) return matchesGlob(path, selector) || matchesGlob(path, `${selector}/**`);
-  return path === selector || path.startsWith(`${selector}/`);
 }
 async function missReason(root, selector, config, inventoryComplete) {
   if (isGlob(selector)) return "no lintable files match";
@@ -23984,42 +24044,10 @@ async function missReason(root, selector, config, inventoryComplete) {
   if (config.ignorePaths.some((glob) => matchesGlob(selector, glob) || matchesGlob(selector, `${glob}/**`))) return "excluded by ignorePaths";
   return inventoryComplete ? "not analyzed (inside a directory the inventory skips, such as node_modules or .git)" : "not analyzed: the inventory hit limits.maxFiles or limits.maxFileBytes";
 }
-function withFile(input2, file, limits) {
-  const oversized = Buffer.byteLength(file.content, "utf8") > limits.maxFileBytes;
-  if (oversized && !isLockfile(file.path)) throw new UsageError(`--stdin content exceeds limits.maxFileBytes (${limits.maxFileBytes} bytes).`);
-  const replacement = oversized ? { path: file.path, content: truncateContent(file.content) } : file;
-  const files = [...input2.files.filter((existing) => existing.path !== file.path), replacement].sort((left, right) => left.path.localeCompare(right.path));
-  const truncated = input2.truncated.filter((path) => path !== file.path);
-  return { ...input2, files, truncated: oversized ? [...truncated, file.path] : truncated };
-}
-function effectiveSeverities(config, rules13, presets) {
-  const severities = new Map(rules13.map((rule) => [rule.meta.id, "off"]));
-  for (const { rule, severity } of resolveRules(config, rules13, presets)) severities.set(rule.meta.id, severity);
-  return severities;
-}
 function explainRule(id, rules13, severities) {
-  const rule = rules13.find((candidate) => candidate.meta.id === id);
-  if (!rule) throw new UsageError(`--explain: unknown rule "${id}".${didYouMean(id, rules13.map((candidate) => candidate.meta.id))}`);
-  const { meta } = rule;
-  const indent = (text4) => text4.replace(/\n$/, "").split("\n").map((line) => `    ${line}`).join("\n");
-  const lines = [
-    meta.id,
-    "",
-    `  Ruleset:   ${meta.ruleset}`,
-    `  Kind:      ${meta.kind}`,
-    `  Severity:  ${severities.get(meta.id) ?? "off"} (default: ${meta.defaultSeverity})`,
-    `  Presets:   ${meta.presets.length > 0 ? meta.presets.join(", ") : "(none)"}`,
-    `  Fixable:   ${meta.fixable ? "yes" : "no"}`,
-    `  Impact:    ${meta.impact}`,
-    ...meta.requires.length > 0 ? [`  Requires:  ${meta.requires.join(", ")}`] : [],
-    "",
-    meta.description
-  ];
-  if (meta.rationale) lines.push("", meta.rationale);
-  if (meta.example) lines.push("", "  Before:", indent(meta.example.bad), "", "  After:", indent(meta.example.good));
-  if (meta.references.length > 0) lines.push("", "References:", ...meta.references.map((reference) => `  ${reference}`));
-  lines.push("", `Docs: ${meta.docsUrl ?? docsUrl(meta.id)}`);
-  return lines.join("\n");
+  const text4 = explainRuleText(id, rules13, severities);
+  if (text4 === void 0) throw new UsageError(unknownRuleMessage("--explain", id, rules13));
+  return text4;
 }
 async function initConfig(io, root, explicit) {
   const target = explicit ? resolvePath(io, explicit) : join6(root, ".github/ci-cd-optimizer.yml");
@@ -24145,11 +24173,11 @@ async function lintCommand(rawArgs, io) {
     await writeText(io, values2.output, JSON.stringify({ configPath: loaded.path ?? null, config: effective, rules: Object.fromEntries(severities) }, null, 2));
     return 0;
   }
-  let selectors = paths.map((path) => toSelector(root, path, "Path"));
+  let selectors = paths.map((path) => usage(() => toSelector(root, path, "Path")));
   let stdinFile;
   if (values2.stdin && stdinFilename !== void 0) {
     if (!io.stdin) throw new UsageError("--stdin is not available in this environment.");
-    const path = toSelector(root, stdinFilename, "--stdin-filename");
+    const path = usage(() => toSelector(root, stdinFilename, "--stdin-filename"));
     if (path === "" || isGlob(path)) throw new UsageError("--stdin-filename must name a file, not a directory or glob.");
     stdinFile = { path, content: await io.stdin() };
     selectors = [path];
@@ -24175,7 +24203,7 @@ async function lintCommand(rawArgs, io) {
   };
   const load = async () => {
     const onDisk = await loadDirectory(root, config, change);
-    return stdinFile ? withFile(onDisk, stdinFile, config.limits) : onDisk;
+    return stdinFile ? usage(() => withFile(onDisk, stdinFile, config.limits)) : onDisk;
   };
   let input2 = await load();
   let result = lint(input2, options);

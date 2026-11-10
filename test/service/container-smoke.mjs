@@ -19,6 +19,9 @@ const env = {
   APP_ID: "42",
   PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
   WEBHOOK_SECRET: secret,
+  CICD_OPTIMIZER_ACP: "true",
+  CICD_OPTIMIZER_ACP_AUTH: "github-user",
+  CICD_OPTIMIZER_ACP_REPOSITORIES: "acme/widgets:42",
   GHE_PROTOCOL: "http",
   ...(durable ? { DATABASE_URL: process.env.SMOKE_DATABASE_URL, WEBHOOK_QUEUE: "postgres" } : {}),
 };
@@ -42,6 +45,7 @@ function startContainer(gateway, publish = false) {
   docker("create", "--name", name, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
     ...(publish ? ["--publish", "127.0.0.1::3000"] : []),
     "--env", "APP_ID", "--env", "PRIVATE_KEY", "--env", "WEBHOOK_SECRET",
+    "--env", "CICD_OPTIMIZER_ACP", "--env", "CICD_OPTIMIZER_ACP_AUTH", "--env", "CICD_OPTIMIZER_ACP_REPOSITORIES",
     "--network", publish ? "bridge" : network, "--add-host", `github-smoke:${gateway}`, "--env", "GHE_HOST", "--env", "GHE_PROTOCOL",
     ...(durable ? ["--env", "DATABASE_URL", "--env", "WEBHOOK_QUEUE"] : []),
     "--env", "LOG_FORMAT=json", "--env", "LOG_LEVEL=warn", "ci-cd-optimizer:smoke");
@@ -121,6 +125,12 @@ try {
   if (durable) await readiness(`http://127.0.0.1:${port}`, 200);
   docker("network", "disconnect", "bridge", name);
   let origin = isolatedOrigin();
+  for (const method of ["GET", "POST", "DELETE", "OPTIONS"]) {
+    const response = await fetch(`${origin}/acp`, { method, signal: AbortSignal.timeout(3000) });
+    assert.equal(response.status, 401, `Hosted ACP ${method} must authenticate at ${durable ? "durable ingress" : "direct ingress"}`);
+    await response.text();
+  }
+  assert.equal(github.requests.length, 0, "ACP must not borrow the App's installation credentials");
   const send = async (event, payload, signature = "valid", id = randomUUID()) => {
     const body = JSON.stringify(payload);
     const response = await fetch(`${origin}/api/github/webhooks`, {

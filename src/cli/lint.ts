@@ -1,13 +1,14 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, posix, relative } from "node:path";
+import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
-import { CONFIG_PATHS, DEFAULT_CONFIG, didYouMean, parseConfigText, PRESETS, resolveRules, type ConfigProblem, type LintConfig } from "../lint/config.js";
+import { CONFIG_PATHS, DEFAULT_CONFIG, didYouMean, parseConfigText, PRESETS, type ConfigProblem, type LintConfig } from "../lint/config.js";
 import { docsUrl, exceedsThreshold, filterInput, fingerprint, lint as runLint, type LintOptions } from "../lint/engine.js";
 import { applyFixes } from "../lint/fix.js";
 import { format, FORMATS, sarif, type FormatName } from "../lint/formatters/index.js";
-import { changedSince, isInventoryPath, isLockfile, loadDirectory, loadGitRevision, truncateContent, type LoadedInput } from "../lint/inventory.js";
+import { changedSince, isInventoryPath, loadDirectory, loadGitRevision } from "../lint/inventory.js";
 import { allRules } from "../lint/rules/index.js";
 import type { ActiveSeverity, AnyRule, ChangeContext, Diagnostic, LintResult, Preset, Severity, SourceFile, UnusedDirective } from "../lint/types.js";
+import { effectiveSeverities, explainRuleText, isGlob, LintInputError, selects, toSelector, unknownRuleMessage, withFile } from "../lint/workspace.js";
 import { matchesGlob } from "../utils.js";
 import { VERSION } from "../version.js";
 import { resolvePath, UsageError, writeText, type CliIO } from "./io.js";
@@ -220,23 +221,14 @@ async function resolveTarget(io: CliIO, rootFlag: string | undefined, positional
   return { root: resolvePath(io, "."), paths: positionals };
 }
 
-/** Normalizes a path argument to a root-relative POSIX selector; "" selects everything. */
-function toSelector(root: string, value: string, label: string): string {
-  const raw = isAbsolute(value) ? relative(root, value) : value;
-  const path = posix.normalize(raw.replace(/\\/g, "/")).replace(/\/+$/, "");
-  if (path === "." || path === "") return "";
-  if (path === ".." || path.startsWith("../") || posix.isAbsolute(path) || isAbsolute(path)) {
-    throw new UsageError(`${label} "${value}" is outside the lint root ${root}; pass --root <dir>.`);
+/** Rethrows the shared helpers' input errors as usage errors (exit code 2). */
+function usage<T>(action: () => T): T {
+  try {
+    return action();
+  } catch (error) {
+    if (error instanceof LintInputError) throw new UsageError(error.message);
+    throw error;
   }
-  return path;
-}
-
-const isGlob = (selector: string) => /[*?]/.test(selector);
-
-function selects(selector: string, path: string): boolean {
-  if (selector === "") return true;
-  if (isGlob(selector)) return matchesGlob(path, selector) || matchesGlob(path, `${selector}/**`);
-  return path === selector || path.startsWith(`${selector}/`);
 }
 
 async function missReason(root: string, selector: string, config: LintConfig, inventoryComplete: boolean): Promise<string> {
@@ -251,45 +243,10 @@ async function missReason(root: string, selector: string, config: LintConfig, in
     : "not analyzed: the inventory hit limits.maxFiles or limits.maxFileBytes";
 }
 
-/** Adds or replaces the `--stdin` file, applying the same size limits as the on-disk inventory. */
-function withFile(input: LoadedInput, file: SourceFile, limits: LintConfig["limits"]): LoadedInput {
-  const oversized = Buffer.byteLength(file.content, "utf8") > limits.maxFileBytes;
-  if (oversized && !isLockfile(file.path)) throw new UsageError(`--stdin content exceeds limits.maxFileBytes (${limits.maxFileBytes} bytes).`);
-  const replacement = oversized ? { path: file.path, content: truncateContent(file.content) } : file;
-  const files = [...input.files.filter((existing) => existing.path !== file.path), replacement].sort((left, right) => left.path.localeCompare(right.path));
-  const truncated = input.truncated.filter((path) => path !== file.path);
-  return { ...input, files, truncated: oversized ? [...truncated, file.path] : truncated };
-}
-
-function effectiveSeverities(config: LintConfig, rules: AnyRule[], presets: Preset[] | undefined): Map<string, Severity> {
-  const severities = new Map<string, Severity>(rules.map((rule) => [rule.meta.id, "off"]));
-  for (const { rule, severity } of resolveRules(config, rules, presets)) severities.set(rule.meta.id, severity);
-  return severities;
-}
-
 function explainRule(id: string, rules: AnyRule[], severities: ReadonlyMap<string, Severity>): string {
-  const rule = rules.find((candidate) => candidate.meta.id === id);
-  if (!rule) throw new UsageError(`--explain: unknown rule "${id}".${didYouMean(id, rules.map((candidate) => candidate.meta.id))}`);
-  const { meta } = rule;
-  const indent = (text: string) => text.replace(/\n$/, "").split("\n").map((line) => `    ${line}`).join("\n");
-  const lines = [
-    meta.id,
-    "",
-    `  Ruleset:   ${meta.ruleset}`,
-    `  Kind:      ${meta.kind}`,
-    `  Severity:  ${severities.get(meta.id) ?? "off"} (default: ${meta.defaultSeverity})`,
-    `  Presets:   ${meta.presets.length > 0 ? meta.presets.join(", ") : "(none)"}`,
-    `  Fixable:   ${meta.fixable ? "yes" : "no"}`,
-    `  Impact:    ${meta.impact}`,
-    ...(meta.requires.length > 0 ? [`  Requires:  ${meta.requires.join(", ")}`] : []),
-    "",
-    meta.description,
-  ];
-  if (meta.rationale) lines.push("", meta.rationale);
-  if (meta.example) lines.push("", "  Before:", indent(meta.example.bad), "", "  After:", indent(meta.example.good));
-  if (meta.references.length > 0) lines.push("", "References:", ...meta.references.map((reference) => `  ${reference}`));
-  lines.push("", `Docs: ${meta.docsUrl ?? docsUrl(meta.id)}`);
-  return lines.join("\n");
+  const text = explainRuleText(id, rules, severities);
+  if (text === undefined) throw new UsageError(unknownRuleMessage("--explain", id, rules));
+  return text;
 }
 
 async function initConfig(io: CliIO, root: string, explicit: string | undefined): Promise<number> {
@@ -430,11 +387,11 @@ export async function lintCommand(rawArgs: string[], io: CliIO): Promise<number>
     return 0;
   }
 
-  let selectors = paths.map((path) => toSelector(root, path, "Path"));
+  let selectors = paths.map((path) => usage(() => toSelector(root, path, "Path")));
   let stdinFile: SourceFile | undefined;
   if (values.stdin && stdinFilename !== undefined) {
     if (!io.stdin) throw new UsageError("--stdin is not available in this environment.");
-    const path = toSelector(root, stdinFilename, "--stdin-filename");
+    const path = usage(() => toSelector(root, stdinFilename, "--stdin-filename"));
     if (path === "" || isGlob(path)) throw new UsageError("--stdin-filename must name a file, not a directory or glob.");
     stdinFile = { path, content: await io.stdin() };
     selectors = [path];
@@ -462,7 +419,7 @@ export async function lintCommand(rawArgs: string[], io: CliIO): Promise<number>
   };
   const load = async () => {
     const onDisk = await loadDirectory(root, config, change);
-    return stdinFile ? withFile(onDisk, stdinFile, config.limits) : onDisk;
+    return stdinFile ? usage(() => withFile(onDisk, stdinFile, config.limits)) : onDisk;
   };
   let input = await load();
   let result: LintResult = runLint(input, options);

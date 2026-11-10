@@ -5,6 +5,12 @@
       "command": "node",
       "args": ["mcp/setup-server.mjs"],
       "tools": ["*"]
+    },
+    "ci-cd-optimizer": {
+      "type": "local",
+      "command": "node",
+      "args": ["plugins/ci-cd-optimizer/server/cicd-agents.mjs", "mcp"],
+      "tools": ["*"]
     }
   }
 }

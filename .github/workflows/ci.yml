@@ -114,6 +114,12 @@ jobs:
           fi
       - uses: ./.github/actions/setup
       - run: npm run build
+      - name: Agent plugin bundle is up to date
+        run: |
+          npm run bundle:agents
+          git diff --exit-code --stat -- plugins/ci-cd-optimizer/server
+      - name: Packed agent bins and real stdio roundtrips
+        run: npm run test:agents:package
       - name: Generate Action bundle
         id: bundle
         run: npm run bundle
