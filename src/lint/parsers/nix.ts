@@ -323,6 +323,7 @@ export interface NixStructure {
 
 const structureCache = new WeakMap<NixFile, NixStructure>();
 const bindingsCache = new WeakMap<NixFile, Map<number, NixBinding[]>>();
+const scopeWordsCache = new WeakMap<NixFile, ReadonlyMap<number, string>>();
 
 /** One masked-source pass per file; shared by every rule rather than rescanning each enclosing attrset. */
 export function nixStructure(file: NixFile): NixStructure {
@@ -381,23 +382,50 @@ function wordAt(masked: string, index: number): string | undefined {
  * (or the end of the text) when no terminator is found.
  */
 export function exprEnd(masked: string, start: number): number {
+  return readExpressionEnd(masked, start);
+}
+
+/** End of a lexical body, including its own conditionals but not an enclosing `then` or `else`. */
+export function scopeExprEnd(file: NixFile, start: number): number {
+  let words = scopeWordsCache.get(file);
+  if (!words) {
+    // Parsed tokens keep dotted selectors intact and exclude paths, comments and string text.
+    words = new Map(file.idents.map((ident) => [ident.offset, ident.text]));
+    scopeWordsCache.set(file, words);
+  }
+  return readExpressionEnd(file.masked, start, words, nixStructure(file).closes);
+}
+
+function readExpressionEnd(masked: string, start: number, scopeWords?: ReadonlyMap<number, string>, closes?: Int32Array): number {
   let depth = 0;
   let lets = 0;
+  let conditionals = 0;
   let pendingSemicolons = 0;
   let index = start;
   while (index < masked.length) {
     const char = masked[index] ?? "";
-    if (char === "{" || char === "(" || char === "[") depth += 1;
-    else if (char === "}" || char === ")" || char === "]") {
+    if (char === "{" || char === "(" || char === "[") {
+      const close = closes?.[index];
+      if (close !== undefined && close >= 0) { index = close + 1; continue; }
+      depth += 1;
+    } else if (char === "}" || char === ")" || char === "]") {
       if (depth === 0) return index;
       depth -= 1;
     } else if (depth === 0 && char === ";") {
       if (pendingSemicolons > 0) pendingSemicolons -= 1;
       else if (lets === 0) return index;
     } else if (depth === 0) {
-      const word = wordAt(masked, index);
+      const word = scopeWords ? scopeWords.get(index) : wordAt(masked, index);
       if (word) {
-        if (word === "let") lets += 1;
+        if (scopeWords) {
+          if (word === "if") conditionals += 1;
+          else if (word === "then" && conditionals === 0) return index;
+          else if (word === "else") {
+            if (conditionals === 0) return index;
+            conditionals -= 1;
+          }
+        }
+        if (word === "let" && (!scopeWords || masked[skipSpace(masked, index + word.length)] !== "{")) lets += 1;
         else if (word === "in" && lets > 0) lets -= 1;
         else if (word === "with" || word === "assert") pendingSemicolons += 1;
         index += word.length;

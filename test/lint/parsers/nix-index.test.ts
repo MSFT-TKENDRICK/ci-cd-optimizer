@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lint } from "../../../src/lint/api.js";
-import { matchingClose, nixBindings, nixStructure, parseNix } from "../../../src/lint/parsers/nix.js";
+import { matchingClose, nixBindings, nixStructure, parseNix, scopeExprEnd } from "../../../src/lint/parsers/nix.js";
 import { buildProject } from "../../../src/lint/project.js";
 import { callArgument, calledAttrset, enclosingOpen, inheritStatements, inheritStatementsAt, isLambdaPattern, isShadowed } from "../../../src/lint/rules/nix/expr.js";
 import ifdRule from "../../../src/lint/rules/nix/import-from-derivation.js";
@@ -112,11 +112,36 @@ describe("shared Nix structural index", () => {
     expect(isShadowed(parseNix("default.nix", "builtins.getEnv \"x\""), "builtins")).toBe(false);
   });
 
-  it.each([sourceRule, ifdRule])("$meta.id does not repeat file-wide source or shadowing scans for inherited-source builders", (rule) => {
+  it("reuses lexical expression tokens without crossing parsed files or mutating input", () => {
+    const source = "if enabled then first else second";
+    let identifierReads = 0;
+    const file = new Proxy(parseNix("default.nix", source), {
+      get(target, key, receiver) {
+        if (key === "idents") identifierReads += 1;
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    for (let pass = 0; pass < 3; pass += 1) {
+      expect(scopeExprEnd(file, 0)).toBe(source.length);
+      expect(scopeExprEnd(file, source.indexOf("first"))).toBe(source.indexOf("else"));
+    }
+    expect(identifierReads).toBe(1);
+    expect(file.content).toBe(source);
+    expect(file.masked).toBe(source);
+    expect(scopeExprEnd(parseNix("default.nix", "first"), 0)).toBe(5);
+  });
+
+  it.each([sourceRule, ifdRule].flatMap((rule) =>
+    ["body", "siblings", "shadowed-siblings", "consecutive-lets"].map((layout) => ({ rule, layout })),
+  ))("$rule.meta.id reuses file-wide source facts for $layout", ({ rule, layout }) => {
     const readsFor = (count: number): number => {
-      const content = "{ pkgs }: let src = ./.; in {\n" + Array.from({ length: count }, (_, index) =>
+      const builders = Array.from({ length: count }, (_, index) =>
         `  p${index} = pkgs.stdenv.mkDerivation { name="p${index}";inherit src; };\n`,
-      ).join("") + "}";
+      ).join("");
+      const content = layout === "siblings" ? `{ pkgs }: let\n${builders}src = ./.; in p0`
+        : layout === "shadowed-siblings" ? `{ pkgs }: let src = ./.; in { batch = let\n${builders}src = ./src; in p0; }`
+          : layout === "consecutive-lets" ? `{ pkgs }: ${"let src = ./.; in ".repeat(count)}pkgs.stdenv.mkDerivation { inherit src; }`
+            : `{ pkgs }: let src = ./.; in {\n${builders}}`;
       const input: AnalysisInput = { files: [{ path: "default.nix", content }], mode: "repository", inventoryComplete: true };
       const project = buildProject(input);
       let sourceReads = 0;
@@ -138,7 +163,7 @@ describe("shared Nix structural index", () => {
       sourceReads = 0;
       let reports = 0;
       rule.check({ input, project, options: { allow: [] }, report: () => { reports += 1; } });
-      expect(reports).toBe(rule === sourceRule ? count : 0);
+      expect(reports).toBe(rule === sourceRule && layout !== "shadowed-siblings" ? layout === "consecutive-lets" ? 1 : count : 0);
       return sourceReads;
     };
     const first = readsFor(1);
@@ -174,6 +199,18 @@ describe("shared Nix structural index", () => {
     const content = "{ pkgs }: let src = ./src; in {\n" + Array.from({ length: count }, (_, index) =>
       ` p${index} = pkgs.stdenv.mkDerivation { name="p${index}";inherit src; };\n`,
     ).join("") + "}";
+    expect(Buffer.byteLength(content)).toBeLessThan(512_000);
+    const result = lint({ input: { files: [{ path: "default.nix", content }], mode: "repository", inventoryComplete: true } });
+    expect(result.diagnostics).toEqual([]);
+    expect(result.parseProblems).toEqual([]);
+    expect(result.skipped.some((entry) => entry.reason.includes("crashed"))).toBe(false);
+    expect(result.rulesRun).toBeGreaterThan(0);
+  });
+
+  it.each([600, 1200, 2400])("keeps default public-API analysis clean for %i recursively shadowed sibling derivations", (count) => {
+    const content = "{ pkgs }: let src = ./.; in { batch = let\n" + Array.from({ length: count }, (_, index) =>
+      ` p${index} = pkgs.stdenv.mkDerivation { name="p${index}";inherit src; };\n`,
+    ).join("") + "src = ./src; in p0; }";
     expect(Buffer.byteLength(content)).toBeLessThan(512_000);
     const result = lint({ input: { files: [{ path: "default.nix", content }], mode: "repository", inventoryComplete: true } });
     expect(result.diagnostics).toEqual([]);

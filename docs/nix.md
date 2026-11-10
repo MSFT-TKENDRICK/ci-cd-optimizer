@@ -94,8 +94,13 @@ marker, not an assurance level.
   unresolved inputs can prevent a finding. Builtin-specific messages assume the identified builtin's documented
   behavior; unused lazy expressions need not execute. Delimiter/enclosing-scope indexes and builder, binding,
   scoped-inherit and shadowing facts are reused per parsed file. Inherited source analysis collects lexical
-  source bindings once and suppresses ambiguous resolution, including an unknown visible binding or a `src`
-  function parameter. These facts describe the masked source, not evaluated Nix semantics.
+  source bindings once. Recognized `let` bindings are recursive: their scope includes sibling initializers before
+  `in` as well as the body; nested lets take precedence over a surrounding recursive set. Legacy `let { ... }`
+  bindings are treated as recursive within that set. Scope bounds stop at enclosing conditional branches,
+  ignoring keyword-like strings, comments, selectors and path components. Unknown visible source bindings or
+  a `src` function parameter suppress ambiguous inherited-source findings. These facts describe the masked source,
+  not evaluated Nix semantics; the [Nix language manual](https://nix.dev/manual/nix/2.35/language/syntax.html)
+  documents the underlying scope rules.
 - **Shell commands:** recognizable invocations, quoting, wrappers and literal arguments are inspected without
   interpreting the shell. Definitions, substitutions and opaque environment changes can leave behavior unknown.
   Quoted examples, help/version queries and arguments belonging to another command are not build executions.

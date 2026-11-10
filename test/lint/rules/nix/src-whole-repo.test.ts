@@ -80,6 +80,40 @@ ruleTester(rule, {
       name: "a narrower recursive attribute shadows an outer repository literal",
       files: { "default.nix": "{ pkgs }: let src = ./.; in rec { src = ./src; p = pkgs.stdenv.mkDerivation { inherit src; }; }" },
     },
+    ...["src = ./src;", '"src" = ./src;', "inherit (other) src;"].flatMap((binding) =>
+      [false, true].map((after) => ({
+        name: `recursive let sibling sees ${binding} declared ${after ? "after" : "before"} it`,
+        files: {
+          "default.nix": nix(
+            "{ pkgs, other }: let src = ./.; in {",
+            "  package = let",
+            ...(after ? [] : [`    ${binding}`]),
+            "    drv = pkgs.stdenv.mkDerivation { inherit src; };",
+            ...(after ? [`    ${binding}`] : []),
+            "  in drv;",
+            "}",
+          ),
+        },
+      })),
+    ),
+    {
+      name: "a let binding inside a recursive set does not leak to sibling attributes",
+      files: { "default.nix": "{ pkgs }: with pkgs; rec { other = let src = ./.; in 0; drv = pkgs.stdenv.mkDerivation { inherit src; }; }" },
+    },
+    {
+      name: "a legacy recursive let attribute shadows an outer source",
+      files: { "default.nix": "{ pkgs }: let src = ./.; in let { src = ./src; body = pkgs.stdenv.mkDerivation { inherit src; }; }" },
+    },
+    ...["0", "./if", "if/foo", "<if>", "with pkgs; if enabled then 0 else 1"].map((body) => ({
+      name: `a let in a conditional branch does not escape through its ${body} body`,
+      files: {
+        "default.nix": `{ pkgs, enabled }: with pkgs; if enabled then let src = ./.; in ${body} else pkgs.stdenv.mkDerivation { inherit src; }`,
+      },
+    })),
+    {
+      name: "a let inside a condition does not escape to either branch",
+      files: { "default.nix": "{ pkgs, enabled }: with pkgs; if let src = ./.; in enabled then pkgs.stdenv.mkDerivation { inherit src; } else 0" },
+    },
     {
       name: "allow option skips a file",
       options: { allow: ["default.nix"] },
@@ -89,6 +123,73 @@ ruleTester(rule, {
     },
   ],
   invalid: [
+    ...["src", '"src"'].map((key) => ({
+      name: `recursive ${key} binding is visible to earlier and later siblings and the let body`,
+      files: {
+        "default.nix": nix(
+          "{ pkgs }: let",
+          "  before = pkgs.stdenv.mkDerivation { inherit src; };",
+          `  ${key} = ./.;`,
+          "  after = pkgs.stdenv.mkDerivation { inherit src; };",
+          "in pkgs.stdenv.mkDerivation { inherit src; }",
+        ),
+      },
+      errors: 3,
+      output: null,
+    })),
+    {
+      name: "nested let shadowing expires before the next recursive attribute",
+      files: {
+        "default.nix": nix(
+          "{ pkgs }: rec {",
+          "  src = ./.;",
+          "  local = let src = ./src; drv = pkgs.stdenv.mkDerivation { inherit src; }; in drv;",
+          "  outside = pkgs.stdenv.mkDerivation { inherit src; };",
+          "}",
+        ),
+      },
+      errors: [{ line: 4, messageIncludes: "inherit src (src = ./.)" }],
+      output: null,
+    },
+    {
+      name: "a narrower branch-local source expires before the outer else branch",
+      files: {
+        "default.nix": nix(
+          "{ pkgs, enabled }: let src = ./.; in if enabled then",
+          "  let src = ./src; drv = pkgs.stdenv.mkDerivation { inherit src; }; in drv",
+          "else pkgs.stdenv.mkDerivation { inherit src; }",
+        ),
+      },
+      errors: [{ line: 3, messageIncludes: "inherit src (src = ./.)" }],
+      output: null,
+    },
+    {
+      name: "path components and lookup paths are not let or in keywords",
+      files: {
+        "default.nix": nix(
+          "{ pkgs }: let",
+          "  src = ./.;",
+          "  a = ./in; b = let/foo; c = <in>; d = ./let/else;",
+          "  drv = pkgs.stdenv.mkDerivation { inherit src; };",
+          "in drv",
+        ),
+      },
+      errors: [{ line: 4, messageIncludes: "inherit src (src = ./.)" }],
+      output: null,
+    },
+    {
+      name: "legacy let bindings are recursive within their attribute set",
+      files: {
+        "default.nix": nix(
+          "{ pkgs }: let {",
+          "  body = pkgs.stdenv.mkDerivation { inherit src; };",
+          "  src = ./.;",
+          "}",
+        ),
+      },
+      errors: [{ line: 2, messageIncludes: "inherit src (src = ./.)" }],
+      output: null,
+    },
     {
       name: "source scopes expire between siblings and retain repeated identical active literals",
       files: {

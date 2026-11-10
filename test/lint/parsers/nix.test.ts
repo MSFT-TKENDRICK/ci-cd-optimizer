@@ -11,6 +11,7 @@ import {
   parseFlakeRef,
   parseNix,
   resolveLockInput,
+  scopeExprEnd,
   searchPaths,
   topLevelAttrset,
 } from "../../../src/lint/parsers/nix.js";
@@ -99,6 +100,28 @@ describe("nix structure helpers", () => {
     expect(exprEnd(masked, 4)).toBe(masked.indexOf("; d"));
     const withSource = parseNix("x.nix", "a = with pkgs; [ hello ]; b = 1;").masked;
     expect(exprEnd(withSource, 4)).toBe(withSource.indexOf("; b"));
+  });
+
+  it.each([
+    "0", "./if", "if/foo", "<if>", "pkgs.if", "./let", "<with>",
+    'let { body = "if then else"; }',
+    'let local = if enabled then "a" else "b"; in local',
+    "with pkgs; assert enabled; if nested then ./then else pkgs.else",
+    "if if nested then enabled else false then [ (if true then 1 else 2) ] else {}",
+    '"literal if then else ${if enabled then ./if else ./else}"',
+  ])("ends a lexical body at its enclosing else after %s", (body) => {
+    const prefix = "a = if enabled then let local = 1; in ";
+    const content = `${prefix}${body} else outside; next = 0;`;
+    const file = parseNix("default.nix", content);
+    expect(scopeExprEnd(file, prefix.length)).toBe(prefix.length + body.length + 1);
+  });
+
+  it("ends a lexical condition before its enclosing then without changing legacy expression scans", () => {
+    const prefix = "if let src = ./.; in ";
+    const body = "with pkgs; if enabled then true else false";
+    const file = parseNix("default.nix", `${prefix}${body} then first else second; next = 0;`);
+    expect(scopeExprEnd(file, prefix.length)).toBe(prefix.length + body.length + 1);
+    expect(exprEnd(file.masked, prefix.length)).toBe(file.masked.indexOf("; next"));
   });
 
   it("classifies call arguments", () => {

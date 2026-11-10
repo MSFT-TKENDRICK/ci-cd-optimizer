@@ -1,8 +1,8 @@
-import { exprEnd, matchingClose } from "../../parsers/nix.js";
+import { exprEnd, matchingClose, scopeExprEnd } from "../../parsers/nix.js";
 import type { NixFile } from "../../parsers/nix.js";
 import type { ProjectModel } from "../../project.js";
 import { defineRule } from "../helpers.js";
-import { bindingNamed, calledAttrset, enclosingOpen, inInherit, inheritStatements, inheritStatementsAt, isBindingKey, isValueUse, lintableNixFiles, previousNonSpace, previousWord, skipLetIn, skipSpace, validateStringLists } from "./expr.js";
+import { bindingNamed, calledAttrset, enclosingOpen, inInherit, inheritStatements, inheritStatementsAt, isBindingKey, isValueUse, lintableNixFiles, previousNonSpace, skipSpace, validateStringLists } from "./expr.js";
 
 const BUILDERS = new Set([
   "mkDerivation",
@@ -97,45 +97,64 @@ interface BindingScope {
 /** Reuse lexical let/rec scopes instead of rescanning every binding's source prefix and body. */
 function bindingScopes(file: NixFile): (index: number) => BindingScope | undefined {
   const { masked } = file;
-  const lets = new Map<number, number[]>();
-  const bodies = new Map<number, number>();
-  const ends = new Map<number, number>();
-  const recursive = new Map<number, BindingScope | undefined>();
-  for (const keyword of masked.matchAll(/(?<![A-Za-z0-9_'.-])let(?![A-Za-z0-9_'-])/g)) {
-    const container = enclosingOpen(file, keyword.index);
-    const offsets = lets.get(container) ?? [];
-    offsets.push(keyword.index);
-    lets.set(container, offsets);
+  interface LetScope { start: number; body?: number; end?: number }
+  const starts = new Map<number, LetScope>();
+  const pending = new Map<number, LetScope[]>();
+  const regions = new Map<number, { offset: number; scope: LetScope | undefined }[]>();
+  const recursive = new Map<number, BindingScope>();
+  for (const ident of file.idents) {
+    if (ident.text !== "let" && ident.text !== "in" && ident.text !== "rec") continue;
+    const next = skipSpace(masked, ident.end);
+    if (ident.text === "rec" || (ident.text === "let" && masked[next] === "{")) {
+      if (masked[next] !== "{") continue;
+      const close = matchingClose(file, next);
+      if (close >= 0) recursive.set(next, { start: next, end: close });
+      continue;
+    }
+    const container = enclosingOpen(file, ident.offset);
+    const stack = pending.get(container) ?? [];
+    const boundaries = regions.get(container) ?? [];
+    if (ident.text === "let") {
+      const scope: LetScope = { start: ident.offset };
+      starts.set(scope.start, scope);
+      stack.push(scope);
+      boundaries.push({ offset: ident.offset, scope });
+    } else {
+      const scope = stack.pop();
+      if (!scope) continue;
+      scope.body = next;
+      boundaries.push({ offset: ident.offset, scope: stack.at(-1) });
+    }
+    pending.set(container, stack);
+    regions.set(container, boundaries);
   }
   return (index) => {
     const container = enclosingOpen(file, index);
-    if (!recursive.has(container)) {
-      const close = matchingClose(file, container);
-      recursive.set(container, container >= 0 && masked[container] === "{" && previousWord(masked, container) === "rec"
-        ? { start: container, end: close < 0 ? masked.length : close }
-        : undefined);
-    }
-    const rec = recursive.get(container);
-    if (rec) return rec;
-    const offsets = lets.get(container);
-    if (!offsets) return undefined;
+    const boundaries = regions.get(container) ?? [];
     let low = 0;
-    let high = offsets.length;
+    let high = boundaries.length;
     while (low < high) {
       const middle = (low + high) >>> 1;
-      if (offsets[middle]! < index) low = middle + 1;
+      if (boundaries[middle]!.offset < index) low = middle + 1;
       else high = middle;
     }
-    for (let position = low - 1; position >= 0; position -= 1) {
-      const keyword = offsets[position]!;
-      let body = bodies.get(keyword);
-      if (body === undefined) { body = skipLetIn(masked, keyword); bodies.set(keyword, body); }
-      if (body <= index) continue;
-      let end = ends.get(body);
-      if (end === undefined) { end = exprEnd(masked, body); ends.set(body, end); }
-      return { start: body, end };
+    const scope = boundaries[low - 1]?.scope;
+    if (scope?.body !== undefined) {
+      // Consecutive `let ... in let ... in` bodies share an end; do not rescan their suffixes.
+      const linked: LetScope[] = [];
+      let last = scope;
+      while (last.end === undefined && last.body !== undefined) {
+        linked.push(last);
+        const child = starts.get(last.body);
+        if (!child) { last.end = scopeExprEnd(file, last.body); break; }
+        last = child;
+      }
+      if (last.end === undefined) return undefined;
+      for (const entry of linked) entry.end = last.end;
+      // Let bindings are recursive, including sibling initializers before `in`.
+      return { start: scope.start, end: last.end };
     }
-    return undefined;
+    return recursive.get(container);
   };
 }
 

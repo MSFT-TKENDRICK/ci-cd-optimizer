@@ -52300,6 +52300,7 @@ function parseNix(path, content3) {
 }
 var structureCache = /* @__PURE__ */ new WeakMap();
 var bindingsCache = /* @__PURE__ */ new WeakMap();
+var scopeWordsCache = /* @__PURE__ */ new WeakMap();
 function nixStructure(file2) {
   const cached2 = structureCache.get(file2);
   if (cached2) return cached2;
@@ -52347,23 +52348,49 @@ function wordAt(masked, index) {
   return match.exec(masked)?.[0];
 }
 function exprEnd(masked, start) {
+  return readExpressionEnd(masked, start);
+}
+function scopeExprEnd(file2, start) {
+  let words6 = scopeWordsCache.get(file2);
+  if (!words6) {
+    words6 = new Map(file2.idents.map((ident) => [ident.offset, ident.text]));
+    scopeWordsCache.set(file2, words6);
+  }
+  return readExpressionEnd(file2.masked, start, words6, nixStructure(file2).closes);
+}
+function readExpressionEnd(masked, start, scopeWords, closes) {
   let depth = 0;
   let lets = 0;
+  let conditionals = 0;
   let pendingSemicolons = 0;
   let index = start;
   while (index < masked.length) {
     const char = masked[index] ?? "";
-    if (char === "{" || char === "(" || char === "[") depth += 1;
-    else if (char === "}" || char === ")" || char === "]") {
+    if (char === "{" || char === "(" || char === "[") {
+      const close = closes?.[index];
+      if (close !== void 0 && close >= 0) {
+        index = close + 1;
+        continue;
+      }
+      depth += 1;
+    } else if (char === "}" || char === ")" || char === "]") {
       if (depth === 0) return index;
       depth -= 1;
     } else if (depth === 0 && char === ";") {
       if (pendingSemicolons > 0) pendingSemicolons -= 1;
       else if (lets === 0) return index;
     } else if (depth === 0) {
-      const word = wordAt(masked, index);
+      const word = scopeWords ? scopeWords.get(index) : wordAt(masked, index);
       if (word) {
-        if (word === "let") lets += 1;
+        if (scopeWords) {
+          if (word === "if") conditionals += 1;
+          else if (word === "then" && conditionals === 0) return index;
+          else if (word === "else") {
+            if (conditionals === 0) return index;
+            conditionals -= 1;
+          }
+        }
+        if (word === "let" && (!scopeWords || masked[skipSpace(masked, index + word.length)] !== "{")) lets += 1;
         else if (word === "in" && lets > 0) lets -= 1;
         else if (word === "with" || word === "assert") pendingSemicolons += 1;
         index += word.length;
@@ -58713,49 +58740,64 @@ function builderCalls(file2) {
 }
 function bindingScopes(file2) {
   const { masked } = file2;
-  const lets = /* @__PURE__ */ new Map();
-  const bodies = /* @__PURE__ */ new Map();
-  const ends = /* @__PURE__ */ new Map();
+  const starts = /* @__PURE__ */ new Map();
+  const pending = /* @__PURE__ */ new Map();
+  const regions = /* @__PURE__ */ new Map();
   const recursive2 = /* @__PURE__ */ new Map();
-  for (const keyword of masked.matchAll(/(?<![A-Za-z0-9_'.-])let(?![A-Za-z0-9_'-])/g)) {
-    const container = enclosingOpen(file2, keyword.index);
-    const offsets = lets.get(container) ?? [];
-    offsets.push(keyword.index);
-    lets.set(container, offsets);
+  for (const ident of file2.idents) {
+    if (ident.text !== "let" && ident.text !== "in" && ident.text !== "rec") continue;
+    const next = skipSpace2(masked, ident.end);
+    if (ident.text === "rec" || ident.text === "let" && masked[next] === "{") {
+      if (masked[next] !== "{") continue;
+      const close = matchingClose(file2, next);
+      if (close >= 0) recursive2.set(next, { start: next, end: close });
+      continue;
+    }
+    const container = enclosingOpen(file2, ident.offset);
+    const stack = pending.get(container) ?? [];
+    const boundaries = regions.get(container) ?? [];
+    if (ident.text === "let") {
+      const scope2 = { start: ident.offset };
+      starts.set(scope2.start, scope2);
+      stack.push(scope2);
+      boundaries.push({ offset: ident.offset, scope: scope2 });
+    } else {
+      const scope2 = stack.pop();
+      if (!scope2) continue;
+      scope2.body = next;
+      boundaries.push({ offset: ident.offset, scope: stack.at(-1) });
+    }
+    pending.set(container, stack);
+    regions.set(container, boundaries);
   }
   return (index) => {
     const container = enclosingOpen(file2, index);
-    if (!recursive2.has(container)) {
-      const close = matchingClose(file2, container);
-      recursive2.set(container, container >= 0 && masked[container] === "{" && previousWord(masked, container) === "rec" ? { start: container, end: close < 0 ? masked.length : close } : void 0);
-    }
-    const rec = recursive2.get(container);
-    if (rec) return rec;
-    const offsets = lets.get(container);
-    if (!offsets) return void 0;
+    const boundaries = regions.get(container) ?? [];
     let low = 0;
-    let high = offsets.length;
+    let high = boundaries.length;
     while (low < high) {
       const middle = low + high >>> 1;
-      if (offsets[middle] < index) low = middle + 1;
+      if (boundaries[middle].offset < index) low = middle + 1;
       else high = middle;
     }
-    for (let position = low - 1; position >= 0; position -= 1) {
-      const keyword = offsets[position];
-      let body = bodies.get(keyword);
-      if (body === void 0) {
-        body = skipLetIn(masked, keyword);
-        bodies.set(keyword, body);
+    const scope2 = boundaries[low - 1]?.scope;
+    if (scope2?.body !== void 0) {
+      const linked = [];
+      let last = scope2;
+      while (last.end === void 0 && last.body !== void 0) {
+        linked.push(last);
+        const child2 = starts.get(last.body);
+        if (!child2) {
+          last.end = scopeExprEnd(file2, last.body);
+          break;
+        }
+        last = child2;
       }
-      if (body <= index) continue;
-      let end = ends.get(body);
-      if (end === void 0) {
-        end = exprEnd(masked, body);
-        ends.set(body, end);
-      }
-      return { start: body, end };
+      if (last.end === void 0) return void 0;
+      for (const entry2 of linked) entry2.end = last.end;
+      return { start: scope2.start, end: last.end };
     }
-    return void 0;
+    return recursive2.get(container);
   };
 }
 function sourceLiterals(file2) {
