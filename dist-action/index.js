@@ -21457,6 +21457,7 @@ function attrsetOf(file, arg) {
   return brace;
 }
 var inheritCache = /* @__PURE__ */ new WeakMap();
+var inheritScopeCache = /* @__PURE__ */ new WeakMap();
 function inheritStatements(file) {
   const cached = inheritCache.get(file);
   if (cached) return cached;
@@ -21472,6 +21473,25 @@ function inheritStatements(file) {
   inheritCache.set(file, found);
   return found;
 }
+function inheritStatementsAt(file, open3) {
+  let scopes2 = inheritScopeCache.get(file);
+  if (!scopes2) {
+    scopes2 = /* @__PURE__ */ new Map();
+    for (const statement2 of inheritStatements(file)) {
+      const scope2 = enclosingOpen(file, statement2.offset);
+      const statements2 = scopes2.get(scope2) ?? [];
+      statements2.push(statement2);
+      scopes2.set(scope2, statements2);
+    }
+    inheritScopeCache.set(file, scopes2);
+  }
+  let statements = scopes2.get(open3);
+  if (!statements) {
+    statements = [];
+    scopes2.set(open3, statements);
+  }
+  return statements;
+}
 function inheritedFromBuiltins(file) {
   const names = /* @__PURE__ */ new Set();
   if (isShadowed(file, "builtins")) return names;
@@ -21486,8 +21506,7 @@ function attrKeys(file, open3) {
     const first = binding2.path[0];
     if (first) keys.add(first);
   }
-  for (const statement2 of inheritStatements(file)) {
-    if (enclosingOpen(file, statement2.offset) !== open3) continue;
+  for (const statement2 of inheritStatementsAt(file, open3)) {
     for (const { name } of statement2.names) keys.add(name);
   }
   return keys;
@@ -21506,7 +21525,17 @@ function wordOffsets(file, word) {
   }
   return offsets;
 }
+var shadowCache = /* @__PURE__ */ new WeakMap();
 function isShadowed(file, name) {
+  let cache = shadowCache.get(file);
+  if (!cache) {
+    cache = /* @__PURE__ */ new Map();
+    shadowCache.set(file, cache);
+  }
+  if (!cache.has(name)) cache.set(name, readShadowed(file, name));
+  return cache.get(name);
+}
+function readShadowed(file, name) {
   for (const statement2 of inheritStatements(file)) {
     if (statement2.source !== void 0 && statement2.source !== "builtins" && statement2.names.some((entry2) => entry2.name === name)) {
       return true;
@@ -24023,15 +24052,16 @@ function producerOf(file, arg, fromBuiltins) {
 }
 function consumerKind(file, ident, fromBuiltins) {
   const { text: text6, segments } = ident;
+  const last = segments.at(-1) ?? "";
+  let kind;
+  if (text6 === "import" || text6 === "builtins.import" || last === "callPackage") kind = "import";
+  else if (segments.length === 2 && segments[0] === "builtins" && BUILTIN_READERS.has(last)) kind = "read";
+  else if (segments.length === 1 && BUILTIN_READERS.has(last) && fromBuiltins.has(last)) kind = "read";
+  else if (segments.length >= 2 && segments.includes("lib") && LIB_READERS.has(last)) kind = "read";
+  else return void 0;
   if (segments.length === 1 && isShadowed(file, text6)) return void 0;
   if (segments[0] === "builtins" && isShadowed(file, "builtins")) return void 0;
-  const last = segments.at(-1) ?? "";
-  if (text6 === "import" || text6 === "builtins.import") return "import";
-  if (last === "callPackage") return "import";
-  if (segments.length === 2 && segments[0] === "builtins" && BUILTIN_READERS.has(last)) return "read";
-  if (segments.length === 1 && BUILTIN_READERS.has(last) && fromBuiltins.has(last) && !isShadowed(file, last)) return "read";
-  if (segments.length >= 2 && segments.includes("lib") && LIB_READERS.has(last)) return "read";
-  return void 0;
+  return kind;
 }
 function consumerFindings(file) {
   const fromBuiltins = inheritedFromBuiltins(file);
@@ -26205,34 +26235,104 @@ function builderCalls(file) {
     const open3 = calledAttrset(file, ident);
     if (open3 !== void 0) calls.push({ builder: last, open: open3 });
   }
-  return calls;
+  return calls.sort((a, b) => a.open - b.open);
 }
-function bindingScope(file, index) {
+function bindingScopes(file) {
   const { masked } = file;
-  const container = enclosingOpen(file, index);
-  const containerEnd = container < 0 ? masked.length : matchingClose(file, container);
-  const end = containerEnd < 0 ? masked.length : containerEnd;
-  if (container >= 0 && masked[container] === "{" && previousWord(masked, container) === "rec") return { start: container, end };
-  const lets = [...masked.slice(0, index).matchAll(/(?<![A-Za-z0-9_'.-])let(?![A-Za-z0-9_'-])/g)].reverse();
-  for (const keyword of lets) {
-    if (enclosingOpen(file, keyword.index) !== container) continue;
-    const body = skipLetIn(masked, keyword.index);
-    if (body > index) return { start: body, end: exprEnd(masked, body) };
+  const lets = /* @__PURE__ */ new Map();
+  const bodies = /* @__PURE__ */ new Map();
+  const ends = /* @__PURE__ */ new Map();
+  const recursive = /* @__PURE__ */ new Map();
+  for (const keyword of masked.matchAll(/(?<![A-Za-z0-9_'.-])let(?![A-Za-z0-9_'-])/g)) {
+    const container = enclosingOpen(file, keyword.index);
+    const offsets = lets.get(container) ?? [];
+    offsets.push(keyword.index);
+    lets.set(container, offsets);
   }
-  return void 0;
+  return (index) => {
+    const container = enclosingOpen(file, index);
+    if (!recursive.has(container)) {
+      const close2 = matchingClose(file, container);
+      recursive.set(container, container >= 0 && masked[container] === "{" && previousWord(masked, container) === "rec" ? { start: container, end: close2 < 0 ? masked.length : close2 } : void 0);
+    }
+    const rec = recursive.get(container);
+    if (rec) return rec;
+    const offsets = lets.get(container);
+    if (!offsets) return void 0;
+    let low = 0;
+    let high = offsets.length;
+    while (low < high) {
+      const middle = low + high >>> 1;
+      if (offsets[middle] < index) low = middle + 1;
+      else high = middle;
+    }
+    for (let position = low - 1; position >= 0; position -= 1) {
+      const keyword = offsets[position];
+      let body = bodies.get(keyword);
+      if (body === void 0) {
+        body = skipLetIn(masked, keyword);
+        bodies.set(keyword, body);
+      }
+      if (body <= index) continue;
+      let end = ends.get(body);
+      if (end === void 0) {
+        end = exprEnd(masked, body);
+        ends.set(body, end);
+      }
+      return { start: body, end };
+    }
+    return void 0;
+  };
 }
-function sourceLiterals(file, open3) {
+function sourceLiterals(file) {
+  const { masked } = file;
+  const scopeOf2 = bindingScopes(file);
   const found = [];
-  for (const match2 of file.masked.matchAll(/(?<![A-Za-z0-9_'.-])src\s*=\s*(\.{1,2}(?:\/\.{1,2})+)\s*;/g)) {
-    const scope2 = bindingScope(file, match2.index);
-    if (scope2 && scope2.start < open3 && open3 < scope2.end) found.push(match2[1] ?? "");
+  const addBinding = (offset, end) => {
+    const scope2 = scopeOf2(offset);
+    if (!scope2) return;
+    const start2 = skipSpace2(masked, skipSpace2(masked, end) + 1);
+    const text6 = masked.slice(start2, exprEnd(masked, start2)).trim();
+    found.push({ ...scope2, literal: DIR_LITERAL.test(text6) ? text6 : void 0 });
+  };
+  for (const ident of file.idents) {
+    if (ident.text !== "src") continue;
+    if (isBindingKey(masked, ident.offset, ident.end - ident.offset)) addBinding(ident.offset, ident.end);
+    else if (!inInherit(masked, ident.offset) && !isValueUse(file, ident)) return [];
+  }
+  for (const string3 of file.strings) {
+    if (string3.interpolated || string3.value !== "src" || masked[previousNonSpace(masked, string3.start)] === ".") continue;
+    if (isBindingKey(masked, string3.start, string3.end - string3.start)) addBinding(string3.start, string3.end);
+  }
+  for (const statement2 of inheritStatements(file)) {
+    if (!statement2.names.some(({ name }) => name === "src")) continue;
+    const scope2 = scopeOf2(statement2.offset);
+    if (scope2) found.push({ ...scope2, literal: void 0 });
   }
   return found;
+}
+function inheritedLiteralLookup(file) {
+  const events = sourceLiterals(file).flatMap(({ start: start2, end, literal: literal4 }) => start2 + 1 >= end ? [] : [
+    { offset: start2 + 1, literal: literal4, delta: 1 },
+    { offset: end, literal: literal4, delta: -1 }
+  ]).sort((a, b) => a.offset - b.offset);
+  const active2 = /* @__PURE__ */ new Map();
+  let next = 0;
+  return (open3) => {
+    while (next < events.length && events[next].offset <= open3) {
+      const event = events[next++];
+      const count = (active2.get(event.literal) ?? 0) + event.delta;
+      if (count === 0) active2.delete(event.literal);
+      else active2.set(event.literal, count);
+    }
+    return active2.size === 1 ? active2.keys().next().value : void 0;
+  };
 }
 function findings3(project, file) {
   const found = [];
   const calls = builderCalls(file);
   const isFlake = file.path === "flake.nix" || file.path.endsWith("/flake.nix");
+  let inheritedLiteral;
   for (const { builder, open: open3 } of calls) {
     const binding2 = bindingNamed(file, open3, "src");
     if (binding2) {
@@ -26251,12 +26351,12 @@ function findings3(project, file) {
       }
       continue;
     }
-    const inherited = inheritStatements(file).find(
-      (statement2) => statement2.source === void 0 && enclosingOpen(file, statement2.offset) === open3 && statement2.names.some((entry3) => entry3.name === "src")
+    const inherited = inheritStatementsAt(file, open3).find(
+      (statement2) => statement2.source === void 0 && statement2.names.some((entry3) => entry3.name === "src")
     );
     if (!inherited) continue;
-    const literals = [...new Set(sourceLiterals(file, open3))];
-    const literal4 = literals.length === 1 ? literals[0] : void 0;
+    inheritedLiteral ??= inheritedLiteralLookup(file);
+    const literal4 = inheritedLiteral(open3);
     if (literal4 === void 0) continue;
     const dir = resolveDir(file, literal4);
     const where = dir === void 0 ? void 0 : describeDir(project, dir);
