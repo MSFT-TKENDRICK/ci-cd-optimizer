@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
   push:
     branches: [main]
@@ -15,7 +16,7 @@ concurrency:
 permissions:
   contents: read
 
-# Independent jobs run in parallel so the slowest check (typed ESLint) bounds wall-clock time.
+# Independent checks run in parallel; the longest job determines the critical path.
 jobs:
   test:
     runs-on: ubuntu-24.04
@@ -51,17 +52,16 @@ jobs:
     # Exercise the shipped image through its published port, not just service mocks.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:17.6
-        env:
-          POSTGRES_PASSWORD: postgres
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 15
     steps:
+      - name: Start postgres in the background
+        run: |
+          docker run -d --name ci-postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            --health-cmd "pg_isready -U postgres" \
+            --health-interval 2s \
+            --health-timeout 5s \
+            --health-retries 15 \
+            postgres:17.6
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -76,11 +76,21 @@ jobs:
           cache-from: type=gha,scope=ci-smoke
           cache-to: type=gha,mode=max,scope=ci-smoke
       - run: node test/service/container-smoke.mjs
+      - name: Wait for postgres
+        run: |
+          for _ in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' ci-postgres)
+            [ "$status" = healthy ] && exit 0
+            sleep 2
+          done
+          echo "::error::postgres did not become healthy (last status: $status)"
+          docker logs ci-postgres
+          exit 1
       - name: Durable production image
         run: node test/service/container-smoke.mjs
         env:
           SMOKE_DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
-          SMOKE_DATABASE_CONTAINER: ${{ job.services.postgres.id }}
+          SMOKE_DATABASE_CONTAINER: ci-postgres
 
   lint:
     runs-on: ubuntu-24.04
@@ -99,6 +109,7 @@ jobs:
       tool-ref: ${{ github.sha }}
 
   build:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
