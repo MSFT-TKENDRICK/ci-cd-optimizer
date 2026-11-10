@@ -3,7 +3,7 @@ import { DEFAULT_HILL_CLIMB_CONFIG, type HillClimbConfig } from "../../src/exper
 import { decide, isExpired, renderDecision } from "../../src/experiments/decide.js";
 import { armBranch, trunkBranch } from "../../src/experiments/manifest.js";
 import { scoreArm, type BranchMeasurement, type ExperimentMeasurements } from "../../src/experiments/score.js";
-import { sampleManifest } from "./fixtures.js";
+import { ciMeasurement, sampleManifest } from "./fixtures.js";
 
 const config = DEFAULT_HILL_CLIMB_CONFIG;
 const corpus = (precision: number, recall: number, fixRate = 1, durationMs = 100) => ({ precision, recall, f1: 0, fixRate, durationMs });
@@ -62,23 +62,23 @@ describe("scoreArm (CI)", () => {
   const fast = [200, 210, 190, 205, 199, 220];
 
   it("needs minSamples on both sides", () => {
-    const score = scoreArm(manifest, branch("trunk", { ci: { ci: slow } }), branch("a", { ci: { ci: fast.slice(0, 2) } }), ciConfig);
+    const score = scoreArm(manifest, ciMeasurement("trunk", slow), ciMeasurement("a", fast.slice(0, 2)), ciConfig);
     expect(score.metrics[0]?.needs).toEqual({ control: 0, arm: 3 });
     expect(score.pending).toEqual(["ci needs more CI samples"]);
   });
 
   it("counts significant speedups and ignores noise", () => {
-    const significant = scoreArm(manifest, branch("trunk", { ci: { ci: slow } }), branch("a", { ci: { ci: fast } }), ciConfig);
+    const significant = scoreArm(manifest, ciMeasurement("trunk", slow), ciMeasurement("a", fast), ciConfig);
     expect(significant.metrics[0]?.pValue).toBeLessThan(0.05);
     expect(significant.deterministic).toBeGreaterThan(0.3);
     expect(significant.qualifies).toBe(true);
-    const noisy = scoreArm(manifest, branch("trunk", { ci: { ci: [300, 100, 250, 120, 280] } }), branch("a", { ci: { ci: [290, 110, 240, 130, 260] } }), ciConfig);
+    const noisy = scoreArm(manifest, ciMeasurement("trunk", [300, 100, 250, 120, 280]), ciMeasurement("a", [290, 110, 240, 130, 260]), ciConfig);
     expect(noisy.metrics[0]?.delta).toBe(0);
     expect(noisy.qualifies).toBe(false);
   });
 
   it("fails significant slowdowns beyond the regression budget", () => {
-    const score = scoreArm(manifest, branch("trunk", { ci: { ci: fast } }), branch("a", { ci: { ci: slow } }), ciConfig);
+    const score = scoreArm(manifest, ciMeasurement("trunk", fast), ciMeasurement("a", slow), ciConfig);
     expect(score.failures[0]).toMatch(/^ci regressed/);
   });
 });
@@ -128,7 +128,7 @@ describe("decide", () => {
     const manifest = sampleManifest({ kind: "pipeline" });
     const decision = decide(
       manifest,
-      measurements([branch("lockfile", { ci: { ci: [1, 2] } }), branch("packagemanager", { ci: { ci: [] } })], branch("trunk", { ci: { ci: [1, 2, 3] } })),
+      measurements([ciMeasurement("lockfile", [1, 2]), ciMeasurement("packagemanager", [])], ciMeasurement("trunk", [1, 2, 3])),
       ciConfig,
       { ...refs, now },
     );

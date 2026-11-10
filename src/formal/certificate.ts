@@ -31,6 +31,7 @@ const SELECTION_ASSUMPTIONS = [
   "The universe is exactly the manifest's unique ASCII-named arms, ordered by ASCII name. Missing measurements are pending; unlisted measurements are excluded.",
   "The objective is a quantized weighted score, not elapsed time itself, a global search optimum, or proof that a recommendation addresses a real bottleneck.",
   "Committed observations (including checks, changed paths and judge scores) are inputs, not authenticated evidence. Arm code can fabricate measurements; Git blob binding does not attest execution.",
+  "CI inputs require distinct successful first-attempt workflow_dispatch observations matching recorded heads, expected branches and workflow identity, with durations recomputed from timestamps. This offline certificate does not contact GitHub; consistent provenance is not authenticated execution or equivalent workload.",
   "Metric extraction, medians, observed-tail Mann-Whitney filtering, dependency parsing, clock/expiry interpretation and decimal quantization are tested trusted preprocessing, not proved by the integer selector.",
   "CI noise filtering is an unadjusted repeated-comparison heuristic, not a significance guarantee; regression gates apply to scored deltas after that filter.",
   "At expiry the reducer may promote the best currently eligible candidate despite unfinished nonfailed candidates. Their unknown outcomes and all unproposed candidates remain outside the maximum claim.",

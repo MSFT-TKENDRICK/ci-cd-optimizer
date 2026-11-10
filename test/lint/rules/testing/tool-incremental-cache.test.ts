@@ -32,7 +32,7 @@ ruleTester(rule, {
     {
       name: "tsc and jest without caches",
       files: wf("      - run: npx tsc --noEmit\n      - run: npx jest --ci\n"),
-      errors: [{ line: 6, messageIncludes: "tsc" }, { line: 7, messageIncludes: "Jest" }],
+      errors: [{ line: 6, messageIncludes: "TypeScript" }, { line: 7, messageIncludes: "Jest" }],
     },
   ],
 });

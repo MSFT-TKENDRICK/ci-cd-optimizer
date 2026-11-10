@@ -139,13 +139,15 @@ jobs:
         id: bundle
         run: npm run bundle
       - name: Execute the formal checker from the shipped Action bundle
+        id: formal_bundle_check
         run: npm run formal:check-bundle
       - name: Action bundle is up to date
         id: bundle_check
+        if: ${{ !cancelled() && steps.bundle.outcome == 'success' }}
         run: |
           git diff --exit-code --stat -- dist-action || { echo "::error::dist-action is stale; run npm run bundle and commit it."; exit 1; }
       - name: Upload generated bundle for reconciliation
-        if: failure() && steps.bundle.outcome == 'success' && steps.bundle_check.outcome == 'failure'
+        if: failure() && steps.bundle.outcome == 'success' && (steps.bundle_check.outcome == 'failure' || steps.formal_bundle_check.outcome == 'failure')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: action-bundle-${{ github.sha }}

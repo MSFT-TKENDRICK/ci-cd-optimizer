@@ -12,7 +12,7 @@ import { parseMeasurements } from "../../src/experiments/measurements.js";
 import { checkCertificate, createCacheCertificate, createDecisionCertificate, type DecisionSources } from "../../src/formal/certificate.js";
 import { canonicalJson, certificateDigest, object, parseStrictJson, type Json } from "../../src/formal/json.js";
 import { readCommittedBlob, type SourceBlob } from "../../src/formal/source.js";
-import { sampleManifest } from "../experiments/fixtures.js";
+import { ciMeasurement, sampleManifest } from "../experiments/fixtures.js";
 
 const root = join(process.cwd(), ".proof-build", `certificate-fixture-${randomUUID()}`);
 const workflowPath = ".github/workflows/cache.yml";
@@ -30,6 +30,12 @@ const evidence = {
 let commit: string;
 let cacheSource: SourceBlob;
 let decisionSources: DecisionSources;
+let ciSources: DecisionSources;
+const ciEvidence = {
+  experiment: "setup-cache-yarn", collectedAt: at,
+  control: ciMeasurement("trunk", [300, 310, 305, 320, 298, 315]),
+  arms: [ciMeasurement("lockfile", [200, 210, 190, 205, 199, 220]), ciMeasurement("packagemanager", [300, 310, 305, 320, 298, 315])],
+};
 
 const git = (...args: string[]) => execFileSync("git", [
   "--no-pager", "-C", root, "-c", "core.autocrlf=false", "-c", `core.hooksPath=${join(root, "disabled-hooks")}`,
@@ -45,18 +51,23 @@ beforeAll(async () => {
     writeFile(join(root, "config.yml"), stringify(DEFAULT_HILL_CLIMB_CONFIG)),
     writeFile(join(root, "manifest.yml"), serializeManifest(sampleManifest())),
     writeFile(join(root, "measurements.json"), JSON.stringify(evidence)),
+    writeFile(join(root, "ci-config.yml"), stringify({ ...DEFAULT_HILL_CLIMB_CONFIG, metrics: [{ id: "ci", source: "ci", direction: "minimize", weight: 1, workflow: "ci.yml" }] })),
+    writeFile(join(root, "ci-manifest.yml"), serializeManifest(sampleManifest({ kind: "pipeline" }))),
+    writeFile(join(root, "ci-measurements.json"), JSON.stringify(ciEvidence)),
     writeFile(join(root, "invalid-utf8"), Buffer.from([0xff])),
   ]);
   git("add", "--all");
   git("commit", "--quiet", "-m", commitMessage);
   commit = git("rev-parse", "HEAD");
-  const [cache, config, manifest, measurements] = await Promise.all(
-    [workflowPath, "config.yml", "manifest.yml", "measurements.json"].map((path) => readCommittedBlob(root, commit, path)),
+  const [cache, config, manifest, measurements, ciConfig, ciManifest, ciMeasurements] = await Promise.all(
+    [workflowPath, "config.yml", "manifest.yml", "measurements.json", "ci-config.yml", "ci-manifest.yml", "ci-measurements.json"].map((path) => readCommittedBlob(root, commit, path)),
   );
   if (!cache || !config || !manifest || !measurements) throw new Error("Missing test source.");
   cacheSource = cache;
   decisionSources = { config, manifest, measurements };
-});
+  if (!ciConfig || !ciManifest || !ciMeasurements) throw new Error("Missing CI test source.");
+  ciSources = { config: ciConfig, manifest: ciManifest, measurements: ciMeasurements };
+}, 30_000);
 
 afterAll(async () => { await rm(root, { force: true, recursive: true }); });
 
@@ -140,6 +151,26 @@ describe("source-bound cache certificates", () => {
 });
 
 describe("decision certificates recompute production inputs and selection", () => {
+  it("binds CI provenance to committed inputs without pretending to authenticate its execution", async () => {
+    const certificate = createDecisionCertificate(ciSources, at);
+    expect(certificate.result.decision).toMatchObject({ action: "promote", winner: "lockfile" });
+    expect(certificate.assumptions.join(" ")).toContain("offline certificate does not contact GitHub");
+    expect(await checkCertificate(canonicalJson(certificate), root)).toMatchObject({ status: "source-bound-valid" });
+    const legacy = structuredClone(ciEvidence);
+    for (const branch of [legacy.control, ...legacy.arms]) delete branch.ciEvidence;
+    const missing = createDecisionCertificate({ ...ciSources, measurements: reblob(ciSources.measurements, JSON.stringify(legacy)) }, at);
+    expect(missing.result.decision.action).toBe("wait");
+    const prContext = structuredClone(ciEvidence);
+    for (const branch of [prContext.control, ...prContext.arms]) {
+      for (const sample of branch.ciEvidence?.ci?.samples ?? []) sample.event = "pull_request";
+    }
+    const unsupported = createDecisionCertificate({ ...ciSources, measurements: reblob(ciSources.measurements, JSON.stringify(prContext)) }, at);
+    expect(unsupported.result.decision.action).toBe("wait");
+    const forged = object(parseStrictJson(canonicalJson(unsupported)), "certificate");
+    object(object(forged.result, "result").decision, "decision").action = "promote";
+    await expect(checkCertificate(resign(forged))).rejects.toThrow(/recomputation/);
+  });
+
   it("binds all inputs and records a finite, complete candidate universe", async () => {
     const certificate = createDecisionCertificate(decisionSources, at);
     expect(certificate.result).toMatchObject({

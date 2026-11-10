@@ -820,14 +820,14 @@
     },
     {
       "id": "testing/tool-incremental-cache",
-      "metadataSha256": "a0d31dfda1c42e83210b0cb298a73f642d4b3f2a550ac2d791f4c277e0bbfd55",
+      "metadataSha256": "50bd7fefc29ed39dad06d73bf31de8747593bba817d64e27ab3b48dfe8495e19",
       "detector": {
         "assurance": "heuristic-not-formally-proved",
         "claim": "ESLint, tsc and Jest should keep their incremental caches between CI runs."
       },
       "recommendation": {
         "assurance": "conditional-not-universally-proved",
-        "rationale": "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can skip unchanged files, but hosted runners start empty. Persisting their cache files makes repeat runs, including agent iterations on a pull request, proportional to what changed."
+        "rationale": "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can reuse compatible prior work. Fresh jobs may lack that state, but persistent runners and tool-managed caches can already provide it. Cache restoration, invalidation and upload costs can outweigh savings; measure repeat runs rather than assuming runtime becomes proportional to changed files."
       },
       "autofix": "not-provided",
       "engineContracts": [
@@ -837,14 +837,14 @@
     },
     {
       "id": "testing/unconditional-debug-upload",
-      "metadataSha256": "6ae87cf87c4cc5ef3be96827d4d8726a2e8a6a69bae0922a586bfd630034a193",
+      "metadataSha256": "2de3be9321d1dc8e4104dd6be2eb00d3fffb718799f1018d6be3aa6c536d8467",
       "detector": {
         "assurance": "heuristic-not-formally-proved",
-        "claim": "Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail."
+        "claim": "Consider failure-only uploads for test artifacts used solely for debugging."
       },
       "recommendation": {
         "assurance": "conditional-not-universally-proved",
-        "rationale": "A step without `if:` runs only after earlier steps succeed, so a debugging upload placed after the tests uploads megabytes of traces and screenshots on every green run and nothing when the tests fail. `if: failure()` uploads exactly when the output is needed."
+        "rationale": "A step's default success condition can skip a debugging upload after an earlier unhandled failure. When successful-run artifacts are not needed, `if: failure()` may avoid unnecessary transfers while retaining failure diagnostics. Visible conditions and consumers are only a heuristic: verify artifact consumers, continue-on-error behavior and diagnostic needs before changing the condition."
       },
       "autofix": "not-formally-proved",
       "engineContracts": [
@@ -973,14 +973,14 @@
     },
     {
       "id": "triggers/workflow-run-chain",
-      "metadataSha256": "dd39eb29cff4709c5a07fba8d9165128395d92fbc6f306fb73ddf50f520c1d9c",
+      "metadataSha256": "b06d23c5a864c90e785f4818e6f5612f4a18512d1062fd5547805c48f29454cc",
       "detector": {
         "assurance": "heuristic-not-formally-proved",
         "claim": "Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job."
       },
       "recommendation": {
         "assurance": "conditional-not-universally-proved",
-        "rationale": "A `workflow_run` trigger only fires after the upstream workflow finishes, so the downstream work waits for a second queue slot, a fresh runner, and another checkout before it starts. When pull request volume is high those extra hops add minutes to every change and make the run graph harder to follow. Calling the downstream work as a reusable workflow job with `needs:` keeps it in the same run, shares artifacts directly, and starts it the moment its dependencies succeed."
+        "rationale": "A completed `workflow_run` subscription waits for the upstream workflow, which may include jobs the follow-up does not need. A dependent job can express narrower prerequisites, but it still has scheduling and runner costs; consolidation does not guarantee a faster run. Preserve deliberate privilege boundaries, trigger semantics and artifact dependencies, then measure whether the changed dependency graph reduces waiting."
       },
       "autofix": "not-provided",
       "engineContracts": [

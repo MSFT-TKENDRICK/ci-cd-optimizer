@@ -89,7 +89,7 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | [`testing/playwright-browser-cache`](#testing-playwright-browser-cache) | practice | warn | recommended, agentic, strict |  | Jobs that download Playwright browsers should cache them or run in the Playwright container image. |
 | [`testing/tool-incremental-cache`](#testing-tool-incremental-cache) | practice | info | agentic, strict |  | ESLint, tsc and Jest should keep their incremental caches between CI runs. |
 | [`testing/watch-mode-in-ci`](#testing-watch-mode-in-ci) | practice | warn | recommended, agentic, strict |  | Test runners and compilers in CI should run once instead of in watch mode. |
-| [`testing/unconditional-debug-upload`](#testing-unconditional-debug-upload) | practice | info | agentic, strict | yes | Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail. |
+| [`testing/unconditional-debug-upload`](#testing-unconditional-debug-upload) | practice | info | agentic, strict | yes | Consider failure-only uploads for test artifacts used solely for debugging. |
 | [`testing/masked-failures`](#testing-masked-failures) | practice | warn | recommended, agentic, strict |  | Test failures should fail the job, not be silenced by `continue-on-error: true` or `\|\| true`. |
 | [`testing/cache-disabled-install`](#testing-cache-disabled-install) | practice | info | agentic, strict |  | Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps. |
 | [`testing/fixed-sleep`](#testing-fixed-sleep) | practice | warn | recommended, agentic, strict |  | Run steps should wait for services to become ready instead of sleeping for a fixed time. |
@@ -2425,7 +2425,7 @@ References:
 
 Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job.
 
-**Why:** A `workflow_run` trigger only fires after the upstream workflow finishes, so the downstream work waits for a second queue slot, a fresh runner, and another checkout before it starts. When pull request volume is high those extra hops add minutes to every change and make the run graph harder to follow. Calling the downstream work as a reusable workflow job with `needs:` keeps it in the same run, shares artifacts directly, and starts it the moment its dependencies succeed.
+**Why:** A completed `workflow_run` subscription waits for the upstream workflow, which may include jobs the follow-up does not need. A dependent job can express narrower prerequisites, but it still has scheduling and runner costs; consolidation does not guarantee a faster run. Preserve deliberate privilege boundaries, trigger semantics and artifact dependencies, then measure whether the changed dependency graph reduces waiting.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
@@ -2977,7 +2977,7 @@ References:
 
 ESLint, tsc and Jest should keep their incremental caches between CI runs.
 
-**Why:** ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can skip unchanged files, but hosted runners start empty. Persisting their cache files makes repeat runs, including agent iterations on a pull request, proportional to what changed.
+**Why:** ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can reuse compatible prior work. Fresh jobs may lack that state, but persistent runners and tool-managed caches can already provide it. Cache restoration, invalidation and upload costs can outweigh savings; measure repeat runs rather than assuming runtime becomes proportional to changed files.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
@@ -3044,9 +3044,9 @@ References:
 
 ### testing/unconditional-debug-upload
 
-Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail.
+Consider failure-only uploads for test artifacts used solely for debugging.
 
-**Why:** A step without `if:` runs only after earlier steps succeed, so a debugging upload placed after the tests uploads megabytes of traces and screenshots on every green run and nothing when the tests fail. `if: failure()` uploads exactly when the output is needed.
+**Why:** A step's default success condition can skip a debugging upload after an earlier unhandled failure. When successful-run artifacts are not needed, `if: failure()` may avoid unnecessary transfers while retaining failure diagnostics. Visible conditions and consumers are only a heuristic: verify artifact consumers, continue-on-error behavior and diagnostic needs before changing the condition.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low; autofix available

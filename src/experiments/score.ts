@@ -2,9 +2,10 @@ import { BigNumber } from "bignumber.js";
 import { mannWhitneyGreater, median } from "../alerts/stats.js";
 import { evaluateCandidate, OBJECTIVE_SCALE, quantize, WEIGHT_SCALE, type KernelCandidate } from "../formal/selection.js";
 import { matchesGlob } from "../utils.js";
+import { ciProjection, validatedCiSeries, type CiEvidence } from "./ci-evidence.js";
 import { validateHillClimbConfig, type HillClimbConfig, type MetricSpec } from "./config.js";
 import type { CorpusMetrics } from "./corpus.js";
-import type { ExperimentManifest } from "./manifest.js";
+import { armBranch, trunkBranch, type ExperimentManifest } from "./manifest.js";
 
 /** Everything the grader measured for one branch (an arm or the trunk control). */
 export interface BranchMeasurement {
@@ -13,8 +14,9 @@ export interface BranchMeasurement {
   pullRequest?: number;
   /** `rules` experiments: benchmark metrics of this branch's engine build. */
   corpus?: CorpusMetrics;
-  /** `pipeline` experiments: metric id -> samples (seconds) from successful runs on this branch. */
+  /** Display-compatible projection only: CI eligibility additionally requires matching ciEvidence. */
   ci?: Record<string, number[]>;
+  ciEvidence?: Record<string, CiEvidence>;
   /** undefined while checks are still running. */
   testsPassed?: boolean;
   changedPaths: string[];
@@ -42,6 +44,7 @@ export interface MetricComparison {
   pValue?: number;
   /** Samples still needed for a CI metric (control, arm). */
   needs?: { control: number; arm: number };
+  evidenceIssue?: string;
   error?: string;
 }
 
@@ -92,7 +95,7 @@ function corpusValue(metrics: CorpusMetrics | undefined, id: string): number | u
   }
 }
 
-function compare(spec: MetricSpec, control: BranchMeasurement, arm: BranchMeasurement, config: HillClimbConfig): MetricComparison {
+function compare(spec: MetricSpec, control: BranchMeasurement, arm: BranchMeasurement, config: HillClimbConfig, manifest: ExperimentManifest): MetricComparison {
   const base: MetricComparison = { id: spec.id, weight: finite(spec.weight, 1_000_000) ? spec.weight : 0, direction: spec.direction, delta: 0 };
   if (spec.source === "corpus") {
     const c = corpusValue(control.corpus, spec.id);
@@ -102,17 +105,24 @@ function compare(spec: MetricSpec, control: BranchMeasurement, arm: BranchMeasur
     if (!finite(c, maximum) || !finite(a, maximum)) return { ...base, error: `${spec.id} contains an invalid measurement` };
     return { ...base, control: c, arm: a, delta: round(relativeDelta(spec, c, a)) };
   }
-  const cSamples = control.ci?.[spec.id] ?? [];
-  const aSamples = arm.ci?.[spec.id] ?? [];
-  if (![cSamples, aSamples].every((samples) => Array.isArray(samples) && samples.length <= 10_000 && Array.from(samples).every((sample) => finite(sample, 1_000_000_000_000)))) {
+  if (![ciProjection(control, spec.id), ciProjection(arm, spec.id)].every((samples) => Array.isArray(samples) && samples.length <= 10_000 && Array.from(samples).every((sample) => finite(sample, 1_000_000_000_000)))) {
     return { ...base, error: `${spec.id} contains invalid CI samples` };
   }
+  const cEvidence = validatedCiSeries(spec, control, { branch: trunkBranch(manifest.name), since: manifest.createdAt });
+  const aEvidence = validatedCiSeries(spec, arm, { branch: armBranch(manifest.name, arm.arm), since: manifest.createdAt });
+  const cSamples = cEvidence.values;
+  const aSamples = aEvidence.values;
   const minSamples = config.selection.minSamples;
   if (!Number.isInteger(minSamples) || minSamples < 2 || minSamples > 10_000 || !finite(config.selection.pValue, 1)) {
     return { ...base, error: "invalid sampling policy" };
   }
+  const controlRuns = new Set(cEvidence.runIds);
+  if ((cEvidence.cohort && aEvidence.cohort && cEvidence.cohort !== aEvidence.cohort) || aEvidence.runIds.some((id) => controlRuns.has(id))) {
+    return { ...base, needs: { control: minSamples, arm: minSamples }, evidenceIssue: `${spec.id} mixes repositories/workflow identities or reuses the control's runs` };
+  }
   if (cSamples.length < minSamples || aSamples.length < minSamples) {
-    return { ...base, needs: { control: Math.max(0, minSamples - cSamples.length), arm: Math.max(0, minSamples - aSamples.length) } };
+    const issue = cEvidence.issue ?? aEvidence.issue;
+    return { ...base, needs: { control: Math.max(0, minSamples - cSamples.length), arm: Math.max(0, minSamples - aSamples.length) }, ...(issue ? { evidenceIssue: issue } : {}) };
   }
   const c = median(cSamples);
   const a = median(aSamples);
@@ -133,7 +143,7 @@ export function evaluateArm(
   config: HillClimbConfig,
 ): { score: ArmScore; candidate: KernelCandidate } {
   const specs = metricsFor(manifest, config);
-  const metrics = specs.map((spec) => compare(spec, control, arm, config));
+  const metrics = specs.map((spec) => compare(spec, control, arm, config, manifest));
   const pending: string[] = [];
   const failures: string[] = [];
   const configProblems = validateHillClimbConfig(config).problems;
@@ -160,7 +170,7 @@ export function evaluateArm(
   for (const metric of metrics) {
     const spec = specs.find((candidate) => candidate.id === metric.id);
     if (metric.error) failures.push(metric.error);
-    else if (metric.needs && (metric.needs.arm > 0 || metric.needs.control > 0)) pending.push(`${metric.id} needs more CI samples`);
+    else if (metric.needs && (metric.needs.arm > 0 || metric.needs.control > 0)) pending.push(metric.evidenceIssue ?? `${metric.id} needs more CI samples`);
     else if (metric.control === undefined || metric.arm === undefined) {
       if (arm.error === undefined && control.error === undefined) pending.push(`${metric.id} has not been measured`);
     } else if (spec?.maxRegression !== undefined && metric.delta < -spec.maxRegression) {

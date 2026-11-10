@@ -1,4 +1,5 @@
 import { exactKeys, integer, object, parseStrictJson, string, type Json } from "../formal/json.js";
+import { decodeCiEvidence } from "./ci-evidence.js";
 import type { BranchMeasurement, ExperimentMeasurements } from "./score.js";
 
 function number(value: Json | undefined, label: string, maximum = 1_000_000_000_000): number {
@@ -18,7 +19,7 @@ function boolean(value: Json | undefined, label: string): boolean {
 
 function branch(value: Json | undefined): BranchMeasurement {
   const record = object(value, "measurement");
-  exactKeys(record, ["arm", "headSha", "pullRequest", "corpus", "ci", "testsPassed", "changedPaths", "judge", "error"], "measurement");
+  exactKeys(record, ["arm", "headSha", "pullRequest", "corpus", "ci", "ciEvidence", "testsPassed", "changedPaths", "judge", "error"], "measurement");
   const result: BranchMeasurement = { arm: string(record.arm, "measurement.arm"), changedPaths: strings(record.changedPaths, "measurement.changedPaths") };
   if (record.headSha !== undefined) result.headSha = string(record.headSha, "measurement.headSha");
   if (record.pullRequest !== undefined) result.pullRequest = integer(record.pullRequest, "measurement.pullRequest", 1);
@@ -46,6 +47,7 @@ function branch(value: Json | undefined): BranchMeasurement {
       return [id, samples.map((sample) => number(sample, `ci.${id}`))];
     }));
   }
+  if (record.ciEvidence !== undefined) result.ciEvidence = decodeCiEvidence(record.ciEvidence);
   return result;
 }
 

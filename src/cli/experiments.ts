@@ -4,13 +4,14 @@ import { parseArgs } from "node:util";
 import { parse } from "yaml";
 import { readFileAt } from "../github/git.js";
 import type { GitHubClient, RepoRef } from "../github/client.js";
-import { collectMeasurements } from "../experiments/collect.js";
+import { collectMeasurements, verifyCiMeasurements } from "../experiments/collect.js";
 import { HILL_CLIMB_CONFIG_PATH, parseHillClimbConfig, type HillClimbConfig } from "../experiments/config.js";
 import { evaluateCorpus, loadCorpus, loadEngine, parseCase } from "../experiments/corpus.js";
 import { decide, renderDecision } from "../experiments/decide.js";
 import { evaluateBranches } from "../experiments/evaluate.js";
 import { applyDecision, createExperiment, groupExperiments, listExperimentPullRequests, resumeExperiment, type ExperimentState } from "../experiments/github.js";
 import { armBranch, manifestPath, parseExperimentRef, parseManifest, trunkBranch, type ExperimentManifest } from "../experiments/manifest.js";
+import { parseMeasurements } from "../experiments/measurements.js";
 import { generatorContext, knownExperimentNames, validateProposal } from "../experiments/propose.js";
 import { metricsFor, type ExperimentMeasurements } from "../experiments/score.js";
 import { ENGINE_API_VERSION, lint } from "../lint/api.js";
@@ -354,7 +355,7 @@ async function evaluateCommand(args: string[], io: CliIO): Promise<number> {
   if (!values.measurements) throw new UsageError("evaluate needs --measurements (worktree mode) or --engine (single build).");
   const files = await measurementFiles(io, values.measurements);
   for (const file of files) {
-    const measurements = JSON.parse(await readFile(file, "utf8")) as ExperimentMeasurements;
+    const measurements = parseMeasurements(await readFile(file, "utf8"));
     if (measurements.needsCorpus === false) continue;
     const result = await evaluateBranches({
       root: resolvePath(io, values["repo-dir"] ?? "."),
@@ -404,7 +405,7 @@ async function decideCommand(args: string[], io: CliIO): Promise<number> {
   const now = io.now?.() ?? new Date();
   const reports: string[] = [];
   for (const file of await measurementFiles(io, values.measurements)) {
-    let measurements = JSON.parse(await readFile(file, "utf8")) as ExperimentMeasurements;
+    let measurements = parseMeasurements(await readFile(file, "utf8"));
     const name = measurements.experiment;
     const state = states.find((candidate) => candidate.name === name);
     if (!state?.trunk) {
@@ -420,6 +421,7 @@ async function decideCommand(args: string[], io: CliIO): Promise<number> {
     const decision = decide(manifest, measurements, config, { now, trunkRef: trunkBranch(name), armRef: (arm) => armBranch(name, arm) });
     reports.push(renderDecision(manifest, decision));
     if (values.apply) {
+      if (decision.action === "promote") await verifyCiMeasurements(client, repo, { manifest, measurements, config });
       const applied = await applyDecision(client, repo, { manifest, decision, state, config, measurements, dispatchClient: workflowDispatchClient(io, client) });
       io.stderr(`${name}: ${applied.action}${applied.merged ? ` (merged #${applied.merged})` : ""}${applied.closed.length ? `, closed ${applied.closed.map((n) => `#${n}`).join(", ")}` : ""}${applied.dispatched ? `, dispatched ${applied.dispatched} run(s)` : ""}${applied.notes.length ? `; ${applied.notes.join("; ")}` : ""}`);
     } else {

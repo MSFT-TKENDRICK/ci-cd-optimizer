@@ -73,7 +73,12 @@ The following steps are tested TypeScript, **not formal theorems about timing or
 
 - Select configured metrics, compute direction-aware relative deltas, and clamp to ±1. With control magnitude
   below `1e-9`, the delta is zero for no change and otherwise the sign of the improvement.
-- For CI, take medians after at least `minSamples` samples per side. Choose a Mann-Whitney tail **after observing
+- For CI, accept only provenance-backed, distinct, successful first-attempt `workflow_dispatch` observations reporting
+  the recorded head and expected branch, with matching repository/workflow identity and recomputed timestamp durations.
+  Bare legacy arrays, PR merge/draft contexts, retries, stale heads and mismatched projections are unmeasured, not
+  evidence of an improvement. The collector paginates run/check/job inventories and never infers a passing control gate.
+  See [controlled observations and migration](experiments.md#controlled-ci-observations-and-migration).
+- Take CI medians after at least `minSamples` supported observations per side. Choose a Mann-Whitney tail **after observing
   direction**, and zero the delta unless the unrounded p-value is below the configured threshold. Displayed
   p-values are rounded. This is an unadjusted repeated-comparison heuristic: it does not guarantee independent
   samples, equivalent work, causality, noise removal or a calibrated family-wise false-positive rate.
@@ -92,6 +97,10 @@ The formal guarantee starts at the integer candidate vector after this preproces
 benchmark labels, changed-path observations, workflow sampling, the clock, or measurement authenticity.
 **Arm code can fabricate observations or skip work.** Source binding does not fix that. Retain human review
 and independent workload/evidence checks; do not interpret a proved ranking as a proved performance improvement.
+The promotion CLI additionally rechecks consumed CI metadata against GitHub before publication. This tested,
+point-in-time guard does not attest a workflow's actual checkout, equivalent inputs/work, required-test coverage or
+runner conditions. The offline certificate checker makes no GitHub API calls and does **not** authenticate recorded
+provenance; its mechanically checked conclusion starts only after the declared input/preprocessing boundary.
 
 ## Primary-key partition model
 
