@@ -50,7 +50,8 @@ interface RawPull {
 }
 
 export async function listExperimentPullRequests(client: GitHubClient, repo: RepoRef, state: "open" | "closed" | "all" = "open"): Promise<ExperimentPullRequest[]> {
-  const pulls = await paginate<RawPull>(client, "GET /repos/{owner}/{repo}/pulls", { ...repo, state, sort: "updated", direction: "desc" }, state === "open" ? 10 : 3);
+  // Capacity and lifecycle decisions require the complete inventory, not a recent-page sample.
+  const pulls = await paginate<RawPull>(client, "GET /repos/{owner}/{repo}/pulls", { ...repo, state, sort: "updated", direction: "desc" }, Number.POSITIVE_INFINITY);
   return pulls.flatMap((pull) => {
     const ref = parseExperimentRef(pull.head.ref);
     if (!ref) return [];
@@ -214,13 +215,15 @@ export async function resumeExperiment(
   }
   const history = await paginate<RawPull>(client, "GET /repos/{owner}/{repo}/pulls", {
     ...repo, state: "all", head: `${repo.owner}:${trunk}`,
-  });
+  }, Number.POSITIVE_INFINITY);
   const sameRepository = `${repo.owner}/${repo.repo}`.toLowerCase();
+  const outcomeLabels = new Set<string>([PROMOTE_LABEL, ...Object.values(OUTCOME_LABELS)]);
   const isExpectedPull = (pull: RawPull | null): boolean => {
     const recorded = parseMarker(pull?.body ?? "");
     return !!pull && Number.isSafeInteger(pull.number) && pull.number > 0 && pull.state === "open" && pull.draft === true && pull.merged_at === null &&
       pull.head?.ref === trunk && pull.head.sha === expectedSha &&
       pull.head.repo?.full_name?.toLowerCase() === sameRepository && pull.base?.ref === baseBranch &&
+      Array.isArray(pull.labels) && pull.labels.every((label) => typeof label?.name === "string" && !outcomeLabels.has(label.name.toLowerCase())) &&
       recorded?.kind === "experiment" && recorded.fingerprint === name && recorded.attributes.status === "running";
   };
   const matches = history.filter((pull) => pull.head?.ref === trunk);

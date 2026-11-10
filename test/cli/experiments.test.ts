@@ -62,19 +62,19 @@ describe("experiment creation credentials", () => {
 describe("experiment capacity CLI", () => {
   it("uses configured capacity and paginates past unrelated pull requests", async () => {
     await writeFile(join(root, "budget.yml"), "selection:\n  maxConcurrent: 1\n");
-    const raw = (ref: string) => ({
-      number: 10, state: "open", merged_at: null, head: { ref, sha: "a".repeat(40), repo: { full_name: "acme/widgets" } },
+    const raw = (ref: string, number: number) => ({
+      number, state: "open", merged_at: null, head: { ref, sha: "a".repeat(40), repo: { full_name: "acme/widgets" } },
       base: { ref: "main" }, body: "", title: ref, labels: [],
     });
     const client = fakeClient((_route, parameters) =>
-      parameters.page === 1 ? Array.from({ length: 100 }, () => raw("unrelated")) : [raw("experiments/demo/trunk")]);
+      Number(parameters.page) <= 10 ? Array.from({ length: 100 }, (_, index) => raw(`feature/${parameters.page}-${index}`, Number(parameters.page) * 100 + index)) : [raw("experiments/demo/trunk", 1100)]);
     const stdout: string[] = [];
     const exit = await run(["experiments", "capacity", "--repo", "acme/widgets", "--config", "budget.yml"], {
       cwd: root, env: {}, github: () => client, stdout: (line) => stdout.push(line), stderr: () => undefined,
     });
     expect(exit).toBe(0);
     expect(JSON.parse(stdout.join("\n"))).toEqual({ running: 1, limit: 1, available: 0 });
-    expect(client.calls).toHaveLength(2);
+    expect(client.calls).toHaveLength(11);
   });
 
   it("does not turn a failed API read into an empty or full budget", async () => {

@@ -8,6 +8,8 @@ import {
   experimentBody,
   groupExperiments,
   listExperimentPullRequests,
+  OUTCOME_LABELS,
+  PROMOTE_LABEL,
   resumeExperiment,
   type ExperimentPullRequest,
   type ExperimentState,
@@ -94,6 +96,19 @@ describe("experiment pull requests", () => {
     expect(body).toContain("decision text");
     expect(body).toContain("Rubric score:** 4.2 / 5");
   });
+
+  it.each(["open", "closed", "all"] as const)("exhausts %s PR pagination beyond ten full pages", async (requestedState) => {
+    const client = fakeClient((_route, parameters) => {
+      expect(parameters.state).toBe(requestedState);
+      const page = Number(parameters.page);
+      if (page <= 10) return Array.from({ length: 100 }, (_, index) =>
+        rawPull(pull("trunk", { number: (page - 1) * 100 + index + 1, head: `feature/${page}-${index}` })));
+      return [rawPull(pull("trunk", { number: 1001, state: requestedState === "closed" ? "closed" : "open" }))];
+    });
+    const pulls = await listExperimentPullRequests(client, repo, requestedState);
+    expect(pulls.map((entry) => entry.number)).toEqual([1001]);
+    expect(client.calls.map((call) => call.parameters.page)).toEqual(Array.from({ length: 11 }, (_, index) => index + 1));
+  });
 });
 
 describe("createExperiment", () => {
@@ -158,6 +173,19 @@ describe("createExperiment", () => {
       .rejects.toThrow(`resume --experiment setup-cache-yarn --expected-head ${"a".repeat(40)} --base main`);
     expect(routes(client).some((route) => route.includes("DELETE") || route.includes("dispatches"))).toBe(false);
   });
+
+  it("reports uncertain trunk creation without blindly retrying the write", async () => {
+    const client = fakeClient((route) => {
+      if (route.startsWith("GET /repos/{owner}/{repo}/git/ref/")) return { object: { sha: "base" } };
+      if (route.startsWith("GET /repos/{owner}/{repo}/git/commits/")) return { tree: { sha: "t" } };
+      if (route === "POST /repos/{owner}/{repo}/git/refs") throw httpError(502);
+      return { sha: "a".repeat(40) };
+    });
+    await expect(createExperiment(client, repo, { manifest: sampleManifest(), baseBranch: "main", config }))
+      .rejects.toThrow(`Cannot confirm creation of experiments/setup-cache-yarn/trunk at ${"a".repeat(40)}`);
+    expect(routes(client).filter((route) => route.endsWith("/git/refs"))).toHaveLength(1);
+    expect(routes(client)).not.toContain("POST /repos/{owner}/{repo}/pulls");
+  });
 });
 
 describe("resumeExperiment", () => {
@@ -171,9 +199,12 @@ describe("resumeExperiment", () => {
     manifest?: ReturnType<typeof sampleManifest>;
     head?: string;
     full?: boolean;
+    unrelatedPages?: number;
     changeAfterLabel?: boolean;
     ignoreLabelWrite?: boolean;
     lostCreateResponse?: boolean;
+    outcomeAfterLabel?: string;
+    failClose?: boolean;
   } = {}) {
     let existing = settings.existing;
     let head = settings.head ?? sha;
@@ -186,6 +217,11 @@ describe("resumeExperiment", () => {
       }
       if (route === "GET /repos/{owner}/{repo}/pulls") {
         if (parameters.head) return existing ? [existing] : [];
+        if (Number(parameters.page) <= (settings.unrelatedPages ?? 0)) {
+          return Array.from({ length: 100 }, (_, index) => ({
+            ...raw(), number: Number(parameters.page) * 100 + index, head: { ...raw().head, ref: `feature/${parameters.page}-${index}` },
+          }));
+        }
         return settings.full ? ["alpha", "beta", "gamma"].map((name) => ({
           ...raw(), head: { ...raw().head, ref: `experiments/${name}/trunk` },
         })) : [];
@@ -196,12 +232,19 @@ describe("resumeExperiment", () => {
         return { number: existing.number };
       }
       if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return existing;
-      if (route === "GET /repos/{owner}/{repo}/labels") return [{ name: "experiment" }];
+      if (route === "GET /repos/{owner}/{repo}/labels") return ["experiment", ...Object.values(OUTCOME_LABELS)].map((name) => ({ name }));
+      if (route === "GET /repos/{owner}/{repo}/issues/{issue_number}/comments") return [];
+      if (route === "POST /repos/{owner}/{repo}/issues/{issue_number}/comments") return { id: 1 };
       if (route === "POST /repos/{owner}/{repo}/issues/{issue_number}/labels") {
         if (settings.changeAfterLabel) head = "c".repeat(40);
-        if (existing && !settings.ignoreLabelWrite) existing.labels = [{ name: "experiment" }];
+        if (existing && !settings.ignoreLabelWrite) {
+          const names = new Set([...existing.labels.map((label) => label.name), ...parameters.labels as string[]]);
+          if (settings.outcomeAfterLabel) names.add(settings.outcomeAfterLabel);
+          existing.labels = [...names].map((name) => ({ name }));
+        }
         return [];
       }
+      if (route === "PATCH /repos/{owner}/{repo}/pulls/{pull_number}" && settings.failClose && parameters.state === "closed") throw httpError(500);
       throw new Error(`Unexpected request: ${route}`);
     });
     return client;
@@ -272,6 +315,38 @@ describe("resumeExperiment", () => {
 
   it("requires the label write to persist before confirming publication", async () => {
     const client = fixture({ ignoreLabelWrite: true });
+    await expect(resumeExperiment(client, repo, options)).rejects.toThrow("publication is not confirmed");
+  });
+
+  it("does not bypass a full budget hidden behind a thousand unrelated PRs", async () => {
+    const client = fixture({ full: true, unrelatedPages: 10 });
+    await expect(resumeExperiment(client, repo, options)).rejects.toThrow("budget is already full");
+    const inventory = client.calls.filter((call) => call.route === "GET /repos/{owner}/{repo}/pulls" && !call.parameters.head);
+    expect(inventory.at(-1)?.parameters.page).toBe(11);
+    expect(routes(client).every((route) => route.startsWith("GET"))).toBe(true);
+  });
+
+  it.each([PROMOTE_LABEL, ...Object.values(OUTCOME_LABELS), "EXPERIMENT:REJECTED"])("refuses the recorded outcome label %s before writing", async (name) => {
+    const client = fixture({ existing: { ...raw(), labels: [{ name }] } });
+    await expect(resumeExperiment(client, repo, options)).rejects.toThrow("completed, changed, or not owned");
+    expect(routes(client).every((route) => route.startsWith("GET"))).toBe(true);
+  });
+
+  it("refuses an interrupted rejection after its outcome label persisted but closing failed", async () => {
+    const client = fixture({ existing: raw(), failClose: true });
+    const planned: ExperimentState = { name: options.name, trunk: pull("trunk", { headSha: sha }), arms: [] };
+    const decision: Decision = { action: "reject", reason: "No eligible improvement.", scores: [] };
+    await expect(applyDecision(client, repo, {
+      manifest: sampleManifest(), decision, state: planned, config, measurements: evidence(planned),
+    })).rejects.toThrow("HTTP 500");
+    expect(client.calls.find((call) => call.route.endsWith("/labels") && call.route.startsWith("POST"))?.parameters.labels).toEqual([OUTCOME_LABELS.reject]);
+    const beforeRecovery = client.calls.length;
+    await expect(resumeExperiment(client, repo, options)).rejects.toThrow("completed, changed, or not owned");
+    expect(client.calls.slice(beforeRecovery).every((call) => call.route.startsWith("GET"))).toBe(true);
+  });
+
+  it("does not confirm publication if a terminal outcome is recorded during recovery", async () => {
+    const client = fixture({ outcomeAfterLabel: OUTCOME_LABELS.expire });
     await expect(resumeExperiment(client, repo, options)).rejects.toThrow("publication is not confirmed");
   });
 

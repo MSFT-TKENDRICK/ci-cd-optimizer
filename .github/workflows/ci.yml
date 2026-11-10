@@ -16,7 +16,7 @@ concurrency:
 permissions:
   contents: read
 
-# Independent jobs run in parallel so the slowest check (typed ESLint) bounds wall-clock time.
+# Independent checks run in parallel; the longest job determines the critical path.
 jobs:
   test:
     runs-on: ubuntu-24.04

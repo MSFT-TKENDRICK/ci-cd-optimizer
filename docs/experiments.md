@@ -27,7 +27,7 @@ was tried.
 
 ### 1. Generator: weekly ([experiment-generator.md](../.github/workflows/experiment-generator.md))
 
-1. `experiments capacity` counts open `experiments/*/trunk` pull requests, with pagination, and reads
+1. `experiments capacity` counts open `experiments/*/trunk` pull requests, exhausting pagination rather than sampling recent PRs, and reads
    `selection.maxConcurrent` from the configuration. When the budget is spent, a separate activation step is skipped:
    this is a successful no-work run, not a workflow failure. API and configuration errors still fail.
 2. Before the agent starts, `experiments context` builds a briefing from the default branch:
@@ -239,6 +239,10 @@ and verifies the resulting draft PR, label, and branch head before reporting suc
 or already-ready PRs, ambiguous history, and closed or completed experiments are refused. Existing matching PRs are reused, including when a
 previous creation response was lost. GitHub operations are not atomic; if a later check fails, inspect the retained PR
 instead of assuming earlier writes were rolled back.
+
+Outcome labels (`experiment:promote`, `experiment:rejected`, `experiment:expired`) also prevent publication recovery,
+even when a failed finalization left the PR open with a running manifest. Reconcile that interrupted outcome instead;
+`resume` does not erase it or restart the experiment. Outcome labels are checked again before confirming publication.
 
 Recovery **does not dispatch arms** or reset the experiment's age. Inspect arm PRs and workflow runs first; dispatch only
 missing arms, one at a time, against the trusted default branch:
