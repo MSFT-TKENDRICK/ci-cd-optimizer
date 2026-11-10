@@ -3,10 +3,10 @@ import { describeScan, scanRepository } from "../service/scan.js";
 import { processWorkflowRun } from "../service/workflow-run.js";
 import { calculateCriticalPath } from "../telemetry/report.js";
 import type { WorkflowRunPayload } from "../telemetry/snapshot.js";
-import type { WorkflowBaseline } from "../telemetry/types.js";
-import type { ActiveSeverity } from "../lint/types.js";
+import type { WorkflowBaseline, WorkflowSnapshot } from "../telemetry/types.js";
+import type { ActiveSeverity, ParseProblem } from "../lint/types.js";
 import { AgentError, summarizeDiagnostics, type DiagnosticPage } from "./workspace.js";
-import { escapeMarkdown, LIMITS, sanitizeMarkdown } from "./safety.js";
+import { escapeMarkdown, LIMITS, ownWork, sanitizeMarkdown } from "./safety.js";
 export { sanitizeMarkdown } from "./safety.js";
 
 /**
@@ -30,6 +30,20 @@ export interface RemoteOptions {
   allow: readonly string[];
   repositoryIds?: Map<string, number>;
   requirePull?: boolean;
+}
+
+export function operationAccess(options: RemoteOptions, signal: AbortSignal): RemoteAccess {
+  let client: GitHubClient | undefined;
+  return {
+    ...options,
+    signal,
+    client: {
+      request: (route, parameters) => ownWork(signal, (readSignal) => {
+        client ??= options.createClient(readSignal);
+        return client.request(route, parameters);
+      }, (error) => !(route === "GET /repos/{owner}/{repo}/contents/{path}" && httpStatus(error) === 404)),
+    },
+  };
 }
 
 export interface RemoteRepository {
@@ -103,13 +117,18 @@ export interface RemoteScanSummary extends Partial<DiagnosticPage> {
   repo: string;
   ref: string;
   sha?: string;
-  status: "scanned" | "disabled" | "invalid-config";
+  status: "scanned" | "partial" | "disabled" | "invalid-config";
+  /** False for parse failures, incomplete inventories, and scans that did not run. */
+  analysisComplete: boolean;
   summary: string;
   configProblems?: string[];
   omittedConfigProblems?: number;
   omittedConfigProblemCharacters?: number;
   omittedSummaryCharacters?: number;
   inventoryComplete?: boolean;
+  parseProblems?: (ParseProblem & { omittedCharacters: number })[];
+  parseProblemCount?: number;
+  omittedParseProblems?: number;
   /** Always true: the scan computed findings without writing anything to GitHub. */
   dryRun: true;
 }
@@ -128,13 +147,20 @@ export async function remoteScan(
     expectedRepositoryId: target.id,
     ...(request.ref ? { ref: request.ref } : {}),
   });
-  const summary = sanitizeMarkdown(describeScan(scan), 4096);
+  const parseProblemCount = scan.result?.parseProblems.length ?? 0;
+  const analysisComplete = Boolean(scan.result && scan.inventoryComplete && parseProblemCount === 0);
+  const partial = scan.status === "scanned" && !analysisComplete;
+  const summary = sanitizeMarkdown([
+    ...(partial ? [`Partial analysis: ${parseProblemCount} parse problem(s)${scan.inventoryComplete ? "" : "; inventory incomplete"}.`] : []),
+    describeScan(scan),
+  ].join(" "), 4096);
   const problems = scan.configProblems?.slice(0, 100).map((problem) => sanitizeMarkdown(problem, 2048));
   return {
     repo: scan.repo,
     ref: scan.ref,
     ...(scan.sha ? { sha: scan.sha } : {}),
-    status: scan.status,
+    status: partial ? "partial" : scan.status,
+    analysisComplete,
     summary: summary.text,
     omittedSummaryCharacters: summary.omittedCharacters,
     ...(problems ? {
@@ -143,7 +169,16 @@ export async function remoteScan(
       omittedConfigProblemCharacters: problems.reduce((total, problem) => total + problem.omittedCharacters, 0),
     } : {}),
     ...(scan.inventoryComplete !== undefined ? { inventoryComplete: scan.inventoryComplete } : {}),
-    ...(scan.result ? summarizeDiagnostics(scan.result.diagnostics, request.minSeverity, request.limit) : {}),
+    ...(scan.result ? {
+      ...summarizeDiagnostics(scan.result.diagnostics, request.minSeverity, request.limit),
+      parseProblemCount,
+      omittedParseProblems: Math.max(0, parseProblemCount - 100),
+      parseProblems: scan.result.parseProblems.slice(0, 100).map((problem) => {
+        const path = sanitizeMarkdown(problem.path, 1024);
+        const message = sanitizeMarkdown(problem.message, 2048);
+        return { path: path.text, line: problem.line, message: message.text, omittedCharacters: path.omittedCharacters + message.omittedCharacters };
+      }),
+    } : {}),
     dryRun: true,
   };
 }
@@ -156,7 +191,8 @@ export interface RunJob {
   queueMs?: number;
   needs: string[];
   omittedNeeds: number;
-  onCriticalPath: boolean;
+  /** Absent when a complete, definition-backed critical path cannot be computed. */
+  onCriticalPath?: boolean;
   /** Median duration of this job over comparable earlier runs, when known. */
   baselineMs?: number;
 }
@@ -165,6 +201,9 @@ export interface RunReport {
   repo: string;
   status: "processed" | "disabled" | "skipped";
   reason?: string;
+  analysisStatus?: "complete" | "partial";
+  provenance?: WorkflowSnapshot["provenance"];
+  warnings?: string[];
   run?: {
     id: number;
     attempt: number;
@@ -174,13 +213,20 @@ export interface RunReport {
     branch: string | null;
     headSha: string;
     conclusion: string | null;
-    durationMs: number;
+    /** Null when incomplete collected job telemetry cannot establish the run's duration. */
+    durationMs: number | null;
     queueMs: number | null;
     url?: string;
   };
   criticalPath?: { durationMs: number; jobKeys: string[]; omittedJobKeys: number };
   jobs?: RunJob[];
-  jobsTotal?: number;
+  /** Consistent upstream total_count, or null when absent, inconsistent, or invalid. */
+  jobsTotal?: number | null;
+  jobsFetched?: number;
+  jobsAnalyzed?: number;
+  jobsNotFetched?: number | null;
+  jobPagesFetched?: number;
+  /** Fetched/analyzed jobs omitted only from this response, not jobs missing from collection. */
   omittedJobs?: number;
   slowestSteps?: { job: string; step: string; durationMs: number }[];
   omittedSteps?: number;
@@ -198,10 +244,10 @@ export interface RunReport {
 export async function remoteRunReport(access: RemoteAccess, request: { repo: string; runId: number; markdown?: boolean }): Promise<RunReport> {
   if (!Number.isSafeInteger(request.runId) || request.runId <= 0) throw new AgentError("runId must be a positive integer.");
   const target = await resolveRepository(access, request.repo);
-  const client = repositoryReader(access, target);
+  const reader = repositoryReader(access, target);
   let run: WorkflowRunPayload;
   try {
-    run = (await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}", { ...target.repo, run_id: request.runId })).data as WorkflowRunPayload;
+    run = (await reader.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}", { ...target.repo, run_id: request.runId })).data as WorkflowRunPayload;
   } catch (error) {
     if (httpStatus(error) === 404) throw new AgentError(`Workflow run ${request.runId} was not found in ${target.fullName}.`);
     throw error;
@@ -209,12 +255,52 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
   if (run.id !== request.runId) throw new AgentError("Workflow run identity does not match the request.");
   const runRepo = (run as WorkflowRunPayload & { repository?: { id?: unknown } }).repository;
   if (runRepo && runRepo.id !== target.id) throw new AgentError("Workflow run repository identity does not match.");
+  const fetchedJobs = new Set<number>();
+  let pages = 0;
+  let reportedTotal: number | undefined;
+  let totalKnown = true;
+  let totalsConsistent = true;
+  let validJobs = true;
+  // Capture the current attempt's API totals without changing the shared snapshot/evidence schema.
+  const client: GitHubClient = {
+    async request(route, parameters = {}) {
+      const response = await reader.request(route, parameters);
+      if (route === "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs" &&
+          parameters.run_id === run.id && parameters.attempt_number === (run.run_attempt ?? 1)) {
+        pages += 1;
+        const data = response.data as { jobs?: { id?: unknown }[]; total_count?: unknown };
+        const total = data.total_count;
+        if (total === undefined) totalKnown = false;
+        else if (typeof total !== "number" || !Number.isSafeInteger(total) || total < 0 || (reportedTotal !== undefined && reportedTotal !== total)) {
+          totalKnown = false;
+          totalsConsistent = false;
+        }
+        else reportedTotal = total;
+        for (const job of data.jobs ?? []) {
+          if (typeof job.id !== "number" || !Number.isSafeInteger(job.id) || job.id <= 0) validJobs = false;
+          else fetchedJobs.add(job.id);
+        }
+      }
+      return response;
+    },
+  };
   const result = await processWorkflowRun(client, target.repo, run, { dryRun: true, check: false, alerts: false, expectedRepositoryId: target.id });
   const report: RunReport = { repo: target.fullName, status: result.status, ...(result.reason ? { reason: result.reason } : {}), dryRun: true };
   const snapshot = result.snapshot;
   if (!snapshot) return report;
-  const critical = calculateCriticalPath(snapshot.jobs);
-  const onPath = new Set(critical.jobKeys);
+  const jobsTotal = totalKnown && reportedTotal !== undefined && reportedTotal >= fetchedJobs.size ? reportedTotal : null;
+  const jobsComplete = snapshot.provenance?.jobsComplete === true && validJobs && totalsConsistent && snapshot.jobs.length === fetchedJobs.size &&
+    (jobsTotal === null || jobsTotal === fetchedJobs.size);
+  const definitionKnown = snapshot.provenance?.definitionKnown === true;
+  const critical = jobsComplete && definitionKnown ? calculateCriticalPath(snapshot.jobs) : undefined;
+  const onPath = new Set(critical?.jobKeys);
+  report.analysisStatus = jobsComplete && definitionKnown ? "complete" : "partial";
+  if (snapshot.provenance) report.provenance = { ...snapshot.provenance };
+  report.warnings = [
+    ...(!jobsComplete ? ["Incomplete job telemetry: run duration, critical path, and baseline comparison are unavailable. Job/step metrics describe collected telemetry only."] : []),
+    ...(!totalsConsistent ? ["The upstream job total changed or was invalid during collection; authoritative totals are unknown."] : []),
+    ...(!definitionKnown ? ["Workflow job definitions are incomplete or unresolved; no critical path is reported."] : []),
+  ];
   report.run = {
     id: snapshot.runId,
     attempt: snapshot.runAttempt,
@@ -224,15 +310,19 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
     branch: snapshot.branch,
     headSha: snapshot.headSha,
     conclusion: snapshot.conclusion,
-    durationMs: snapshot.durationMs,
+    durationMs: jobsComplete ? snapshot.durationMs : null,
     queueMs: snapshot.queueMs,
     ...(snapshot.htmlUrl ? { url: snapshot.htmlUrl } : {}),
   };
-  report.criticalPath = { ...critical, jobKeys: critical.jobKeys.slice(0, 100), omittedJobKeys: Math.max(0, critical.jobKeys.length - 100) };
-  report.jobsTotal = snapshot.jobs.length;
+  if (critical) report.criticalPath = { ...critical, jobKeys: critical.jobKeys.slice(0, 100), omittedJobKeys: Math.max(0, critical.jobKeys.length - 100) };
+  report.jobsTotal = jobsTotal;
+  report.jobsFetched = fetchedJobs.size;
+  report.jobsAnalyzed = snapshot.jobs.length;
+  report.jobsNotFetched = jobsTotal === null ? null : jobsTotal - fetchedJobs.size;
+  report.jobPagesFetched = pages;
   report.omittedJobs = Math.max(0, snapshot.jobs.length - 100);
   report.jobs = snapshot.jobs.slice(0, 100).map((job) => {
-    const baselineMs = result.baseline?.jobs?.[job.key];
+    const baselineMs = jobsComplete ? result.baseline?.jobs?.[job.key] : undefined;
     return {
       key: job.key,
       name: job.name,
@@ -241,7 +331,7 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
       ...(job.queueMs !== undefined ? { queueMs: job.queueMs } : {}),
       needs: job.needs.slice(0, 100),
       omittedNeeds: Math.max(0, job.needs.length - 100),
-      onCriticalPath: onPath.has(job.key),
+      ...(critical ? { onCriticalPath: onPath.has(job.key) } : {}),
       ...(baselineMs !== undefined ? { baselineMs } : {}),
     };
   });
@@ -250,7 +340,7 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
   report.slowestSteps = steps
     .sort((left, right) => right.durationMs - left.durationMs)
     .slice(0, MAX_STEPS);
-  if (result.baseline) {
+  if (jobsComplete && result.baseline) {
     const jobs = Object.entries(result.baseline.jobs ?? {});
     report.baseline = { ...result.baseline, jobs: Object.fromEntries(jobs.slice(0, 100)) };
     report.omittedBaselineJobs = Math.max(0, jobs.length - 100);
@@ -262,15 +352,21 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
     const timestamp = (value: string) => new Date(value).toISOString().replace(/\.\d{3}Z$/, "");
     const markdown = sanitizeMarkdown([
       `## ${escapeMarkdown(snapshot.workflowName)} performance snapshot`,
-      `Run ${snapshot.runId}, attempt ${snapshot.runAttempt}; ${snapshot.durationMs} ms; queue ${snapshot.queueMs ?? "unavailable"} ms.`,
-      `Estimated critical path: ${critical.durationMs} ms — ${report.criticalPath.jobKeys.map(escapeMarkdown).join(" → ")}.`,
-      result.baseline ? `Baseline: ${result.baseline.medianDurationMs} ms (${result.baseline.sampleCount} comparable samples).` : "No comparable baseline.",
+      `Run ${snapshot.runId}, attempt ${snapshot.runAttempt}; duration ${jobsComplete ? `${snapshot.durationMs} ms` : "unavailable (incomplete job telemetry)"}; queue ${snapshot.queueMs ?? "unavailable"} ms.`,
+      ...report.warnings.map((warning) => `**Warning:** ${warning}`),
+      `Collector: ${escapeMarkdown(snapshot.provenance?.collector ?? "unknown")}; collected at ${escapeMarkdown(snapshot.provenance?.collectedAt ?? "unknown")}; ` +
+        `job inventory ${snapshot.provenance?.jobsComplete === true ? "complete" : "incomplete or unknown"}; workflow definitions ${definitionKnown ? "known" : "incomplete or unknown"}.`,
+      `Fetched ${report.jobsFetched} jobs across ${pages} page(s); upstream total: ${jobsTotal ?? "unknown"}. ` +
+        `${report.jobsNotFetched === null ? "The number of unfetched jobs is unknown." : `${report.jobsNotFetched} upstream job(s) not fetched.`}`,
+      `Showing ${report.jobs.length} of ${report.jobsAnalyzed} analyzed job(s); ${report.omittedJobs} fetched job(s) omitted from this response.`,
+      critical && report.criticalPath ? `Estimated critical path: ${critical.durationMs} ms — ${report.criticalPath.jobKeys.map(escapeMarkdown).join(" → ")}.` : "Critical path unavailable.",
+      report.baseline ? `Baseline: ${report.baseline.medianDurationMs} ms (${report.baseline.sampleCount} comparable samples).` : "No comparable baseline reported.",
       "", "| Job | Duration (ms) | Conclusion |", "|---|---:|---|",
       ...report.jobs.map((job) => `| ${escapeMarkdown(job.name)} | ${job.durationMs} | ${escapeMarkdown(job.conclusion ?? "unknown")} |`),
       "", "```mermaid", "gantt", `    title ${mermaidLabel(snapshot.workflowName)}`,
       "    dateFormat YYYY-MM-DDTHH:mm:ss", "    section Jobs",
       ...snapshot.jobs.slice(0, 100).map((job, index) => `    ${mermaidLabel(job.name)} :j${index}, ${timestamp(job.startedAt)}, ${timestamp(job.completedAt)}`),
-      "```", ...(report.omittedJobs ? [`${report.omittedJobs} jobs omitted from this output.`] : []),
+      "```",
     ].join("\n"), MAX_REPORT_CHARS);
     report.markdown = markdown.text;
     report.markdownTruncated = markdown.truncated;

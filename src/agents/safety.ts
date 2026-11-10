@@ -13,6 +13,7 @@ export const LIMITS = {
   depth: 40,
   sessions: 8,
   operationMs: 30_000,
+  cleanupMs: 1_000,
   httpMs: 10_000,
   githubResponseBytes: 2 * 1024 * 1024,
   githubTotalBytes: 16 * 1024 * 1024,
@@ -94,21 +95,95 @@ export class WorkLimiter {
   }
 }
 
-export async function operation<T>(run: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal, timeoutMs: number = LIMITS.operationMs): Promise<T> {
+interface OwnedWork {
+  controller: AbortController;
+  signal: AbortSignal;
+  pending: Set<Promise<unknown>>;
+  failed: boolean;
+  failure?: unknown;
+}
+
+const ownedOperations = new WeakMap<AbortSignal, OwnedWork>();
+
+/** Also used when a command handles its own error instead of rejecting its outer operation. */
+export function failOwnedWork(signal: AbortSignal, error: unknown): void {
+  const owned = ownedOperations.get(signal);
+  if (!owned || owned.signal.aborted) return;
+  owned.failed = true;
+  owned.failure = error;
+  owned.controller.abort(error);
+}
+
+/** Register before starting a read; a failed child stops queued reads and cancels its siblings. */
+export function ownWork<T>(
+  signal: AbortSignal,
+  run: (signal: AbortSignal) => Promise<T>,
+  cancelSiblings: (error: unknown) => boolean = () => true,
+): Promise<T> {
+  const owned = ownedOperations.get(signal);
+  if (!owned) return Promise.reject(new AgentError("Remote reads require an active operation."));
+  const pending = Promise.resolve().then(() => {
+    owned.signal.throwIfAborted();
+    return run(owned.signal);
+  });
+  owned.pending.add(pending);
+  return pending.then((value) => {
+    owned.pending.delete(pending);
+    return value;
+  }, (error: unknown) => {
+    owned.pending.delete(pending);
+    if (cancelSiblings(error)) failOwnedWork(signal, error);
+    throw owned.failed ? owned.failure : error;
+  });
+}
+
+export async function operation<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  signal?: AbortSignal,
+  timeoutMs: number = LIMITS.operationMs,
+  lifecycle: { onSettled?: () => void; cleanupMs?: number } = {},
+): Promise<T> {
   const controller = new AbortController();
+  const children = new AbortController();
+  const owned: OwnedWork = {
+    controller: children, signal: AbortSignal.any([controller.signal, children.signal]), pending: new Set(), failed: false,
+  };
+  ownedOperations.set(controller.signal, owned);
   const deadline = performance.now() + timeoutMs;
   const cancel = () => controller.abort(signal?.reason);
   signal?.addEventListener("abort", cancel, { once: true });
   if (signal?.aborted) cancel();
   const timer = setTimeout(() => controller.abort(new AgentError("Operation deadline exceeded.")), timeoutMs);
+  let outcome: { ok: true; value: T } | { ok: false; error: unknown };
   try {
     controller.signal.throwIfAborted();
     const result = await run(controller.signal);
     if (performance.now() >= deadline) controller.abort(new AgentError("Operation deadline exceeded."));
     controller.signal.throwIfAborted();
-    return result;
-  } finally {
+    outcome = { ok: true, value: result };
+  } catch (error) {
+    outcome = { ok: false, error };
+    failOwnedWork(controller.signal, error);
+  }
+  controller.abort();
+  // Even a handler that caught an error owns its unfinished reads. Retain capacity/session cancellation
+  // until they settle; an uncooperative transport may delay cleanup, but cannot open another work slot.
+  let settled = false;
+  const drained = Promise.allSettled([...owned.pending]).then(() => {
+    settled = true;
     clearTimeout(timer);
     signal?.removeEventListener("abort", cancel);
-  }
+    ownedOperations.delete(controller.signal);
+    lifecycle.onSettled?.();
+  });
+  let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    drained,
+    new Promise<void>((resolve) => { cleanupTimer = setTimeout(resolve, lifecycle.cleanupMs ?? LIMITS.cleanupMs); }),
+  ]);
+  clearTimeout(cleanupTimer);
+  if (!outcome.ok) throw outcome.error;
+  if (!settled) throw owned.failed ? owned.failure : new AgentError("Operation cleanup is still pending; capacity remains reserved until its reads settle.");
+  signal?.throwIfAborted();
+  return outcome.value;
 }

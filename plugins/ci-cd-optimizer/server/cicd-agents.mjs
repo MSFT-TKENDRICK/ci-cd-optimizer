@@ -46032,11 +46032,17 @@ function matchesGlob(path, glob) {
 async function mapLimit(items2, limit, fn) {
   const results = new Array(items2.length);
   let next = 0;
+  let stopped = false;
   const worker = async () => {
-    while (next < items2.length) {
+    while (!stopped && next < items2.length) {
       const index = next;
       next += 1;
-      results[index] = await fn(items2[index]);
+      try {
+        results[index] = await fn(items2[index]);
+      } catch (error62) {
+        stopped = true;
+        throw error62;
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items2.length) }, worker));
@@ -57252,6 +57258,7 @@ var LIMITS = {
   depth: 40,
   sessions: 8,
   operationMs: 3e4,
+  cleanupMs: 1e3,
   httpMs: 1e4,
   githubResponseBytes: 2 * 1024 * 1024,
   githubTotalBytes: 16 * 1024 * 1024,
@@ -57327,23 +57334,78 @@ var WorkLimiter = class {
     };
   }
 };
-async function operation(run2, signal, timeoutMs = LIMITS.operationMs) {
+var ownedOperations = /* @__PURE__ */ new WeakMap();
+function failOwnedWork(signal, error62) {
+  const owned = ownedOperations.get(signal);
+  if (!owned || owned.signal.aborted) return;
+  owned.failed = true;
+  owned.failure = error62;
+  owned.controller.abort(error62);
+}
+function ownWork(signal, run2, cancelSiblings = () => true) {
+  const owned = ownedOperations.get(signal);
+  if (!owned) return Promise.reject(new AgentError("Remote reads require an active operation."));
+  const pending = Promise.resolve().then(() => {
+    owned.signal.throwIfAborted();
+    return run2(owned.signal);
+  });
+  owned.pending.add(pending);
+  return pending.then((value) => {
+    owned.pending.delete(pending);
+    return value;
+  }, (error62) => {
+    owned.pending.delete(pending);
+    if (cancelSiblings(error62)) failOwnedWork(signal, error62);
+    throw owned.failed ? owned.failure : error62;
+  });
+}
+async function operation(run2, signal, timeoutMs = LIMITS.operationMs, lifecycle = {}) {
   const controller = new AbortController();
+  const children = new AbortController();
+  const owned = {
+    controller: children,
+    signal: AbortSignal.any([controller.signal, children.signal]),
+    pending: /* @__PURE__ */ new Set(),
+    failed: false
+  };
+  ownedOperations.set(controller.signal, owned);
   const deadline = performance.now() + timeoutMs;
   const cancel = () => controller.abort(signal?.reason);
   signal?.addEventListener("abort", cancel, { once: true });
   if (signal?.aborted) cancel();
   const timer = setTimeout(() => controller.abort(new AgentError("Operation deadline exceeded.")), timeoutMs);
+  let outcome;
   try {
     controller.signal.throwIfAborted();
     const result = await run2(controller.signal);
     if (performance.now() >= deadline) controller.abort(new AgentError("Operation deadline exceeded."));
     controller.signal.throwIfAborted();
-    return result;
-  } finally {
+    outcome = { ok: true, value: result };
+  } catch (error62) {
+    outcome = { ok: false, error: error62 };
+    failOwnedWork(controller.signal, error62);
+  }
+  controller.abort();
+  let settled = false;
+  const drained = Promise.allSettled([...owned.pending]).then(() => {
+    settled = true;
     clearTimeout(timer);
     signal?.removeEventListener("abort", cancel);
-  }
+    ownedOperations.delete(controller.signal);
+    lifecycle.onSettled?.();
+  });
+  let cleanupTimer;
+  await Promise.race([
+    drained,
+    new Promise((resolve3) => {
+      cleanupTimer = setTimeout(resolve3, lifecycle.cleanupMs ?? LIMITS.cleanupMs);
+    })
+  ]);
+  clearTimeout(cleanupTimer);
+  if (!outcome.ok) throw outcome.error;
+  if (!settled) throw owned.failed ? owned.failure : new AgentError("Operation cleanup is still pending; capacity remains reserved until its reads settle.");
+  signal?.throwIfAborted();
+  return outcome.value;
 }
 
 // src/agents/inventory.ts
@@ -57727,6 +57789,19 @@ async function validateReviewProject(rootPath, path, signal) {
 }
 
 // src/agents/remote.ts
+function operationAccess(options, signal) {
+  let client;
+  return {
+    ...options,
+    signal,
+    client: {
+      request: (route, parameters) => ownWork(signal, (readSignal) => {
+        client ??= options.createClient(readSignal);
+        return client.request(route, parameters);
+      }, (error62) => !(route === "GET /repos/{owner}/{repo}/contents/{path}" && httpStatus(error62) === 404))
+    }
+  };
+}
 var NAME = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/;
 var MAX_REPORT_CHARS = 3e4;
 var MAX_STEPS = 10;
@@ -57791,13 +57866,20 @@ async function remoteScan(access, request) {
     expectedRepositoryId: target.id,
     ...request.ref ? { ref: request.ref } : {}
   });
-  const summary = sanitizeMarkdown(describeScan(scan), 4096);
+  const parseProblemCount = scan.result?.parseProblems.length ?? 0;
+  const analysisComplete = Boolean(scan.result && scan.inventoryComplete && parseProblemCount === 0);
+  const partial2 = scan.status === "scanned" && !analysisComplete;
+  const summary = sanitizeMarkdown([
+    ...partial2 ? [`Partial analysis: ${parseProblemCount} parse problem(s)${scan.inventoryComplete ? "" : "; inventory incomplete"}.`] : [],
+    describeScan(scan)
+  ].join(" "), 4096);
   const problems = scan.configProblems?.slice(0, 100).map((problem) => sanitizeMarkdown(problem, 2048));
   return {
     repo: scan.repo,
     ref: scan.ref,
     ...scan.sha ? { sha: scan.sha } : {},
-    status: scan.status,
+    status: partial2 ? "partial" : scan.status,
+    analysisComplete,
     summary: summary.text,
     omittedSummaryCharacters: summary.omittedCharacters,
     ...problems ? {
@@ -57806,17 +57888,26 @@ async function remoteScan(access, request) {
       omittedConfigProblemCharacters: problems.reduce((total, problem) => total + problem.omittedCharacters, 0)
     } : {},
     ...scan.inventoryComplete !== void 0 ? { inventoryComplete: scan.inventoryComplete } : {},
-    ...scan.result ? summarizeDiagnostics(scan.result.diagnostics, request.minSeverity, request.limit) : {},
+    ...scan.result ? {
+      ...summarizeDiagnostics(scan.result.diagnostics, request.minSeverity, request.limit),
+      parseProblemCount,
+      omittedParseProblems: Math.max(0, parseProblemCount - 100),
+      parseProblems: scan.result.parseProblems.slice(0, 100).map((problem) => {
+        const path = sanitizeMarkdown(problem.path, 1024);
+        const message = sanitizeMarkdown(problem.message, 2048);
+        return { path: path.text, line: problem.line, message: message.text, omittedCharacters: path.omittedCharacters + message.omittedCharacters };
+      })
+    } : {},
     dryRun: true
   };
 }
 async function remoteRunReport(access, request) {
   if (!Number.isSafeInteger(request.runId) || request.runId <= 0) throw new AgentError("runId must be a positive integer.");
   const target = await resolveRepository(access, request.repo);
-  const client = repositoryReader(access, target);
+  const reader = repositoryReader(access, target);
   let run2;
   try {
-    run2 = (await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}", { ...target.repo, run_id: request.runId })).data;
+    run2 = (await reader.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}", { ...target.repo, run_id: request.runId })).data;
   } catch (error62) {
     if (httpStatus(error62) === 404) throw new AgentError(`Workflow run ${request.runId} was not found in ${target.fullName}.`);
     throw error62;
@@ -57824,12 +57915,48 @@ async function remoteRunReport(access, request) {
   if (run2.id !== request.runId) throw new AgentError("Workflow run identity does not match the request.");
   const runRepo = run2.repository;
   if (runRepo && runRepo.id !== target.id) throw new AgentError("Workflow run repository identity does not match.");
+  const fetchedJobs = /* @__PURE__ */ new Set();
+  let pages = 0;
+  let reportedTotal;
+  let totalKnown = true;
+  let totalsConsistent = true;
+  let validJobs = true;
+  const client = {
+    async request(route, parameters = {}) {
+      const response = await reader.request(route, parameters);
+      if (route === "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs" && parameters.run_id === run2.id && parameters.attempt_number === (run2.run_attempt ?? 1)) {
+        pages += 1;
+        const data = response.data;
+        const total = data.total_count;
+        if (total === void 0) totalKnown = false;
+        else if (typeof total !== "number" || !Number.isSafeInteger(total) || total < 0 || reportedTotal !== void 0 && reportedTotal !== total) {
+          totalKnown = false;
+          totalsConsistent = false;
+        } else reportedTotal = total;
+        for (const job of data.jobs ?? []) {
+          if (typeof job.id !== "number" || !Number.isSafeInteger(job.id) || job.id <= 0) validJobs = false;
+          else fetchedJobs.add(job.id);
+        }
+      }
+      return response;
+    }
+  };
   const result = await processWorkflowRun(client, target.repo, run2, { dryRun: true, check: false, alerts: false, expectedRepositoryId: target.id });
   const report = { repo: target.fullName, status: result.status, ...result.reason ? { reason: result.reason } : {}, dryRun: true };
   const snapshot = result.snapshot;
   if (!snapshot) return report;
-  const critical = calculateCriticalPath(snapshot.jobs);
-  const onPath = new Set(critical.jobKeys);
+  const jobsTotal = totalKnown && reportedTotal !== void 0 && reportedTotal >= fetchedJobs.size ? reportedTotal : null;
+  const jobsComplete = snapshot.provenance?.jobsComplete === true && validJobs && totalsConsistent && snapshot.jobs.length === fetchedJobs.size && (jobsTotal === null || jobsTotal === fetchedJobs.size);
+  const definitionKnown = snapshot.provenance?.definitionKnown === true;
+  const critical = jobsComplete && definitionKnown ? calculateCriticalPath(snapshot.jobs) : void 0;
+  const onPath = new Set(critical?.jobKeys);
+  report.analysisStatus = jobsComplete && definitionKnown ? "complete" : "partial";
+  if (snapshot.provenance) report.provenance = { ...snapshot.provenance };
+  report.warnings = [
+    ...!jobsComplete ? ["Incomplete job telemetry: run duration, critical path, and baseline comparison are unavailable. Job/step metrics describe collected telemetry only."] : [],
+    ...!totalsConsistent ? ["The upstream job total changed or was invalid during collection; authoritative totals are unknown."] : [],
+    ...!definitionKnown ? ["Workflow job definitions are incomplete or unresolved; no critical path is reported."] : []
+  ];
   report.run = {
     id: snapshot.runId,
     attempt: snapshot.runAttempt,
@@ -57839,15 +57966,19 @@ async function remoteRunReport(access, request) {
     branch: snapshot.branch,
     headSha: snapshot.headSha,
     conclusion: snapshot.conclusion,
-    durationMs: snapshot.durationMs,
+    durationMs: jobsComplete ? snapshot.durationMs : null,
     queueMs: snapshot.queueMs,
     ...snapshot.htmlUrl ? { url: snapshot.htmlUrl } : {}
   };
-  report.criticalPath = { ...critical, jobKeys: critical.jobKeys.slice(0, 100), omittedJobKeys: Math.max(0, critical.jobKeys.length - 100) };
-  report.jobsTotal = snapshot.jobs.length;
+  if (critical) report.criticalPath = { ...critical, jobKeys: critical.jobKeys.slice(0, 100), omittedJobKeys: Math.max(0, critical.jobKeys.length - 100) };
+  report.jobsTotal = jobsTotal;
+  report.jobsFetched = fetchedJobs.size;
+  report.jobsAnalyzed = snapshot.jobs.length;
+  report.jobsNotFetched = jobsTotal === null ? null : jobsTotal - fetchedJobs.size;
+  report.jobPagesFetched = pages;
   report.omittedJobs = Math.max(0, snapshot.jobs.length - 100);
   report.jobs = snapshot.jobs.slice(0, 100).map((job) => {
-    const baselineMs = result.baseline?.jobs?.[job.key];
+    const baselineMs = jobsComplete ? result.baseline?.jobs?.[job.key] : void 0;
     return {
       key: job.key,
       name: job.name,
@@ -57856,14 +57987,14 @@ async function remoteRunReport(access, request) {
       ...job.queueMs !== void 0 ? { queueMs: job.queueMs } : {},
       needs: job.needs.slice(0, 100),
       omittedNeeds: Math.max(0, job.needs.length - 100),
-      onCriticalPath: onPath.has(job.key),
+      ...critical ? { onCriticalPath: onPath.has(job.key) } : {},
       ...baselineMs !== void 0 ? { baselineMs } : {}
     };
   });
   const steps2 = snapshot.jobs.flatMap((job) => (job.steps ?? []).map((step) => ({ job: job.key, step: step.name, durationMs: step.durationMs })));
   report.omittedSteps = Math.max(0, steps2.length - MAX_STEPS);
   report.slowestSteps = steps2.sort((left, right) => right.durationMs - left.durationMs).slice(0, MAX_STEPS);
-  if (result.baseline) {
+  if (jobsComplete && result.baseline) {
     const jobs = Object.entries(result.baseline.jobs ?? {});
     report.baseline = { ...result.baseline, jobs: Object.fromEntries(jobs.slice(0, 100)) };
     report.omittedBaselineJobs = Math.max(0, jobs.length - 100);
@@ -57874,9 +58005,13 @@ async function remoteRunReport(access, request) {
     const timestamp3 = (value) => new Date(value).toISOString().replace(/\.\d{3}Z$/, "");
     const markdown2 = sanitizeMarkdown([
       `## ${escapeMarkdown(snapshot.workflowName)} performance snapshot`,
-      `Run ${snapshot.runId}, attempt ${snapshot.runAttempt}; ${snapshot.durationMs} ms; queue ${snapshot.queueMs ?? "unavailable"} ms.`,
-      `Estimated critical path: ${critical.durationMs} ms \u2014 ${report.criticalPath.jobKeys.map(escapeMarkdown).join(" \u2192 ")}.`,
-      result.baseline ? `Baseline: ${result.baseline.medianDurationMs} ms (${result.baseline.sampleCount} comparable samples).` : "No comparable baseline.",
+      `Run ${snapshot.runId}, attempt ${snapshot.runAttempt}; duration ${jobsComplete ? `${snapshot.durationMs} ms` : "unavailable (incomplete job telemetry)"}; queue ${snapshot.queueMs ?? "unavailable"} ms.`,
+      ...report.warnings.map((warning) => `**Warning:** ${warning}`),
+      `Collector: ${escapeMarkdown(snapshot.provenance?.collector ?? "unknown")}; collected at ${escapeMarkdown(snapshot.provenance?.collectedAt ?? "unknown")}; job inventory ${snapshot.provenance?.jobsComplete === true ? "complete" : "incomplete or unknown"}; workflow definitions ${definitionKnown ? "known" : "incomplete or unknown"}.`,
+      `Fetched ${report.jobsFetched} jobs across ${pages} page(s); upstream total: ${jobsTotal ?? "unknown"}. ${report.jobsNotFetched === null ? "The number of unfetched jobs is unknown." : `${report.jobsNotFetched} upstream job(s) not fetched.`}`,
+      `Showing ${report.jobs.length} of ${report.jobsAnalyzed} analyzed job(s); ${report.omittedJobs} fetched job(s) omitted from this response.`,
+      critical && report.criticalPath ? `Estimated critical path: ${critical.durationMs} ms \u2014 ${report.criticalPath.jobKeys.map(escapeMarkdown).join(" \u2192 ")}.` : "Critical path unavailable.",
+      report.baseline ? `Baseline: ${report.baseline.medianDurationMs} ms (${report.baseline.sampleCount} comparable samples).` : "No comparable baseline reported.",
       "",
       "| Job | Duration (ms) | Conclusion |",
       "|---|---:|---|",
@@ -57888,8 +58023,7 @@ async function remoteRunReport(access, request) {
       "    dateFormat YYYY-MM-DDTHH:mm:ss",
       "    section Jobs",
       ...snapshot.jobs.slice(0, 100).map((job, index) => `    ${mermaidLabel(job.name)} :j${index}, ${timestamp3(job.startedAt)}, ${timestamp3(job.completedAt)}`),
-      "```",
-      ...report.omittedJobs ? [`${report.omittedJobs} jobs omitted from this output.`] : []
+      "```"
     ].join("\n"), MAX_REPORT_CHARS);
     report.markdown = markdown2.text;
     report.markdownTruncated = markdown2.truncated;
@@ -58117,7 +58251,7 @@ var HANDLERS = {
   scan: async (turn) => {
     const [repo, ref] = turn.args;
     if (!turn.remote || !repo || turn.args.length > 2) throw new AgentError("Usage: /scan <owner/repo> [ref].");
-    const result = await remoteScan({ ...turn.remote, client: turn.remote.createClient(turn.signal), signal: turn.signal }, { repo, ...ref ? { ref } : {}, limit: MAX_LISTED });
+    const result = await remoteScan(operationAccess(turn.remote, turn.signal), { repo, ...ref ? { ref } : {}, limit: MAX_LISTED });
     if (turn.signal.aborted) return;
     await send(turn.client, turn.sessionId, {
       sessionUpdate: "tool_call",
@@ -58130,13 +58264,15 @@ var HANDLERS = {
     await say(turn, [
       escapeMarkdown(result.summary),
       ...(result.diagnostics ?? []).map((item) => `- ${code(item.ruleId)} ${code(`${item.path}:${item.line}`)} \u2014 ${escapeMarkdown(item.message)}`),
-      ...result.omittedDiagnostics ? [`${result.omittedDiagnostics} diagnostics omitted.`] : []
+      ...result.omittedDiagnostics ? [`${result.omittedDiagnostics} diagnostics omitted.`] : [],
+      ...(result.parseProblems ?? []).slice(0, MAX_LISTED).map((problem) => `Could not parse ${code(`${problem.path}:${problem.line}`)}: ${escapeMarkdown(problem.message)}`),
+      ...(result.parseProblemCount ?? 0) > MAX_LISTED ? [`${(result.parseProblemCount ?? 0) - MAX_LISTED} parse problems omitted from this text; analysis is incomplete.`] : []
     ].join("\n"));
   },
   report: async (turn) => {
     const [repo, id] = turn.args;
     if (!turn.remote || !repo || !id || !/^[1-9]\d*$/.test(id) || turn.args.length !== 2) throw new AgentError("Usage: /report <owner/repo> <run-id>.");
-    const result = await remoteRunReport({ ...turn.remote, client: turn.remote.createClient(turn.signal), signal: turn.signal }, { repo, runId: Number(id), markdown: true });
+    const result = await remoteRunReport(operationAccess(turn.remote, turn.signal), { repo, runId: Number(id), markdown: true });
     if (turn.signal.aborted) return;
     await send(turn.client, turn.sessionId, {
       sessionUpdate: "tool_call",
@@ -58184,6 +58320,7 @@ async function runTurn(client, sessionId, session, blocks, signal, remote) {
     signal.throwIfAborted();
     await HANDLERS[command2.name]({ ...turnBase, session, signal, args: command2.args, paths: paths2, content: content2, ...remote ? { remote } : {} });
   } catch (error62) {
+    failOwnedWork(signal, error62);
     if (signal.aborted) return { stopReason: "cancelled" };
     await say(turnBase, `**Error:** ${escapeMarkdown(error62 instanceof AgentError ? error62.message : "Operation failed. No changes were made.")}`);
   }
@@ -58246,15 +58383,17 @@ function createAcpAgent(options = {}) {
     signal.addEventListener("abort", abort, { once: true });
     if (signal.aborted) abort();
     try {
-      return await operation((signal2) => runTurn(client, params.sessionId, session, params.prompt, signal2, options.remote), running.signal, options.timeoutMs);
+      return await operation((signal2) => runTurn(client, params.sessionId, session, params.prompt, signal2, options.remote), running.signal, options.timeoutMs, {
+        onSettled: () => {
+          signal.removeEventListener("abort", abort);
+          delete session.running;
+          release();
+        }
+      });
     } catch (error62) {
       if (running.signal.aborted) return { stopReason: "cancelled" };
-      await say({ client, sessionId: params.sessionId }, `**Error:** ${escapeMarkdown(error62 instanceof AgentError ? error62.message : "Operation deadline exceeded.")}`);
+      await say({ client, sessionId: params.sessionId }, `**Error:** ${escapeMarkdown(error62 instanceof AgentError ? error62.message : "Operation failed. No changes were made.")}`);
       return { stopReason: "end_turn" };
-    } finally {
-      signal.removeEventListener("abort", abort);
-      delete session.running;
-      release();
     }
   }).onNotification(methods.agent.session.cancel, ({ params }) => {
     sessions.get(params.sessionId)?.running?.abort();
@@ -58482,11 +58621,7 @@ function createMcpServer(options) {
   const limiter = new WorkLimiter(2, 2);
   const guard = (run2, signal) => guardResult(async () => {
     const release = limiter.acquire();
-    try {
-      return await operation(run2, signal);
-    } finally {
-      release();
-    }
+    return operation(run2, signal, LIMITS.operationMs, { onSettled: release });
   });
   const pluginRoot = options.pluginRoot ? realpath3(options.pluginRoot).catch(() => void 0) : Promise.resolve(void 0);
   let workspace;
@@ -58610,17 +58745,11 @@ function createMcpServer(options) {
   if (options.remote) {
     const remote = options.remote;
     const repositoryIds = remote.repositoryIds ?? /* @__PURE__ */ new Map();
-    const access = (signal) => ({
-      client: remote.createClient(signal),
-      allow: remote.allow,
-      repositoryIds,
-      signal,
-      ...remote.requirePull ? { requirePull: true } : {}
-    });
+    const access = (signal) => operationAccess({ ...remote, repositoryIds }, signal);
     const allowed = `Allowed repositories: ${remote.allow.join(", ")}.`;
     server.registerTool(MCP_TOOLS.scanRepository, {
       title: "Scan a GitHub repository",
-      description: `Lint a repository's default branch (or a ref) through the GitHub API exactly as the App does, as a dry run that writes nothing. ${allowed}`,
+      description: `Lint a repository's default branch (or a ref) through the GitHub API as a dry run that writes nothing. Check analysisComplete, status, parseProblemCount, and omission counts: partial or unparseable inventories are not clean scans. ${allowed}`,
       inputSchema: external_exports.object({
         repo: external_exports.string().max(140).describe("owner/repo"),
         ref: external_exports.string().min(1).max(255).optional().describe("Branch, tag, or commit (default: the default branch)."),
@@ -58630,7 +58759,7 @@ function createMcpServer(options) {
     }, (args, ctx) => guard(async (signal) => ({ ...await remoteScan(access(signal), strip(args)) }), ctx.mcpReq.signal));
     server.registerTool(MCP_TOOLS.workflowRunReport, {
       title: "Analyze a workflow run",
-      description: `Timeline, critical path, slowest steps, queue time, and baseline comparison for one completed GitHub Actions run, as a dry run that writes nothing. Set markdown to include an escaped agent report with a Gantt chart. ${allowed}`,
+      description: `Timeline, critical path, slowest steps, queue time, and baseline comparison for one completed GitHub Actions run, as a dry run that writes nothing. Inspect analysisStatus and collection provenance: fetched jobs and response omissions are separate from upstream totals, and incomplete telemetry suppresses whole-run metrics. Set markdown to include an escaped agent report with a Gantt chart. ${allowed}`,
       inputSchema: external_exports.object({
         repo: external_exports.string().max(140).describe("owner/repo"),
         runId: external_exports.number().int().positive().describe("Workflow run id (the number in .../actions/runs/<id>)."),

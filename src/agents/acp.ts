@@ -5,8 +5,8 @@ import { agent, methods, PROTOCOL_VERSION, RequestError, type AgentApp, type Age
 import type { AvailableCommand, ContentBlock, PromptResponse, SessionUpdate, ToolCallLocation } from "@agentclientprotocol/sdk";
 import type { ActiveSeverity } from "../lint/types.js";
 import { VERSION } from "../version.js";
-import { remoteRunReport, remoteScan, type RemoteOptions } from "./remote.js";
-import { boundedResult, codeBlock, escapeMarkdown, inlineCode, LIMITS, operation, sanitizeMarkdown, WorkLimiter } from "./safety.js";
+import { operationAccess, remoteRunReport, remoteScan, type RemoteOptions } from "./remote.js";
+import { boundedResult, codeBlock, escapeMarkdown, failOwnedWork, inlineCode, LIMITS, operation, sanitizeMarkdown, WorkLimiter } from "./safety.js";
 import {
   AgentError,
   confine,
@@ -288,19 +288,23 @@ const HANDLERS: Record<string, (turn: Turn) => Promise<void>> = {
   scan: async (turn) => {
     const [repo, ref] = turn.args;
     if (!turn.remote || !repo || turn.args.length > 2) throw new AgentError("Usage: /scan <owner/repo> [ref].");
-    const result = await remoteScan({ ...turn.remote, client: turn.remote.createClient(turn.signal), signal: turn.signal }, { repo, ...(ref ? { ref } : {}), limit: MAX_LISTED });
+    const result = await remoteScan(operationAccess(turn.remote, turn.signal), { repo, ...(ref ? { ref } : {}), limit: MAX_LISTED });
     if (turn.signal.aborted) return;
     await send(turn.client, turn.sessionId, {
       sessionUpdate: "tool_call", toolCallId: randomUUID(), title: "Read-only repository scan", kind: "fetch", status: "completed", rawOutput: boundedResult({ ...result }),
     });
     await say(turn, [escapeMarkdown(result.summary), ...(result.diagnostics ?? []).map((item) =>
       `- ${code(item.ruleId)} ${code(`${item.path}:${item.line}`)} — ${escapeMarkdown(item.message)}`),
-    ...(result.omittedDiagnostics ? [`${result.omittedDiagnostics} diagnostics omitted.`] : [])].join("\n"));
+    ...(result.omittedDiagnostics ? [`${result.omittedDiagnostics} diagnostics omitted.`] : []),
+    ...(result.parseProblems ?? []).slice(0, MAX_LISTED).map((problem) =>
+      `Could not parse ${code(`${problem.path}:${problem.line}`)}: ${escapeMarkdown(problem.message)}`),
+    ...((result.parseProblemCount ?? 0) > MAX_LISTED ? [`${(result.parseProblemCount ?? 0) - MAX_LISTED} parse problems omitted from this text; analysis is incomplete.`] : []),
+    ].join("\n"));
   },
   report: async (turn) => {
     const [repo, id] = turn.args;
     if (!turn.remote || !repo || !id || !/^[1-9]\d*$/.test(id) || turn.args.length !== 2) throw new AgentError("Usage: /report <owner/repo> <run-id>.");
-    const result = await remoteRunReport({ ...turn.remote, client: turn.remote.createClient(turn.signal), signal: turn.signal }, { repo, runId: Number(id), markdown: true });
+    const result = await remoteRunReport(operationAccess(turn.remote, turn.signal), { repo, runId: Number(id), markdown: true });
     if (turn.signal.aborted) return;
     await send(turn.client, turn.sessionId, {
       sessionUpdate: "tool_call", toolCallId: randomUUID(), title: "Read-only workflow report", kind: "fetch", status: "completed", rawOutput: boundedResult({ ...result }),
@@ -340,6 +344,7 @@ async function runTurn(client: AgentContext, sessionId: string, session: Session
     signal.throwIfAborted();
     await (HANDLERS[command.name] as (turn: Turn) => Promise<void>)({ ...turnBase, session, signal, args: command.args, paths, content, ...(remote ? { remote } : {}) });
   } catch (error) {
+    failOwnedWork(signal, error);
     if (signal.aborted) return { stopReason: "cancelled" };
     await say(turnBase, `**Error:** ${escapeMarkdown(error instanceof AgentError ? error.message : "Operation failed. No changes were made.")}`);
   }
@@ -401,15 +406,17 @@ export function createAcpAgent(options: AcpOptions = {}): AgentApp {
       signal.addEventListener("abort", abort, { once: true });
       if (signal.aborted) abort();
       try {
-        return await operation((signal) => runTurn(client, params.sessionId, session, params.prompt, signal, options.remote), running.signal, options.timeoutMs);
+        return await operation((signal) => runTurn(client, params.sessionId, session, params.prompt, signal, options.remote), running.signal, options.timeoutMs, {
+          onSettled: () => {
+            signal.removeEventListener("abort", abort);
+            delete session.running;
+            release();
+          },
+        });
       } catch (error) {
         if (running.signal.aborted) return { stopReason: "cancelled" };
-        await say({ client, sessionId: params.sessionId }, `**Error:** ${escapeMarkdown(error instanceof AgentError ? error.message : "Operation deadline exceeded.")}`);
+        await say({ client, sessionId: params.sessionId }, `**Error:** ${escapeMarkdown(error instanceof AgentError ? error.message : "Operation failed. No changes were made.")}`);
         return { stopReason: "end_turn" };
-      } finally {
-        signal.removeEventListener("abort", abort);
-        delete session.running;
-        release();
       }
     })
     .onNotification(methods.agent.session.cancel, ({ params }) => {

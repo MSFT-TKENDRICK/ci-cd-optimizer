@@ -38,15 +38,17 @@ export function matchesGlob(path: string, glob: string): boolean {
   return matched[path.length] === 1;
 }
 
-/** Maps with at most `limit` promises in flight, preserving order. */
+/** Maps with at most `limit` promises in flight, preserving order. A failure stops queued work, not in-flight work. */
 export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let next = 0;
+  let stopped = false;
   const worker = async () => {
-    while (next < items.length) {
+    while (!stopped && next < items.length) {
       const index = next;
       next += 1;
-      results[index] = await fn(items[index] as T);
+      try { results[index] = await fn(items[index] as T); }
+      catch (error) { stopped = true; throw error; }
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));

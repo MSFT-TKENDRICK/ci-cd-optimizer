@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { boundedResult, codeBlock, escapeMarkdown, inlineCode, LIMITS, operation, WorkLimiter } from "../../src/agents/safety.js";
+import { AgentError, boundedResult, codeBlock, escapeMarkdown, inlineCode, LIMITS, operation, ownWork, WorkLimiter } from "../../src/agents/safety.js";
 import { githubReader } from "../../src/agents/github.js";
 import { repositoryReader, resolveRepository } from "../../src/agents/remote.js";
 import type { GitHubClient } from "../../src/github/client.js";
+import { mapLimit } from "../../src/utils.js";
 
 describe("agent output and operation budgets", () => {
   it("omits whole oversized results with exact byte counts, never partial executable fixes", () => {
@@ -43,13 +44,87 @@ describe("agent output and operation budgets", () => {
     const pending = operation(async (signal) => {
       await new Promise<void>((resolve) => { finish = resolve; });
       expect(signal.aborted).toBe(true);
-    }, undefined, 10).finally(release);
+    }, undefined, 10, { onSettled: release });
     const failure = expect(pending).rejects.toThrow("deadline");
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(() => limiter.acquire()).toThrow("Concurrency");
     finish();
     await failure;
     limiter.acquire()();
+  });
+
+  it("drains cancelled siblings even when the command catches its first read failure", async () => {
+    const limiter = new WorkLimiter(1, 1);
+    const release = limiter.acquire();
+    const first = new AgentError("Original scan failure");
+    let active = 0;
+    let aborted = 0;
+    const result = await operation(async (signal) => {
+      const stalled = ownWork(signal, async (readSignal) => {
+        active += 1;
+        try {
+          await new Promise<void>((_resolve, reject) => readSignal.addEventListener("abort", () => {
+            aborted += 1;
+            expect(readSignal.reason).toBe(first);
+            expect(() => limiter.acquire()).toThrow("Concurrency");
+            setTimeout(() => reject(readSignal.reason), 20);
+          }, { once: true }));
+        } finally { active -= 1; }
+      });
+      const failed = ownWork(signal, async () => { throw first; });
+      try { await Promise.all([stalled, failed]); }
+      catch (error) { expect(error).toBe(first); }
+      await expect(ownWork(signal, async () => { throw new Error("Must not start"); })).rejects.toBe(first);
+      return "handled";
+    }, undefined, 500, { onSettled: release });
+    expect(result).toBe("handled");
+    expect({ active, aborted }).toEqual({ active: 0, aborted: 1 });
+    limiter.acquire()();
+  });
+
+  it("stops queued mapper work as soon as a worker fails, even before its siblings finish", async () => {
+    const first = new AgentError("Original mapping failure");
+    const started: number[] = [];
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    const pending = mapLimit([0, 1, 2, 3], 2, async (item) => {
+      started.push(item);
+      if (item === 0) throw first;
+      await gate;
+      return item;
+    });
+    try { await expect(pending).rejects.toBe(first); }
+    finally { finish(); }
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(started).toEqual([0, 1]);
+  });
+
+  it("bounds cleanup waits, preserves the first error, and reserves capacity until stubborn work settles", async () => {
+    const limiter = new WorkLimiter(1, 1);
+    const release = limiter.acquire();
+    const first = new AgentError("Original scan failure");
+    let finish!: () => void;
+    let readSignal!: AbortSignal;
+    const result = operation(async (signal) => {
+      const stubborn = ownWork(signal, async (child) => {
+        readSignal = child;
+        await new Promise<void>((resolve) => { finish = resolve; });
+      });
+      void stubborn.catch(() => undefined);
+      await Promise.resolve();
+      throw first;
+    }, undefined, 500, { onSettled: release, cleanupMs: 10 });
+    try {
+      await expect(result).rejects.toBe(first);
+      expect(readSignal.aborted).toBe(true);
+      expect(readSignal.reason).toBe(first);
+      expect(() => limiter.acquire()).toThrow("Concurrency");
+    } finally { finish(); }
+    await expect.poll(() => {
+      try { limiter.acquire()(); return true; }
+      catch { return false; }
+    }).toBe(true);
   });
 });
 

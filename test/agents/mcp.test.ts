@@ -10,6 +10,9 @@ import { PROJECT_YAML } from "../review/fixtures.js";
 import { fakeApi, TIMEOUT_ONLY, writes } from "../service/api.js";
 import { forbiddenLocalRule, MISSING_TIMEOUT, tempDirs, WORKFLOW, write } from "./helpers.js";
 import { LIMITS } from "../../src/agents/safety.js";
+import { githubReader } from "../../src/agents/github.js";
+import type { RemoteScanSummary, RunReport } from "../../src/agents/remote.js";
+import { cappedJobs, fanoutFiles, remoteFixture } from "./remote-fixtures.js";
 
 interface ToolResult {
   isError?: boolean;
@@ -225,6 +228,86 @@ describe("MCP server GitHub tools", () => {
     const scan = await data(client, MCP_TOOLS.scanRepository, { repo: "ACME/widgets" });
     expect(scan).toMatchObject({ repo: "acme/widgets", status: "scanned", dryRun: true, counts: { error: 1 } });
     expect(writes(api)).toEqual([]);
+  });
+
+  it.each(["fail", "malformed"] as const)("drains %s scan siblings before the next MCP operation and cancels in-flight reads", async (mode) => {
+    const api = remoteFixture({ files: fanoutFiles() });
+    const client = await connect({ fallbackRoot: repo, remote: {
+      allow: ["acme/widgets"], createClient: (signal) => githubReader("test-token", { signal, fetch: api.fetcher }),
+    } });
+    api.state.mode = mode;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      expect(await failure(client, MCP_TOOLS.scanRepository, { repo: "acme/widgets" })).not.toContain("deadline");
+      expect(api.state).toMatchObject({ active: 0, started: attempt * 8, aborted: attempt * 7, maximumActive: 8 });
+    }
+    api.state.mode = "stall";
+    const stop = new AbortController();
+    const pending = client.callTool({ name: MCP_TOOLS.scanRepository, arguments: { repo: "acme/widgets" } }, { signal: stop.signal });
+    const cancelled = expect(pending).rejects.toBeDefined();
+    await expect.poll(() => api.state.active).toBe(8);
+    stop.abort();
+    await cancelled;
+    await expect.poll(() => api.state.active).toBe(0);
+    expect(api.state.aborted).toBe(29);
+    api.state.mode = "normal";
+    expect(await data(client, MCP_TOOLS.scanRepository, { repo: "acme/widgets" })).toMatchObject({ status: "scanned", analysisComplete: true });
+  });
+
+  it("does not treat an optional missing configuration file as a fatal child failure", async () => {
+    const api = fakeApi({ repositoryMetadata: REPOSITORY, refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } } });
+    const client = await connect({ fallbackRoot: repo, remote: { allow: ["acme/widgets"], createClient: () => api } });
+    expect(await data(client, MCP_TOOLS.scanRepository, { repo: "acme/widgets" })).toMatchObject({ status: "scanned", analysisComplete: true });
+  });
+
+  it.each([1, 105])("reports %i remote parse failures as bounded partial analysis, not a clean scan", async (count) => {
+    const files = Object.fromEntries(Array.from({ length: count }, (_, index) =>
+      [`.github/workflows/broken-${index}.yml`, "jobs: [unterminated\n"]));
+    const api = remoteFixture({ files });
+    const client = await connect({ fallbackRoot: repo, remote: {
+      allow: ["acme/widgets"], createClient: (signal) => githubReader("test-token", { signal, fetch: api.fetcher }),
+    } });
+    const scan = await data<RemoteScanSummary>(client, MCP_TOOLS.scanRepository, { repo: "acme/widgets" });
+    expect(scan).toMatchObject({
+      status: "partial", analysisComplete: false, inventoryComplete: true, parseProblemCount: count,
+      omittedParseProblems: Math.max(0, count - 100), counts: { error: 0 }, dryRun: true,
+    });
+    expect(scan.summary).toContain("Partial analysis");
+    expect(scan.parseProblems).toHaveLength(Math.min(count, 100));
+    expect(scan.parseProblems?.[0]).toMatchObject({ path: expect.stringContaining(".github/workflows/broken-"), line: expect.any(Number), message: expect.any(String), omittedCharacters: 0 });
+  });
+
+  it("exposes the actual five-page collector cap without authoritative-looking partial metrics", async () => {
+    const api = remoteFixture({ jobs: cappedJobs() });
+    const client = await connect({ fallbackRoot: repo, remote: {
+      allow: ["acme/widgets"], createClient: (signal) => githubReader("test-token", { signal, fetch: api.fetcher }),
+    } });
+    const report = await data<RunReport>(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 2000, markdown: true });
+    expect(api.state.jobPages).toEqual([1, 2, 3, 4, 5]);
+    expect(report).toMatchObject({
+      status: "processed", analysisStatus: "partial", provenance: { collector: "github-actions-rest", jobsComplete: false, definitionKnown: true },
+      jobsTotal: 501, jobsFetched: 500, jobsAnalyzed: 500, jobsNotFetched: 1, jobPagesFetched: 5, omittedJobs: 400,
+      run: { durationMs: null },
+    });
+    expect(report.jobs).toHaveLength(100);
+    expect(report).not.toHaveProperty("criticalPath");
+    expect(report).not.toHaveProperty("baseline");
+    expect(report.jobs?.every((job) => job.onCriticalPath === undefined && job.baselineMs === undefined)).toBe(true);
+    expect(report.markdown).toContain("Incomplete job telemetry");
+    expect(report.markdown).toContain("400 fetched job(s) omitted from this response");
+    expect(report.markdown).toContain("1 upstream job(s) not fetched");
+    expect(report.markdown).not.toContain("Estimated critical path: 60000");
+  });
+
+  it.each(["missing", "inconsistent"] as const)("keeps %s upstream totals unknown rather than substituting fetched counts", async (mode) => {
+    const jobs = cappedJobs().slice(0, 200);
+    const api = remoteFixture({ jobs, total: (page) => mode === "missing" ? undefined : page === 1 ? 201 : 200 });
+    const client = await connect({ fallbackRoot: repo, remote: {
+      allow: ["acme/widgets"], createClient: (signal) => githubReader("test-token", { signal, fetch: api.fetcher }),
+    } });
+    const report = await data<RunReport>(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 2000, markdown: true });
+    expect(report).toMatchObject({ jobsTotal: null, jobsNotFetched: null, jobsFetched: 200, omittedJobs: 100 });
+    expect(report.markdown).toContain("upstream total: unknown");
+    if (mode === "inconsistent") expect(report).toMatchObject({ analysisStatus: "partial", run: { durationMs: null } });
   });
 
   it("report a workflow run's critical path without writing", async () => {

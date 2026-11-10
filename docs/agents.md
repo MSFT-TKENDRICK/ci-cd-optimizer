@@ -137,6 +137,38 @@ Remote operations are dry runs: they do not publish checks/SARIF, synchronize is
 telemetry to a database, or open fix PRs. Run reports fetch recent comparison data through the same bounded reader;
 they do not expose the App's privileged installation client or persistent telemetry history.
 
+### Remote result completeness
+
+A remote scan with parse failures or incomplete inventory has `status: "partial"` and `analysisComplete: false`.
+`inventoryComplete: true` means enumeration finished, **not** that every file parsed successfully. A scan that
+did not run also has `analysisComplete: false`. Diagnostic severity counts do not include parser failures:
+inspect `parseProblemCount`, `parseProblems`, and `omittedParseProblems` independently. Up to 100 parse problems
+are returned with path, line, bounded message, and `omittedCharacters`; counts cover all problems encountered
+in the analyzed inventory. Hosted ACP renders up to 50 problems and reports its own remaining text omission
+count. Zero diagnostics never imply clean analysis when parse problems or coverage gaps exist.
+
+Run-report `status: "processed"` means a snapshot was produced, not that telemetry is complete. Inspect
+`analysisStatus` (`complete` or `partial`), `warnings`, and `provenance`: collector/version, collection time,
+`jobsComplete`, and `definitionKnown` are retained from the snapshot. Markdown/ACP also states collection
+provenance and warnings. Collection requests at most five pages of 100 jobs per run attempt.
+
+| Report field | Meaning |
+|---|---|
+| `jobsTotal` | Consistent, valid upstream `total_count`; `null` if unknown or inconsistent, never a substitute fetched count |
+| `jobsFetched` | Distinct job IDs actually fetched for this run attempt |
+| `jobsAnalyzed` | Fetched jobs with the timestamps needed for analysis |
+| `jobsNotFetched` | Known upstream total minus fetched jobs, or `null` when the total is unknown |
+| `jobPagesFetched` | Pages fetched for this run attempt, excluding historical comparison runs |
+| `jobs` / `omittedJobs` | Up to 100 analyzed jobs / analyzed jobs omitted **from this response only** |
+
+For example, a 501-job run capped at five pages reports 500 fetched jobs, 100 returned jobs, 400 response-omitted
+jobs, and one upstream job not fetched. It does not claim that output pagination covers the missing job.
+When collected job telemetry is incomplete, `run.durationMs` is `null`, `criticalPath` and per-job
+`onCriticalPath` are absent, and baseline comparisons are withheld. Unknown workflow definitions also suppress
+critical-path metrics. Individual job/step timings remain measurements of the collected subset, not a complete
+ranking of the run. A Gantt chart likewise covers only returned jobs. Missing fields are unavailable evidence,
+not zero durations or proof that a job is off the critical path.
+
 ## Local ACP
 
 Configure an external agent with command `node` and argument
@@ -237,7 +269,7 @@ Hard ceilings are not raised by repository configuration:
 | Work | Two concurrent local operations; hosted four globally, two per user; one prompt per ACP session |
 | Hosted connections / sessions | 32 connections globally, four per user; eight sessions and eight pending RPC requests per connection |
 | Hosted HTTP / SSE | 32 ordinary requests globally/eight per user; 64 SSE streams globally/12 per user, with separate permits |
-| Deadlines | 30-second cooperative operation deadline; ten-second HTTP/auth/read deadline |
+| Deadlines | 30-second cooperative operation deadline; ten-second HTTP/auth/read deadline; at most one second awaiting child-read cleanup after a command exits |
 | GitHub reads | At most 256 requests, 2 MiB per response, 16 MiB response bytes per operation |
 | Hosted output buffering | Explicit 256 KiB SDK queue threshold; five-second output-stall timeout |
 
@@ -246,8 +278,13 @@ caps bound that overshoot. Excess work is rejected instead of queued indefinitel
 buffer is used by the hosted endpoint. Use proxy limits as well; in-process quotas are not a distributed rate limit.
 
 Cancellation aborts pending GitHub fetches and is checked between filesystem/analysis phases. It cannot preempt
-synchronous JavaScript parsing or a built-in rule already running. A deadline rejects late results, and concurrency
-permits stay held until the underlying work settles. Do not describe this as hard CPU isolation.
+synchronous JavaScript parsing or a built-in rule already running. Failed reads cancel their sibling reads and
+prevent queued reads from starting; a missing optional configuration/workflow file is not a fatal read failure.
+Every command exit aborts and drains owned reads, including errors converted to ACP `end_turn`. The original error
+is retained rather than replaced by a sibling's cancellation error. A deadline rejects late results. If a transport
+ignores cancellation beyond the cleanup wait, the response can finish but its concurrency permit and ACP session
+remain reserved until the underlying reads actually settle. Neither retrying nor creating another session can
+reclaim those occupied operation slots. Do not describe this as hard CPU isolation.
 
 Counts describe the analyzed inventory, not unseen files. `inventoryComplete: false` means coverage is incomplete;
 unvisited files cannot be counted without exceeding the traversal budget. Diagnostic/list caps report omitted

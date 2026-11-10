@@ -6,7 +6,7 @@ import { z } from "zod";
 import { VERSION } from "../version.js";
 import { PRESETS } from "../lint/config.js";
 import { RULESETS } from "../lint/rules/index.js";
-import { normalizeRepository, remoteRunReport, remoteScan, type RemoteAccess, type RemoteOptions } from "./remote.js";
+import { normalizeRepository, operationAccess, remoteRunReport, remoteScan, type RemoteOptions } from "./remote.js";
 import { boundedResult, LIMITS, operation, sanitizeMarkdown, WorkLimiter } from "./safety.js";
 import {
   AgentError,
@@ -115,8 +115,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   const limiter = new WorkLimiter(2, 2);
   const guard = (run: (signal: AbortSignal) => Promise<Record<string, unknown>>, signal?: AbortSignal): Promise<Result> => guardResult(async () => {
     const release = limiter.acquire();
-    try { return await operation(run, signal); }
-    finally { release(); }
+    return operation(run, signal, LIMITS.operationMs, { onSettled: release });
   });
   const pluginRoot = options.pluginRoot ? realpath(options.pluginRoot).catch(() => undefined) : Promise.resolve(undefined);
   let workspace: Promise<string> | undefined;
@@ -264,14 +263,12 @@ export function createMcpServer(options: McpServerOptions): McpServer {
   if (options.remote) {
     const remote = options.remote;
     const repositoryIds = remote.repositoryIds ?? new Map<string, number>();
-    const access = (signal: AbortSignal): RemoteAccess => ({
-      client: remote.createClient(signal), allow: remote.allow, repositoryIds, signal,
-      ...(remote.requirePull ? { requirePull: true } : {}),
-    });
+    const access = (signal: AbortSignal) => operationAccess({ ...remote, repositoryIds }, signal);
     const allowed = `Allowed repositories: ${remote.allow.join(", ")}.`;
     server.registerTool(MCP_TOOLS.scanRepository, {
       title: "Scan a GitHub repository",
-      description: `Lint a repository's default branch (or a ref) through the GitHub API exactly as the App does, as a dry run that writes nothing. ${allowed}`,
+      description: "Lint a repository's default branch (or a ref) through the GitHub API as a dry run that writes nothing. "
+        + `Check analysisComplete, status, parseProblemCount, and omission counts: partial or unparseable inventories are not clean scans. ${allowed}`,
       inputSchema: z.object({
         repo: z.string().max(140).describe("owner/repo"),
         ref: z.string().min(1).max(255).optional().describe("Branch, tag, or commit (default: the default branch)."),
@@ -283,6 +280,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     server.registerTool(MCP_TOOLS.workflowRunReport, {
       title: "Analyze a workflow run",
       description: "Timeline, critical path, slowest steps, queue time, and baseline comparison for one completed GitHub Actions run, as a dry run that writes nothing. "
+        + "Inspect analysisStatus and collection provenance: fetched jobs and response omissions are separate from upstream totals, and incomplete telemetry suppresses whole-run metrics. "
         + `Set markdown to include an escaped agent report with a Gantt chart. ${allowed}`,
       inputSchema: z.object({
         repo: z.string().max(140).describe("owner/repo"),

@@ -6,6 +6,7 @@ import { createHostedAcp, hostedAcpFromEnv, type HostedOptions } from "../../src
 import { LIMITS } from "../../src/agents/safety.js";
 import { MISSING_TIMEOUT, WORKFLOW } from "./helpers.js";
 import { TIMEOUT_ONLY } from "../service/api.js";
+import { cappedJobs, fanoutFiles, remoteFixture } from "./remote-fixtures.js";
 
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
@@ -204,6 +205,102 @@ describe("hosted ACP roundtrips and resource limits", () => {
       expect(host.state.aborted).toBe(true);
       host.state.stall = false;
       expect((await ctx.request(methods.agent.session.prompt, { sessionId: session.sessionId, prompt: [{ type: "text", text: "/help" }] })).stopReason).toBe("end_turn");
+    });
+  });
+
+  it.each(["fail", "malformed"] as const)("drains every %s scan before ending its HTTP/SSE turn, then still handles cancellation", async (mode) => {
+    const api = remoteFixture({ files: fanoutFiles() });
+    const host = await serve({ operations: 1, userOperations: 1 }, api.fetcher);
+    await withClient(host.url, async (ctx) => {
+      const session = await ctx.buildSession("/").start();
+      await session.nextUpdate();
+      api.state.mode = mode;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const scan = await turn(session, "/scan acme/widgets");
+        expect(scan.response.stopReason).toBe("end_turn");
+        expect(scan.answer).toContain("Operation failed");
+        expect(scan.answer).not.toContain("deadline");
+        expect(api.state).toMatchObject({ active: 0, started: attempt * 8, aborted: attempt * 7, maximumActive: 8 });
+      }
+      api.state.mode = "stall";
+      const pending = ctx.request(methods.agent.session.prompt, { sessionId: session.sessionId, prompt: [{ type: "text", text: "/scan acme/widgets" }] });
+      await expect.poll(() => api.state.active).toBe(8);
+      await ctx.notify(methods.agent.session.cancel, { sessionId: session.sessionId });
+      expect((await pending).stopReason).toBe("cancelled");
+      expect(api.state).toMatchObject({ active: 0, aborted: 29, started: 32, maximumActive: 8 });
+      api.state.mode = "normal";
+      expect((await turn(session, "/scan acme/widgets")).answer).toContain("workflow/job-timeout");
+    });
+  });
+
+  it.each([1, 105])("renders %i parse failures and true omission counts in real hosted scan output", async (count) => {
+    const files = Object.fromEntries(Array.from({ length: count }, (_, index) =>
+      [`.github/workflows/broken-${index}.yml`, "jobs: [unterminated\n"]));
+    const api = remoteFixture({ files });
+    const host = await serve({}, api.fetcher);
+    await withClient(host.url, async (ctx) => {
+      const session = await ctx.buildSession("/").start();
+      await session.nextUpdate();
+      const scan = await turn(session, "/scan acme/widgets");
+      expect(scan.response.stopReason).toBe("end_turn");
+      expect(scan.answer).toContain("Partial analysis");
+      expect(scan.answer).toContain("Could not parse");
+      expect(scan.answer).toContain(".github/workflows/broken-");
+      const raw = scan.updates.flatMap((update) => update.sessionUpdate === "tool_call" ? [update.rawOutput] : [])[0];
+      expect(raw).toMatchObject({ status: "partial", analysisComplete: false, inventoryComplete: true, parseProblemCount: count, omittedParseProblems: Math.max(0, count - 100) });
+      if (count > 50) expect(scan.answer).toContain(`${count - 50} parse problems omitted from this text`);
+    });
+  });
+
+  it("keeps the session and shared operation permit reserved after bounded cleanup times out", async () => {
+    let settle!: () => void;
+    const abortSettlement = new Promise<void>((resolve) => { settle = resolve; });
+    const api = remoteFixture({ files: fanoutFiles(), abortSettlement });
+    const host = await serve({ operations: 1, userOperations: 1 }, api.fetcher);
+    try {
+      await withClient(host.url, async (ctx) => {
+        const session = await ctx.buildSession("/").start();
+        const other = await ctx.buildSession("/").start();
+        await session.nextUpdate();
+        await other.nextUpdate();
+        api.state.mode = "fail";
+        const scan = await turn(session, "/scan acme/widgets");
+        expect(scan.response.stopReason).toBe("end_turn");
+        expect(api.state).toMatchObject({ active: 7, aborted: 7, started: 8 });
+        await expect(ctx.request(methods.agent.session.prompt, { sessionId: session.sessionId, prompt: [{ type: "text", text: "/help" }] }))
+          .rejects.toThrow("already running");
+        await expect(ctx.request(methods.agent.session.prompt, { sessionId: other.sessionId, prompt: [{ type: "text", text: "/help" }] }))
+          .rejects.toThrow("Concurrent operation limit");
+        await ctx.notify(methods.agent.session.cancel, { sessionId: session.sessionId });
+        settle();
+        await expect.poll(() => api.state.active).toBe(0);
+        expect((await turn(session, "/help")).response.stopReason).toBe("end_turn");
+        expect((await turn(other, "/help")).response.stopReason).toBe("end_turn");
+      });
+    } finally { settle(); }
+  });
+
+  it("renders real capped-collector provenance and distinguishes unfetched jobs from response omissions", async () => {
+    const api = remoteFixture({ jobs: cappedJobs() });
+    const host = await serve({}, api.fetcher);
+    await withClient(host.url, async (ctx) => {
+      const session = await ctx.buildSession("/").start();
+      await session.nextUpdate();
+      const report = await turn(session, "/report acme/widgets 2000");
+      expect(report.response.stopReason).toBe("end_turn");
+      expect(api.state.jobPages).toEqual([1, 2, 3, 4, 5]);
+      expect(report.answer).toContain("Incomplete job telemetry");
+      expect(report.answer).toContain("Fetched 500 jobs");
+      expect(report.answer).toContain("upstream total: 501");
+      expect(report.answer).toContain("1 upstream job(s) not fetched");
+      expect(report.answer).toContain("400 fetched job(s) omitted from this response");
+      expect(report.answer).toContain("Critical path unavailable");
+      const raw = report.updates.flatMap((update) => update.sessionUpdate === "tool_call" ? [update.rawOutput] : [])[0];
+      expect(raw).toMatchObject({
+        analysisStatus: "partial", provenance: { jobsComplete: false, definitionKnown: true },
+        jobsTotal: 501, jobsFetched: 500, jobsNotFetched: 1, omittedJobs: 400, run: { durationMs: null },
+      });
+      expect(raw).not.toHaveProperty("criticalPath");
     });
   });
 
