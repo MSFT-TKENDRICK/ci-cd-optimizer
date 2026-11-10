@@ -140,7 +140,7 @@ they do not expose the App's privileged installation client or persistent teleme
 ### Remote result completeness
 
 A remote scan with parse failures or incomplete inventory has `status: "partial"` and `analysisComplete: false`.
-`inventoryComplete: true` means enumeration finished, **not** that every file parsed successfully. A scan that
+`inventoryComplete: true` means enumeration finished without omitting relevant files, **not** that every file parsed successfully. A scan that
 did not run also has `analysisComplete: false`. Diagnostic severity counts do not include parser failures:
 inspect `parseProblemCount`, `parseProblems`, and `omittedParseProblems` independently. Up to 100 parse problems
 are returned with path, line, bounded message, and `omittedCharacters`; counts cover all problems encountered
@@ -286,8 +286,10 @@ ignores cancellation beyond the cleanup wait, the response can finish but its co
 remain reserved until the underlying reads actually settle. Neither retrying nor creating another session can
 reclaim those occupied operation slots. Do not describe this as hard CPU isolation.
 
-Counts describe the analyzed inventory, not unseen files. `inventoryComplete: false` means coverage is incomplete;
-unvisited files cannot be counted without exceeding the traversal budget. Diagnostic/list caps report omitted
+Counts describe the analyzed inventory, not unseen files; `filesAnalyzed` includes supported Nix/toolchain inputs
+and cross-file configuration, not just workflows. `inventoryComplete: false` means coverage is incomplete:
+excluded relevant files and unfollowed links do not establish absence, and unvisited files cannot be counted without
+exceeding the traversal budget. Diagnostic/list caps report omitted
 counts, text caps report omitted characters, and oversized envelopes report omitted response bytes. Previews never
 return half of a file: omitted diffs are flagged and counted. Their `inventoryComplete`, `localRulesIgnored`, and
 `parseProblemCount` fields expose coverage limitations; use `lint` for parse-problem details. Narrow selections/queries and retry rather than

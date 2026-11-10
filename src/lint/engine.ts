@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { matchesGlob } from "../utils.js";
 import { resolveRules, type LintConfig } from "./config.js";
-import { isActionPath, isWorkflowPath } from "./parsers/workflow.js";
+import { isInventoryPath } from "./inventory-paths.js";
 import { parseYaml } from "./parsers/yaml.js";
 import { buildProject } from "./project.js";
 import type {
@@ -172,22 +172,17 @@ export function fingerprint(ruleId: string, path: string, discriminator: string)
   return createHash("sha256").update(`${ruleId}\u0000${path}\u0000${discriminator}`).digest("hex").slice(0, 32);
 }
 
-function isRelevant(path: string): boolean {
-  return (
-    isWorkflowPath(path) ||
-    isActionPath(path) ||
-    /(^|\/)(Dockerfile|Containerfile)(\.[^/]+)?$/i.test(path) ||
-    /\.(dockerfile|containerfile)$/i.test(path) ||
-    /(^|\/)package\.json$/.test(path)
-  );
-}
-
 export function filterInput(input: AnalysisInput, ignorePaths: string[]): AnalysisInput {
+  let excluded = false;
+  const files = input.files.filter((file) => {
+    const ignored = ignorePaths.some((glob) => matchesGlob(file.path, glob) || matchesGlob(file.path, `${glob}/**`));
+    if (ignored && isInventoryPath(file.path)) excluded = true;
+    return !ignored;
+  });
   return {
     ...input,
-    files: input.files.filter(
-      (file) => !ignorePaths.some((glob) => matchesGlob(file.path, glob) || matchesGlob(file.path, `${glob}/**`)),
-    ),
+    files,
+    inventoryComplete: input.inventoryComplete && !excluded,
   };
 }
 
@@ -230,7 +225,10 @@ export function lint(rawInput: AnalysisInput, options: LintOptions): LintResult 
       });
     };
     try {
-      rule.check({ options: ruleOptions, project, input, report });
+      rule.check({
+        options: ruleOptions, project, input, report,
+        isPathIgnored: (path) => options.config.ignorePaths.some((glob) => matchesGlob(path, glob) || matchesGlob(path, `${glob}/**`)),
+      });
     } catch (error) {
       skipped.push({
         ruleId: rule.meta.id,
@@ -299,7 +297,7 @@ export function lint(rawInput: AnalysisInput, options: LintOptions): LintResult 
     diagnostics,
     skipped,
     parseProblems: project.parseProblems,
-    filesAnalyzed: input.files.filter((file) => isRelevant(file.path)).length,
+    filesAnalyzed: input.files.filter((file) => isInventoryPath(file.path)).length,
     rulesRun,
     suppressed: suppressedCount,
     durationMs: Math.round(performance.now() - started),

@@ -1,7 +1,8 @@
 # CI/CD Optimizer
 
 CI/CD Optimizer is Dependabot for build and release performance. It lints GitHub Actions workflows, Dockerfiles,
-and package manifests against platform-engineering best practices: hermetic builds, caching, dependency layers,
+Nix expressions and flakes, and package/toolchain configuration for declared build practices and potential improvements:
+hermeticity, caching, dependency layers,
 sparse checkout, affected-only testing, GHCR and GitHub Packages, and package decomposition. It then acts on the
 findings the way GitHub Advanced Security and Dependabot do. It also measures configured Actions workflows, flags statistically
 significant slowdowns, and runs hill-climbing experiments with GitHub Agentic Workflows to evolve its own rules and
@@ -74,7 +75,7 @@ npm link                     # puts cicd-lint, ci-cd-optimizer, cicd-mcp, and ci
 cd ~/src/my-service
 cicd-lint                    # lint the current directory; exits 1 on errors
 cicd-lint --base origin/main # only findings this change introduces
-cicd-lint --fix              # apply safe autofixes, then report what remains
+cicd-lint --fix              # apply available autofixes; review and test the resulting diff
 cicd-lint --init             # write a starter .github/ci-cd-optimizer.yml
 cicd-lint -f sarif -o cicd.sarif
 ```
@@ -86,7 +87,7 @@ tarball. Inside the clone, `npm run cli -- <command>` runs the TypeScript source
 
 | Command | Purpose | Needs |
 |---|---|---|
-| `lint [paths...]` | Lint workflows, Dockerfiles, and package manifests. The default command. | A checkout |
+| `lint [paths...]` | Lint workflows, Dockerfiles, Nix expressions/flakes, and package/toolchain configuration. The default command. | A checkout |
 | `rules` | List the rule catalog (`--format json\|markdown`) | — |
 | `scan` | Lint a repository's default branch through the API like the App, then upload SARIF (`--upload-sarif`), sync finding issues, and open fix pull requests. `--dry-run` previews. | `--repo`, a token |
 | `telemetry` | Report on a completed workflow run (`--run-id`) with a Gantt chart and critical path. Raises duration alerts; `--check` posts a check run. | A token with `actions: read` |
@@ -224,28 +225,41 @@ registers itself as the reference example in [projects/ci-cd-optimizer](projects
 
 ## What it finds
 
-62 rules in 12 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
+126 rules in 14 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
 suppressions.
 
 | Ruleset | Examples |
 |---|---|
-| `workflow` | Concurrency cancellation, job timeouts, merge queue support, outdated action majors, artifact retention |
+| `workflow` | Concurrency cancellation, job timeouts, merge queue support, matrix coverage/budgets, duplicate triggers, setup version files |
 | `checkout` | Sparse checkout, partial clone (`filter: blob:none`), correct base refs for affected detection |
 | `affected` | Change detection, affected-only test selection instead of `nx run-many`, `turbo run`, `lerna run`, `pnpm -r`, workspace-wide npm/Yarn, or `bazel test //...`, path-filtered required checks |
-| `caching` | setup-* dependency caches, build-tool caches, cache key hygiene, Docker layer cache (`type=gha`/registry) |
+| `caching` | setup-* dependency caches, build-tool caches, matrix platform compatibility, artifact compression, redundant installs |
 | `hermeticity` | Frozen lockfiles, pinned actions, runners, container images, and base image digests |
-| `containers` | Dependency layer before source, multi-stage builds, BuildKit cache mounts, `.dockerignore`, shared base images |
+| `containers` | Dependency layers, multi-stage builds, BuildKit cache scope/mode and mounts, context size, QEMU, verified script downloads |
 | `packages` | Monolith decomposition signals, `exports` maps, `files` allowlists, version drift across a monorepo |
 | `registries` | Publishing images to GHCR and packages to the GitHub npm registry for org-wide reuse |
 | `triggers` | Draft pull request gating, noisy `pull_request` types, over-frequent schedules, `workflow_run` chains, serialized matrices |
 | `redundancy` | Duplicate setup steps and commands, the same build repeated per job, toolchain version drift, shadowed `env` |
 | `testing` | Playwright browser caching, incremental tool caches, watch mode in CI, masked failures, fixed sleeps |
 | `security` | Expression injection, untrusted checkouts in privileged triggers, cache poisoning, excessive token permissions, persisted credentials |
+| `nix` | 37 rules for CI configuration, evaluation inputs, flake locks, cache/trust boundaries, fetchers, derivations and image layers |
+| `toolchains` | 10 rules for Gradle cache/parallel settings, Cargo locking/incremental builds and Rust selection, Bazel, pip, uv and Go |
 
 Presets are `recommended` (default), `strict`, `agentic`, `github`, `insights`, and `all`. The full catalog with
 rationale, examples, and references is in [docs/rules.md](docs/rules.md). Configuration is covered in
 [docs/configuration.md](docs/configuration.md), and suppressions and custom local rules in
 [docs/linter.md](docs/linter.md#suppressions).
+
+The directory, Git-revision, and GitHub API loaders share an inventory of workflows/composite actions, Dockerfiles
+and containerfiles, package manifests/locks, `*.nix`, `flake.lock`, devenv files, `.cargo/config[.toml]`, Gradle
+configuration, requirements files, and supported toolchain version files. See [supported inputs](docs/linter.md#supported-inputs)
+and the [Nix guide](docs/nix.md). Repository code is not evaluated or built by the built-in rules.
+
+**Findings are not universal formal proofs of correctness, hermeticity, or performance.** Detectors use bounded
+static models; an unmodeled construct or no finding does not establish safety. Severity, impact and confidence are
+heuristic judgments. Tests and corpus cases check concrete behavior, while performance claims require measurements
+on the relevant workload. All 64 rules in this expansion are advisory, without automatic edits. The 11 existing
+fixable rules still require review and validation; “fixable” is not a proof of semantic equivalence.
 
 ## Acting on findings
 
@@ -254,7 +268,7 @@ These run from the App, `scan`, and `telemetry`:
 - **Issues.** Findings at or above `issues.minSeverity`/`minImpact` open one issue per rule (or per finding).
   Issues are fingerprinted, updated in place, closed when resolved, and capped by `maxOpen`. With
   `assignCopilot: true` they are assigned to the Copilot coding agent with custom instructions.
-- **Fix pull requests.** Safe autofixes are grouped (by ruleset or by named groups) into branches under
+- **Fix pull requests.** Available autofixes are grouped (by ruleset or by named groups) into branches under
   `cicd-optimizer/`, with Dependabot-style commands in the PR body.
 - **Duration alerts.** Each workflow run is compared with up to `alerts.window` prior successful runs. Two checks run:
   - **Spike:** a single run with robust z ≥ 3.5, using median and MAD.

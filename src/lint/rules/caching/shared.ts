@@ -1,4 +1,5 @@
 import type { StepModel } from "../../parsers/workflow.js";
+import { shellWords } from "../../parsers/shell.js";
 
 /** actions/cache and drop-in replacements that restore a cache (save-only variants excluded). */
 export const CACHE_RESTORE_ACTIONS = [
@@ -59,13 +60,5 @@ export function basename(path: string): string {
 
 /** Words of a shell command with leading `VAR=value` assignments and `sudo`/`time`/`env` wrappers removed. */
 export function commandWords(command: string): string[] {
-  const words = command.split(/\s+/).filter(Boolean);
-  let index = 0;
-  while (
-    index < words.length &&
-    (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index] ?? "") || ["sudo", "time", "env", "exec", "command"].includes(words[index] ?? ""))
-  ) {
-    index += 1;
-  }
-  return words.slice(index);
+  return shellWords(command);
 }

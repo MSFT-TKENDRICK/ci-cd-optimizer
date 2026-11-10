@@ -62,7 +62,8 @@ export async function collectRunKnowledge(
     }
     if (source) {
       if (source.sha !== run.headSha) throw new Error("Run source revision changed during collection");
-      project = extractKnowledge(repository, source.sha, source.input, {
+      // Knowledge has a fixed, narrower inventory. Keep its completeness separate from the linter's input.
+      project = extractKnowledge(repository, source.sha, { ...source.input, inventoryComplete: source.selectionComplete }, {
         ignorePaths: config.ignorePaths, truncated: source.input.truncated, inventoryPolicyDigest: policy,
         ...(options.now ? { now: options.now } : {}),
       });

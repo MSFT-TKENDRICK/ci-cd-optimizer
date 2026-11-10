@@ -8,6 +8,8 @@ import { mapLimit } from "../utils.js";
 
 export interface RepositorySnapshot {
   input: LoadedInput;
+  /** Complete within pathFilter/configured scope, not necessarily the linter's full inventory. */
+  selectionComplete: boolean;
   /** Branch or ref that was read. */
   ref: string;
   /** Commit the snapshot was taken from (base for fix commits). */
@@ -92,7 +94,13 @@ export async function loadRepositorySnapshot(
       .map((entry) => [entry.path, entry]),
   );
   const selection = selectInventory(
-    [...blobs.values()].map((entry) => ({ path: entry.path, ...(entry.size !== undefined ? { size: entry.size } : {}) })),
+    treeData.tree.filter((entry) => (entry.type === "blob" || entry.type === "commit") &&
+      (entry.mode === SYMLINK_MODE || entry.type === "commit" || !options.pathFilter || options.pathFilter(entry.path)))
+      .map((entry) => ({
+        path: entry.path,
+        opaque: entry.mode === SYMLINK_MODE || entry.type === "commit",
+        ...(entry.size !== undefined ? { size: entry.size } : {}),
+      })),
     options.config,
   );
   const truncated = new Set(selection.truncated);
@@ -106,10 +114,11 @@ export async function loadRepositorySnapshot(
   return {
     ref: options.ref,
     sha: commit.sha,
+    selectionComplete: selection.selectionComplete && treeData.truncated !== true,
     input: {
       files,
       mode: "repository",
-      inventoryComplete: selection.complete && treeData.truncated !== true,
+      inventoryComplete: selection.complete && treeData.truncated !== true && options.pathFilter === undefined,
       truncated: selection.truncated,
       ...(options.change ? { change: options.change } : {}),
     },

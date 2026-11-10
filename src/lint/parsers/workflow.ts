@@ -42,6 +42,8 @@ export interface StepModel {
   with: Map<string, Sourced<unknown>>;
   run?: Sourced<string> & { contentLine: number };
   workingDirectory?: string;
+  /** `shell:` of the step itself, not inherited defaults. */
+  shell?: string;
   if?: string;
   env: Record<string, unknown>;
 }
@@ -68,6 +70,8 @@ export interface JobModel {
   matrix?: Record<string, unknown>;
   steps: StepModel[];
   workingDirectory?: string;
+  /** `defaults.run.shell` of the job. */
+  shell?: string;
   env: Record<string, unknown>;
 }
 
@@ -89,6 +93,8 @@ export interface WorkflowModel {
   triggersLine: number;
   concurrency?: Sourced<unknown>;
   workingDirectory?: string;
+  /** `defaults.run.shell` of the workflow. */
+  shell?: string;
   env: Record<string, unknown>;
   jobs: JobModel[];
 }
@@ -166,6 +172,7 @@ function parseSteps(source: YamlSource, stepsNode: Node | null | undefined, keyP
     const id = stringValue(field(source, stepNode, "id")?.value);
     const name = stringValue(field(source, stepNode, "name")?.value);
     const workingDirectory = stringValue(field(source, stepNode, "working-directory")?.value);
+    const shell = stringValue(field(source, stepNode, "shell")?.value);
     const condition = stringValue(field(source, stepNode, "if")?.value);
     return {
       index,
@@ -177,6 +184,7 @@ function parseSteps(source: YamlSource, stepsNode: Node | null | undefined, keyP
       with: withMap,
       ...(run ? { run: { ...run, contentLine } } : {}),
       ...(workingDirectory !== undefined ? { workingDirectory } : {}),
+      ...(shell !== undefined ? { shell } : {}),
       ...(condition !== undefined ? { if: condition } : {}),
       env: record(source, field(source, stepNode, "env")?.value),
     };
@@ -186,6 +194,11 @@ function parseSteps(source: YamlSource, stepsNode: Node | null | undefined, keyP
 function defaultsWorkingDirectory(source: YamlSource, node: Node | null | undefined): string | undefined {
   const run = field(source, field(source, node, "defaults")?.value, "run");
   return stringValue(field(source, run?.value, "working-directory")?.value);
+}
+
+function defaultsShell(source: YamlSource, node: Node | null | undefined): string | undefined {
+  const run = field(source, field(source, node, "defaults")?.value, "run");
+  return stringValue(field(source, run?.value, "shell")?.value);
 }
 
 function parseTriggers(source: YamlSource, onField: Field | undefined): TriggerModel[] {
@@ -230,6 +243,7 @@ function parseJob(source: YamlSource, entry: Field): JobModel {
   const name = stringValue(field(source, node, "name")?.value);
   const condition = stringValue(field(source, node, "if")?.value);
   const workingDirectory = defaultsWorkingDirectory(source, node);
+  const shell = defaultsShell(source, node);
   const runsOn = sourced<unknown>(source, field(source, node, "runs-on"));
   const timeoutMinutes = sourced<unknown>(source, field(source, node, "timeout-minutes"));
   const uses = sourcedString(source, field(source, node, "uses"));
@@ -256,6 +270,7 @@ function parseJob(source: YamlSource, entry: Field): JobModel {
         : {}),
     steps: parseSteps(source, field(source, node, "steps")?.value, key),
     ...(workingDirectory !== undefined ? { workingDirectory } : {}),
+    ...(shell !== undefined ? { shell } : {}),
     env: record(source, field(source, node, "env")?.value),
   };
 }
@@ -303,6 +318,7 @@ export function parseWorkflow(path: string, content: string): WorkflowModel {
   const onField = field(source, root, "on");
   const concurrency = sourced<unknown>(source, field(source, root, "concurrency"));
   const workingDirectory = defaultsWorkingDirectory(source, root);
+  const shell = defaultsShell(source, root);
   return {
     kind: "workflow",
     path,
@@ -312,6 +328,7 @@ export function parseWorkflow(path: string, content: string): WorkflowModel {
     triggersLine: onField?.line ?? 1,
     ...(concurrency ? { concurrency } : {}),
     ...(workingDirectory !== undefined ? { workingDirectory } : {}),
+    ...(shell !== undefined ? { shell } : {}),
     env: record(source, field(source, root, "env")?.value),
     jobs: entries(source, field(source, root, "jobs")?.value).map((entry) => parseJob(source, entry)),
   };

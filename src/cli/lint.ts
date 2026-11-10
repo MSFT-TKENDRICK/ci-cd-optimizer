@@ -17,7 +17,8 @@ import { loadLocalRules } from "./local-rules.js";
 export const LINT_HELP = `Usage: ci-cd-optimizer lint [paths...] [options]
        cicd-lint [paths...] [options]
 
-Lints GitHub Actions workflows, Dockerfiles, and package manifests for CI/CD performance and hermeticity.
+Lints GitHub Actions workflows, Dockerfiles, Nix expressions/flakes, and package/toolchain configuration.
+Findings are static recommendations, not proofs of runtime behavior or performance.
 
 With no paths the current directory is the lint root, and a single directory argument becomes the root. Any other
 paths are files, directories, or globs relative to the root (--root, default: the current directory). They filter
@@ -36,7 +37,7 @@ Options:
       --max-warnings <n>    Exit 1 when more than n warnings are reported
       --base <ref>          Compare with a git ref; only findings this change introduces are reported
       --scope <scope>       all | changed | introduced (default: introduced with --base, else all)
-      --fix                 Apply safe autofixes in place, then report what remains
+      --fix                 Apply available autofixes in place; review and test the resulting diff
   -q, --quiet               Report errors only
       --stdin               Lint standard input in place of the file named by --stdin-filename
       --stdin-filename <p>  Root-relative path of the --stdin content (decides which rules apply)
@@ -473,7 +474,7 @@ export async function lintCommand(rawArgs: string[], io: CliIO): Promise<number>
     parseProblems: result.parseProblems.filter((problem) => selected(problem.path)),
     ...(unusedDirectives ? { unusedDirectives } : {}),
   };
-  if (!input.inventoryComplete) io.stderr("Inventory was truncated by limits; rules that check for missing files were skipped.");
+  if (!input.inventoryComplete) io.stderr("Inventory is incomplete; rules requiring complete inventory were skipped.");
 
   const reportRules = [...rules, UNUSED_DIRECTIVE_RULE];
   await writeText(io, values.output, format(formatName, shown, reportRules, VERSION));

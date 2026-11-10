@@ -24,8 +24,8 @@ export interface ExpectedError {
 
 export interface InvalidCase extends TestCase {
   errors: ExpectedError[] | number;
-  /** Expected file contents after applying all fixes (path -> content, or a string for the default path). */
-  output?: string | Record<string, string>;
+  /** Expected fixed contents; null explicitly requires no fix and every input file unchanged. */
+  output?: string | Record<string, string> | null;
 }
 
 export function toFiles(files: TestCase["files"]): SourceFile[] {
@@ -52,6 +52,9 @@ export function runRule(rule: AnyRule, testCase: TestCase): Diagnostic[] {
   );
   const crash = result.skipped.find((skip) => skip.reason.startsWith("rule crashed"));
   if (crash) throw new Error(`${rule.meta.id} ${crash.reason}`);
+  if (rule.meta.fixable === false && result.diagnostics.some((diagnostic) => diagnostic.fix !== undefined)) {
+    throw new Error(`${rule.meta.id} emitted an automatic fix despite fixable: false`);
+  }
   return result.diagnostics;
 }
 
@@ -93,13 +96,15 @@ export function ruleTester(rule: AnyRule, cases: { valid: TestCase[]; invalid: I
               expect(actual).toBeDefined();
               if (expected.line !== undefined) expect(actual?.line).toBe(expected.line);
               if (expected.path !== undefined) expect(actual?.path).toBe(expected.path);
-              if (expected.messageIncludes !== undefined) expect(actual?.message).toContain(expected.messageIncludes);
+              if (expected.messageIncludes !== undefined) expect(actual?.message, `Actual diagnostic #${position}: ${actual?.message ?? "<missing>"}`).toContain(expected.messageIncludes);
             });
           }
           if (testCase.output !== undefined) {
             const files = toFiles(testCase.files);
             const fixed = applyFixes(files, diagnostics).files;
-            const expected = typeof testCase.output === "string" ? { [DEFAULT_PATH]: testCase.output } : testCase.output;
+            if (testCase.output === null) expect(diagnostics.every((diagnostic) => diagnostic.fix === undefined)).toBe(true);
+            const expected = testCase.output === null ? Object.fromEntries(files.map((file) => [file.path, file.content])) :
+              typeof testCase.output === "string" ? { [DEFAULT_PATH]: testCase.output } : testCase.output;
             for (const [path, content] of Object.entries(expected)) {
               expect(fixed.get(path) ?? files.find((file) => file.path === path)?.content).toBe(content);
             }
