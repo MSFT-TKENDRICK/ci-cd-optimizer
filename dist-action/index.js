@@ -19826,6 +19826,7 @@ function parseNix(path, content2) {
 }
 var structureCache = /* @__PURE__ */ new WeakMap();
 var bindingsCache = /* @__PURE__ */ new WeakMap();
+var scopeCache = /* @__PURE__ */ new WeakMap();
 function nixStructure(file) {
   const cached = structureCache.get(file);
   if (cached) return cached;
@@ -19873,32 +19874,121 @@ function wordAt(masked, index) {
   return match2.exec(masked)?.[0];
 }
 function exprEnd(masked, start2) {
+  return readExpressionEnd(masked, start2);
+}
+function scopeExprEnd(file, start2) {
+  let cached = scopeCache.get(file);
+  if (!cached) {
+    cached = { words: new Map(file.idents.map((ident) => [ident.offset, ident.text])), ends: /* @__PURE__ */ new Map() };
+    scopeCache.set(file, cached);
+  }
+  const known2 = cached.ends.get(start2);
+  if (known2 !== void 0) return known2;
+  const end = readExpressionEnd(file.masked, start2, cached.words, nixStructure(file).closes, collectScopeEnds(cached.ends));
+  cached.ends.set(start2, end);
+  return end;
+}
+function collectScopeEnds(ends) {
+  const active2 = /* @__PURE__ */ new Set();
+  const statements = /* @__PURE__ */ new Map();
+  const branches = /* @__PURE__ */ new Map();
+  const bindings = /* @__PURE__ */ new Map();
+  const group = (groups, key2) => {
+    let entries2 = groups.get(key2);
+    if (!entries2) {
+      entries2 = /* @__PURE__ */ new Set();
+      groups.set(key2, entries2);
+    }
+    return entries2;
+  };
+  const resolve5 = (entries2, end) => {
+    if (!entries2) return;
+    for (const body of entries2) {
+      active2.delete(body);
+      statements.get(body.statement)?.delete(body);
+      branches.get(body.conditional)?.delete(body);
+      bindings.get(body.lets)?.delete(body);
+      if (end !== void 0) ends.set(body.start, end);
+    }
+  };
+  return {
+    body(start2, lets, separators, conditional) {
+      if (ends.has(start2)) return;
+      const body = { start: start2, statement: `${lets}:${separators}`, conditional, lets };
+      active2.add(body);
+      group(statements, body.statement).add(body);
+      group(branches, conditional).add(body);
+      group(bindings, lets).add(body);
+    },
+    statement(lets, separators, end) {
+      resolve5(statements.get(`${lets}:${separators}`), end);
+    },
+    branch(conditional, end) {
+      resolve5(branches.get(conditional), end);
+    },
+    leaveBindings(lets) {
+      resolve5(bindings.get(lets));
+    },
+    finish(end) {
+      resolve5(active2, end);
+      return end;
+    }
+  };
+}
+function readExpressionEnd(masked, start2, scopeWords, closes, scopeEnds) {
   let depth = 0;
   let lets = 0;
+  let conditionals = 0;
   let pendingSemicolons = 0;
+  const scopeSeparators = scopeWords ? [] : void 0;
   let index = start2;
   while (index < masked.length) {
     const char = masked[index] ?? "";
-    if (char === "{" || char === "(" || char === "[") depth += 1;
-    else if (char === "}" || char === ")" || char === "]") {
-      if (depth === 0) return index;
+    if (char === "{" || char === "(" || char === "[") {
+      const close2 = closes?.[index];
+      if (close2 !== void 0 && close2 >= 0) {
+        index = close2 + 1;
+        continue;
+      }
+      depth += 1;
+    } else if (char === "}" || char === ")" || char === "]") {
+      if (depth === 0) return scopeEnds?.finish(index) ?? index;
       depth -= 1;
     } else if (depth === 0 && char === ";") {
-      if (pendingSemicolons > 0) pendingSemicolons -= 1;
+      if (scopeSeparators) {
+        scopeEnds?.statement(lets, scopeSeparators.length, index);
+        if (scopeSeparators.at(-1) === lets) scopeSeparators.pop();
+        else if (lets === 0) return scopeEnds?.finish(index) ?? index;
+      } else if (pendingSemicolons > 0) pendingSemicolons -= 1;
       else if (lets === 0) return index;
     } else if (depth === 0) {
-      const word = wordAt(masked, index);
+      const word = scopeWords ? scopeWords.get(index) : wordAt(masked, index);
       if (word) {
-        if (word === "let") lets += 1;
-        else if (word === "in" && lets > 0) lets -= 1;
-        else if (word === "with" || word === "assert") pendingSemicolons += 1;
+        if (scopeWords) {
+          if (word === "then" || word === "else") scopeEnds?.branch(conditionals, index);
+          if (word === "if") conditionals += 1;
+          else if (word === "then" && conditionals === 0) return scopeEnds?.finish(index) ?? index;
+          else if (word === "else") {
+            if (conditionals === 0) return scopeEnds?.finish(index) ?? index;
+            conditionals -= 1;
+          }
+        }
+        if (word === "let" && (!scopeWords || masked[skipSpace(masked, index + word.length)] !== "{")) lets += 1;
+        else if (word === "in" && lets > 0) {
+          scopeEnds?.leaveBindings(lets);
+          lets -= 1;
+          scopeEnds?.body(skipSpace(masked, index + word.length), lets, scopeSeparators?.length ?? 0, conditionals);
+        } else if (word === "with" || word === "assert") {
+          if (scopeSeparators) scopeSeparators.push(lets);
+          else pendingSemicolons += 1;
+        }
         index += word.length;
         continue;
       }
     }
     index += 1;
   }
-  return masked.length;
+  return scopeEnds?.finish(masked.length) ?? masked.length;
 }
 function skipSpace(masked, index) {
   let cursor = index;
@@ -26239,49 +26329,64 @@ function builderCalls(file) {
 }
 function bindingScopes(file) {
   const { masked } = file;
-  const lets = /* @__PURE__ */ new Map();
-  const bodies = /* @__PURE__ */ new Map();
-  const ends = /* @__PURE__ */ new Map();
+  const starts2 = /* @__PURE__ */ new Map();
+  const pending = /* @__PURE__ */ new Map();
+  const regions = /* @__PURE__ */ new Map();
   const recursive = /* @__PURE__ */ new Map();
-  for (const keyword of masked.matchAll(/(?<![A-Za-z0-9_'.-])let(?![A-Za-z0-9_'-])/g)) {
-    const container = enclosingOpen(file, keyword.index);
-    const offsets = lets.get(container) ?? [];
-    offsets.push(keyword.index);
-    lets.set(container, offsets);
+  for (const ident of file.idents) {
+    if (ident.text !== "let" && ident.text !== "in" && ident.text !== "rec") continue;
+    const next = skipSpace2(masked, ident.end);
+    if (ident.text === "rec" || ident.text === "let" && masked[next] === "{") {
+      if (masked[next] !== "{") continue;
+      const close2 = matchingClose(file, next);
+      if (close2 >= 0) recursive.set(next, { start: next, end: close2 });
+      continue;
+    }
+    const container = enclosingOpen(file, ident.offset);
+    const stack = pending.get(container) ?? [];
+    const boundaries = regions.get(container) ?? [];
+    if (ident.text === "let") {
+      const scope2 = { start: ident.offset };
+      starts2.set(scope2.start, scope2);
+      stack.push(scope2);
+      boundaries.push({ offset: ident.offset, scope: scope2 });
+    } else {
+      const scope2 = stack.pop();
+      if (!scope2) continue;
+      scope2.body = next;
+      boundaries.push({ offset: ident.offset, scope: stack.at(-1) });
+    }
+    pending.set(container, stack);
+    regions.set(container, boundaries);
   }
   return (index) => {
     const container = enclosingOpen(file, index);
-    if (!recursive.has(container)) {
-      const close2 = matchingClose(file, container);
-      recursive.set(container, container >= 0 && masked[container] === "{" && previousWord(masked, container) === "rec" ? { start: container, end: close2 < 0 ? masked.length : close2 } : void 0);
-    }
-    const rec = recursive.get(container);
-    if (rec) return rec;
-    const offsets = lets.get(container);
-    if (!offsets) return void 0;
+    const boundaries = regions.get(container) ?? [];
     let low = 0;
-    let high = offsets.length;
+    let high = boundaries.length;
     while (low < high) {
       const middle = low + high >>> 1;
-      if (offsets[middle] < index) low = middle + 1;
+      if (boundaries[middle].offset < index) low = middle + 1;
       else high = middle;
     }
-    for (let position = low - 1; position >= 0; position -= 1) {
-      const keyword = offsets[position];
-      let body = bodies.get(keyword);
-      if (body === void 0) {
-        body = skipLetIn(masked, keyword);
-        bodies.set(keyword, body);
+    const scope2 = boundaries[low - 1]?.scope;
+    if (scope2?.body !== void 0) {
+      const linked = [];
+      let last = scope2;
+      while (last.end === void 0 && last.body !== void 0) {
+        linked.push(last);
+        const child2 = starts2.get(last.body);
+        if (!child2) {
+          last.end = scopeExprEnd(file, last.body);
+          break;
+        }
+        last = child2;
       }
-      if (body <= index) continue;
-      let end = ends.get(body);
-      if (end === void 0) {
-        end = exprEnd(masked, body);
-        ends.set(body, end);
-      }
-      return { start: body, end };
+      if (last.end === void 0) return void 0;
+      for (const entry2 of linked) entry2.end = last.end;
+      return { start: scope2.start, end: last.end };
     }
-    return void 0;
+    return recursive.get(container);
   };
 }
 function sourceLiterals(file) {
