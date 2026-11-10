@@ -329,6 +329,14 @@ primary-key partition classifier/transformer used by `formal cache-key` and `for
 See [the exact guarantees and trusted boundary](formal-verification.md). Rule assurance is a separate exhaustive
 claim inventory, not a blanket correctness proof for detectors or recommendations.
 
+`plan.ts` exposes a separate typed bounded-CI planning API, used by `experiments plan` and the optional
+`experiments context --model` briefing. It validates explicit job/mode/dependency declarations and executes
+generated `CiPolicy.Optimize`. The proof covers complete integer start/mode enumeration, resource-constrained
+feasibility and the global modeled makespan/cost optimum; insufficient budgets produce no policy. `formal
+ci-plan` and the shared certificate checker rerun that search from immutable model bytes. Workflow correspondence,
+mode equivalence and duration/resource profiles remain assumptions; planning never bypasses empirical
+promotion gates. See [the full model and integration](ci-policy-planning.md). The lint engine API remains version 1.
+
 ## Recipes (`src/recipes`)
 
 These turn a promoted pipeline experiment into a portable [recipe](recipes.md). The flow is `apply.ts` (autofix PR,

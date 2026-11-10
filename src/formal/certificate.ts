@@ -2,6 +2,7 @@ import { parseHillClimbConfig } from "../experiments/config.js";
 import { decide } from "../experiments/decide.js";
 import { armBranch, parseManifest, trunkBranch } from "../experiments/manifest.js";
 import { parseMeasurements } from "../experiments/measurements.js";
+import { CI_MODEL_ASSUMPTIONS, CI_MODEL_LIMITS, parseCiEnvironmentModel, planCiEnvironment, type CiEnvironmentPlan } from "../experiments/plan.js";
 import { evaluateArm, metricsFor, selectionParameters } from "../experiments/score.js";
 import { analyzeCacheKey, CACHE_ASSUMPTIONS, extractCacheKey } from "./cache-key.js";
 import { PROOF_BUILD } from "./generated/manifest.js";
@@ -12,6 +13,15 @@ import { bindSources, decodeSourceBlob, validateSourceBlob, type SourceBlob } fr
 export const CERTIFICATE_SCHEMA = "cicd-optimizer/certificate-v1";
 
 function seal<T extends object>(body: T) { return { ...body, digest: certificateDigest(body) }; }
+
+export function createCiPlanCertificate(source: SourceBlob, searchBudget = CI_MODEL_LIMITS.defaultSearchBudget) {
+  validateSourceBlob(source);
+  return seal({
+    schema: CERTIFICATE_SCHEMA, kind: "ci-policy-plan", proof: PROOF_BUILD,
+    source, request: { searchBudget }, assumptions: CI_MODEL_ASSUMPTIONS,
+    result: planCiEnvironment(parseCiEnvironmentModel(source.content), { searchBudget }),
+  });
+}
 
 export function createCacheCertificate(source: SourceBlob, job: string, step: number, dependencies: string[] | null) {
   validateSourceBlob(source);
@@ -87,12 +97,16 @@ function decodeDependencies(value: Json | undefined): string[] | null {
 }
 
 /** All assertions, hashes, extraction bytes, witnesses and outcomes are recomputed, not trusted from the certificate. */
-export async function checkCertificate(text: string, repository?: string): Promise<{ status: "source-bound-valid" | "model-valid"; kind: string; digest: string }> {
+export async function checkCertificate(text: string, repository?: string): Promise<{
+  status: "source-bound-valid" | "model-valid"; kind: string; digest: string;
+  resultStatus?: CiEnvironmentPlan["status"];
+}> {
   const supplied = object(parseStrictJson(text), "certificate");
   if (supplied.schema !== CERTIFICATE_SCHEMA || canonicalJson(supplied.proof) !== canonicalJson(PROOF_BUILD)) throw new Error("Certificate schema or compiled-in proof build does not match this checker.");
   const request = object(supplied.request, "request");
-  let expected: ReturnType<typeof createCacheCertificate> | ReturnType<typeof createDecisionCertificate>;
+  let expected: ReturnType<typeof createCacheCertificate> | ReturnType<typeof createDecisionCertificate> | ReturnType<typeof createCiPlanCertificate>;
   let sources: SourceBlob[];
+  let resultStatus: CiEnvironmentPlan["status"] | undefined;
   if (supplied.kind === "cache-key") {
     const source = decodeSourceBlob(supplied.source);
     sources = [source];
@@ -102,8 +116,17 @@ export async function checkCertificate(text: string, repository?: string): Promi
     const decoded = { manifest: decodeSourceBlob(input.manifest), config: decodeSourceBlob(input.config), measurements: decodeSourceBlob(input.measurements) };
     sources = Object.values(decoded);
     expected = createDecisionCertificate(decoded, string(request.at, "at"));
+  } else if (supplied.kind === "ci-policy-plan") {
+    const source = decodeSourceBlob(supplied.source);
+    sources = [source];
+    const plan = createCiPlanCertificate(source, integer(request.searchBudget, "searchBudget", 1, CI_MODEL_LIMITS.maxSearchBudget));
+    expected = plan;
+    resultStatus = plan.result.status;
   } else throw new Error("Unsupported certificate kind.");
   if (canonicalJson(supplied) !== canonicalJson(expected)) throw new Error("Certificate does not match full recomputation (including its digest).");
   if (repository !== undefined) await bindSources(sources, repository);
-  return { status: repository === undefined ? "model-valid" : "source-bound-valid", kind: expected.kind, digest: expected.digest };
+  return {
+    status: repository === undefined ? "model-valid" : "source-bound-valid", kind: expected.kind, digest: expected.digest,
+    ...(resultStatus === undefined ? {} : { resultStatus }),
+  };
 }

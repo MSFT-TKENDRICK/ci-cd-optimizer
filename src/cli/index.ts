@@ -24,17 +24,18 @@ Commands:
   rules                 List rules (--format json|markdown)
   scan                  Scan a repository via the API like the App: SARIF, finding issues, autofix PRs
   telemetry             Report on a completed workflow run (Gantt, critical path) and raise duration alerts
-  experiments <cmd>     Hill-climbing experiments: list, context, create, collect, evaluate, decide
+  experiments <cmd>     Conditional CI model planning and measured experiments: plan, context, create, collect, evaluate, decide
   recipes <cmd>         Reusable fixes from promoted experiments: publish, apply, status, rollout
   knowledge <cmd>       Authorized mitigation history: applications, runs, inspect, refresh, evaluate
   maintenance <cmd>     Operator-only knowledge retention and erasure (preview by default)
   execution <cmd>       Opt-in task capture and authorized runtime report import/inspection
   review <cmd>          Project review program: validate, run, intake, scheduled (docs/review-program)
-  formal <cmd>          Source-bound cache-key and finite-selection certificates (docs/formal-verification)
+  formal <cmd>          Input-bound cache-key, finite-selection and CI model planning certificates (docs/formal-verification)
   help [command]        Show help
   version               Print the version
 
 Exit codes: 0 success, 1 findings at or above --fail-on (or a failed operation), 2 usage or configuration error.
+Planning also uses 4 for proved model infeasibility and 5 for exhausted search; formal check uses 3 for model-only validity.
 `;
 
 const RULES_HELP = `Usage: ci-cd-optimizer rules [--format text|json|markdown] [--output <file>]`;

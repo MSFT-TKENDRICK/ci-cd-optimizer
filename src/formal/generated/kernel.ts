@@ -1188,6 +1188,524 @@ let _System = (function() {
 
   return $module;
 })(); // end of module _System
+let CiPolicy = (function() {
+  let $module: any = {};
+
+  $module.__default = class __default {
+    constructor () {
+      this._tname = "CiPolicy._default";
+    }
+    _parentTraits() {
+      return [];
+    }
+    static ValidMode(mode) {
+      return ((((_dafny.ONE).isLessThanOrEqualTo((mode).dtor_duration)) && (((mode).dtor_duration).isLessThanOrEqualTo(CiPolicy.__default.MaxDuration))) && (((_dafny.ZERO).isLessThanOrEqualTo((mode).dtor_cost)) && (((mode).dtor_cost).isLessThanOrEqualTo(CiPolicy.__default.MaxModeCost)))) && (((_dafny.ONE).isLessThanOrEqualTo((mode).dtor_demand)) && (((mode).dtor_demand).isLessThanOrEqualTo(CiPolicy.__default.MaxCapacity)));
+    };
+    static Valid(environment) {
+      return (((((new BigNumber(((environment).dtor_jobs).length)).isLessThanOrEqualTo(CiPolicy.__default.MaxJobs)) && (((_dafny.ONE).isLessThanOrEqualTo((environment).dtor_horizon)) && (((environment).dtor_horizon).isLessThanOrEqualTo(CiPolicy.__default.MaxHorizon)))) && (((_dafny.ONE).isLessThanOrEqualTo((environment).dtor_capacity)) && (((environment).dtor_capacity).isLessThanOrEqualTo(CiPolicy.__default.MaxCapacity)))) && (((_dafny.ZERO).isLessThanOrEqualTo((environment).dtor_costLimit)) && (((environment).dtor_costLimit).isLessThanOrEqualTo((CiPolicy.__default.MaxJobs).multipliedBy(CiPolicy.__default.MaxModeCost))))) && (_dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(((environment).dtor_jobs).length)), true, function (_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(((_dafny.ZERO).isLessThanOrEqualTo(_0_j)) && ((_0_j).isLessThan(new BigNumber(((environment).dtor_jobs).length)))) || (((((_dafny.ONE).isLessThanOrEqualTo(new BigNumber(((((environment).dtor_jobs)[_0_j]).dtor_modes).length))) && ((new BigNumber(((((environment).dtor_jobs)[_0_j]).dtor_modes).length)).isLessThanOrEqualTo(CiPolicy.__default.MaxModes))) && (_dafny.Quantifier(((((environment).dtor_jobs)[_0_j]).dtor_modes).UniqueElements, true, function (_forall_var_1) {
+          let _1_mode = _forall_var_1;
+          return !(_dafny.Seq.contains((((environment).dtor_jobs)[_0_j]).dtor_modes, _1_mode)) || (CiPolicy.__default.ValidMode(_1_mode));
+        }))) && (_dafny.Quantifier(((((environment).dtor_jobs)[_0_j]).dtor_needs).UniqueElements, true, function (_forall_var_2) {
+          let _2_dependency = _forall_var_2;
+          return !(_dafny.Seq.contains((((environment).dtor_jobs)[_0_j]).dtor_needs, _2_dependency)) || (((_dafny.ZERO).isLessThanOrEqualTo(_2_dependency)) && ((_2_dependency).isLessThan(_0_j)));
+        })));
+      }));
+    };
+    static DomainParameters(jobs, horizon) {
+      return ((_dafny.ZERO).isLessThan(horizon)) && (_dafny.Quantifier((jobs).UniqueElements, true, function (_forall_var_0) {
+        let _0_job = _forall_var_0;
+        return !(_dafny.Seq.contains(jobs, _0_job)) || ((_dafny.ZERO).isLessThan(new BigNumber(((_0_job).dtor_modes).length)));
+      }));
+    };
+    static Choices(jobs, policy) {
+      return ((new BigNumber((jobs).length)).isEqualTo(new BigNumber((policy).length))) && (_dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber((jobs).length)), true, function (_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(((_dafny.ZERO).isLessThanOrEqualTo(_0_j)) && ((_0_j).isLessThan(new BigNumber((jobs).length)))) || (((_dafny.ZERO).isLessThanOrEqualTo(((policy)[_0_j]).dtor_mode)) && ((((policy)[_0_j]).dtor_mode).isLessThan(new BigNumber((((jobs)[_0_j]).dtor_modes).length))));
+      }));
+    };
+    static InDomain(jobs, horizon, policy) {
+      return (CiPolicy.__default.Choices(jobs, policy)) && (_dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber((jobs).length)), true, function (_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(((_dafny.ZERO).isLessThanOrEqualTo(_0_j)) && ((_0_j).isLessThan(new BigNumber((jobs).length)))) || (((_dafny.ZERO).isLessThanOrEqualTo(((policy)[_0_j]).dtor_start)) && ((((policy)[_0_j]).dtor_start).isLessThan(horizon)));
+      }));
+    };
+    static Finish(jobs, policy, j) {
+      return (((policy)[j]).dtor_start).plus(((((jobs)[j]).dtor_modes)[((policy)[j]).dtor_mode]).dtor_duration);
+    };
+    static Cost(jobs, policy, n) {
+      let _0___accumulator = _dafny.ZERO;
+      TAIL_CALL_START: while (true) {
+        if ((n).isEqualTo(_dafny.ZERO)) {
+          return (_dafny.ZERO).plus(_0___accumulator);
+        } else {
+          _0___accumulator = (((((jobs)[(n).minus(_dafny.ONE)]).dtor_modes)[((policy)[(n).minus(_dafny.ONE)]).dtor_mode]).dtor_cost).plus(_0___accumulator);
+          let _in0 = jobs;
+          let _in1 = policy;
+          let _in2 = (n).minus(_dafny.ONE);
+          jobs = _in0;
+          policy = _in1;
+          n = _in2;
+          continue TAIL_CALL_START;
+        }
+      }
+    };
+    static Max(a, b) {
+      if ((b).isLessThanOrEqualTo(a)) {
+        return a;
+      } else {
+        return b;
+      }
+    };
+    static Makespan(jobs, policy, n) {
+      if ((n).isEqualTo(_dafny.ZERO)) {
+        return _dafny.ZERO;
+      } else {
+        return CiPolicy.__default.Max(CiPolicy.__default.Makespan(jobs, policy, (n).minus(_dafny.ONE)), CiPolicy.__default.Finish(jobs, policy, (n).minus(_dafny.ONE)));
+      }
+    };
+    static Load(jobs, policy, tick, n) {
+      let _0___accumulator = _dafny.ZERO;
+      TAIL_CALL_START: while (true) {
+        if ((n).isEqualTo(_dafny.ZERO)) {
+          return (_dafny.ZERO).plus(_0___accumulator);
+        } else {
+          _0___accumulator = (((((((policy)[(n).minus(_dafny.ONE)]).dtor_start).isLessThanOrEqualTo(tick)) && ((tick).isLessThan(CiPolicy.__default.Finish(jobs, policy, (n).minus(_dafny.ONE))))) ? (((((jobs)[(n).minus(_dafny.ONE)]).dtor_modes)[((policy)[(n).minus(_dafny.ONE)]).dtor_mode]).dtor_demand) : (_dafny.ZERO))).plus(_0___accumulator);
+          let _in0 = jobs;
+          let _in1 = policy;
+          let _in2 = tick;
+          let _in3 = (n).minus(_dafny.ONE);
+          jobs = _in0;
+          policy = _in1;
+          tick = _in2;
+          n = _in3;
+          continue TAIL_CALL_START;
+        }
+      }
+    };
+    static Feasible(environment, policy) {
+      return ((((CiPolicy.__default.Choices((environment).dtor_jobs, policy)) && (_dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(((environment).dtor_jobs).length)), true, function (_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(((_dafny.ZERO).isLessThanOrEqualTo(_0_j)) && ((_0_j).isLessThan(new BigNumber(((environment).dtor_jobs).length)))) || (((_dafny.ZERO).isLessThanOrEqualTo(((policy)[_0_j]).dtor_start)) && ((CiPolicy.__default.Finish((environment).dtor_jobs, policy, _0_j)).isLessThanOrEqualTo((environment).dtor_horizon)));
+      }))) && ((CiPolicy.__default.Cost((environment).dtor_jobs, policy, new BigNumber(((environment).dtor_jobs).length))).isLessThanOrEqualTo((environment).dtor_costLimit))) && (_dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(((environment).dtor_jobs).length)), true, function (_forall_var_1) {
+        let _1_j = _forall_var_1;
+        return !(((_dafny.ZERO).isLessThanOrEqualTo(_1_j)) && ((_1_j).isLessThan(new BigNumber(((environment).dtor_jobs).length)))) || (_dafny.Quantifier(((((environment).dtor_jobs)[_1_j]).dtor_needs).UniqueElements, true, function (_forall_var_2) {
+          let _2_dependency = _forall_var_2;
+          return !(_dafny.Seq.contains((((environment).dtor_jobs)[_1_j]).dtor_needs, _2_dependency)) || ((CiPolicy.__default.Finish((environment).dtor_jobs, policy, _2_dependency)).isLessThanOrEqualTo(((policy)[_1_j]).dtor_start));
+        }));
+      }))) && (_dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, (environment).dtor_horizon), true, function (_forall_var_3) {
+        let _3_tick = _forall_var_3;
+        return !(((_dafny.ZERO).isLessThanOrEqualTo(_3_tick)) && ((_3_tick).isLessThan((environment).dtor_horizon))) || ((CiPolicy.__default.Load((environment).dtor_jobs, policy, _3_tick, new BigNumber(((environment).dtor_jobs).length))).isLessThanOrEqualTo((environment).dtor_capacity));
+      }));
+    };
+    static Evaluate(environment, policy) {
+      return CiPolicy.Objective.create_Objective(CiPolicy.__default.Makespan((environment).dtor_jobs, policy, new BigNumber(((environment).dtor_jobs).length)), CiPolicy.__default.Cost((environment).dtor_jobs, policy, new BigNumber(((environment).dtor_jobs).length)));
+    };
+    static PolicyCount(jobs, horizon) {
+      let _0___accumulator = _dafny.ONE;
+      TAIL_CALL_START: while (true) {
+        if ((new BigNumber((jobs).length)).isEqualTo(_dafny.ZERO)) {
+          return (_dafny.ONE).multipliedBy(_0___accumulator);
+        } else {
+          _0___accumulator = (_0___accumulator).multipliedBy((horizon).multipliedBy(new BigNumber((((jobs)[_dafny.ZERO]).dtor_modes).length)));
+          let _in0 = (jobs).slice(_dafny.ONE);
+          let _in1 = horizon;
+          jobs = _in0;
+          horizon = _in1;
+          continue TAIL_CALL_START;
+        }
+      }
+    };
+    static Decode(jobs, horizon, rank) {
+      let _0___accumulator = _dafny.Seq.of();
+      TAIL_CALL_START: while (true) {
+        if ((new BigNumber((jobs).length)).isEqualTo(_dafny.ZERO)) {
+          return _dafny.Seq.Concat(_0___accumulator, _dafny.Seq.of());
+        } else {
+          let _1_tailCount = CiPolicy.__default.PolicyCount((jobs).slice(_dafny.ONE), horizon);
+          let _2_digit = _dafny.EuclideanDivision(rank, _1_tailCount);
+          _0___accumulator = _dafny.Seq.Concat(_0___accumulator, _dafny.Seq.of(CiPolicy.Placement.create_Placement(_dafny.EuclideanDivision(_2_digit, horizon), (_2_digit).mod(horizon))));
+          let _in0 = (jobs).slice(_dafny.ONE);
+          let _in1 = horizon;
+          let _in2 = (rank).mod(_1_tailCount);
+          jobs = _in0;
+          horizon = _in1;
+          rank = _in2;
+          continue TAIL_CALL_START;
+        }
+      }
+    };
+    static Encode(jobs, horizon, policy) {
+      if ((new BigNumber((jobs).length)).isEqualTo(_dafny.ZERO)) {
+        return _dafny.ZERO;
+      } else {
+        let _0_digit = ((((policy)[_dafny.ZERO]).dtor_mode).multipliedBy(horizon)).plus(((policy)[_dafny.ZERO]).dtor_start);
+        let _1_tailCount = CiPolicy.__default.PolicyCount((jobs).slice(_dafny.ONE), horizon);
+        let _2_tailRank = CiPolicy.__default.Encode((jobs).slice(_dafny.ONE), horizon, (policy).slice(_dafny.ONE));
+        return ((_0_digit).multipliedBy(_1_tailCount)).plus(_2_tailRank);
+      }
+    };
+    static Preferred(a, ai, b, bi) {
+      return (((a).dtor_makespan).isLessThan((b).dtor_makespan)) || ((((a).dtor_makespan).isEqualTo((b).dtor_makespan)) && ((((a).dtor_cost).isLessThan((b).dtor_cost)) || ((((a).dtor_cost).isEqualTo((b).dtor_cost)) && ((ai).isLessThanOrEqualTo(bi)))));
+    };
+    static Optimize(environment, budget) {
+      let result = CiPolicy.Result.Default();
+      if ((!(CiPolicy.__default.Valid(environment))) || (!(((_dafny.ONE).isLessThanOrEqualTo(budget)) && ((budget).isLessThanOrEqualTo(CiPolicy.__default.MaxSearchBudget))))) {
+        result = CiPolicy.Result.create_Invalid();
+        return result;
+      }
+      let _0_jobs;
+      let _1_horizon;
+      let _rhs0 = (environment).dtor_jobs;
+      let _rhs1 = (environment).dtor_horizon;
+      _0_jobs = _rhs0;
+      _1_horizon = _rhs1;
+      let _2_count;
+      _2_count = CiPolicy.__default.PolicyCount(_0_jobs, _1_horizon);
+      if ((budget).isLessThan(_2_count)) {
+        result = CiPolicy.Result.create_Exhausted(_2_count);
+        return result;
+      }
+      let _3_winner;
+      _3_winner = new BigNumber(-1);
+      let _4_rank;
+      _4_rank = _dafny.ZERO;
+      while ((_4_rank).isLessThan(_2_count)) {
+        let _5_policy;
+        _5_policy = CiPolicy.__default.Decode(_0_jobs, _1_horizon, _4_rank);
+        if (CiPolicy.__default.Feasible(environment, _5_policy)) {
+          if ((_3_winner).isEqualTo(new BigNumber(-1))) {
+            _3_winner = _4_rank;
+          } else if (CiPolicy.__default.Preferred(CiPolicy.__default.Evaluate(environment, _5_policy), _4_rank, CiPolicy.__default.Evaluate(environment, CiPolicy.__default.Decode(_0_jobs, _1_horizon, _3_winner)), _3_winner)) {
+            _3_winner = _4_rank;
+          } else {
+          }
+        }
+        _4_rank = (_4_rank).plus(_dafny.ONE);
+      }
+      if ((_3_winner).isEqualTo(new BigNumber(-1))) {
+        result = CiPolicy.Result.create_Infeasible(_2_count);
+      } else {
+        let _6_policy;
+        _6_policy = CiPolicy.__default.Decode(_0_jobs, _1_horizon, _3_winner);
+        result = CiPolicy.Result.create_Optimal(_2_count, _3_winner, _6_policy, CiPolicy.__default.Evaluate(environment, _6_policy));
+      }
+      return result;
+    }
+    static get MaxDuration() {
+      return new BigNumber(32);
+    };
+    static get MaxModeCost() {
+      return new BigNumber(1000000);
+    };
+    static get MaxCapacity() {
+      return new BigNumber(8);
+    };
+    static get MaxJobs() {
+      return new BigNumber(8);
+    };
+    static get MaxHorizon() {
+      return new BigNumber(16);
+    };
+    static get MaxModes() {
+      return new BigNumber(4);
+    };
+    static get MaxSearchBudget() {
+      return new BigNumber(250000);
+    };
+    static get DefaultSearchBudget() {
+      return new BigNumber(50000);
+    };
+  };
+
+  $module.Mode = class Mode {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Mode(duration, cost, demand) {
+      let $dt = new Mode(0);
+      $dt.duration = duration;
+      $dt.cost = cost;
+      $dt.demand = demand;
+      return $dt;
+    }
+    get is_Mode() { return this.$tag === 0; }
+    get dtor_duration() { return this.duration; }
+    get dtor_cost() { return this.cost; }
+    get dtor_demand() { return this.demand; }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Mode.Mode" + "(" + _dafny.toString(this.duration) + ", " + _dafny.toString(this.cost) + ", " + _dafny.toString(this.demand) + ")";
+      } else  {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.duration, other.duration) && _dafny.areEqual(this.cost, other.cost) && _dafny.areEqual(this.demand, other.demand);
+      } else  {
+        return false; // unexpected
+      }
+    }
+    static Default() {
+      return CiPolicy.Mode.create_Mode(_dafny.ZERO, _dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Mode.Default();
+        }
+      };
+    }
+  }
+
+  $module.Job = class Job {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Job(modes, needs) {
+      let $dt = new Job(0);
+      $dt.modes = modes;
+      $dt.needs = needs;
+      return $dt;
+    }
+    get is_Job() { return this.$tag === 0; }
+    get dtor_modes() { return this.modes; }
+    get dtor_needs() { return this.needs; }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Job.Job" + "(" + _dafny.toString(this.modes) + ", " + _dafny.toString(this.needs) + ")";
+      } else  {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.modes, other.modes) && _dafny.areEqual(this.needs, other.needs);
+      } else  {
+        return false; // unexpected
+      }
+    }
+    static Default() {
+      return CiPolicy.Job.create_Job(_dafny.Seq.of(), _dafny.Seq.of());
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Job.Default();
+        }
+      };
+    }
+  }
+
+  $module.Environment = class Environment {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Environment(jobs, horizon, capacity, costLimit) {
+      let $dt = new Environment(0);
+      $dt.jobs = jobs;
+      $dt.horizon = horizon;
+      $dt.capacity = capacity;
+      $dt.costLimit = costLimit;
+      return $dt;
+    }
+    get is_Environment() { return this.$tag === 0; }
+    get dtor_jobs() { return this.jobs; }
+    get dtor_horizon() { return this.horizon; }
+    get dtor_capacity() { return this.capacity; }
+    get dtor_costLimit() { return this.costLimit; }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Environment.Environment" + "(" + _dafny.toString(this.jobs) + ", " + _dafny.toString(this.horizon) + ", " + _dafny.toString(this.capacity) + ", " + _dafny.toString(this.costLimit) + ")";
+      } else  {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.jobs, other.jobs) && _dafny.areEqual(this.horizon, other.horizon) && _dafny.areEqual(this.capacity, other.capacity) && _dafny.areEqual(this.costLimit, other.costLimit);
+      } else  {
+        return false; // unexpected
+      }
+    }
+    static Default() {
+      return CiPolicy.Environment.create_Environment(_dafny.Seq.of(), _dafny.ZERO, _dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Environment.Default();
+        }
+      };
+    }
+  }
+
+  $module.Placement = class Placement {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Placement(mode, start) {
+      let $dt = new Placement(0);
+      $dt.mode = mode;
+      $dt.start = start;
+      return $dt;
+    }
+    get is_Placement() { return this.$tag === 0; }
+    get dtor_mode() { return this.mode; }
+    get dtor_start() { return this.start; }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Placement.Placement" + "(" + _dafny.toString(this.mode) + ", " + _dafny.toString(this.start) + ")";
+      } else  {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.mode, other.mode) && _dafny.areEqual(this.start, other.start);
+      } else  {
+        return false; // unexpected
+      }
+    }
+    static Default() {
+      return CiPolicy.Placement.create_Placement(_dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Placement.Default();
+        }
+      };
+    }
+  }
+
+  $module.Objective = class Objective {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Objective(makespan, cost) {
+      let $dt = new Objective(0);
+      $dt.makespan = makespan;
+      $dt.cost = cost;
+      return $dt;
+    }
+    get is_Objective() { return this.$tag === 0; }
+    get dtor_makespan() { return this.makespan; }
+    get dtor_cost() { return this.cost; }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Objective.Objective" + "(" + _dafny.toString(this.makespan) + ", " + _dafny.toString(this.cost) + ")";
+      } else  {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.makespan, other.makespan) && _dafny.areEqual(this.cost, other.cost);
+      } else  {
+        return false; // unexpected
+      }
+    }
+    static Default() {
+      return CiPolicy.Objective.create_Objective(_dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Objective.Default();
+        }
+      };
+    }
+  }
+
+  $module.Result = class Result {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Invalid() {
+      let $dt = new Result(0);
+      return $dt;
+    }
+    static create_Exhausted(required) {
+      let $dt = new Result(1);
+      $dt.required = required;
+      return $dt;
+    }
+    static create_Infeasible(examined) {
+      let $dt = new Result(2);
+      $dt.examined = examined;
+      return $dt;
+    }
+    static create_Optimal(examined, rank, policy, objective) {
+      let $dt = new Result(3);
+      $dt.examined = examined;
+      $dt.rank = rank;
+      $dt.policy = policy;
+      $dt.objective = objective;
+      return $dt;
+    }
+    get is_Invalid() { return this.$tag === 0; }
+    get is_Exhausted() { return this.$tag === 1; }
+    get is_Infeasible() { return this.$tag === 2; }
+    get is_Optimal() { return this.$tag === 3; }
+    get dtor_required() { return this.required; }
+    get dtor_examined() { return this.examined; }
+    get dtor_rank() { return this.rank; }
+    get dtor_policy() { return this.policy; }
+    get dtor_objective() { return this.objective; }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Result.Invalid";
+      } else if (this.$tag === 1) {
+        return "CiPolicy.Result.Exhausted" + "(" + _dafny.toString(this.required) + ")";
+      } else if (this.$tag === 2) {
+        return "CiPolicy.Result.Infeasible" + "(" + _dafny.toString(this.examined) + ")";
+      } else if (this.$tag === 3) {
+        return "CiPolicy.Result.Optimal" + "(" + _dafny.toString(this.examined) + ", " + _dafny.toString(this.rank) + ", " + _dafny.toString(this.policy) + ", " + _dafny.toString(this.objective) + ")";
+      } else  {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1 && _dafny.areEqual(this.required, other.required);
+      } else if (this.$tag === 2) {
+        return other.$tag === 2 && _dafny.areEqual(this.examined, other.examined);
+      } else if (this.$tag === 3) {
+        return other.$tag === 3 && _dafny.areEqual(this.examined, other.examined) && _dafny.areEqual(this.rank, other.rank) && _dafny.areEqual(this.policy, other.policy) && _dafny.areEqual(this.objective, other.objective);
+      } else  {
+        return false; // unexpected
+      }
+    }
+    static Default() {
+      return CiPolicy.Result.create_Invalid();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Result.Default();
+        }
+      };
+    }
+  }
+  return $module;
+})(); // end of module CiPolicy
 let Policy = (function() {
   let $module: any = {};
 
@@ -2325,4 +2843,4 @@ let _module = (function() {
   return $module;
 })(); // end of module _module
 
-export { _dafny as Dafny, CacheKey, Selection, Policy };
+export { _dafny as Dafny, CacheKey, Selection, Policy, CiPolicy };

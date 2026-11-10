@@ -94,15 +94,18 @@ tarball. Inside the clone, `npm run cli -- <command>` runs the TypeScript source
 | `telemetry` | Report on a completed workflow run (`--run-id`) with a Gantt chart and critical path. Raises duration alerts; `--check` posts a check run. | A token with `actions: read` |
 | `review <cmd>` | Review program: `validate`, `run`, `intake`, `intake-artifact`, `intake-status`, `scheduled` | A token for API reads |
 | `experiments <cmd>` | Hill climbing: `list`, `context`, `create`, `collect`, `evaluate`, `decide` | A token |
+| `experiments plan` | Exactly optimize an explicit bounded CI job/mode/resource model; no publication | A model JSON file; no token |
 | `recipes <cmd>` | Reusable fixes: `publish`, `apply`, `status`, `rollout` | A token |
 | `knowledge <cmd>` | Authorized mitigation history: `applications`, `runs`, `inspect`, `refresh`, `evaluate` | `DATABASE_URL`, a token |
 | `execution <cmd>` | Opt-in task capture on a runner, and authorized report `import` and `list` | `DATABASE_URL` for import and list |
 | `maintenance <cmd>` | Operator-only `prune` and `purge`; previews unless confirmed | `DATABASE_URL` |
-| `formal <cmd>` | Create/check primary-key partition and finite-selection certificates; no execution attestation | Committed inputs; Git for source binding |
+| `formal <cmd>` | Create/check primary-key partition, finite-selection and CI-model planning certificates; no execution attestation | Committed inputs; Git for source binding |
 
 Exit codes: `0` success; `1` findings at or above `--fail-on`, or a failed operation; `2` a usage or configuration
 error. `formal check` additionally returns `3` for model-valid evidence checked without its source repository, not
-source-bound success. The Action exposes the code as its `exit-code` output.
+source-bound success. `experiments plan` returns `4` for proved model infeasibility and `5` for search-budget
+exhaustion without a partial optimum. Certificate validity is separate from the model's `resultStatus`.
+The Action exposes the code as its `exit-code` output.
 
 ## Scanning pull requests
 
@@ -309,6 +312,14 @@ It preserves hard eligibility gates and selects a deterministic maximum of the *
 under the configured quantized objective. Severity precedence also executes a verified last-assignment-wins fold.
 Neither establishes a global policy optimum, authenticates measurements, nor proves that an experiment did
 equivalent work or removed a real bottleneck.
+
+For actual scheduling policies, [`experiments plan`](docs/ci-policy-planning.md) executes a separate verified
+optimizer over a bounded CI environment: jobs, dependencies, selectable duration/cost/resource modes, runner
+capacity and horizon. It proves feasibility and lexicographic makespan/cost optimality over **every admissible
+policy in that declared model**, including complete search-space coverage. Insufficient search budgets return
+no policy and no optimum/infeasibility claim. `experiments context --model` uses the real planner to inform
+candidate proposals; it never replaces measured-evidence promotion gates. Workflow correspondence, equivalent
+work and timing/resource profiles remain declared assumptions, not authenticated facts.
 
 Optional cache-key certificates prove primary-key equality partitions **relative to declared component
 dependencies**, not cache lookup behavior, safe workload dependencies, or speed. The checker recomputes from

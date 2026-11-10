@@ -8,6 +8,12 @@ an incomplete benchmark.** The mechanically verified selector
 proves its finite ranking and hard-gate contract, not the truth of inputs, causal speedups, or a global policy optimum.
 See [formal verification](formal-verification.md) for executable proofs and source-bound certificates.
 
+For a complete scheduling optimum rather than observed-arm ranking, use
+[`experiments plan --model`](ci-policy-planning.md). It exactly optimizes every feasible job/mode/start policy
+in a declared bounded CI environment with dependencies, resource capacity and a cost limit. That theorem is
+conditional on the supplied model; no workflow correspondence or duration profile is verified. An optimal
+plan is experimental input, never measured evidence or permission to promote.
+
 ```text
 main
 └── experiments/<name>/trunk          control: main + manifest + any new benchmark cases (draft PR → main)
@@ -39,6 +45,8 @@ was tried.
    - the latest CI telemetry (critical path, slow jobs)
    - the rubric and metrics
    - the history of running, promoted, rejected, and expired experiments, so ideas aren't retried blindly
+   - when explicitly supplied with `--model`, a recomputed bounded CI policy plan and its assumptions; without
+     a model, the briefing explicitly warns against claiming scheduling optimality from scores or telemetry
 
    The briefing is fixed before that agent invocation. This does not authenticate historical measurements or benchmark labels.
 3. The Copilot agent proposes **one** experiment: a manifest with a hypothesis, 1–4 arms with distinct approaches, and
@@ -360,6 +368,6 @@ them with an older global extension; compiler versions differ in their protected
 | A prompt-injected agent pushes a persuasive but harmful change. | Agents never hold write tokens. gh-aw safe outputs validate and apply their requests, and gh-aw threat detection scans their output. Judgments only reorder arms that already qualify on measurements. |
 | A winning arm merges without oversight. | Winners merge only into the experiment trunk. `main` changes only when a human approves the trunk pull request, unless `promotion.autoMerge` is enabled. |
 | An arm forges its measurements or does less work. | Corpus-report forgery and workload changes are **not prevented**. CI promotion rechecks recorded dispatch metadata/timing against GitHub, so an edited duration alone is insufficient, but a workflow can skip work and genuinely finish faster. Grading is not execution or workload attestation. Human review of the trunk pull request is the trust boundary: confirm the winning diff still does the same work. Do not enable `promotion.autoMerge` when arms may come from untrusted proposers. |
-| A formal certificate is mistaken for execution attestation or universal optimality. | The checker recomputes from recorded `commit:path` blobs and a pinned generated kernel. This binds the calculation to bytes, not to an honest execution. Its maximum ranges only over the declared eligible candidates, and cache-key proofs range only over declared dependency values. |
+| A formal certificate is mistaken for execution attestation or universal optimality. | The checker recomputes from recorded `commit:path` blobs and a pinned generated kernel. This binds the calculation to bytes, not to an honest execution. The arm selector covers declared eligible candidates; the scheduling optimizer covers every feasible policy in its explicit bounded environment, assuming the declared workload/timing correspondence; cache-key proofs cover declared dependency values. Budget exhaustion is not an optimum or infeasibility proof. |
 | Workflow changes are used for privilege escalation. | Keep the repository's default `GITHUB_TOKEN` permissions read-only, require review for `.github/workflows/**` via CODEOWNERS, and scope `CICD_OPTIMIZER_TOKEN` to this repository. |
 | Runaway cost. | Pre-activation checks skip inference when there's nothing to do. `maxConcurrent`, `maxArms`, `maxAgeDays`, and per-job timeouts bound the work. |

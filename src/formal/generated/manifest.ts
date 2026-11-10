@@ -4,11 +4,11 @@ export const PROOF_BUILD = {
   "dafny": "4.11.0",
   "z3": "4.12.1",
   "arithmetic": "unbounded-integers; scalar-Unicode; objective-10000; ties-to-positive-infinity",
-  "modelSha256": "8ee32e5a255f7c6ce89e73524e7bf551d66c1c2bebab023310d8c11f71c7d3c0",
-  "translatorOutputSha256": "2ecfd76ce5a1dcfed45962af59c8ad23eb793841c263c859712145ce58be5240",
-  "generatedSha256": "7c2f527b6ea171f94d2d22abb461bc4e97032c7157935698238acfeb2461603f",
+  "modelSha256": "c02c0d35c01265610c159d692a034ab811f4df1700b5878572f8afe182fd9262",
+  "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
+  "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "ee5f9f0ef1d5b066cb846ee72add9041358e353d75766e3cb3281c1dd55825ca",
-  "generatorSha256": "7aeb2e3719074d5dc90ce2e46d24643ba1125fff0bc47ee4d723f638f76fa1d7",
-  "dependenciesSha256": "c9eab2d192b719a7e25989fa108c9464fddd8f7930c382f2b9d80d55e12f47c6"
+  "implementationSha256": "5d97e9e63c32fdf60e23d215b354f684d40d582d076c2002ae9a82d61962d9b7",
+  "generatorSha256": "3796e86ad20c33e0b41cc5ad4490c09338a37e5c6d2ea7c2b2f9095dbf298aed",
+  "dependenciesSha256": "29541c79a3a66abe02d08f761eb5f09a36ff175b2fe6081af12c2ee7600517cc"
 } as const;

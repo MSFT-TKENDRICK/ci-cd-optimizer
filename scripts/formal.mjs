@@ -7,7 +7,7 @@ import { checkToolchain, dafny, lock, root, z3 } from "./formal-toolchain.mjs";
 const mode = process.argv[2];
 if (!["verify", "generate", "check"].includes(mode)) throw new Error("Usage: node scripts/formal.mjs verify|generate|check");
 checkToolchain();
-const sources = ["Kernel.dfy", "CacheKey.dfy", "Selection.dfy", "Policy.dfy"];
+const sources = ["Kernel.dfy", "CacheKey.dfy", "Selection.dfy", "Policy.dfy", "CiPolicy.dfy"];
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const normalize = (text) => text.replaceAll("\r\n", "\n");
 async function sourceFiles(directory, prefix) {
@@ -40,7 +40,7 @@ if (mode === "verify") {
     throw new Error("Unexpected translator output; review the ESM adaptation.");
   }
   const adapted = raw.replace(requireLine, 'import { BigNumber } from "bignumber.js";').replaceAll("let $module = {};", "let $module: any = {};");
-  const generated = `// @ts-nocheck\n// GENERATED: npm run formal:generate; do not edit.\n${adapted}\nexport { _dafny as Dafny, CacheKey, Selection, Policy };\n`;
+  const generated = `// @ts-nocheck\n// GENERATED: npm run formal:generate; do not edit.\n${adapted}\nexport { _dafny as Dafny, CacheKey, Selection, Policy, CiPolicy };\n`;
   const manifest = {
     schema: "cicd-optimizer/formal-v1",
     dafny: lock.dafny,

@@ -1,7 +1,7 @@
 # Formal verification: guarantees and limits
 
-The production experiment selector and lint severity resolver execute code generated from mechanically verified
-Dafny models. Cache-key certificates execute a verified classifier and transformation. These are **model-specific
+The production experiment selector, bounded CI environment optimizer and lint severity resolver execute code generated
+from mechanically verified Dafny models. Cache-key certificates execute a verified classifier and transformation. These are **model-specific
 guarantees**, not proofs that arbitrary pipelines run faster or that every detector and suggested fix is correct.
 
 The [complete rule assurance catalogue](../formal/rule-assurance.json) lists every built-in detector,
@@ -15,6 +15,7 @@ explicitly outside the built-in inventory.
 
 | Model | Machine-checked contract | Production call path |
 |---|---|---|
+| [`CiPolicy.dfy`](../formal/CiPolicy.dfy) | Every feasible discrete schedule is represented by the mixed-radix policy space; encode/decode inverses; semantic maximum-finish objective; returned-policy feasibility and global lexicographic makespan/cost optimum over all feasible policies in the bounded environment; unique deterministic winner; complete-search infeasibility iff no feasible policy; explicit invalid/exhausted outcomes without a policy | `experiments plan` / `experiments context --model` / `formal ci-plan` / `formal check → experiments/plan.ts → CiPolicy.Optimize` |
 | [`Selection.dfy`](../formal/Selection.dfy) | Exact bounded objective; eligibility equivalence; valid judges cannot alter eligibility/deterministic score; a total, transitive preference; eligible finite maximum; no-winner iff no eligible candidate; unfinished-candidate detection; reducer promotion/readiness/empty-universe contracts | `experiments/score.ts → formal/selection.ts → Selection.Evaluate`; `experiments/decide.ts → formal/selection.ts → Selection.Reduce` |
 | [`Policy.dfy`](../formal/Policy.dfy) | The executable fold equals the independent recursive last-present-assignment specification; an empty/all-absent sequence resolves to `off` | `lint/config.ts → formal/policy.ts → Policy.Resolve` |
 | [`CacheKey.dfy`](../formal/CacheKey.dfy) | Normalization preserves rendering; separated templates permit component recovery; coverage/determination imply exact equality partition; missing/extra components have concrete counterexamples; pruning undeclared components coarsens the partition, preserves declared coverage and yields a determined template | `formal cache-key` / `formal check → formal/cache-key.ts → CacheKey.Classify`, `Recommend`, `Base`, `Vary`, `Render` |
@@ -27,6 +28,24 @@ uses the returned action/index; it does not run a separate handwritten `best()` 
 Severity resolution supplies assignments in the existing order: matching preset defaults, then the ruleset
 override, then the explicit rule override. The proof covers the last-present fold, **not** YAML parsing, choosing
 which presets match, option merging, suppressions, capabilities, detector completeness, or autofix semantics.
+
+## Bounded CI environment optimum
+
+The [CI policy planning guide](ci-policy-planning.md) specifies the complete input schema, resource semantics,
+numeric/search bounds, typed API and runnable non-greedy examples. This is separate from empirical arm ranking:
+the objective is derived from actual modeled execution intervals, not a supplied score.
+
+`Feasible` checks mode choices, dependency finish-to-start order, nonnegative starts, positive declared durations,
+pooled capacity at every tick, total cost and the finish horizon. `FeasibleInDomain` proves that every such
+schedule has starts in `[0,horizon)`. `DecodeEncode`/`EncodeDecode` establish full coverage and identity of
+`product(horizon * modeCount[j])` policies. The `Optimize` invariant and coverage lemmas prove its optimum
+against **all feasible policies**, not only a caller-provided list. Resource-limited schedules are not mistaken
+for an achievable unlimited-runner critical path. Complete infeasibility and budget exhaustion are distinct.
+
+The guarantee is conditional on the explicit discrete, nonpreemptive, constant-capacity model. The adapter,
+identifier mapping and strict schema decoding are tested trusted code. No workflow-to-model mapping,
+duration-profile authenticity or semantic equivalence of arbitrary execution modes is established.
+Source binding identifies the model JSON only. A model optimum remains a candidate for empirical validation.
 
 ## Finite objective and reducer
 
@@ -206,6 +225,11 @@ decision nor authorizes a merge. Existing publication ownership/head/manifest ch
 
 ### Outcomes and canonical data
 
+For CI scheduling, commit a model and run `formal ci-plan --commit <full-commit-id> --path ci-environment.json`.
+Its checker independently recomputes the complete search from the committed model and declared budget,
+including schedule, semantic objective, capacity usage, counts, outcome and assumptions. See
+[planning certificate commands](ci-policy-planning.md#source-bound-independently-recomputed-certificates).
+
 | Exit | Result | Meaning |
 |---|---|---|
 | `0` | `source-bound-valid` | Full recomputation agrees, and every recorded `commit:path` blob matches the explicitly selected local repository |
@@ -214,8 +238,9 @@ decision nor authorizes a merge. Existing publication ownership/head/manifest ch
 | `2` | usage | Missing/unknown CLI options, malformed commit selector or decision time |
 
 Help also exits zero. **A valid certificate need not say the original key is correct or an arm qualifies.**
-It can validly report counterexamples, missing dependencies, rejection or waiting. Exit zero validates the
-certificate/binding, not a cache fix or performance claim.
+It can validly report counterexamples, missing dependencies, rejection or waiting. A planning certificate also
+reports `resultStatus: optimal | infeasible | budget-exhausted`; a source-bound exhaustion certificate is not an
+optimum. Exit zero validates the certificate/binding, not a cache fix or performance claim.
 
 The certificate JSON profile rejects duplicate decoded keys, invalid/nonfinite/unsafe numeric values, negative
 zero, lone surrogates, sparse/decorated/accessor arrays, accessors and nonplain objects. Keys are sorted using
@@ -281,12 +306,15 @@ exports. BigNumber 9.3.1 is an actual production dependency used by this runtime
 
 The `formal` CI job always verifies/regenerates and checks the all-rule catalogue. Runtime tests include an
 independent BigInt objective oracle, exhaustive short candidate/policy sequences, production selection,
+an independent reverse-DFS scheduling oracle over 4,608 small environments, non-greedy resource/cost fixtures,
 Unicode/empty-hash/cache separation, canonicalization, tampering, stale/forged sources and exit semantics.
-The build job also executes certificates through the **real Action bundle** and rejects tampering. These tests
+The build job also executes the modeled planner and certificates through the **real Action bundle** and rejects tampering. These tests
 exercise the trusted boundary; they are not substituted for the Dafny proofs.
 
 When CI reports a stale Action bundle, retrieve its `action-bundle-<sha>` artifact and commit `dist-action/index.js`
-from that artifact; do not mistake a passing source proof for a current shipped bundle.
+from that artifact; do not mistake a passing source proof for a current shipped bundle. Shared changes can also
+stale the agent bundle: retrieve `agent-bundle-<sha>` and commit its `cicd-agents.mjs` into
+`plugins/ci-cd-optimizer/server`. Both bundle checks remain mandatory; their artifacts are generated by hosted CI.
 
 ### Trusted computing base
 
@@ -296,5 +324,7 @@ configuration/manifest validation and adapters are **tested trusted code**, not 
 of GitHub Actions or consumer workloads. A corrupted checker or modified runtime is outside the certificate
 threat model. CI source/runtime/dependency stamps support reproducibility; they are not a code-signing scheme.
 
-The exact finite and string-partition guarantees remain useful within this boundary. They must not be
-restated as “all improvements proved,” “authenticated observations,” or “globally optimal pipeline policy.”
+The exact finite, modeled-scheduling and string-partition guarantees remain useful within this boundary.
+“Globally optimal within the declared bounded CI model” is established only for an `optimal` planning result.
+It must not be restated as “all improvements proved,” “authenticated observations,” or “globally optimal
+real pipeline policy.”

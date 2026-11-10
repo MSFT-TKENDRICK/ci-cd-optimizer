@@ -20,12 +20,14 @@ import { allRules } from "../lint/rules/index.js";
 import type { SourceFile } from "../lint/types.js";
 import { githubClient, repoFrom, resolvePath, shellExec, UsageError, writeText, type CliIO } from "./io.js";
 import { loadLintConfig } from "./lint.js";
+import { ciPlanCommand, readCiEnvironment, searchBudgetOption } from "./ci-plan.js";
 
 export const EXPERIMENTS_HELP = `Usage: ci-cd-optimizer experiments <command> [options]
 
 Hill-climbing experiments on experiments/<name>/<arm> branches (see docs/experiments.md).
 
 Commands:
+  plan                      Exactly optimize a declared bounded CI environment (no publication)
   list                      Running experiments as JSON
   capacity                  Open experiment count and configured concurrency budget as JSON
   context                   Markdown briefing for the experiment generator agent
@@ -44,7 +46,9 @@ resume:    --experiment <name> --expected-head <SHA> [--base <branch>] [--dry-ru
 collect:   [--experiment <name>] --output-dir <dir> | --output <file>
 evaluate:  --measurements <file|dir> [--repo-dir <dir>]  |  --engine <module> [--corpus <dir>]
 decide:    --measurements <file|dir> [--agent-output <file>] [--apply]
-context:   [--dir <dir>] [--telemetry <file>] [--output <file>]
+context:   [--dir <dir>] [--telemetry <file>] [--model <ci-environment.json>] [--search-budget <policies>] [--output <file>]
+plan:      --model <ci-environment.json> [--search-budget <policies>] [--output <file>]
+           Exit 0: model optimum; 4: proved model infeasible; 5: budget exhausted (no partial result).
 `;
 
 const COMMON = {
@@ -204,7 +208,10 @@ async function capacityCommand(args: string[], io: CliIO): Promise<number> {
 }
 
 async function contextCommand(args: string[], io: CliIO): Promise<number> {
-  const { values } = parseArgs({ args, strict: true, options: { ...COMMON, dir: { type: "string" }, telemetry: { type: "string" }, output: { type: "string", short: "o" } } });
+  const { values } = parseArgs({ args, strict: true, options: { ...COMMON, dir: { type: "string" }, telemetry: { type: "string" }, model: { type: "string" }, "search-budget": { type: "string" }, output: { type: "string", short: "o" } } });
+  if (values["search-budget"] !== undefined && !values.model) throw new UsageError("context --search-budget requires --model.");
+  const ciModel = values.model ? await readCiEnvironment(io, values.model) : undefined;
+  const ciSearchBudget = searchBudgetOption(values["search-budget"]);
   const config = await loadHillClimbConfig(io, values.config);
   const repo = repoFrom(values.repo, io);
   const client = githubClient(io);
@@ -219,6 +226,7 @@ async function contextCommand(args: string[], io: CliIO): Promise<number> {
     config,
     diagnostics,
     ...(telemetry ? { telemetry } : {}),
+    ...(ciModel ? { ciModel, ciSearchBudget } : {}),
     running,
     history,
     rules: allRules.map((rule) => ({ id: rule.meta.id, description: rule.meta.description })),
@@ -435,6 +443,7 @@ async function decideCommand(args: string[], io: CliIO): Promise<number> {
 }
 
 const COMMANDS: Record<string, (args: string[], io: CliIO) => Promise<number>> = {
+  plan: ciPlanCommand,
   list: listCommand,
   capacity: capacityCommand,
   context: contextCommand,
