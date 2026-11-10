@@ -22921,7 +22921,7 @@ var EXPERIMENT_LABEL = "experiment";
 var PROMOTE_LABEL = "experiment:promote";
 var OUTCOME_LABELS = { reject: "experiment:rejected", expire: "experiment:expired" };
 async function listExperimentPullRequests(client, repo, state = "open") {
-  const pulls = await paginate(client, "GET /repos/{owner}/{repo}/pulls", { ...repo, state, sort: "updated", direction: "desc" }, state === "open" ? 10 : 3);
+  const pulls = await paginate(client, "GET /repos/{owner}/{repo}/pulls", { ...repo, state, sort: "updated", direction: "desc" }, Number.POSITIVE_INFINITY);
   return pulls.flatMap((pull) => {
     const ref = parseExperimentRef(pull.head.ref);
     if (!ref) return [];
@@ -23059,11 +23059,12 @@ async function resumeExperiment(client, repo, options) {
     ...repo,
     state: "all",
     head: `${repo.owner}:${trunk}`
-  });
+  }, Number.POSITIVE_INFINITY);
   const sameRepository = `${repo.owner}/${repo.repo}`.toLowerCase();
+  const outcomeLabels = /* @__PURE__ */ new Set([PROMOTE_LABEL, ...Object.values(OUTCOME_LABELS)]);
   const isExpectedPull = (pull) => {
     const recorded = parseMarker(pull?.body ?? "");
-    return !!pull && Number.isSafeInteger(pull.number) && pull.number > 0 && pull.state === "open" && pull.draft === true && pull.merged_at === null && pull.head?.ref === trunk && pull.head.sha === expectedSha && pull.head.repo?.full_name?.toLowerCase() === sameRepository && pull.base?.ref === baseBranch && recorded?.kind === "experiment" && recorded.fingerprint === name && recorded.attributes.status === "running";
+    return !!pull && Number.isSafeInteger(pull.number) && pull.number > 0 && pull.state === "open" && pull.draft === true && pull.merged_at === null && pull.head?.ref === trunk && pull.head.sha === expectedSha && pull.head.repo?.full_name?.toLowerCase() === sameRepository && pull.base?.ref === baseBranch && Array.isArray(pull.labels) && pull.labels.every((label) => typeof label?.name === "string" && !outcomeLabels.has(label.name.toLowerCase())) && recorded?.kind === "experiment" && recorded.fingerprint === name && recorded.attributes.status === "running";
   };
   const matches = history.filter((pull) => pull.head?.ref === trunk);
   if (matches.length > 1) throw new Error("Multiple promotion pull requests use this trunk; reconcile them before resuming.");
