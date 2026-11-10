@@ -1,0 +1,25 @@
+{
+  "schema": "cicd-optimizer/ci-environment-v1",
+  "timeUnitSeconds": 30,
+  "horizonTicks": 8,
+  "runnerCapacity": 1,
+  "maxCostUnits": 3,
+  "jobs": [
+    {
+      "id": "prepare",
+      "needs": [],
+      "modes": [
+        { "id": "fast", "durationTicks": 1, "costUnits": 3, "runnerDemand": 1 },
+        { "id": "slow", "durationTicks": 2, "costUnits": 0, "runnerDemand": 1 }
+      ]
+    },
+    {
+      "id": "test",
+      "needs": ["prepare"],
+      "modes": [
+        { "id": "fast", "durationTicks": 1, "costUnits": 3, "runnerDemand": 1 },
+        { "id": "slow", "durationTicks": 6, "costUnits": 0, "runnerDemand": 1 }
+      ]
+    }
+  ]
+}

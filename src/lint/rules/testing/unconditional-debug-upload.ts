@@ -28,9 +28,9 @@ export default defineRule({
   meta: {
     id: "testing/unconditional-debug-upload",
     ruleset: "testing",
-    description: "Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail.",
+    description: "Consider failure-only uploads for test artifacts used solely for debugging.",
     rationale:
-      "A step without `if:` runs only after earlier steps succeed, so a debugging upload placed after the tests uploads megabytes of traces and screenshots on every green run and nothing when the tests fail. `if: failure()` uploads exactly when the output is needed.",
+      "A step's default success condition can skip a debugging upload after an earlier unhandled failure. When successful-run artifacts are not needed, `if: failure()` may avoid unnecessary transfers while retaining failure diagnostics. Visible conditions and consumers are only a heuristic: verify artifact consumers, continue-on-error behavior and diagnostic needs before changing the condition.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -77,8 +77,8 @@ export default defineRule({
           path: workflow.path,
           line,
           key: `${step.key}:always`,
-          message: `Traces, videos or screenshots (${paths.join(", ")}) are uploaded on every run, including green ones.`,
-          suggestion: "Use `if: failure()` so the heavy debugging artifacts upload only when a test fails.",
+          message: `The upload condition permits traces, videos or screenshots (${paths.join(", ")}) on successful jobs.`,
+          suggestion: "If successful-run artifacts are not needed, consider `if: failure()` and verify downstream consumers.",
         });
         continue;
       }
@@ -99,9 +99,9 @@ export default defineRule({
         key: step.key,
         message:
           condition === undefined
-            ? `Debugging output (${paths.join(", ")}) is uploaded only when the tests pass, which is when it is not needed.`
-            : `Debugging output (${paths.join(", ")}) is uploaded only on success (\`if: success()\`).`,
-        suggestion: "Add `if: failure()` so the upload runs when a test fails and is skipped on green runs.",
+            ? `Debugging output (${paths.join(", ")}) uses the default success condition and may be skipped after an earlier failure.`
+            : `Debugging output (${paths.join(", ")}) uses an explicit success condition (\`if: success()\`).`,
+        suggestion: "If the artifacts are only needed for failure diagnostics, use `if: failure()`; verify consumers and continue-on-error behavior.",
         ...(applied ? { fix: applied } : {}),
       });
     }

@@ -261,7 +261,7 @@ export default defineRule({
     ruleset: "caching",
     description: "Language setup actions should cache downloaded dependencies.",
     rationale:
-      "Without caching, every run re-downloads all dependencies from the registry, which is often the slowest part of a job and is repeated on every agent iteration. setup-node, setup-python, setup-java and setup-dotnet only cache when `cache` is set (setup-node v6+ auto-caches npm only when package.json `packageManager` names npm); setup-go caches by default.",
+      "Dependency downloads can be a large repeated cost on fresh runners. An effective cache may reduce that cost, but prewarmed runners, external caches and restore/upload overhead can change the benefit; measure the affected job. setup-node, setup-python, setup-java and setup-dotnet support explicit `cache` settings (setup-node v6+ also auto-caches npm when package metadata selects npm); setup-go caches by default.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic"],

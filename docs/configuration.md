@@ -181,7 +181,9 @@ Ignores are recorded with the `cicd-optimizer:ignored` label; remove it to undo.
 
 ## Duration alerts (`alerts`)
 
-Raises issues when a workflow or job gets statistically significantly slower. Enabled by default.
+Raises issues for observed slowdowns that cross the configured statistical and materiality thresholds. Enabled
+by default. These observational thresholds are not proof of causality, comparable work, independent samples, or
+a calibrated false-positive guarantee across repeated workflow/job comparisons.
 
 ```yaml
 alerts:

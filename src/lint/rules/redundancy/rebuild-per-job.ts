@@ -34,7 +34,7 @@ export default defineRule({
     ruleset: "redundancy",
     description: "Several jobs in a workflow should not each rebuild the same project from scratch.",
     rationale:
-      "When multiple jobs run the same build command on the same runner type, the workflow pays for the build several times and the jobs may test or ship slightly different outputs. Building once and passing the result through an artifact cuts runner minutes and guarantees every downstream job uses the same bits.",
+      "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["agentic", "strict"],

@@ -25,18 +25,18 @@ ruleTester(rule, {
   invalid: [
     {
       files: wf(upload("playwright-report/")),
-      errors: [{ line: 7, messageIncludes: "only when the tests pass" }],
+      errors: [{ line: 7, messageIncludes: "default success condition" }],
       output: wf(upload("playwright-report/", "        if: failure()\n")),
     },
     {
       name: "success() is flagged",
       files: wf(upload("test-results/", "        if: success()\n")),
-      errors: [{ line: 7, messageIncludes: "only on success" }],
+      errors: [{ line: 7, messageIncludes: "explicit success condition" }],
     },
     {
       name: "always() upload of heavy traces",
       files: wf(upload("traces/", "        if: always()\n")),
-      errors: [{ line: 7, messageIncludes: "every run" }],
+      errors: [{ line: 7, messageIncludes: "permits traces, videos or screenshots" }],
     },
   ],
 });

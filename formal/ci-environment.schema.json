@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Bounded CI environment, version 1",
+  "$comment": "Schema validation is an editor aid, not a proof or a replacement for parseCiEnvironmentModel. The runtime additionally rejects duplicate JSON keys, negative zero, invalid Unicode, duplicate identifiers and non-topological dependencies. Workflow correspondence and timing/resource profiles are declared assumptions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "timeUnitSeconds", "horizonTicks", "runnerCapacity", "maxCostUnits", "jobs"],
+  "properties": {
+    "schema": { "const": "cicd-optimizer/ci-environment-v1" },
+    "timeUnitSeconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+    "horizonTicks": { "type": "integer", "minimum": 1, "maximum": 16 },
+    "runnerCapacity": { "type": "integer", "minimum": 1, "maximum": 8 },
+    "maxCostUnits": { "type": "integer", "minimum": 0, "maximum": 8000000 },
+    "jobs": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/job" } }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "needs", "modes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "needs": {
+          "type": "array",
+          "description": "Unique identifiers of earlier jobs in this same jobs array.",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "modes": {
+          "type": "array",
+          "description": "One or more execution modes with unique identifiers within this job.",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/mode" }
+        }
+      }
+    },
+    "mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "durationTicks", "costUnits", "runnerDemand"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "durationTicks": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "costUnits": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "runnerDemand": { "type": "integer", "minimum": 1, "maximum": 8 }
+      }
+    }
+  }
+}

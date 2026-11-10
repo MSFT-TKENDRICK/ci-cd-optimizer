@@ -49,9 +49,9 @@ export default defineRule({
   meta: {
     id: "testing/cache-disabled-install",
     ruleset: "testing",
-    description: "Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps.",
+    description: "Review installs that appear to clear or bypass a configured package-manager cache.",
     rationale:
-      "Restoring a dependency cache costs a download and a save on every run; clearing it, pointing installs at an empty temporary cache or passing `--no-cache-dir` throws that work away and makes every install download from the registry again.",
+      "Clearing or bypassing compatible restored package-manager entries can cause avoidable work. Restore/save operations are conditional, and clearing a cache does not necessarily require a registry download. Verify actual cache paths, command ordering, install behavior and any correctness or isolation requirement before changing the workflow.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -81,8 +81,8 @@ export default defineRule({
             path: workflow.path,
             line: entry.direct ? entry.line : stepLine(entry.owner),
             key: `${entry.step.key}:${defeat.ecosystem}:${entry.command}`,
-            message: `${defeat.what} the ${defeat.ecosystem} cache that job \`${job.id}\` restores, so the restore is wasted and dependencies download again.`,
-            suggestion: "Drop the cache-clearing command or flag and let the install use the restored cache.",
+            message: `${defeat.what} the ${defeat.ecosystem} cache in job \`${job.id}\`, which also configures caching; this may prevent reuse of restored entries.`,
+            suggestion: "If clearing or bypassing the cache is not needed for correctness or isolation, verify the paths and ordering, allow compatible cache reuse, and measure the result.",
           });
         }
       }

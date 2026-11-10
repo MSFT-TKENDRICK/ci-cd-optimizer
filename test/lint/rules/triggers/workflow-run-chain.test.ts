@@ -39,7 +39,7 @@ ruleTester(rule, {
   invalid: [
     {
       files: { ".github/workflows/ci.yml": CI, ".github/workflows/docs.yml": CHAINED },
-      errors: [{ line: 3, messageIncludes: 'waits for "CI"' }],
+      errors: [{ line: 3, messageIncludes: 'subscribes to "CI"' }],
     },
     {
       name: "single-string workflows and no types",

@@ -1,8 +1,18 @@
 # Hill-climbing experiments
 
-CI/CD Optimizer improves itself, and the pipelines it lints, through controlled experiments that agents propose and
-implement and that statistics decide. Three [GitHub Agentic Workflows](https://github.github.com/gh-aw/) (gh-aw) run the
-loop on a schedule. Every decision is made by deterministic code from measurements the agents can't alter.
+CI/CD Optimizer evaluates proposed changes to itself and the pipelines it lints through finite candidate experiments.
+Three [GitHub Agentic Workflows](https://github.github.com/gh-aw/) (gh-aw) run the loop on a schedule. Deterministic
+grading uses supplied observations and an explicit scoring policy. **Those observations do not attest equivalent work:
+CI promotion metadata is rechecked against GitHub, but arm code can fabricate corpus results, skip work, or exploit
+an incomplete benchmark.** The mechanically verified selector
+proves its finite ranking and hard-gate contract, not the truth of inputs, causal speedups, or a global policy optimum.
+See [formal verification](formal-verification.md) for executable proofs and source-bound certificates.
+
+For a complete scheduling optimum rather than observed-arm ranking, use
+[`experiments plan --model`](ci-policy-planning.md). It exactly optimizes every feasible job/mode/start policy
+in a declared bounded CI environment with dependencies, resource capacity and a cost limit. That theorem is
+conditional on the supplied model; no workflow correspondence or duration profile is verified. An optimal
+plan is experimental input, never measured evidence or permission to promote.
 
 ```text
 main
@@ -21,7 +31,7 @@ was tried.
 | Kind | Changes | Measured by |
 |---|---|---|
 | `rules` | The linter: new rules, fewer false positives, better fixes. | The benchmark [corpus](../corpus/README.md): precision, recall, fix rate, lint duration. Each arm is built in its own worktree. |
-| `pipeline` | CI/CD itself, such as caching, sparse checkout, job graph, or container layers. | Successful CI runs on each arm's head commit vs the trunk: wall clock and test job duration. |
+| `pipeline` | CI/CD itself, such as caching, sparse checkout, job graph, or container layers. | Successful first-attempt `workflow_dispatch` runs reporting each recorded head/branch: run timestamp span or a named job's duration. See the workload caveats below. |
 
 ## The loop
 
@@ -35,8 +45,10 @@ was tried.
    - the latest CI telemetry (critical path, slow jobs)
    - the rubric and metrics
    - the history of running, promoted, rejected, and expired experiments, so ideas aren't retried blindly
+   - when explicitly supplied with `--model`, a recomputed bounded CI policy plan and its assumptions; without
+     a model, the briefing explicitly warns against claiming scheduling optimality from scores or telemetry
 
-   The briefing is built before the agent runs, so the agent can't shape its own evidence.
+   The briefing is fixed before that agent invocation. This does not authenticate historical measurements or benchmark labels.
 3. The Copilot agent proposes **one** experiment: a manifest with a hypothesis, 1–4 arms with distinct approaches, and
    self-scored rubric criteria. For `rules` experiments, it can also add new benchmark cases.
 4. The `create-experiment` safe-output job re-validates the proposal with `experiments create`. It checks the schema,
@@ -72,7 +84,7 @@ The same capacity check skips inference successfully when no experiment is open.
 
 | Decision | When | Effect |
 |---|---|---|
-| `wait` | An arm is still collecting evidence: it isn't built yet, its checks are running, it has fewer than `minSamples` CI runs, or a metric is unmeasured. | Dispatches the configured CI workflow on the arms and trunk that need more runs. Pushes and pull requests made with `GITHUB_TOKEN` don't trigger CI, so the grader dispatches it explicitly. |
+| `wait` | An arm is still collecting evidence: it isn't built yet, its checks are running, it has fewer than `minSamples` supported CI observations, or a metric is unmeasured. Legacy/unsupported timing arrays do not count. | Dispatches the configured CI workflow on the arms and trunk that need more runs. Pushes and pull requests made with `GITHUB_TOKEN` don't trigger CI, so the grader dispatches it explicitly. |
 | `promote` | The top-ranked qualifying arm exists, and either no arm is still pending or the experiment expired. | Squash-merges the winner into the trunk and closes the other arms. Records `status: promoted`, the winner, and the measured evidence in the manifest. Marks the trunk PR ready for review, requests `promotion.reviewers`, and adds labels. |
 | `reject` | No arm is still pending and none qualifies. | Closes the arms and labels the trunk `experiment:rejected`. |
 | `expire` | `maxAgeDays` (or the manifest's `expiresAt`) passed with no qualifying arm. | Closes the arms and labels the trunk `experiment:expired`. |
@@ -110,24 +122,85 @@ Closures are also non-transactional: earlier verified targets may already be clo
 fails. A lost close response may leave a closed PR with its branch retained; no durable experiment cleanup intent is
 recorded, so reconcile such retained branches manually rather than replaying cleanup from old closed-PR history.
 
+## Controlled CI observations and migration
+
+`experiments collect` keeps the numeric `ci[metricId]` arrays for existing displays and adds
+`ciEvidence[metricId]` with schema `cicd-optimizer/ci-evidence-v1`. **Keep both fields when moving or augmenting
+measurements.** Bare duration arrays from older collectors are unmeasured for eligibility; recollect them rather
+than inventing provenance. Normal `evaluate` and `decide` commands use the same duplicate-aware strict measurement
+decoder as formal certificates.
+
+The collector and scorer enforce this deliberately narrow observation contract:
+
+- The run is completed/successful, has `event: workflow_dispatch` and `run_attempt: 1`, reports the exact full
+  recorded SHA and expected experiment branch, and was created at or after the experiment's creation timestamp.
+  PR-event runs, push/schedule events, retries, old heads, unknown heads and foreign repository contexts do not count.
+  A PR run's reported `head_sha` is **not** evidence that its checkout used that commit: default PR checkout can use a
+  synthetic merge, and a draft control can skip work that a non-draft arm performs.
+- Each observation records run ID, attempt, workflow ID/path, event, status/conclusion, head/branch and timestamps.
+  The series records repository and configured workflow. Duration is recomputed from timestamps and must equal the
+  numeric projection. IDs are deduplicated during collection; duplicates in serialized evidence invalidate that series.
+  Control and arm must use the same repository/workflow identity and cannot reuse each other's runs.
+- Runs are paginated until `max(30, minSamples)` supported observations have been found per metric/branch or the API
+  inventory is exhausted. This is a bounded sample, not all historical runs. For job metrics, the collector exhausts
+  the **attempt-1** job inventory and requires exactly one job with the configured name, a successful completed status,
+  the same run/attempt/head, and timestamps within the run. Ambiguous matrix names and incomplete job inventories
+  are not usable observations.
+- Both the control's and arm's reported check inventories are paginated. A passing gate requires all returned checks
+  completed/nonfailing and at least one success; all-skipped or absent checks remain pending. This does not discover
+  required tests or prove that successful jobs did meaningful work. Missing comparison files or the API's 300-file
+  comparison ceiling fail closed rather than presenting potentially truncated protected-path evidence as complete.
+
+Before `experiments decide --apply` publishes a performance promotion, it re-reads every consumed run's metadata
+and any selected attempt-specific job from GitHub. Forged timestamps, changed attempts, and context mismatches abort
+before publication. This is a point-in-time API comparison, not a transaction locking executions against subsequent
+changes. The App needs only **Actions: read** for these checks; dispatch retains its separate job-local credential.
+
+These safeguards remove the PR-merge/draft/retry mixing problem, **not all experimental confounders**.
+`workflow_dispatch` and the API's head metadata do not prove a custom checkout's ref, identical inputs, equivalent
+work, required-test coverage, runner equality, honest corpus reports, or statistical independence. A workflow can
+skip work and still succeed. Review workflow changes and verify workload equivalence independently before accepting
+a performance recommendation. Offline source-bound certificates verify the recorded calculation without contacting
+GitHub; they do not authenticate the recorded API responses.
+
 ## Scoring
 
-For each metric, an arm's relative improvement over the control is computed and clamped to ±100%:
+For each configured metric, a relative delta over the control is computed, clamped to ±100%, and quantized to
+10,000 integer ticks per unit:
 
-- **Corpus metrics** are deterministic. The arm and control run on the same corpus in the same job.
-- **CI metrics** compare medians of at least `minSamples` successful runs per branch. A one-sided Mann-Whitney U test
-  must reject noise at `pValue`. Otherwise the change scores 0.
+- **Corpus metrics** compare results on the same labeled corpus. Counts depend on engine behavior and labels;
+  duration is a noisy timing measurement, not a deterministic correctness fact.
+- **CI metrics** compare medians of at least `minSamples` supported, provenance-backed dispatch observations per branch. A Mann-Whitney tail chosen
+  after observing the direction must have an unrounded p-value below `pValue`; otherwise the delta scores zero.
+  This is an unadjusted repeated-comparison heuristic, not a test that can guarantee removal of noise, statistical
+  independence, equivalent work, or causality. Displayed p-values are rounded.
 
-The **deterministic score** is the weighted mean of those improvements. An arm **qualifies** only when:
+The generated Dafny kernel computes the **deterministic score** as an exact integer-weighted mean rounded to a tick
+(ties toward positive infinity). Weights have at most six decimal places and positive total. An arm **qualifies**
+only when the generated kernel establishes all of these conditions on its supplied inputs:
 
-- its deterministic score is at least `minImprovement`,
-- its checks pass,
-- no metric regresses beyond its `maxRegression`,
-- it changed no `protectedPaths`, and
-- its evaluation didn't fail.
+- its score meets `minImprovement`, with that threshold rounded **up** to a tick;
+- both its checks and the control's checks are reported passed;
+- every selected metric is measured and no **scored** delta breaches its regression limit, rounded **down** to a tick;
+- no reported changed path matches `protectedPaths`;
+- neither evaluation reports an error, and numeric inputs/configuration are valid.
 
-The agent's judgment only reorders qualifying arms: `rank = (1 − w) · deterministic + w · (2 · judge − 1)`, where
-`w = judgeWeight` (capped at 0.5). A persuasive but unmeasured change can never be promoted.
+The judge only reorders eligible arms: the kernel rounds
+`rank = (1 − w) · deterministic + w · (2 · judge − 1)` to a tick, with valid `w <= 0.5`.
+Missing judgments leave rank equal to the deterministic score. Invalid/NaN/infinite judgments fail closed, rather
+than being silently clamped. A valid judge value cannot bypass any eligibility gate—this is a proved runtime
+contract, not just an intention. It does **not** prevent an arm from supplying fabricated measurements that satisfy
+those gates.
+
+The candidate universe is exactly the manifest's unique ASCII-named arms. Ties use descending rank, descending
+deterministic score, then ascending ASCII name (not host locale). Missing arms remain pending; measurements for
+unlisted arms are excluded. Before expiry the reducer waits for every nonfailed candidate to finish. At expiry it
+may promote the maximum among currently eligible measured candidates despite unfinished arms; no claim is made
+about their unknown outcomes or unproposed alternatives. The production `decide` path calls this generated reducer.
+
+The [complete rule assurance catalogue](../formal/rule-assurance.json) separately records every built-in detector
+and recommendation as heuristic/conditional. Verified selection does not turn a selected rule improvement into a
+proof of detector correctness or of a real bottleneck reduction.
 
 ## Configuration: `.github/hill-climb.yml`
 
@@ -175,7 +248,8 @@ evaluation:
 ```
 
 Experiments use every metric whose `source` matches their kind, unless the manifest lists `metrics`. To change the
-rubric, metrics, or protected paths, edit this file on `main`. Arms can't change it.
+rubric, metrics, or protected paths, edit this file on `main`. Reported changes to protected configuration paths
+disqualify an arm; this gate is not a sandbox against malicious evaluation code.
 
 ## Manifest: `experiments/<name>/experiment.yml`
 
@@ -289,10 +363,11 @@ them with an older global extension; compiler versions differ in their protected
 
 | Risk | Mitigation |
 |---|---|
-| An arm games its own score, for example by editing the corpus, the metrics, or the manifest. | Changes to `protectedPaths` disqualify the arm. New corpus cases land on the trunk before any arm branches, and existing cases are immutable. |
+| An arm games its own score, for example by editing the corpus, the metrics, or the manifest. | Reported changes to `protectedPaths` disqualify the arm. New corpus cases land on the trunk before arms branch. The gate does not stop runtime tampering, fabricated observations, or exploitation of incomplete labels. |
 | Untrusted arm code runs during evaluation. | It runs only in the grader's `evaluate` step, which has no token in a read-only job. The numbers are uploaded as an artifact before the agent runs and are re-read by the grading job. |
 | A prompt-injected agent pushes a persuasive but harmful change. | Agents never hold write tokens. gh-aw safe outputs validate and apply their requests, and gh-aw threat detection scans their output. Judgments only reorder arms that already qualify on measurements. |
 | A winning arm merges without oversight. | Winners merge only into the experiment trunk. `main` changes only when a human approves the trunk pull request, unless `promotion.autoMerge` is enabled. |
-| An arm forges its measurements. | **Not prevented.** Arm code controls the commands whose results are measured, so it can make itself look faster (for example, by skipping work or editing the report). Grading ranks self-reported evidence; it is not attestation. Human review of the trunk pull request is the trust boundary: confirm the winning diff still does the same work. Do not enable `promotion.autoMerge` when arms may come from untrusted proposers. |
+| An arm forges its measurements or does less work. | Corpus-report forgery and workload changes are **not prevented**. CI promotion rechecks recorded dispatch metadata/timing against GitHub, so an edited duration alone is insufficient, but a workflow can skip work and genuinely finish faster. Grading is not execution or workload attestation. Human review of the trunk pull request is the trust boundary: confirm the winning diff still does the same work. Do not enable `promotion.autoMerge` when arms may come from untrusted proposers. |
+| A formal certificate is mistaken for execution attestation or universal optimality. | The checker recomputes from recorded `commit:path` blobs and a pinned generated kernel. This binds the calculation to bytes, not to an honest execution. The arm selector covers declared eligible candidates; the scheduling optimizer covers every feasible policy in its explicit bounded environment, assuming the declared workload/timing correspondence; cache-key proofs cover declared dependency values. Budget exhaustion is not an optimum or infeasibility proof. |
 | Workflow changes are used for privilege escalation. | Keep the repository's default `GITHUB_TOKEN` permissions read-only, require review for `.github/workflows/**` via CODEOWNERS, and scope `CICD_OPTIMIZER_TOKEN` to this repository. |
 | Runaway cost. | Pre-activation checks skip inference when there's nothing to do. `maxConcurrent`, `maxArms`, `maxAgeDays`, and per-job timeouts bound the work. |

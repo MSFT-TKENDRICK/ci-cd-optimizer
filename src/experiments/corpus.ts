@@ -5,13 +5,14 @@ import type { LintConfig } from "../lint/config.js";
 import type { AnalysisInput, ChangeContext, Diagnostic, LintResult, Preset, SourceFile } from "../lint/types.js";
 
 /**
- * The benchmark corpus is the experiment's ground truth. Each case is a directory:
+ * The benchmark corpus defines the experiment's labeled evaluation target. Each case is a directory:
  *
  *   corpus/<case>/case.yml   description, expected findings, optional scope / change context / fixed contents
  *   corpus/<case>/files/**   the repository snapshot that is linted
  *
- * Arms cannot modify the corpus (it is a protected path); new cases for a hypothesis land on the experiment trunk
- * before arms branch, so every arm and the control are scored against the same trusted benchmark.
+ * The protected-path gate rejects reported corpus changes; new cases land on the trunk before arms branch.
+ * This is not a sandbox or attestation: executable arm code can fabricate results, and benchmark labels do not
+ * establish detector correctness or performance on arbitrary consumer repositories.
  */
 export interface ExpectedFinding {
   rule: string;

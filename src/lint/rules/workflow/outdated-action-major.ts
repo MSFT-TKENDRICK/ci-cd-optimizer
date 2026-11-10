@@ -5,7 +5,7 @@ import { actionVersion, defineRule, steps } from "../helpers.js";
 
 interface Track {
   latest: number;
-  /** First major that targets node24; hosted runners force older majors (node20 or earlier) onto Node 24, untested. */
+  /** First major tracked as targeting node24; verify the pinned release and runner compatibility. */
   node24: number;
 }
 
@@ -29,8 +29,6 @@ const TRACKS: Record<string, Track> = {
 };
 
 const RETIRED_RUNTIMES = new Set(["node12", "node16", "node20"]);
-const NODE_REMOVAL = "GitHub-hosted runners stopped providing on 2026-09-23; they force such actions onto Node 24";
-
 function upgradeNotes(name: string, from: number, to: number): string {
   const notes: string[] = [];
   if (name === "actions/checkout" && from < 7 && to >= 7) {
@@ -66,8 +64,8 @@ function checkStep(
     line: step.uses.line,
     key: `${step.key}.uses`,
     message: retired
-      ? `${shown} targets Node 20 or older, which ${NODE_REMOVAL}, a runtime that release was never tested on, and warn on every run. The latest major is v${track.latest}.`
-      : `${shown} is behind the latest major, v${track.latest}.`,
+      ? `${shown} is classified by the tracked major table as targeting Node 20 or older. Verify the pinned release's actual runtime and compatibility with the target runner; older declared runtimes may be overridden or unsupported. The latest tracked major is v${track.latest}.`
+      : `${shown} is behind the latest major in the tracked table, v${track.latest}.`,
     suggestion: `Upgrade to ${name}@v${track.latest} (or its full commit SHA with a \`# v${track.latest}\` comment) after reviewing the release notes for breaking changes since v${version.major}.${upgradeNotes(name, version.major, track.latest)}`,
     ...(retired ? { impact: "high" as const } : {}),
     ...(version.source === "comment" ? { confidence: "medium" as const } : {}),
@@ -80,7 +78,7 @@ export default defineRule({
     ruleset: "workflow",
     description: "Well-known actions should use their current major version, and local JavaScript actions should run on node24.",
     rationale:
-      "Old majors of the official setup, cache, checkout, and artifact actions miss performance work (faster caching backends, parallel artifact uploads) and, below the node24 releases, target Node 20, which GitHub Actions runners removed on 2026-09-23: they now force those actions onto Node 24, which their authors never tested, and warn on every run (self-hosted runners on unsupported platforms cannot run them at all). Agents copy existing workflow snippets, so one stale pin spreads quickly.",
+      "The maintained major/runtime table identifies releases to review for runtime support, security and performance changes. Newer majors can introduce breaking changes and are not guaranteed faster. Check the pinned action's source and release notes, target runner requirements and GitHub Enterprise Server support before upgrading; the table does not establish how an arbitrary pinned release was tested or executed.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -113,7 +111,7 @@ export default defineRule({
         path: action.path,
         line: using.line,
         key: "runs.using",
-        message: `Action declares \`runs.using: ${runtime}\`, which ${NODE_REMOVAL}, a runtime this action was never built or tested for.`,
+        message: `Action declares \`runs.using: ${runtime}\`, a retired runtime in the tracked GitHub-hosted runner policy. Verify the target runner's actual runtime and the action's compatibility with Node 24.`,
         suggestion:
           "Change `runs.using` to `node24`, rebuild any bundled `dist/` output, and run the action's tests on Node 24 before releasing a new tag.",
         impact: "high",

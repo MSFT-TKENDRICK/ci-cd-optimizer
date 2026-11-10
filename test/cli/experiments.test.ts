@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { run } from "../../src/cli/index.js";
 import { serializeManifest } from "../../src/experiments/manifest.js";
 import type { ExperimentMeasurements } from "../../src/experiments/score.js";
-import { fakeClient, sampleManifest } from "../experiments/fixtures.js";
+import { ciMeasurement, fakeClient, sampleManifest } from "../experiments/fixtures.js";
 
 let root: string;
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "cicd-experiment-cli-")); });
@@ -129,6 +129,50 @@ describe("experiment recovery CLI", () => {
 });
 
 describe("experiment decision CLI", () => {
+  it.each(["pull_request", "retry", "timing", "valid"])("rechecks CI provenance before any promotion write (%s)", async (scenario) => {
+    const manifest = sampleManifest({ kind: "pipeline" });
+    const measured: ExperimentMeasurements = {
+      experiment: manifest.name, collectedAt: "2026-11-05T00:00:00Z",
+      control: ciMeasurement("trunk", [300, 310, 305, 320, 298, 315]),
+      arms: [ciMeasurement("lockfile", [200, 210, 190, 205, 199, 220]), ciMeasurement("packagemanager", [300, 310, 305, 320, 298, 315])],
+    };
+    const branches = [measured.control, ...measured.arms];
+    branches.forEach((branch, index) => { branch.pullRequest = 10 + index; });
+    await writeFile(join(root, "measurements.json"), JSON.stringify(measured));
+    await writeFile(join(root, "config.yml"), "metrics:\n  - id: ci\n    source: ci\n    direction: minimize\n    weight: 1\n    workflow: ci.yml\n");
+    const pulls = branches.map((branch, index) => ({
+      number: 10 + index, node_id: `PR_${10 + index}`, state: "open", merged_at: null, closed_at: null, title: branch.arm, body: "", labels: [],
+      head: { ref: `experiments/${manifest.name}/${branch.arm}`, sha: branch.headSha, repo: { full_name: "acme/widgets" } },
+      base: { ref: index === 0 ? "main" : `experiments/${manifest.name}/trunk` }, draft: index === 0,
+    }));
+    const client = fakeClient((route, parameters) => {
+      if (route === "GET /repos/{owner}/{repo}/pulls") return pulls;
+      if (route === "GET /repos/{owner}/{repo}/pulls/{pull_number}") return pulls.find((pull) => pull.number === parameters.pull_number);
+      if (route === "GET /repos/{owner}/{repo}/contents/{path}") return { content: serializeManifest(manifest) };
+      if (route === "GET /repos/{owner}/{repo}/actions/runs/{run_id}") {
+        const sample = branches.flatMap((branch) => branch.ciEvidence?.ci?.samples ?? []).find((sample) => sample.runId === parameters.run_id);
+        if (!sample) throw new Error("Missing observation fixture.");
+        return {
+          id: sample.runId, run_attempt: scenario === "retry" ? 2 : 1, workflow_id: sample.workflowId, path: sample.workflowPath,
+          event: scenario === "pull_request" ? "pull_request" : "workflow_dispatch", status: sample.status, conclusion: sample.conclusion,
+          head_sha: sample.headSha, head_branch: sample.branch, created_at: sample.createdAt, run_started_at: sample.startedAt,
+          updated_at: scenario === "timing" ? new Date(Date.parse(sample.updatedAt) + 60_000).toISOString() : sample.updatedAt,
+          repository: { full_name: "acme/widgets" }, head_repository: { full_name: "acme/widgets" },
+        };
+      }
+      if (route === "PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge") return { merged: false, sha: "not-merged" };
+      throw new Error(`Unexpected request: ${route}`);
+    });
+    const stderr: string[] = [];
+    const exit = await run(["experiments", "decide", "--repo", "acme/widgets", "--config", "config.yml", "--measurements", "measurements.json", "--apply"], {
+      cwd: root, env: {}, github: () => client, now: () => new Date("2026-11-05T00:00:00Z"), stdout: () => undefined, stderr: (line) => stderr.push(line),
+    });
+    expect(exit).toBe(1);
+    expect(stderr.join("\n")).toMatch(scenario === "valid" ? /did not confirm/ : /no longer matches/);
+    expect(client.calls.filter((call) => call.route === "GET /repos/{owner}/{repo}/actions/runs/{run_id}")).toHaveLength(scenario === "valid" ? 18 : 1);
+    expect(client.calls.filter((call) => !call.route.startsWith("GET")).map((call) => call.route)).toEqual(scenario === "valid" ? ["PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge"] : []);
+  });
+
   it.each(["stale", "unconfirmed", "dry run", "stale rejection", "unconfirmed rejection", "stale expiry", "unconfirmed expiry"])("preserves evidence and failure semantics (%s)", async (scenario) => {
     const manifest = sampleManifest();
     const negative = scenario.includes("rejection") || scenario.includes("expiry");

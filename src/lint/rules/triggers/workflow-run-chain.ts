@@ -19,7 +19,7 @@ export default defineRule({
     ruleset: "triggers",
     description: "Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job.",
     rationale:
-      "A `workflow_run` trigger only fires after the upstream workflow finishes, so the downstream work waits for a second queue slot, a fresh runner, and another checkout before it starts. When pull request volume is high those extra hops add minutes to every change and make the run graph harder to follow. Calling the downstream work as a reusable workflow job with `needs:` keeps it in the same run, shares artifacts directly, and starts it the moment its dependencies succeed.",
+      "A completed `workflow_run` subscription waits for the upstream workflow, which may include jobs the follow-up does not need. A dependent job can express narrower prerequisites, but it still has scheduling and runner costs; consolidation does not guarantee a faster run. Preserve deliberate privilege boundaries, trigger semantics and artifact dependencies, then measure whether the changed dependency graph reduces waiting.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -53,9 +53,9 @@ export default defineRule({
         path: workflow.path,
         line: chained.line,
         key: "on.workflow_run",
-        message: `Workflow waits for ${label} via workflow_run, adding a second queue wait, runner start, and checkout to every run.`,
+        message: `Workflow subscribes to ${label} via workflow_run; narrower job dependencies may reduce waiting.`,
         suggestion:
-          "Turn this workflow into a reusable workflow (`on: workflow_call`) and call it from the upstream workflow as a job with `needs:` on the jobs it depends on; pass build outputs as job outputs or artifacts within the same run.",
+          "If the workflow boundary is not needed, consider a reusable workflow (`on: workflow_call`) called with `needs:` on its actual prerequisites. Preserve permissions, trigger semantics and artifact consumers, and compare the resulting critical path.",
         related: upstream.flatMap((candidate) => (candidate ? [{ path: candidate.path, line: candidate.triggersLine }] : [])),
         confidence: "medium",
       });

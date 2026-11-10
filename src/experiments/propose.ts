@@ -3,6 +3,7 @@ import type { Diagnostic } from "../lint/types.js";
 import type { HillClimbConfig } from "./config.js";
 import type { ExperimentPullRequest, ExperimentState } from "./github.js";
 import { renderRubric, scoreRubric, validateManifest, type ExperimentManifest, type RubricScore } from "./manifest.js";
+import { planCiEnvironment, type CiEnvironmentModel } from "./plan.js";
 
 export interface ProposalResult {
   manifest?: ExperimentManifest;
@@ -51,6 +52,9 @@ export interface GeneratorContextInput {
   diagnostics?: readonly Diagnostic[];
   /** Optional telemetry digest (for example the critical-path report) that points at bottlenecks. */
   telemetry?: string;
+  /** Optional explicit scheduling model. The context recomputes its plan; callers cannot supply an optimum claim. */
+  ciModel?: CiEnvironmentModel;
+  ciSearchBudget?: number;
   running: readonly ExperimentState[];
   history: readonly ExperimentPullRequest[];
   rules: ReadonlyArray<{ id: string; description: string }>;
@@ -66,6 +70,10 @@ function outcome(pull: ExperimentPullRequest): string {
 
 /** Markdown briefing for the experiment-generator agent: rubric, current evidence, and what has been tried. */
 export function generatorContext(input: GeneratorContextInput): string {
+  if (input.ciSearchBudget !== undefined && !input.ciModel) throw new Error("A CI environment model is required for a planning search budget.");
+  const ciPlan = input.ciModel
+    ? planCiEnvironment(input.ciModel, input.ciSearchBudget === undefined ? {} : { searchBudget: input.ciSearchBudget })
+    : undefined;
   const byRule = new Map<string, number>();
   for (const diagnostic of input.diagnostics ?? []) byRule.set(diagnostic.ruleId, (byRule.get(diagnostic.ruleId) ?? 0) + 1);
   const findings = [...byRule.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -90,6 +98,18 @@ export function generatorContext(input: GeneratorContextInput): string {
     `Arms must beat the trunk control by at least ${(input.config.selection.minImprovement * 100).toFixed(1)}% (weighted) and must not modify: ${input.config.protectedPaths.map((path) => `\`${path}\``).join(", ")}.`,
     `At most ${input.config.selection.maxArms} arms per experiment and ${input.config.selection.maxConcurrent} concurrent experiments.`,
     "",
+    "## Conditional CI policy planning",
+    "",
+    ...(ciPlan
+      ? [
+        "This plan was recomputed by the verified bounded CI environment optimizer. Use an optimal plan only as a candidate for an experiment, never as measured evidence or permission to promote. Validate the declared workflow correspondence and timing/resource assumptions independently. Budget exhaustion is not infeasibility.",
+        "",
+        "```json", JSON.stringify(ciPlan, null, 2), "```", "",
+      ]
+      : [
+        "No CI environment model was supplied. Observed candidate scores and telemetry do not prove scheduling optimality. Use `experiments plan --model <ci-environment.json>` or supply `context --model` for an explicit bounded model; do not invent duration profiles or label heuristic proposals optimal.",
+        "",
+      ]),
     "## Current findings",
     "",
     ...(findings.length > 0 ? ["| Rule | Findings |", "| --- | --- |", ...findings.slice(0, 30).map(([rule, count]) => `| \`${rule}\` | ${count} |`)] : ["No findings were supplied."]),

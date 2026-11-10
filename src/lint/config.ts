@@ -1,4 +1,5 @@
 import { parse as parseYamlText } from "yaml";
+import { resolveSeverity } from "../formal/policy.js";
 import { durationPolicyProblems, type DurationsConfig } from "../knowledge/duration-policy.js";
 import type { ActiveSeverity, AnyRule, Impact, Preset, ResolvedRule, Severity } from "./types.js";
 
@@ -549,36 +550,19 @@ export function parseConfigText(text: string, rules: AnyRule[], path = CONFIG_PA
  */
 export function resolveRules(config: LintConfig, rules: AnyRule[], presetOverride?: Preset[]): ResolvedRule[] {
   const presets = presetOverride ?? config.extends;
-  const severity = new Map<string, Severity>(rules.map((rule) => [rule.meta.id, "off"]));
-  for (const preset of presets) {
-    for (const rule of rules) {
-      if (preset === "all" || rule.meta.presets.includes(preset)) {
-        severity.set(rule.meta.id, rule.meta.defaultSeverity);
-      }
-    }
-  }
-  for (const [ruleset, value] of Object.entries(config.rulesets)) {
-    for (const rule of rules) {
-      if (rule.meta.ruleset === ruleset) severity.set(rule.meta.id, value);
-    }
-  }
-  const options = new Map<string, Record<string, unknown>>();
-  for (const [id, setting] of Object.entries(config.rules)) {
-    if (Array.isArray(setting)) {
-      severity.set(id, setting[0]);
-      options.set(id, setting[1]);
-    } else {
-      severity.set(id, setting);
-    }
-  }
   return rules.flatMap((rule) => {
-    const level = severity.get(rule.meta.id) ?? "off";
+    const setting = config.rules[rule.meta.id];
+    const level = resolveSeverity([
+      ...presets.map((preset) => preset === "all" || rule.meta.presets.includes(preset) ? rule.meta.defaultSeverity : undefined),
+      config.rulesets[rule.meta.ruleset],
+      Array.isArray(setting) ? setting[0] : setting,
+    ]);
     if (level === "off") return [];
     return [
       {
         rule,
         severity: level,
-        options: { ...(rule.meta.defaultOptions as Record<string, unknown>), ...(options.get(rule.meta.id) ?? {}) },
+        options: { ...(rule.meta.defaultOptions as Record<string, unknown>), ...(Array.isArray(setting) ? setting[1] : {}) },
       },
     ];
   });

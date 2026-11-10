@@ -319,7 +319,8 @@ npm run test:agents:package
 
 The package check packs/extracts under `.agent-artifacts`, checks all four shipped bins and canonical assets, and
 performs real stdio MCP/ACP initialize/lint/preview roundtrips against both packed bins and the single-file plugin
-bundle. Marker/throwing local rules and unchanged file contents/mtime prove those reads do not execute or write.
+bundle. Marker/throwing local rules and unchanged fixture contents/mtime check that these tested reads neither
+execute local rules nor write workspace files; these regressions are not a formal proof of every read path.
 CI also verifies plugin bundle freshness, authenticated HTTP/SSE adversarial tests, and `/acp` mounting in both
 direct and Postgres production images. The shared lint helpers do not import CLI internals; `ENGINE_API_VERSION`
 remains `1`.

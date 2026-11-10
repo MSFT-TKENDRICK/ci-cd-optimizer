@@ -15,9 +15,11 @@
     "dist",
     "plugins/ci-cd-optimizer",
     "action.yml",
+    "formal",
     "docs",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.txt"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -29,6 +31,13 @@
     "bundle:agents": "esbuild src/agent-bundle.ts --bundle --platform=node --target=node22 --format=esm --outfile=plugins/ci-cd-optimizer/server/cicd-agents.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --legal-comments=none",
     "cli": "tsx src/bin.ts",
     "docs:rules": "tsx src/bin.ts rules --format markdown --output docs/rules.md",
+    "formal:setup": "node scripts/formal-toolchain.mjs",
+    "formal:verify": "node scripts/formal.mjs verify",
+    "formal:generate": "node scripts/formal.mjs generate",
+    "formal:check": "node scripts/formal.mjs check",
+    "formal:check-bundle": "node scripts/check-formal-bundle.mjs",
+    "assurance:generate": "tsx scripts/assurance.ts generate",
+    "assurance:check": "tsx scripts/assurance.ts check",
     "dev": "tsx watch src/index.ts",
     "lint": "eslint .",
     "start": "node dist/index.js",
@@ -49,6 +58,7 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.4.0",
     "@modelcontextprotocol/server": "^2.4.0",
+    "bignumber.js": "9.3.1",
     "postgres": "^4.0.0",
     "probot": "^14.3.5",
     "yaml": "^2.9.1",

