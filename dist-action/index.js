@@ -22982,6 +22982,19 @@ function experimentBody(manifest, config, decision) {
     "</details>"
   ].join("\n");
 }
+async function openExperimentPull(client, repo, manifest, baseBranch, config) {
+  const pull = { ...repo, title: `experiment(${manifest.name}): ${manifest.title}`, head: trunkBranch(manifest.name), base: baseBranch, body: experimentBody(manifest, config), maintainer_can_modify: true };
+  const response = await client.request("POST /repos/{owner}/{repo}/pulls", { ...pull, draft: true });
+  const number2 = response.data?.number;
+  if (!Number.isSafeInteger(number2) || typeof number2 !== "number" || number2 < 1) {
+    throw new Error("GitHub did not return the experiment pull request number; inspect the branch before retrying.");
+  }
+  return number2;
+}
+async function labelExperiment(client, repo, number2) {
+  await ensureLabels(client, repo, [EXPERIMENT_LABEL]);
+  await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: number2, labels: [EXPERIMENT_LABEL] });
+}
 async function createExperiment(client, repo, options) {
   const { manifest, baseBranch, config } = options;
   const trunk = trunkBranch(manifest.name);
@@ -22997,20 +23010,92 @@ async function createExperiment(client, repo, options) {
     await client.request("POST /repos/{owner}/{repo}/git/refs", { ...repo, ref: `refs/heads/${trunk}`, sha });
   } catch (error2) {
     if (httpStatus(error2) === 422) throw new Error(`Experiment "${manifest.name}" already exists (${trunk}).`, { cause: error2 });
-    throw error2;
+    throw new Error(`Cannot confirm creation of ${trunk} at ${sha}. Inspect that ref before retrying; if it exists at this commit, use experiments resume --experiment ${manifest.name} --expected-head ${sha} --base ${baseBranch}. ${error2.message}`, { cause: error2 });
   }
-  const pull = { ...repo, title: `experiment(${manifest.name}): ${manifest.title}`, head: trunk, base: baseBranch, body: experimentBody(manifest, config), maintainer_can_modify: true };
-  let response;
   try {
-    response = await client.request("POST /repos/{owner}/{repo}/pulls", { ...pull, draft: true });
+    const number2 = await openExperimentPull(client, repo, manifest, baseBranch, config);
+    await labelExperiment(client, repo, number2);
+    return { trunk, pullRequest: number2, sha };
   } catch (error2) {
-    if (httpStatus(error2) !== 422) throw error2;
-    response = await client.request("POST /repos/{owner}/{repo}/pulls", pull);
+    throw new Error(`Experiment trunk ${trunk} was retained at ${sha}, but publication did not finish: ${error2.message}. After repairing access, run experiments resume --experiment ${manifest.name} --expected-head ${sha} --base ${baseBranch}.`, { cause: error2 });
   }
-  const number2 = response.data.number;
-  await ensureLabels(client, repo, [EXPERIMENT_LABEL]);
-  await client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", { ...repo, issue_number: number2, labels: [EXPERIMENT_LABEL] });
-  return { trunk, pullRequest: number2, sha };
+}
+async function resumeExperiment(client, repo, options) {
+  const { name, config } = options;
+  const expectedSha = options.expectedSha.toLowerCase();
+  const trunk = trunkBranch(name);
+  if (!parseExperimentRef(trunk) || !/^[a-f0-9]{40}$/i.test(expectedSha)) {
+    throw new Error("Recovery requires a valid experiment name and its exact 40-character commit SHA.");
+  }
+  const repository = await client.request("GET /repos/{owner}/{repo}", { ...repo });
+  const defaultBranch2 = repository.data?.default_branch;
+  if (typeof defaultBranch2 !== "string" || !defaultBranch2 || defaultBranch2 === trunk) {
+    throw new Error("Cannot safely identify the default branch for experiment recovery.");
+  }
+  const baseBranch = options.baseBranch ?? defaultBranch2;
+  if (!baseBranch || baseBranch === trunk) throw new Error("An experiment cannot be its own promotion base.");
+  await branchSha(client, repo, baseBranch);
+  const checkHead = async () => {
+    if (await branchSha(client, repo, trunk) !== expectedSha) {
+      throw new Error("Experiment trunk changed; inspect its current commit before resuming.");
+    }
+  };
+  await checkHead();
+  const text4 = await readFileAt(client, repo, manifestPath(name), expectedSha);
+  if (text4 === void 0) throw new Error(`No experiment manifest at ${expectedSha}.`);
+  const parsed = parseManifest2(text4, { config });
+  const manifest = parsed.manifest;
+  if (!manifest || manifest.name !== name || manifest.status !== "running" || manifest.winner || manifest.evidence) {
+    throw new Error("Only a valid running experiment without a recorded outcome can be resumed.");
+  }
+  const rubric = scoreRubric(manifest.rubric.scores, config.rubric);
+  const now2 = (options.now ?? /* @__PURE__ */ new Date()).getTime();
+  if (!Number.isFinite(now2) || Date.parse(manifest.createdAt) > now2) throw new Error("The experiment creation time is in the future or the recovery clock is invalid.");
+  if (!rubric.passed || rubric.missing.length > 0) throw new Error("The experiment no longer meets the configured proposal rubric.");
+  if (Date.parse(manifest.expiresAt) <= now2 || Date.parse(manifest.createdAt) + config.selection.maxAgeDays * 864e5 <= now2) {
+    throw new Error("The experiment has expired; publication cannot be resumed.");
+  }
+  const history = await paginate(client, "GET /repos/{owner}/{repo}/pulls", {
+    ...repo,
+    state: "all",
+    head: `${repo.owner}:${trunk}`
+  });
+  const sameRepository = `${repo.owner}/${repo.repo}`.toLowerCase();
+  const isExpectedPull = (pull) => {
+    const recorded = parseMarker(pull?.body ?? "");
+    return !!pull && Number.isSafeInteger(pull.number) && pull.number > 0 && pull.state === "open" && pull.draft === true && pull.merged_at === null && pull.head?.ref === trunk && pull.head.sha === expectedSha && pull.head.repo?.full_name?.toLowerCase() === sameRepository && pull.base?.ref === baseBranch && recorded?.kind === "experiment" && recorded.fingerprint === name && recorded.attributes.status === "running";
+  };
+  const matches = history.filter((pull) => pull.head?.ref === trunk);
+  if (matches.length > 1) throw new Error("Multiple promotion pull requests use this trunk; reconcile them before resuming.");
+  let number2;
+  const existing = matches[0];
+  if (existing) {
+    if (!isExpectedPull(existing)) {
+      throw new Error("The existing promotion pull request is completed, changed, or not owned by this experiment.");
+    }
+    number2 = existing.number;
+  } else {
+    const open3 = groupExperiments(await listExperimentPullRequests(client, repo));
+    if (open3.filter((experiment) => experiment.trunk?.state === "open").length >= config.selection.maxConcurrent) {
+      throw new Error("The concurrent experiment budget is already full.");
+    }
+  }
+  if (options.dryRun) return { trunk, sha: expectedSha, baseBranch, ...number2 === void 0 ? {} : { pullRequest: number2 }, created: false };
+  await checkHead();
+  const created = number2 === void 0;
+  number2 ??= await openExperimentPull(client, repo, manifest, baseBranch, config);
+  const verifyPull = async (requireLabel = false) => {
+    const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: number2 });
+    const pull = response.data;
+    if (!isExpectedPull(pull) || pull?.number !== number2 || requireLabel && !pull?.labels?.some((label) => label.name === EXPERIMENT_LABEL)) {
+      throw new Error("Experiment publication is not confirmed at the expected commit; reconcile the pull request before continuing.");
+    }
+    await checkHead();
+  };
+  await verifyPull();
+  await labelExperiment(client, repo, number2);
+  await verifyPull(true);
+  return { trunk, sha: expectedSha, baseBranch, pullRequest: number2, created };
 }
 async function dispatchRuns(client, repo, requests, maxPerRequest = 5) {
   let dispatched = 0;
@@ -23097,7 +23182,7 @@ async function applyDecision(client, repo, options) {
   const trunk = state.trunk;
   if (decision.action === "skip") return result;
   if (decision.action === "wait") {
-    result.dispatched = await dispatchRuns(client, repo, decision.dispatch);
+    result.dispatched = await dispatchRuns(options.dispatchClient ?? client, repo, decision.dispatch);
     if (trunk) await upsertComment(client, repo, trunk.number, manifest.name, report);
     return result;
   }
@@ -24159,8 +24244,10 @@ Hill-climbing experiments on experiments/<name>/<arm> branches (see docs/experim
 
 Commands:
   list                      Running experiments as JSON
+  capacity                  Open experiment count and configured concurrency budget as JSON
   context                   Markdown briefing for the experiment generator agent
   create                    Validate a proposal and create its trunk branch, PR, and arm runs
+  resume                    Recover interrupted trunk PR publication at an inspected commit
   collect                   Gather CI evidence for running experiments into measurement files
   evaluate                  Build each arm in a worktree and score it on the benchmark corpus
   decide                    Grade measurements and (with --apply) promote, reject, or request runs
@@ -24170,6 +24257,7 @@ Common options:
       --config <file>       Hill-climb configuration (default: ${HILL_CLIMB_CONFIG_PATH})
 
 create:    --manifest <file> | --agent-output <file>   [--cases <file.json>] [--base <branch>] [--arm-workflow <file>] [--dry-run]
+resume:    --experiment <name> --expected-head <SHA> [--base <branch>] [--dry-run]
 collect:   [--experiment <name>] --output-dir <dir> | --output <file>
 evaluate:  --measurements <file|dir> [--repo-dir <dir>]  |  --engine <module> [--corpus <dir>]
 decide:    --measurements <file|dir> [--agent-output <file>] [--apply]
@@ -24180,6 +24268,10 @@ var COMMON = {
   config: { type: "string" },
   help: { type: "boolean", short: "h", default: false }
 };
+function workflowDispatchClient(io, fallback) {
+  const token = io.env.CICD_OPTIMIZER_DISPATCH_TOKEN;
+  return token ? githubClient({ ...io, env: { ...io.env, GITHUB_TOKEN: token } }) : fallback;
+}
 async function readText(io, path) {
   try {
     return await readFile4(resolvePath(io, path), "utf8");
@@ -24297,6 +24389,15 @@ async function listCommand(args, io) {
   io.stdout(JSON.stringify(summary3, null, 2));
   return 0;
 }
+async function capacityCommand(args, io) {
+  const { values: values2 } = parseArgs2({ args, strict: true, options: { ...COMMON } });
+  const config = await loadHillClimbConfig(io, values2.config);
+  const states3 = groupExperiments(await listExperimentPullRequests(githubClient(io), repoFrom(values2.repo, io)));
+  const running = states3.filter((state) => state.trunk?.state === "open").length;
+  const limit3 = config.selection.maxConcurrent;
+  io.stdout(JSON.stringify({ running, limit: limit3, available: Math.max(0, limit3 - running) }));
+  return 0;
+}
 async function contextCommand(args, io) {
   const { values: values2 } = parseArgs2({ args, strict: true, options: { ...COMMON, dir: { type: "string" }, telemetry: { type: "string" }, output: { type: "string", short: "o" } } });
   const config = await loadHillClimbConfig(io, values2.config);
@@ -24343,6 +24444,7 @@ async function createCommand(args, io) {
     io.stderr("No create_experiment proposals found.");
     return 0;
   }
+  if (proposals.length > 1) throw new UsageError("create accepts only one proposal per invocation; recheck capacity before another proposal.");
   const history = await listExperimentPullRequests(client, repo, "all");
   const running = groupExperiments(history.filter((pull) => pull.state === "open"));
   const knownNames = knownExperimentNames(history);
@@ -24371,8 +24473,9 @@ ${result.errors.map((error2) => `  - ${error2}`).join("\n")}`);
     knownNames.push(manifest.name);
     io.stdout(`Created ${created.trunk} (#${created.pullRequest}) at ${created.sha.slice(0, 7)}`);
     if (values2["arm-workflow"]) {
+      const dispatcher = workflowDispatchClient(io, client);
       for (const arm of manifest.arms) {
-        await client.request("POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches", {
+        await dispatcher.request("POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches", {
           ...repo,
           workflow_id: values2["arm-workflow"],
           ref: base2,
@@ -24383,6 +24486,27 @@ ${result.errors.map((error2) => `  - ${error2}`).join("\n")}`);
     }
   }
   return failed ? 1 : 0;
+}
+async function resumeCommand(args, io) {
+  const { values: values2 } = parseArgs2({
+    args,
+    strict: true,
+    options: { ...COMMON, experiment: { type: "string" }, "expected-head": { type: "string" }, base: { type: "string" }, "dry-run": { type: "boolean", default: false } }
+  });
+  if (!values2.experiment || !parseExperimentRef(trunkBranch(values2.experiment)) || !values2["expected-head"] || !/^[a-f0-9]{40}$/i.test(values2["expected-head"])) {
+    throw new UsageError("resume needs --experiment <name> and --expected-head <40-character SHA>.");
+  }
+  const result = await resumeExperiment(githubClient(io), repoFrom(values2.repo, io), {
+    name: values2.experiment,
+    expectedSha: values2["expected-head"],
+    config: await loadHillClimbConfig(io, values2.config),
+    ...values2.base ? { baseBranch: values2.base } : {},
+    ...io.now ? { now: io.now() } : {},
+    dryRun: values2["dry-run"]
+  });
+  io.stdout(JSON.stringify(result, null, 2));
+  io.stderr(values2["dry-run"] ? "Recovery preview only; no changes made." : "Publication confirmed. No arm runs were dispatched; inspect existing PRs and runs before dispatching missing arms.");
+  return 0;
 }
 async function collectCommand(args, io) {
   const { values: values2 } = parseArgs2({ args, strict: true, options: { ...COMMON, experiment: { type: "string" }, output: { type: "string", short: "o" }, "output-dir": { type: "string" } } });
@@ -24482,7 +24606,7 @@ async function decideCommand(args, io) {
     const decision = decide(manifest, measurements, config, { now: now2, trunkRef: trunkBranch(name), armRef: (arm) => armBranch(name, arm) });
     reports.push(renderDecision(manifest, decision));
     if (values2.apply) {
-      const applied = await applyDecision(client, repo, { manifest, decision, state, config, measurements });
+      const applied = await applyDecision(client, repo, { manifest, decision, state, config, measurements, dispatchClient: workflowDispatchClient(io, client) });
       io.stderr(`${name}: ${applied.action}${applied.merged ? ` (merged #${applied.merged})` : ""}${applied.closed.length ? `, closed ${applied.closed.map((n) => `#${n}`).join(", ")}` : ""}${applied.dispatched ? `, dispatched ${applied.dispatched} run(s)` : ""}${applied.notes.length ? `; ${applied.notes.join("; ")}` : ""}`);
     } else {
       io.stderr(`${name}: ${decision.action} (dry run; pass --apply to act)`);
@@ -24496,8 +24620,10 @@ async function decideCommand(args, io) {
 }
 var COMMANDS = {
   list: listCommand,
+  capacity: capacityCommand,
   context: contextCommand,
   create: createCommand,
+  resume: resumeCommand,
   collect: collectCommand,
   evaluate: evaluateCommand,
   decide: decideCommand
