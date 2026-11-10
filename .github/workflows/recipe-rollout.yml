@@ -3,9 +3,10 @@
 # it) stays above rollout.minCompatibility. Incompatible targets get an adaptation issue that can be
 # assigned to the Copilot coding agent instead of a pull request. See docs/recipes.md.
 #
-# Needs a GitHub App installed on the target repositories (contents, pull requests, issues, checks:
-# read) - set vars.CICD_OPTIMIZER_APP_ID and secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY. Targets and wave
-# sizes live in .github/recipe-targets.yml.
+# Needs a GitHub App installed on the source and same-owner target repositories, with Contents,
+# Pull requests and Issues write, Checks read, and Workflows write for workflow fixes. Set
+# vars.CICD_OPTIMIZER_APP_ID and secrets.CICD_OPTIMIZER_APP_PRIVATE_KEY. Explicit targets and wave
+# sizes live in .github/recipe-targets.yml; no targets file means no rollout.
 name: Recipe rollout
 
 on:

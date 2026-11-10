@@ -1,9 +1,9 @@
 # Recipes: reusable fixes from promoted experiments
 
-When an experiment wins in one repository, the improvement usually applies to many more. A **recipe** packages a promoted
-`pipeline` experiment as a portable change, the way Dependabot packages a dependency update. A rollout then applies it to
-other repositories in waves gated by a CI **compatibility score**. If the change doesn't fit a repository verbatim, a
-coding agent adapts it there instead of failing.
+A **recipe** packages a promoted `pipeline` experiment as a candidate change for other repositories, the way Dependabot
+packages a dependency update. The source experiment's measured improvement does not establish a speedup or compatibility
+in another repository. A rollout proposes the change in waves gated by a CI **compatibility score**. If no suitable
+autofix exists, it opens an adaptation issue that can be assigned to a coding agent; adaptation is not guaranteed.
 
 ```text
 experiments/<name>/trunk merged ──▶ recipe-publish ──▶ recipes/<name>.yml (PR) ──▶ recipe-rollout (weekly)
@@ -48,9 +48,13 @@ the files the winner changed decide where the recipe applies.
 
 ### Risk
 
+Risk is a path-based triage heuristic, not a proof of safety or preserved workload semantics. Even a `low`-risk workflow
+edit can change build inputs, skip tests, expose credentials, or alter release behavior. Review the actual change and its
+CI evidence; the risk label and a passing CI run do not establish that all intended behavior is preserved.
+
 | Risk | Patch contents |
 |---|---|
-| `low` | Only workflows (`.github/workflows/*.yml`) and actions (`.github/actions/**`, `action.yml`). These can't change what gets built. |
+| `low` | Only workflows (`.github/workflows/*.yml`) and actions (`.github/actions/**`, `action.yml`). |
 | `medium` | Containerfiles, `.dockerignore`, compose files, or any other non-pipeline file. |
 | `high` | Package manifests or lockfiles (`package.json`, `go.mod`, `pom.xml`, `*.csproj`, `nx.json`, and so on), or more than 10 files. |
 
@@ -141,6 +145,12 @@ nonzero when any target fails. Do not configure this database secret in untruste
 [recipe-rollout.yml](../.github/workflows/recipe-rollout.yml) runs weekly, or on dispatch with an optional recipe id and
 dry run. For each `recipes/*.yml`, it applies the recipe to the next wave of targets listed in `.github/recipe-targets.yml`
 ([example](../examples/recipe-targets.yml)):
+
+Without that targets file, the workflow reports that there is nothing to roll out and makes no target changes. It does
+not discover or enroll repositories automatically. The shipped workflow mints a token for the source repository owner's
+App installation, so its targets must belong to that same owner and be accessible to that installation. Cross-owner
+rollouts require separately authorized credentials for each target installation; one installation token cannot span
+owners.
 
 ```yaml
 repositories: [my-org/web, my-org/api, my-org/mobile, my-org/platform-tools, my-org/data-pipeline]
