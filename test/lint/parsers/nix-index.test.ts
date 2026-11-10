@@ -131,17 +131,75 @@ describe("shared Nix structural index", () => {
     expect(scopeExprEnd(parseNix("default.nix", "first"), 0)).toBe(5);
   });
 
+  it.each([
+    { prefix: "let src = ./src; in assert true; ", value: "true", operand: false },
+    { prefix: "let src = ./src; in with {}; ", value: "true", operand: false },
+    { prefix: "assert let src = ./src; in ", value: "true", operand: true },
+    { prefix: "with let src = ./src; in ", value: "{}", operand: true },
+  ])("indexes every nested body during one scan of $prefix", ({ prefix, value, operand }) => {
+    const count = 600;
+    const suffix = `; ${value}`;
+    const content = prefix.repeat(count) + value + (operand ? suffix.repeat(count) : "");
+    let sourceReads = 0;
+    const file = new Proxy(parseNix("default.nix", content), {
+      get(target, key, receiver) {
+        if (key === "masked") sourceReads += 1;
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    const bodies = file.idents.filter((ident) => ident.text === "in").map((ident) => ident.end + 1);
+    expect(bodies).toHaveLength(count);
+    expect(scopeExprEnd(file, 0)).toBe(content.length);
+    expect(sourceReads).toBeGreaterThan(0);
+    sourceReads = 0;
+    for (const [index, body] of bodies.entries()) {
+      const end = operand ? prefix.length * count + value.length + suffix.length * (count - index - 1) : content.length;
+      expect(scopeExprEnd(file, body)).toBe(end);
+    }
+    expect(sourceReads).toBe(0);
+  });
+
+  it.each([
+    "assert let src = ./src; in assert let src = ./.; in true; true; result",
+    "with let src = ./src; in with let src = ./.; in {}; {}; result",
+    "let a = let src = ./src; in assert true; value; b = let src = ./.; in other; in result",
+    "if let src = ./src; in enabled then let src = ./.; in if enabled then first else second else outside",
+    "assert let label = \"with; in; else\"; src = ./src; in with let x = 1; in {}; true; result",
+    "with let { body = let src = ./.; in {}; }; let src = ./src; in result",
+    "let a = let src = ./src; in in let y = 1; in y; in result",
+    "assert let a = let src = ./src; in in let y = 1; in y; in true; result",
+  ])("cached nested bodies preserve uncached expression bounds for %s", (content) => {
+    const original = parseNix("default.nix", content);
+    const starts = [0, ...original.idents.filter((ident) => ident.text === "in").map((ident) =>
+      ident.end + (original.masked.slice(ident.end).match(/^\s*/)?.[0].length ?? 0),
+    )];
+    const expected = new Map(starts.map((start) => [start, scopeExprEnd(parseNix("default.nix", content), start)]));
+    for (const order of [starts, [...starts].reverse()]) {
+      const file = parseNix("default.nix", content);
+      for (const start of order) expect(scopeExprEnd(file, start), `offset ${start}`).toBe(expected.get(start));
+    }
+  });
+
   it.each([sourceRule, ifdRule].flatMap((rule) =>
-    ["body", "siblings", "shadowed-siblings", "consecutive-lets"].map((layout) => ({ rule, layout })),
+    ["body", "siblings", "shadowed-siblings", "consecutive-lets", "assert-operand", "with-operand", "assert-chain", "with-chain", "operand-chain"].map((layout) => ({ rule, layout })),
   ))("$rule.meta.id reuses file-wide source facts for $layout", ({ rule, layout }) => {
     const readsFor = (count: number): number => {
       const builders = Array.from({ length: count }, (_, index) =>
         `  p${index} = pkgs.stdenv.mkDerivation { name="p${index}";inherit src; };\n`,
       ).join("");
-      const content = layout === "siblings" ? `{ pkgs }: let\n${builders}src = ./.; in p0`
-        : layout === "shadowed-siblings" ? `{ pkgs }: let src = ./.; in { batch = let\n${builders}src = ./src; in p0; }`
-          : layout === "consecutive-lets" ? `{ pkgs }: ${"let src = ./.; in ".repeat(count)}pkgs.stdenv.mkDerivation { inherit src; }`
-            : `{ pkgs }: let src = ./.; in {\n${builders}}`;
+      const single = "pkgs.stdenv.mkDerivation { inherit src; }";
+      const contents: Record<string, () => string> = {
+        body: () => `{ pkgs }: let src = ./.; in {\n${builders}}`,
+        siblings: () => `{ pkgs }: let\n${builders}src = ./.; in p0`,
+        "shadowed-siblings": () => `{ pkgs }: let src = ./.; in { batch = let\n${builders}src = ./src; in p0; }`,
+        "consecutive-lets": () => `{ pkgs }: ${"let src = ./.; in ".repeat(count)}${single}`,
+        "assert-operand": () => `{ pkgs }: let src = ./.; in { batch = let src = ./src; in assert let x = true; in x; {\n${builders}}; }`,
+        "with-operand": () => `{ pkgs }: let src = ./.; in { batch = let src = ./src; in with let x = 1; in {}; {\n${builders}}; }`,
+        "assert-chain": () => `{ pkgs }: ${"let src = ./.; in assert true; ".repeat(count)}${single}`,
+        "with-chain": () => `{ pkgs }: ${"let src = ./.; in with {}; ".repeat(count)}${single}`,
+        "operand-chain": () => `{ pkgs }: let src = ./.; in ${"assert let src = ./src; in ".repeat(count)}true${"; true".repeat(count - 1)}; ${single}`,
+      };
+      const content = contents[layout]!();
       const input: AnalysisInput = { files: [{ path: "default.nix", content }], mode: "repository", inventoryComplete: true };
       const project = buildProject(input);
       let sourceReads = 0;
@@ -163,7 +221,9 @@ describe("shared Nix structural index", () => {
       sourceReads = 0;
       let reports = 0;
       rule.check({ input, project, options: { allow: [] }, report: () => { reports += 1; } });
-      expect(reports).toBe(rule === sourceRule && layout !== "shadowed-siblings" ? layout === "consecutive-lets" ? 1 : count : 0);
+      const shadowed = ["shadowed-siblings", "assert-operand", "with-operand"].includes(layout);
+      const singleBuilder = ["consecutive-lets", "assert-chain", "with-chain", "operand-chain"].includes(layout);
+      expect(reports).toBe(rule === sourceRule && !shadowed ? singleBuilder ? 1 : count : 0);
       return sourceReads;
     };
     const first = readsFor(1);
@@ -211,6 +271,21 @@ describe("shared Nix structural index", () => {
     const content = "{ pkgs }: let src = ./.; in { batch = let\n" + Array.from({ length: count }, (_, index) =>
       ` p${index} = pkgs.stdenv.mkDerivation { name="p${index}";inherit src; };\n`,
     ).join("") + "src = ./src; in p0; }";
+    expect(Buffer.byteLength(content)).toBeLessThan(512_000);
+    const result = lint({ input: { files: [{ path: "default.nix", content }], mode: "repository", inventoryComplete: true } });
+    expect(result.diagnostics).toEqual([]);
+    expect(result.parseProblems).toEqual([]);
+    expect(result.skipped.some((entry) => entry.reason.includes("crashed"))).toBe(false);
+    expect(result.rulesRun).toBeGreaterThan(0);
+  });
+
+  it.each(["assert let x = true; in x;", "with let x = 1; in {};"].flatMap((prefix) =>
+    [600, 1200, 2400].map((count) => ({ prefix, count })),
+  ))("keeps $count default public-API derivations clean after $prefix", ({ prefix, count }) => {
+    const content = `{ pkgs }: let src = ./.; in { batch = let src = ./src; in ${prefix} {\n` +
+      Array.from({ length: count }, (_, index) =>
+        ` p${index} = pkgs.stdenv.mkDerivation { name="p${index}";inherit src; };\n`,
+      ).join("") + "}; }";
     expect(Buffer.byteLength(content)).toBeLessThan(512_000);
     const result = lint({ input: { files: [{ path: "default.nix", content }], mode: "repository", inventoryComplete: true } });
     expect(result.diagnostics).toEqual([]);

@@ -124,6 +124,31 @@ describe("nix structure helpers", () => {
     expect(exprEnd(file.masked, prefix.length)).toBe(file.masked.indexOf("; next"));
   });
 
+  it.each([
+    ["assert", "let x = true; in x"],
+    ["with", "let x = 1; in {}"],
+    ["assert", "let x = let y = true; in y; in x"],
+    ["with", "let x = with {}; 1; in {}"],
+    ["assert", "let x = assert true; true; in x"],
+    ["with", "assert let ok = true; in ok; {}"],
+    ["assert", "if enabled then let x = true; in x else true"],
+    ["with", "let inherit (pkgs) stdenv; in {}"],
+    ["assert", "with let x = 1; in {}; let passed = true; in passed"],
+    ["with", "if enabled then let x = 1; in {} else {}"],
+  ])("keeps the body after %s %s within the lexical scope", (keyword, operand) => {
+    for (const expression of [operand, `(${operand})`]) {
+      const body = `${keyword} ${expression}; result`;
+      for (const { prefix, suffix, end } of [
+        { prefix: "let value = ", suffix: "; next = 0; in next", end: 0 },
+        { prefix: "if enabled then ", suffix: " else outside", end: 1 },
+        { prefix: "if ", suffix: " then yes else no", end: 1 },
+      ]) {
+        const file = parseNix("default.nix", `${prefix}${body}${suffix}`);
+        expect(scopeExprEnd(file, prefix.length), file.content).toBe(prefix.length + body.length + end);
+      }
+    }
+  });
+
   it("classifies call arguments", () => {
     const file = parseNix("x.nix", 'fetchTarball { url = "u"; } fetchTarball "u" f (x) g [ 1 ] h y');
     const kinds = file.idents

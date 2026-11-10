@@ -2,6 +2,20 @@ import rule from "../../../../src/lint/rules/nix/src-whole-repo.js";
 import { ruleTester } from "../../rule-tester.js";
 
 const nix = (...lines: string[]): string => `${lines.join("\n")}\n`;
+const scopedPrefixes = [
+  ["assert", "let x = true; in x"],
+  ["with", "let x = 1; in {}"],
+  ["assert", "let x = let y = true; in y; in x"],
+  ["with", "let x = with {}; 1; in {}"],
+  ["assert", "let x = assert true; true; in x"],
+  ["with", "assert let ok = true; in ok; {}"],
+  ["assert", "if enabled then let x = true; in x else true"],
+  ["with", "let inherit (pkgs) stdenv; in {}"],
+  ["assert", "with let x = 1; in {}; let passed = true; in passed"],
+  ["with", "if enabled then let x = 1; in {} else {}"],
+].flatMap(([keyword, operand]) => [false, true].map((parenthesized) =>
+  `${keyword} ${parenthesized ? `(${operand})` : operand};`,
+));
 
 ruleTester(rule, {
   valid: [
@@ -64,6 +78,12 @@ ruleTester(rule, {
       name: "a narrower inner let binding shadows an outer repository literal",
       files: { "default.nix": "{ pkgs }: let src = ./.; in { p = let src = ./src; in pkgs.stdenv.mkDerivation { inherit src; }; }" },
     },
+    ...scopedPrefixes.map((prefix) => ({
+      name: `inner source scope includes the body after ${prefix}`,
+      files: {
+        "default.nix": `{ pkgs, enabled }: let src = ./.; in { package = let src = ./src; in ${prefix} pkgs.stdenv.mkDerivation { inherit src; }; }`,
+      },
+    })),
     {
       name: "a quoted inner binding shadows an outer repository literal",
       files: { "default.nix": '{ pkgs }: let src = ./.; in { p = let "src" = ./src; in pkgs.stdenv.mkDerivation { inherit src; }; }' },
@@ -123,6 +143,28 @@ ruleTester(rule, {
     },
   ],
   invalid: [
+    ...["assert let x = true; in x;", "with let x = 1; in {};"].map((prefix) => ({
+      name: `inner ${prefix} source scope expires before a sibling attribute`,
+      files: {
+        "default.nix": nix(
+          "{ pkgs }: let src = ./.; in {",
+          `  package = let src = ./src; in ${prefix}`,
+          "    pkgs.stdenv.mkDerivation { inherit src; };",
+          "  outside = pkgs.stdenv.mkDerivation { inherit src; };",
+          "}",
+        ),
+      },
+      errors: [{ line: 4, messageIncludes: "inherit src (src = ./.)" }],
+      output: null,
+    })),
+    ...scopedPrefixes.map((prefix) => ({
+      name: `known whole-repository source remains visible after ${prefix}`,
+      files: {
+        "default.nix": `{ pkgs, enabled }: let src = ./.; in ${prefix} pkgs.stdenv.mkDerivation { inherit src; }`,
+      },
+      errors: 1,
+      output: null,
+    })),
     ...["src", '"src"'].map((key) => ({
       name: `recursive ${key} binding is visible to earlier and later siblings and the let body`,
       files: {

@@ -97,8 +97,12 @@ marker, not an assurance level.
   source bindings once. Recognized `let` bindings are recursive: their scope includes sibling initializers before
   `in` as well as the body; nested lets take precedence over a surrounding recursive set. Legacy `let { ... }`
   bindings are treated as recursive within that set. Scope bounds stop at enclosing conditional branches,
-  ignoring keyword-like strings, comments, selectors and path components. Unknown visible source bindings or
-  a `src` function parameter suppress ambiguous inherited-source findings. These facts describe the masked source,
+  ignoring keyword-like strings, comments, selectors and path components. Pending `with`/`assert` separators
+  retain their lexical let-binding depth, so semicolons in nested operands do not end a source scope early.
+  A parent scan indexes nested let-body endpoints at their statement and conditional boundaries; later
+  lookups reuse those endpoints, including chains separated by `with`/`assert` prefixes and nested operands.
+  Unknown visible source bindings or a `src` function parameter suppress ambiguous inherited-source findings.
+  These facts describe the masked source,
   not evaluated Nix semantics; the [Nix language manual](https://nix.dev/manual/nix/2.35/language/syntax.html)
   documents the underlying scope rules.
 - **Shell commands:** recognizable invocations, quoting, wrappers and literal arguments are inspected without

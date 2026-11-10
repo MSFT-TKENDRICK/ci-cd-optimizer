@@ -52300,7 +52300,7 @@ function parseNix(path, content3) {
 }
 var structureCache = /* @__PURE__ */ new WeakMap();
 var bindingsCache = /* @__PURE__ */ new WeakMap();
-var scopeWordsCache = /* @__PURE__ */ new WeakMap();
+var scopeCache = /* @__PURE__ */ new WeakMap();
 function nixStructure(file2) {
   const cached2 = structureCache.get(file2);
   if (cached2) return cached2;
@@ -52351,18 +52351,70 @@ function exprEnd(masked, start) {
   return readExpressionEnd(masked, start);
 }
 function scopeExprEnd(file2, start) {
-  let words6 = scopeWordsCache.get(file2);
-  if (!words6) {
-    words6 = new Map(file2.idents.map((ident) => [ident.offset, ident.text]));
-    scopeWordsCache.set(file2, words6);
+  let cached2 = scopeCache.get(file2);
+  if (!cached2) {
+    cached2 = { words: new Map(file2.idents.map((ident) => [ident.offset, ident.text])), ends: /* @__PURE__ */ new Map() };
+    scopeCache.set(file2, cached2);
   }
-  return readExpressionEnd(file2.masked, start, words6, nixStructure(file2).closes);
+  const known2 = cached2.ends.get(start);
+  if (known2 !== void 0) return known2;
+  const end = readExpressionEnd(file2.masked, start, cached2.words, nixStructure(file2).closes, collectScopeEnds(cached2.ends));
+  cached2.ends.set(start, end);
+  return end;
 }
-function readExpressionEnd(masked, start, scopeWords, closes) {
+function collectScopeEnds(ends) {
+  const active = /* @__PURE__ */ new Set();
+  const statements = /* @__PURE__ */ new Map();
+  const branches = /* @__PURE__ */ new Map();
+  const bindings = /* @__PURE__ */ new Map();
+  const group = (groups, key) => {
+    let entries2 = groups.get(key);
+    if (!entries2) {
+      entries2 = /* @__PURE__ */ new Set();
+      groups.set(key, entries2);
+    }
+    return entries2;
+  };
+  const resolve4 = (entries2, end) => {
+    if (!entries2) return;
+    for (const body of entries2) {
+      active.delete(body);
+      statements.get(body.statement)?.delete(body);
+      branches.get(body.conditional)?.delete(body);
+      bindings.get(body.lets)?.delete(body);
+      if (end !== void 0) ends.set(body.start, end);
+    }
+  };
+  return {
+    body(start, lets, separators, conditional) {
+      if (ends.has(start)) return;
+      const body = { start, statement: `${lets}:${separators}`, conditional, lets };
+      active.add(body);
+      group(statements, body.statement).add(body);
+      group(branches, conditional).add(body);
+      group(bindings, lets).add(body);
+    },
+    statement(lets, separators, end) {
+      resolve4(statements.get(`${lets}:${separators}`), end);
+    },
+    branch(conditional, end) {
+      resolve4(branches.get(conditional), end);
+    },
+    leaveBindings(lets) {
+      resolve4(bindings.get(lets));
+    },
+    finish(end) {
+      resolve4(active, end);
+      return end;
+    }
+  };
+}
+function readExpressionEnd(masked, start, scopeWords, closes, scopeEnds) {
   let depth = 0;
   let lets = 0;
   let conditionals = 0;
   let pendingSemicolons = 0;
+  const scopeSeparators = scopeWords ? [] : void 0;
   let index = start;
   while (index < masked.length) {
     const char = masked[index] ?? "";
@@ -52374,32 +52426,43 @@ function readExpressionEnd(masked, start, scopeWords, closes) {
       }
       depth += 1;
     } else if (char === "}" || char === ")" || char === "]") {
-      if (depth === 0) return index;
+      if (depth === 0) return scopeEnds?.finish(index) ?? index;
       depth -= 1;
     } else if (depth === 0 && char === ";") {
-      if (pendingSemicolons > 0) pendingSemicolons -= 1;
+      if (scopeSeparators) {
+        scopeEnds?.statement(lets, scopeSeparators.length, index);
+        if (scopeSeparators.at(-1) === lets) scopeSeparators.pop();
+        else if (lets === 0) return scopeEnds?.finish(index) ?? index;
+      } else if (pendingSemicolons > 0) pendingSemicolons -= 1;
       else if (lets === 0) return index;
     } else if (depth === 0) {
       const word = scopeWords ? scopeWords.get(index) : wordAt(masked, index);
       if (word) {
         if (scopeWords) {
+          if (word === "then" || word === "else") scopeEnds?.branch(conditionals, index);
           if (word === "if") conditionals += 1;
-          else if (word === "then" && conditionals === 0) return index;
+          else if (word === "then" && conditionals === 0) return scopeEnds?.finish(index) ?? index;
           else if (word === "else") {
-            if (conditionals === 0) return index;
+            if (conditionals === 0) return scopeEnds?.finish(index) ?? index;
             conditionals -= 1;
           }
         }
         if (word === "let" && (!scopeWords || masked[skipSpace(masked, index + word.length)] !== "{")) lets += 1;
-        else if (word === "in" && lets > 0) lets -= 1;
-        else if (word === "with" || word === "assert") pendingSemicolons += 1;
+        else if (word === "in" && lets > 0) {
+          scopeEnds?.leaveBindings(lets);
+          lets -= 1;
+          scopeEnds?.body(skipSpace(masked, index + word.length), lets, scopeSeparators?.length ?? 0, conditionals);
+        } else if (word === "with" || word === "assert") {
+          if (scopeSeparators) scopeSeparators.push(lets);
+          else pendingSemicolons += 1;
+        }
         index += word.length;
         continue;
       }
     }
     index += 1;
   }
-  return masked.length;
+  return scopeEnds?.finish(masked.length) ?? masked.length;
 }
 function skipSpace(masked, index) {
   let cursor = index;

@@ -323,7 +323,7 @@ export interface NixStructure {
 
 const structureCache = new WeakMap<NixFile, NixStructure>();
 const bindingsCache = new WeakMap<NixFile, Map<number, NixBinding[]>>();
-const scopeWordsCache = new WeakMap<NixFile, ReadonlyMap<number, string>>();
+const scopeCache = new WeakMap<NixFile, { words: ReadonlyMap<number, string>; ends: Map<number, number> }>();
 
 /** One masked-source pass per file; shared by every rule rather than rescanning each enclosing attrset. */
 export function nixStructure(file: NixFile): NixStructure {
@@ -387,20 +387,74 @@ export function exprEnd(masked: string, start: number): number {
 
 /** End of a lexical body, including its own conditionals but not an enclosing `then` or `else`. */
 export function scopeExprEnd(file: NixFile, start: number): number {
-  let words = scopeWordsCache.get(file);
-  if (!words) {
+  let cached = scopeCache.get(file);
+  if (!cached) {
     // Parsed tokens keep dotted selectors intact and exclude paths, comments and string text.
-    words = new Map(file.idents.map((ident) => [ident.offset, ident.text]));
-    scopeWordsCache.set(file, words);
+    cached = { words: new Map(file.idents.map((ident) => [ident.offset, ident.text])), ends: new Map() };
+    scopeCache.set(file, cached);
   }
-  return readExpressionEnd(file.masked, start, words, nixStructure(file).closes);
+  const known = cached.ends.get(start);
+  if (known !== undefined) return known;
+  const end = readExpressionEnd(file.masked, start, cached.words, nixStructure(file).closes, collectScopeEnds(cached.ends));
+  cached.ends.set(start, end);
+  return end;
 }
 
-function readExpressionEnd(masked: string, start: number, scopeWords?: ReadonlyMap<number, string>, closes?: Int32Array): number {
+/** Index nested let-body boundaries during their parent's scan. */
+function collectScopeEnds(ends: Map<number, number>) {
+  interface Body { start: number; statement: string; conditional: number; lets: number }
+  const active = new Set<Body>();
+  const statements = new Map<string, Set<Body>>();
+  const branches = new Map<number, Set<Body>>();
+  const bindings = new Map<number, Set<Body>>();
+  const group = <K>(groups: Map<K, Set<Body>>, key: K): Set<Body> => {
+    let entries = groups.get(key);
+    if (!entries) { entries = new Set(); groups.set(key, entries); }
+    return entries;
+  };
+  const resolve = (entries: Set<Body> | undefined, end?: number): void => {
+    if (!entries) return;
+    for (const body of entries) {
+      active.delete(body);
+      statements.get(body.statement)?.delete(body);
+      branches.get(body.conditional)?.delete(body);
+      bindings.get(body.lets)?.delete(body);
+      if (end !== undefined) ends.set(body.start, end);
+    }
+  };
+  return {
+    body(start: number, lets: number, separators: number, conditional: number): void {
+      if (ends.has(start)) return;
+      const body = { start, statement: `${lets}:${separators}`, conditional, lets };
+      active.add(body);
+      group(statements, body.statement).add(body);
+      group(branches, conditional).add(body);
+      group(bindings, lets).add(body);
+    },
+    statement(lets: number, separators: number, end: number): void {
+      resolve(statements.get(`${lets}:${separators}`), end);
+    },
+    branch(conditional: number, end: number): void { resolve(branches.get(conditional), end); },
+    leaveBindings(lets: number): void {
+      // An unclosed body at an enclosing `in` is malformed; do not cache its inferred boundary.
+      resolve(bindings.get(lets));
+    },
+    finish(end: number): number { resolve(active, end); return end; },
+  };
+}
+
+function readExpressionEnd(
+  masked: string,
+  start: number,
+  scopeWords?: ReadonlyMap<number, string>,
+  closes?: Int32Array,
+  scopeEnds?: ReturnType<typeof collectScopeEnds>,
+): number {
   let depth = 0;
   let lets = 0;
   let conditionals = 0;
   let pendingSemicolons = 0;
+  const scopeSeparators: number[] | undefined = scopeWords ? [] : undefined;
   let index = start;
   while (index < masked.length) {
     const char = masked[index] ?? "";
@@ -409,32 +463,45 @@ function readExpressionEnd(masked: string, start: number, scopeWords?: ReadonlyM
       if (close !== undefined && close >= 0) { index = close + 1; continue; }
       depth += 1;
     } else if (char === "}" || char === ")" || char === "]") {
-      if (depth === 0) return index;
+      if (depth === 0) return scopeEnds?.finish(index) ?? index;
       depth -= 1;
     } else if (depth === 0 && char === ";") {
-      if (pendingSemicolons > 0) pendingSemicolons -= 1;
+      if (scopeSeparators) {
+        scopeEnds?.statement(lets, scopeSeparators.length, index);
+        // A nested let-binding terminator cannot consume an outer with/assert separator.
+        if (scopeSeparators.at(-1) === lets) scopeSeparators.pop();
+        else if (lets === 0) return scopeEnds?.finish(index) ?? index;
+      } else if (pendingSemicolons > 0) pendingSemicolons -= 1;
       else if (lets === 0) return index;
     } else if (depth === 0) {
       const word = scopeWords ? scopeWords.get(index) : wordAt(masked, index);
       if (word) {
         if (scopeWords) {
+          if (word === "then" || word === "else") scopeEnds?.branch(conditionals, index);
           if (word === "if") conditionals += 1;
-          else if (word === "then" && conditionals === 0) return index;
+          else if (word === "then" && conditionals === 0) return scopeEnds?.finish(index) ?? index;
           else if (word === "else") {
-            if (conditionals === 0) return index;
+            if (conditionals === 0) return scopeEnds?.finish(index) ?? index;
             conditionals -= 1;
           }
         }
         if (word === "let" && (!scopeWords || masked[skipSpace(masked, index + word.length)] !== "{")) lets += 1;
-        else if (word === "in" && lets > 0) lets -= 1;
-        else if (word === "with" || word === "assert") pendingSemicolons += 1;
+        else if (word === "in" && lets > 0) {
+          scopeEnds?.leaveBindings(lets);
+          lets -= 1;
+          scopeEnds?.body(skipSpace(masked, index + word.length), lets, scopeSeparators?.length ?? 0, conditionals);
+        }
+        else if (word === "with" || word === "assert") {
+          if (scopeSeparators) scopeSeparators.push(lets);
+          else pendingSemicolons += 1;
+        }
         index += word.length;
         continue;
       }
     }
     index += 1;
   }
-  return masked.length;
+  return scopeEnds?.finish(masked.length) ?? masked.length;
 }
 
 function skipSpace(masked: string, index: number): number {
