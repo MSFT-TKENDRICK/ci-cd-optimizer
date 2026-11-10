@@ -39,7 +39,7 @@ limits:
   maxFileBytes: 512000  # larger files are skipped
 
 # Repository-relative .js/.mjs modules exporting local/* rules. The CLI loads them only with --allow-local-rules;
-# the GitHub App never loads them.
+# the GitHub App and MCP/ACP agent interfaces never load them.
 localRules: [.github/cicd-rules/approved-runners.mjs]
 ```
 
@@ -58,6 +58,20 @@ Rule options and defaults are listed per rule in [rules.md](rules.md). Generated
 ignored by default. Fix the `.md` source and recompile instead.
 
 Suppression comments, `--init`, `--print-config`, and writing local rules are covered in [linter.md](linter.md).
+
+### Agent-interface restrictions
+
+[MCP and ACP](agents.md) share these rule settings but always use built-in rules and read-only operations.
+Local agent inventory limits are the lower of this configuration and hard ceilings of 250 files, 256 KiB per file,
+and 4 MiB aggregate including unsaved overrides. Local configuration is limited to 64 KiB. Truncation and ignored
+local rules are reported rather than silently treated as a clean scan.
+
+Agent exposure/authentication is **process configuration**, not repository-controlled YAML. Remote MCP requires
+`--enable-remote`, explicit `--repo` allowlists, and a provisioned token. Hosted ACP requires
+`CICD_OPTIMIZER_ACP=true`, `CICD_OPTIMIZER_ACP_AUTH=github-user`, and
+`CICD_OPTIMIZER_ACP_REPOSITORIES=owner/repo:numeric-id`; see [hosted setup](agents.md#hosted-acp-on-your-own-app-deployment)
+for authentication, transport, limits, and deployment requirements. Repository settings cannot enable writes or
+raise agent transport quotas.
 
 ### Legacy keys
 

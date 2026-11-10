@@ -1,5 +1,4 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 /** A workflow with no job timeout: `workflow/job-timeout` (warn, fixable) reports it. */
@@ -16,7 +15,9 @@ export function tempDirs(): TempDirs {
   const made: string[] = [];
   return {
     async make(prefix = "cicd-agents-") {
-      const dir = await realpath(await mkdtemp(join(tmpdir(), prefix)));
+      const base = join(process.cwd(), ".agent-test-workspaces");
+      await mkdir(base, { recursive: true });
+      const dir = await realpath(await mkdtemp(join(base, prefix)));
       made.push(dir);
       return dir;
     },
@@ -31,4 +32,11 @@ export async function write(root: string, path: string, text: string): Promise<s
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, text);
   return file;
+}
+
+export async function forbiddenLocalRule(root: string): Promise<string> {
+  await write(root, "rules/forbidden.mjs",
+    'import { writeFileSync } from "node:fs";\nwriteFileSync(new URL("./executed", import.meta.url), "unsafe import");\nthrow new Error("Local rules must never execute");\n');
+  await write(root, ".github/ci-cd-optimizer.yml", "schemaVersion: 1\nextends: [recommended]\nlocalRules: [rules/forbidden.mjs]\n");
+  return join(root, "rules", "executed");
 }

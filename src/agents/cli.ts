@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 import type { GitHubClient } from "../github/client.js";
-import { restClient } from "../github/rest.js";
-import { normalizeRepository, originRepository, type RemoteOptions } from "./remote.js";
+import { githubReader } from "./github.js";
+import { normalizeRepository, type RemoteOptions } from "./remote.js";
 import { AgentError, resolveRoot } from "./workspace.js";
 
 export interface AgentIO {
@@ -34,8 +34,8 @@ Options:
                       (MCP roots), else the current directory.
   --enable-remote     Add the read-only GitHub tools (scan_repository, workflow_run_report).
                       Needs GITHUB_TOKEN or GH_TOKEN.
-  --repo <owner/repo> Repository the GitHub tools may read (repeatable; default: the
-                      workspace's origin remote). Other repositories are refused.
+  --repo <owner/repo> Explicit repository allowlist (required with --enable-remote;
+                      repeatable). Other repositories are refused.
   -h, --help          Show this help
   -v, --version       Show the version
 
@@ -60,7 +60,7 @@ Options:
   -v, --version  Show the version
 `;
 
-/** Parses `cicd-mcp` arguments. Remote access needs both --enable-remote and a token; a missing token is a notice, not an error. */
+/** Remote reads require process opt-in, an explicit allowlist, and a token. Ambient tokens alone do nothing. */
 export async function mcpCommand(argv: string[], io: AgentIO): Promise<AgentCommand> {
   const { values } = parseArgs({
     args: argv,
@@ -82,26 +82,18 @@ export async function mcpCommand(argv: string[], io: AgentIO): Promise<AgentComm
   if (values.repo?.length && !values["enable-remote"]) throw new AgentError("--repo only applies with --enable-remote.");
   if (!values["enable-remote"]) return { kind: "serve", ...base };
 
+  const allow = [...new Set((values.repo ?? []).map(normalizeRepository))];
+  if (!allow.length || allow.length > 100) throw new AgentError("--enable-remote requires 1–100 explicit --repo owner/repo entries.");
   const token = io.env.GITHUB_TOKEN || io.env.GH_TOKEN;
-  if (!token) {
-    notices.push("GitHub tools are disabled: set GITHUB_TOKEN or GH_TOKEN (for example `GH_TOKEN=$(gh auth token)`).");
-    return { kind: "serve", ...base };
-  }
-  const serverUrl = io.env.GITHUB_SERVER_URL || "https://github.com";
-  let allow = [...new Set((values.repo ?? []).map(normalizeRepository))];
-  if (allow.length === 0 && root) {
-    const origin = await originRepository(root, serverUrl);
-    if (!origin) {
-      notices.push("GitHub tools are disabled: the workspace has no GitHub origin remote. Pass --repo owner/repo.");
-      return { kind: "serve", ...base };
-    }
-    allow = [origin];
-  }
-  const client = io.github ? io.github(token) : restClient({ token, ...(io.env.GITHUB_API_URL ? { baseUrl: io.env.GITHUB_API_URL } : {}) });
-  notices.push(allow.length
-    ? `GitHub tools enabled (read-only, dry run) for: ${allow.join(", ")}.`
-    : "GitHub tools enabled (read-only, dry run) for the workspace's origin repository, resolved on first use.");
-  return { kind: "serve", ...base, remote: { client, serverUrl, ...(allow.length ? { allow } : {}) } };
+  if (!token) throw new AgentError("--enable-remote requires GITHUB_TOKEN or GH_TOKEN in the server environment.");
+  notices.push(`GitHub tools enabled (read-only, dry run) for: ${allow.join(", ")}.`);
+  return {
+    kind: "serve", ...base,
+    remote: {
+      allow, repositoryIds: new Map(),
+      createClient: (signal) => io.github ? io.github(token) : githubReader(token, { signal, ...(io.env.GITHUB_API_URL ? { baseUrl: io.env.GITHUB_API_URL } : {}) }),
+    },
+  };
 }
 
 export function acpCommand(argv: string[]): AgentCommand | { kind: "serve-acp" } {

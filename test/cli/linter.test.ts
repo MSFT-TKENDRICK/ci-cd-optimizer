@@ -524,7 +524,8 @@ describe("packaging", () => {
   it("ships cicd-lint as shorthand for `ci-cd-optimizer lint`", async () => {
     const source = await readFile(join(REPO_ROOT, "src/lint-bin.ts"), "utf8");
     expect(source).toMatch(/^#!\/usr\/bin\/env node\r?\n/);
-    expect(source).toContain('run(["lint", ...process.argv.slice(2)]');
+    expect(source).toContain('["lint", ...args]');
+    expect(source).toContain('args[0] === "--version" || args[0] === "-v"');
     const pkg = JSON.parse(await readFile(join(REPO_ROOT, "package.json"), "utf8"));
     expect(pkg.bin).toMatchObject({ "ci-cd-optimizer": "dist/bin.js", "cicd-lint": "dist/lint-bin.js" });
     expect(pkg.files).toEqual(expect.arrayContaining(["dist", "action.yml"]));

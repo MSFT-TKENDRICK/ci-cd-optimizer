@@ -1,28 +1,29 @@
-import { lstat, readFile, realpath, stat } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
+import { lstat, realpath, stat } from "node:fs/promises";
+import { basename, dirname, join, posix, resolve } from "node:path";
 import { CONFIG_PATHS, DEFAULT_CONFIG, didYouMean, parseConfigText, PRESETS, type LintConfig } from "../lint/config.js";
 import { docsUrl, filterInput, lint as runLint } from "../lint/engine.js";
 import { applyFixes } from "../lint/fix.js";
-import { loadDirectory, type LoadedInput } from "../lint/inventory.js";
+import type { LoadedInput } from "../lint/inventory.js";
 import { allRules, RULESETS } from "../lint/rules/index.js";
 import type { ActiveSeverity, AnyRule, Diagnostic, LintResult, ParseProblem, Preset, RuleKind, Severity, SkippedRule } from "../lint/types.js";
 import { effectiveSeverities, explainRuleText, LintInputError, selects, SEVERITIES, toSelector, unknownRuleMessage, withFile } from "../lint/workspace.js";
 import { parseProjectText, PROJECT_FILE, PROJECT_MAX_BYTES, type Project } from "../review/project.js";
+import { loadAgentDirectory, readBoundedFile, within } from "./inventory.js";
+import { AgentError, LIMITS, sanitizeMarkdown } from "./safety.js";
+
+export { AgentError } from "./safety.js";
+export { within } from "./inventory.js";
 
 /**
  * The read-only core behind the agent integrations (the `cicd-mcp` MCP server and the `cicd-acp` ACP agent). Every
  * function reads the workspace and returns plain data; none writes files, runs repository code (configured
  * `localRules` are never loaded), or contacts the network. Paths are confined to the workspace root.
  */
-export class AgentError extends Error {
-  override name = "AgentError";
-}
-
 export const RANK: Record<ActiveSeverity, number> = { info: 1, warn: 2, error: 3 };
 export const DEFAULT_LIMIT = 100;
 export const MAX_LIMIT = 500;
 export const MAX_CONTENT_FILES = 20;
-const MAX_PREVIEW_CHARS = 200_000;
+const MAX_PREVIEW_BYTES = 64 * 1024;
 const SCHEME = /^[a-z][a-z0-9+.-]+:/i;
 const DRIVE = /^[a-z]:[\\/]/i;
 
@@ -36,14 +37,11 @@ function input<T>(action: () => T): T {
 }
 
 function notUrl(value: string, label: string): void {
+  // eslint-disable-next-line no-control-regex -- reject control characters in path input
+  if (!value || value.length > 4096 || /[\u0000-\u001f]/.test(value)) throw new AgentError(`${label} must name a file with a valid path.`);
   if (SCHEME.test(value) && !DRIVE.test(value)) throw new AgentError(`${label} "${value}" must be a path, not a URL.`);
+  if (value.replace(DRIVE, "").includes(":")) throw new AgentError(`${label} must not name an alternate data stream.`);
 }
-
-/** Whether `child` is `parent` or inside it (both already resolved). */
-export const within = (parent: string, child: string) => {
-  const rel = relative(parent, child);
-  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
-};
 
 /** Resolves the workspace root through symlinks; it must be an existing directory. */
 export async function resolveRoot(path: string): Promise<string> {
@@ -90,16 +88,21 @@ export interface LoadedConfig {
 }
 
 /** Loads `.github/ci-cd-optimizer.yml` (or an explicit path inside the root) with the built-in rules only. */
-export async function loadConfig(root: string, explicit?: string): Promise<LoadedConfig> {
-  const candidates = explicit ? [await confine(root, explicit, "Configuration path")] : CONFIG_PATHS.map((path) => ({ path, absolute: join(root, path) }));
+export async function loadConfig(root: string, explicit?: string, signal?: AbortSignal): Promise<LoadedConfig> {
+  const candidates = await Promise.all((explicit ? [explicit] : CONFIG_PATHS).map((path) => confine(root, path, "Configuration path")));
   for (const candidate of candidates) {
-    const info = await lstat(candidate.absolute).catch(() => undefined);
+    const info = await lstat(candidate.absolute).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return undefined;
+      throw new AgentError(`Configuration ${candidate.path} could not be inspected.`);
+    });
     if (!info) {
       if (explicit) throw new AgentError(`Configuration ${candidate.path} does not exist.`);
       continue;
     }
     if (!info.isFile()) throw new AgentError(`Configuration ${candidate.path} is not a regular file.`);
-    const text = await readFile(candidate.absolute, "utf8");
+    const read = await readBoundedFile(root, candidate.absolute, LIMITS.configBytes, signal);
+    if (read.truncated) throw new AgentError(`Configuration exceeds ${LIMITS.configBytes} bytes.`);
+    const text = read.text;
     const parsed = parseConfigText(text, allRules, candidate.path);
     if (parsed.problems.length > 0) {
       throw new AgentError(`Invalid configuration ${candidate.path}: ${parsed.problems.map((problem) => `${problem.path || "(root)"}: ${problem.message}`).join("; ")}`);
@@ -147,6 +150,7 @@ export interface ContentOverride {
 
 export interface LintRequest extends Overrides {
   root: string;
+  signal?: AbortSignal;
   /** Configuration path inside the root (default: .github/ci-cd-optimizer.yml). */
   config?: string;
   /** Files, directories, or globs to report on. The whole root is still analyzed. */
@@ -168,17 +172,23 @@ interface Analysis extends LoadedConfig {
 }
 
 async function analyze(request: LintRequest): Promise<Analysis> {
+  request.signal?.throwIfAborted();
+  if (Buffer.byteLength(JSON.stringify(request)) > LIMITS.requestBytes) throw new AgentError("Request exceeds the agent byte limit.");
+  if ((request.paths?.length ?? 0) > 200) throw new AgentError("At most 200 path selectors are accepted.");
   const root = await resolveRoot(request.root);
-  const loaded = await loadConfig(root, request.config);
+  const loaded = await loadConfig(root, request.config, request.signal);
+  loaded.config.limits = { maxFiles: Math.min(loaded.config.limits.maxFiles, LIMITS.files), maxFileBytes: Math.min(loaded.config.limits.maxFileBytes, LIMITS.fileBytes) };
   const presets = applyOverrides(loaded.config, request);
   const content = request.content ?? [];
   if (content.length > MAX_CONTENT_FILES) throw new AgentError(`At most ${MAX_CONTENT_FILES} content overrides are accepted.`);
-  const contentPaths = content.map((file) => {
+  const contentPaths = await Promise.all(content.map(async (file) => {
     notUrl(file.path, "Content path");
     const path = input(() => toSelector(root, file.path, "Content path", ""));
     if (path === "" || /[*?]/.test(path)) throw new AgentError(`Content path "${file.path}" must name a file.`);
+    await confine(root, path, "Content path");
     return path;
-  });
+  }));
+  if (new Set(contentPaths).size !== contentPaths.length) throw new AgentError("Content overrides must have unique paths.");
   const selectors = [
     ...(request.paths ?? []).map((path) => {
       notUrl(path, "Path");
@@ -186,12 +196,17 @@ async function analyze(request: LintRequest): Promise<Analysis> {
     }),
     ...contentPaths,
   ];
-  let loadedInput = await loadDirectory(root, loaded.config);
+  let loadedInput = await loadAgentDirectory(root, loaded.config, request.signal);
   for (const [index, file] of content.entries()) {
     const path = contentPaths[index] as string;
     loadedInput = input(() => withFile(loadedInput, { path, content: file.text }, loaded.config.limits, `Content for ${path}`));
   }
+  if (loadedInput.files.length > LIMITS.files || loadedInput.files.reduce((bytes, file) => bytes + Buffer.byteLength(file.content), 0) > LIMITS.workspaceBytes) {
+    throw new AgentError("Workspace and content overrides exceed the agent inventory budget.");
+  }
+  request.signal?.throwIfAborted();
   const result = runLint(loadedInput, { config: loaded.config, rules: allRules, ...(presets ? { presets } : {}) });
+  request.signal?.throwIfAborted();
   const selected = (path: string) => selectors.length === 0 || selectors.some((selector) => selects(selector, path));
   const analyzed = filterInput(loadedInput, loaded.config.ignorePaths).files.map((file) => file.path);
   const unmatched = selectors.filter((selector) => !analyzed.some((path) => selects(selector, path)));
@@ -215,6 +230,7 @@ export interface AgentDiagnostic {
   /** A safe autofix exists; preview it with fix_preview. */
   fixable: boolean;
   fixDescription?: string;
+  omittedCharacters: number;
 }
 
 export interface SeverityCounts {
@@ -229,6 +245,7 @@ export interface DiagnosticPage {
   total: number;
   /** More diagnostics exist than were returned. */
   truncated: boolean;
+  omittedDiagnostics: number;
   diagnostics: AgentDiagnostic[];
 }
 
@@ -240,29 +257,34 @@ export interface LintSummary extends DiagnosticPage {
   rulesRun: number;
   suppressed: number;
   inventoryComplete: boolean;
-  parseProblems: ParseProblem[];
+  parseProblems: (ParseProblem & { omittedCharacters: number })[];
   skipped: SkippedRule[];
   /** Requested paths that matched no analyzed file. */
   unmatched: string[];
+  omitted: { parseProblems: number; skipped: number; unmatched: number };
 }
 
 function slim(diagnostic: Diagnostic): AgentDiagnostic {
+  const message = sanitizeMarkdown(diagnostic.message, 2048);
+  const suggestion = diagnostic.suggestion ? sanitizeMarkdown(diagnostic.suggestion, 2048) : undefined;
+  const description = diagnostic.fix ? sanitizeMarkdown(diagnostic.fix.description, 1024) : undefined;
   return {
     ruleId: diagnostic.ruleId,
     ruleset: diagnostic.ruleset,
     severity: diagnostic.severity,
     kind: diagnostic.kind,
-    message: diagnostic.message,
+    message: message.text,
     path: diagnostic.path,
     line: diagnostic.line,
     column: diagnostic.column,
-    ...(diagnostic.suggestion ? { suggestion: diagnostic.suggestion } : {}),
+    ...(suggestion ? { suggestion: suggestion.text } : {}),
     impact: diagnostic.impact,
     confidence: diagnostic.confidence,
     docsUrl: diagnostic.docsUrl,
     fingerprint: diagnostic.fingerprint,
     fixable: Boolean(diagnostic.fix?.edits.length),
-    ...(diagnostic.fix ? { fixDescription: diagnostic.fix.description } : {}),
+    ...(description ? { fixDescription: description.text } : {}),
+    omittedCharacters: message.omittedCharacters + (suggestion?.omittedCharacters ?? 0) + (description?.omittedCharacters ?? 0),
   };
 }
 
@@ -286,7 +308,7 @@ export function summarizeDiagnostics(diagnostics: readonly Diagnostic[], minSeve
   const visible = diagnostics
     .filter((diagnostic) => RANK[diagnostic.severity] >= minimum)
     .sort((left, right) => RANK[right.severity] - RANK[left.severity] || left.path.localeCompare(right.path) || left.line - right.line || left.ruleId.localeCompare(right.ruleId));
-  return { counts: countSeverities(visible), total: visible.length, truncated: visible.length > max, diagnostics: visible.slice(0, max).map(slim) };
+  return { counts: countSeverities(visible), total: visible.length, truncated: visible.length > max, omittedDiagnostics: Math.max(0, visible.length - max), diagnostics: visible.slice(0, max).map(slim) };
 }
 
 export async function lintWorkspace(request: LintRequest): Promise<LintSummary> {
@@ -304,9 +326,17 @@ export async function lintWorkspace(request: LintRequest): Promise<LintSummary> 
     suppressed: result.suppressed,
     inventoryComplete: analysis.input.inventoryComplete,
     ...page,
-    parseProblems: result.parseProblems.filter((problem) => analysis.selected(problem.path)),
-    skipped: result.skipped,
-    unmatched: analysis.unmatched,
+    parseProblems: result.parseProblems.filter((problem) => analysis.selected(problem.path)).slice(0, 100).map((problem) => {
+      const message = sanitizeMarkdown(problem.message, 2048);
+      return { ...problem, message: message.text, omittedCharacters: message.omittedCharacters };
+    }),
+    skipped: result.skipped.slice(0, 100),
+    unmatched: analysis.unmatched.slice(0, 100),
+    omitted: {
+      parseProblems: Math.max(0, result.parseProblems.filter((problem) => analysis.selected(problem.path)).length - 100),
+      skipped: Math.max(0, result.skipped.length - 100),
+      unmatched: Math.max(0, analysis.unmatched.length - 100),
+    },
   };
 }
 
@@ -322,14 +352,20 @@ export interface FilePreview {
   newText?: string;
   omitted?: boolean;
   fixes: string[];
+  omittedFixes: number;
+  omittedCharacters: number;
 }
 
 export interface FixPreview {
   root: string;
+  inventoryComplete: boolean;
+  localRulesIgnored: boolean;
+  parseProblemCount: number;
   applied: number;
   /** Fixes that overlap an earlier fix in the same pass; they apply on a later run. */
   conflicts: number;
   files: FilePreview[];
+  omittedFiles: number;
   /** Always false: previews never write. Apply with `cicd-lint --fix` after review. */
   written: false;
 }
@@ -347,21 +383,28 @@ export async function fixPreview(request: FixPreviewRequest): Promise<FixPreview
   );
   const fixed = applyFixes(analysis.input.files, fixable);
   const original = new Map(analysis.input.files.map((file) => [file.path, file.content]));
-  let budget = MAX_PREVIEW_CHARS;
+  let budget = MAX_PREVIEW_BYTES;
   const files: FilePreview[] = [];
   for (const [path, newText] of [...fixed.files].sort(([left], [right]) => left.localeCompare(right))) {
     const oldText = original.get(path) ?? "";
     if (oldText === newText) continue;
-    const fixes = fixed.applied
+    const descriptions = fixed.applied
       .filter((diagnostic) => diagnostic.fix?.edits.some((edit) => edit.path === path))
       .map((diagnostic) => `${diagnostic.ruleId}: ${diagnostic.fix?.description ?? ""}`);
-    const size = oldText.length + newText.length;
-    if (size <= budget) {
+    const listed = descriptions.slice(0, 50).map((description) => sanitizeMarkdown(description, 1024));
+    const fixes = listed.map((description) => description.text);
+    const omissions = { omittedFixes: Math.max(0, descriptions.length - 50), omittedCharacters: listed.reduce((total, description) => total + description.omittedCharacters, 0) };
+    const size = Buffer.byteLength(oldText) + Buffer.byteLength(newText);
+    if (size <= budget && files.length < MAX_CONTENT_FILES) {
       budget -= size;
-      files.push({ path, oldText, newText, fixes });
-    } else files.push({ path, omitted: true, fixes });
+      files.push({ path, oldText, newText, fixes, ...omissions });
+    } else files.push({ path, omitted: true, fixes, ...omissions });
   }
-  return { root: analysis.root, applied: fixed.applied.length, conflicts: fixed.conflicts.length, files, written: false };
+  return {
+    root: analysis.root, inventoryComplete: analysis.input.inventoryComplete, localRulesIgnored: analysis.localRulesIgnored,
+    parseProblemCount: analysis.result.parseProblems.filter((problem) => analysis.selected(problem.path)).length,
+    applied: fixed.applied.length, conflicts: fixed.conflicts.length, files, omittedFiles: files.filter((file) => file.omitted).length, written: false,
+  };
 }
 
 export interface RuleFilter {
@@ -423,10 +466,11 @@ export interface RuleExplanation extends RuleSummary {
   text: string;
 }
 
-export async function explainRule(id: string, options: { root?: string; config?: string } = {}): Promise<RuleExplanation> {
+export async function explainRule(id: string, options: { root?: string; config?: string; signal?: AbortSignal } = {}): Promise<RuleExplanation> {
   const rule = allRules.find((candidate) => candidate.meta.id === id);
   if (!rule) throw new AgentError(unknownRuleMessage("Rule", id, allRules));
-  const config = options.root ? (await loadConfig(await resolveRoot(options.root), options.config)).config : structuredClone(DEFAULT_CONFIG);
+  const config = options.root ? (await loadConfig(await resolveRoot(options.root), options.config, options.signal)).config : structuredClone(DEFAULT_CONFIG);
+  options.signal?.throwIfAborted();
   const severities = effectiveSeverities(config, allRules, undefined);
   return {
     ...ruleSummary(rule),
@@ -445,9 +489,9 @@ export interface EffectiveConfig extends LoadedConfig {
   rules: Record<string, Severity>;
 }
 
-export async function effectiveConfig(request: { root: string; config?: string } & Overrides): Promise<EffectiveConfig> {
+export async function effectiveConfig(request: { root: string; config?: string; signal?: AbortSignal } & Overrides): Promise<EffectiveConfig> {
   const root = await resolveRoot(request.root);
-  const loaded = await loadConfig(root, request.config);
+  const loaded = await loadConfig(root, request.config, request.signal);
   const presets = applyOverrides(loaded.config, request);
   const severities = effectiveSeverities(loaded.config, allRules, presets);
   return { root, ...loaded, config: presets ? { ...loaded.config, extends: presets } : loaded.config, rules: Object.fromEntries(severities) };
@@ -461,7 +505,7 @@ export interface ReviewProjectValidation {
 }
 
 /** Validates an OSS review program `project.yaml` (see docs/oss-review-program.md) inside the workspace. */
-export async function validateReviewProject(rootPath: string, path: string): Promise<ReviewProjectValidation> {
+export async function validateReviewProject(rootPath: string, path: string, signal?: AbortSignal): Promise<ReviewProjectValidation> {
   const root = await resolveRoot(rootPath);
   const target = await confine(root, path, "Project path");
   if (posix.basename(target.path) !== PROJECT_FILE) throw new AgentError(`${target.path}: project files must be named ${PROJECT_FILE}.`);
@@ -469,7 +513,8 @@ export async function validateReviewProject(rootPath: string, path: string): Pro
   if (!info) throw new AgentError(`${target.path} does not exist.`);
   if (!info.isFile()) throw new AgentError(`${target.path} is not a regular file.`);
   const directory = basename(dirname(target.absolute));
-  const text = info.size > PROJECT_MAX_BYTES ? "x".repeat(PROJECT_MAX_BYTES + 1) : await readFile(target.absolute, "utf8");
+  const read = await readBoundedFile(root, target.absolute, PROJECT_MAX_BYTES, signal);
+  const text = read.truncated ? "x".repeat(PROJECT_MAX_BYTES + 1) : read.text;
   const parsed = parseProjectText(text, directory);
   return { path: target.path, valid: parsed.project !== undefined, problems: parsed.problems, ...(parsed.project ? { project: parsed.project } : {}) };
 }

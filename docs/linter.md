@@ -6,6 +6,10 @@ The rule engine behind the GitHub App also runs on its own, like actionlint, ziz
 - as a CI step, with the GitHub Action or the reusable workflow;
 - as a pre-commit hook.
 
+The same built-in rules power [developer-agent skills, MCP, and ACP](agents.md). These read-only interfaces accept
+unsaved content and return exact fix previews without writing files or importing repository-local rules.
+The ordinary CLI's `--fix` and `--allow-local-rules` are separate, explicit opt-ins; no protocol write API exists.
+
 It reads GitHub Actions workflows, composite actions, Dockerfiles, and package manifests and lockfiles, and reports
 build and release optimizations. The [rule catalog](rules.md) lists every rule.
 
@@ -40,6 +44,7 @@ You can also install a tarball with `npm pack` in the clone, which builds `dist/
 runs the TypeScript sources directly.
 
 `cicd-lint [args]` is shorthand for `ci-cd-optimizer lint [args]`.
+`cicd-lint --version` (or `-v`) prints the installed package version.
 
 ## Command line
 

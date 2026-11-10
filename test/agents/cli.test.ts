@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { describe, expect, it, afterEach } from "vitest";
 import { acpCommand, ACP_USAGE, MCP_USAGE, mcpCommand, type AgentIO } from "../../src/agents/cli.js";
-import { normalizeRepository, parseRemoteUrl, sanitizeMarkdown } from "../../src/agents/remote.js";
+import { normalizeRepository, sanitizeMarkdown } from "../../src/agents/remote.js";
 import { AgentError } from "../../src/agents/workspace.js";
 import type { GitHubClient } from "../../src/github/client.js";
 import { tempDirs } from "./helpers.js";
@@ -38,27 +38,24 @@ describe("cicd-mcp arguments", () => {
     await expect(mcpCommand(["--repo", "a/b"], io({ GITHUB_TOKEN: "t" }))).rejects.toThrow("--repo only applies with --enable-remote.");
   });
 
-  it("keeps GitHub tools off without a token, and says how to enable them", async () => {
-    const command = await mcpCommand(["--enable-remote", "--repo", "a/b"], io());
+  it("fails closed if opt-in lacks a token and never exposes ambient tokens alone", async () => {
+    await expect(mcpCommand(["--enable-remote", "--repo", "a/b"], io())).rejects.toThrow("requires GITHUB_TOKEN or GH_TOKEN");
+    const command = await mcpCommand([], io({ GITHUB_TOKEN: "ambient-token" }));
     expect(command).not.toHaveProperty("remote");
-    expect(command).toMatchObject({ notices: [expect.stringContaining("set GITHUB_TOKEN or GH_TOKEN")] });
   });
 
   it("enables GitHub tools for a normalized, de-duplicated allowlist", async () => {
     const command = await mcpCommand(["--enable-remote", "--repo", "Octo/Repo", "--repo", "octo/repo.git", "--repo", "x/y"], io({ GH_TOKEN: "t" }));
-    expect(command).toMatchObject({ kind: "serve", remote: { client: fakeClient, serverUrl: "https://github.com", allow: ["octo/repo", "x/y"] } });
+    expect(command).toMatchObject({ kind: "serve", remote: { createClient: expect.any(Function), repositoryIds: new Map(), allow: ["octo/repo", "x/y"] } });
+    if (command.kind === "serve") expect(command.remote?.createClient(new AbortController().signal)).toBe(fakeClient);
     expect(command).toMatchObject({ notices: ["GitHub tools enabled (read-only, dry run) for: octo/repo, x/y."] });
     await expect(mcpCommand(["--enable-remote", "--repo", "not a repo"], io({ GH_TOKEN: "t" }))).rejects.toThrow("is not an owner/repo name");
   });
 
-  it("uses the workspace origin when --root has one, and disables GitHub tools when it does not", async () => {
+  it("requires an explicit allowlist even when a workspace or ambient server URL is given", async () => {
     const root = await dirs.make();
-    const noOrigin = await mcpCommand(["--enable-remote", "--root", root], io({ GITHUB_TOKEN: "t" }));
-    expect(noOrigin).not.toHaveProperty("remote");
-    expect(noOrigin).toMatchObject({ notices: [expect.stringContaining("no GitHub origin remote")] });
-    const deferred = await mcpCommand(["--enable-remote"], io({ GITHUB_TOKEN: "t", GITHUB_SERVER_URL: "https://ghe.example.com" }));
-    expect(deferred).toMatchObject({ remote: { serverUrl: "https://ghe.example.com" }, notices: [expect.stringContaining("resolved on first use")] });
-    expect(deferred).not.toHaveProperty("remote.allow");
+    await expect(mcpCommand(["--enable-remote", "--root", root], io({ GITHUB_TOKEN: "t" }))).rejects.toThrow("explicit --repo");
+    await expect(mcpCommand(["--enable-remote"], io({ GITHUB_TOKEN: "t", GITHUB_SERVER_URL: "https://ghe.example.com" }))).rejects.toThrow("explicit --repo");
   });
 });
 
@@ -73,23 +70,6 @@ describe("cicd-acp arguments", () => {
 });
 
 describe("remote helpers", () => {
-  it("parses GitHub origin URLs in scp, ssh, and https forms", () => {
-    expect(parseRemoteUrl("git@github.com:Octo/Repo.git")).toBe("octo/repo");
-    expect(parseRemoteUrl("ssh://git@github.com/octo/repo.git")).toBe("octo/repo");
-    expect(parseRemoteUrl("https://github.com/octo/repo")).toBe("octo/repo");
-    expect(parseRemoteUrl("https://token@github.com/octo/repo.git/")).toBe("octo/repo");
-    expect(parseRemoteUrl("https://ghe.example.com/octo/repo", "https://ghe.example.com")).toBe("octo/repo");
-  });
-
-  it("ignores other hosts, deeper paths, and garbage", () => {
-    expect(parseRemoteUrl("https://gitlab.com/octo/repo")).toBeUndefined();
-    expect(parseRemoteUrl("git@github.com.evil.com:octo/repo.git")).toBeUndefined();
-    expect(parseRemoteUrl("https://github.com/octo/repo/tree/main")).toBeUndefined();
-    expect(parseRemoteUrl("C:\\src\\repo")).toBeUndefined();
-    expect(parseRemoteUrl("")).toBeUndefined();
-    expect(parseRemoteUrl("not a url")).toBeUndefined();
-  });
-
   it("normalizes repository names and rejects invalid ones", () => {
     expect(normalizeRepository(" Octo/Repo.git ")).toBe("octo/repo");
     expect(normalizeRepository("a-b/c.d_e")).toBe("a-b/c.d_e");
@@ -99,8 +79,8 @@ describe("remote helpers", () => {
   });
 
   it("strips control and bidi characters and truncates long text", () => {
-    expect(sanitizeMarkdown("a\u0000b\u001bc\u202ed\u2066e\nf\tg")).toEqual({ text: "abcde\nf\tg", truncated: false });
+    expect(sanitizeMarkdown("a\u0000b\u001bc\u202ed\u2066e\nf\tg")).toEqual({ text: "abcde\nf\tg", truncated: false, omittedCharacters: 0 });
     const long = sanitizeMarkdown("x".repeat(20), 10);
-    expect(long).toEqual({ text: `${"x".repeat(10)}\n\n… (truncated)`, truncated: true });
+    expect(long).toEqual({ text: `${"x".repeat(10)}\n\n… (10 characters omitted)`, truncated: true, omittedCharacters: 10 });
   });
 });

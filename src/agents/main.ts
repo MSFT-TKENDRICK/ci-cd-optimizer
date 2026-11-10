@@ -7,6 +7,7 @@ import { createAcpAgent } from "./acp.js";
 import { acpCommand, mcpCommand } from "./cli.js";
 import { createMcpServer } from "./mcp.js";
 import { VERSION } from "../version.js";
+import { LIMITS } from "./safety.js";
 
 // Stdout carries the protocol; anything a dependency logs must go to stderr instead.
 function protectStdout(): void {
@@ -32,7 +33,7 @@ export async function runMcp(argv: string[]): Promise<void> {
       const stop = () => void server.close().finally(() => process.exit(0));
       process.once("SIGINT", stop);
       process.once("SIGTERM", stop);
-      await server.connect(new StdioServerTransport());
+      await server.connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: LIMITS.requestBytes }));
     }
   } catch (error) {
     process.stderr.write(`cicd-mcp: ${error instanceof Error ? error.message : String(error)}\n`);
@@ -47,7 +48,7 @@ export async function runAcp(argv: string[]): Promise<void> {
     if (command.kind === "help") process.stdout.write(command.text);
     else if (command.kind === "version") process.stdout.write(`${VERSION}\n`);
     else {
-      const stream = ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin) as ReadableStream<Uint8Array>);
+      const stream = ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin) as ReadableStream<Uint8Array>, { maxMessageBytes: LIMITS.requestBytes });
       const connection = createAcpAgent().connect(stream);
       const stop = () => connection.close();
       process.once("SIGINT", stop);

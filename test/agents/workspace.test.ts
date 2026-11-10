@@ -1,6 +1,7 @@
-import { readFile, symlink } from "node:fs/promises";
+import { readFile, stat, symlink } from "node:fs/promises";
+import * as filesystem from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { allRules } from "../../src/lint/rules/index.js";
 import {
   AgentError,
@@ -18,7 +19,11 @@ import {
   validateReviewProject,
 } from "../../src/agents/workspace.js";
 import { PROJECT_YAML } from "../review/fixtures.js";
-import { MISSING_TIMEOUT, tempDirs, WORKFLOW, write } from "./helpers.js";
+import { forbiddenLocalRule, MISSING_TIMEOUT, tempDirs, WORKFLOW, write } from "./helpers.js";
+import { LIMITS } from "../../src/agents/safety.js";
+import { readBoundedFile } from "../../src/agents/inventory.js";
+
+vi.mock("node:fs/promises", { spy: true });
 
 const dirs = tempDirs();
 let root: string;
@@ -96,12 +101,59 @@ describe("lintWorkspace", () => {
 
   it("honors the workspace configuration and never loads local rules", async () => {
     await write(root, WORKFLOW, MISSING_TIMEOUT);
-    await write(root, "rules/x.mjs", "throw new Error('local rules must not be imported');\n");
-    await write(root, ".github/ci-cd-optimizer.yml", "schemaVersion: 1\nextends: [recommended]\nlocalRules: [rules/x.mjs]\nrules:\n  workflow/job-timeout: error\n");
+    const marker = await forbiddenLocalRule(root);
+    await write(root, ".github/ci-cd-optimizer.yml", "schemaVersion: 1\nextends: [recommended]\nlocalRules: [rules/forbidden.mjs]\nrules:\n  workflow/job-timeout: error\n");
     const summary = await lintWorkspace({ root });
     expect(summary.configPath).toBe(".github/ci-cd-optimizer.yml");
     expect(summary.localRulesIgnored).toBe(true);
     expect(summary.diagnostics.find((diagnostic) => diagnostic.ruleId === "workflow/job-timeout")?.severity).toBe("error");
+    await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects duplicate overrides, oversized configuration, and oversized requests", async () => {
+    const content = { path: WORKFLOW, text: MISSING_TIMEOUT };
+    await expect(lintWorkspace({ root, content: [content, content] })).rejects.toThrow("unique paths");
+    await expect(lintWorkspace({ root, content: [{ ...content, text: "x".repeat(LIMITS.requestBytes) }] })).rejects.toThrow("byte limit");
+    await write(root, ".github/ci-cd-optimizer.yml", "#".repeat(LIMITS.configBytes + 1));
+    await expect(lintWorkspace({ root })).rejects.toThrow("Configuration exceeds");
+  });
+
+  it("fails closed when an existing configuration cannot be inspected", async () => {
+    const inspect = vi.mocked(filesystem.lstat).mockRejectedValueOnce(Object.assign(new Error("Access denied"), { code: "EACCES" }));
+    try { await expect(loadConfig(root)).rejects.toThrow("could not be inspected"); }
+    finally { inspect.mockRestore(); }
+  });
+
+  it.each([[0xff], [0xc3, 0x28], [0xed, 0xa0, 0x80], [0xe2, 0x82]])("rejects malformed UTF-8 rather than returning a lossy preview (%j)", async (...invalid) => {
+    const path = await write(root, WORKFLOW, MISSING_TIMEOUT);
+    const bytes = Buffer.concat([Buffer.from(`${MISSING_TIMEOUT}#`), Buffer.from(invalid)]);
+    await filesystem.writeFile(path, bytes);
+    await expect(lintWorkspace({ root })).rejects.toThrow("valid UTF-8");
+    await expect(fixPreview({ root })).rejects.toThrow("valid UTF-8");
+    expect(await readFile(path)).toEqual(bytes);
+  });
+
+  it("preserves UTF-8 BOMs and Unicode in exact preview source text", async () => {
+    const text = `\ufeff${MISSING_TIMEOUT}# café 🦊\n`;
+    const path = await write(root, WORKFLOW, text);
+    const preview = await fixPreview({ root, ruleIds: ["workflow/job-timeout"] });
+    expect(preview.files[0]?.oldText).toBe(text);
+    expect(await readFile(path)).toEqual(Buffer.from(text));
+  });
+
+  it.each([[2, "A"], [3, "A"], [4, "A"], [5, "A🦊"], [6, "A🦊B"]] as const)("decodes a bounded prefix without splitting a UTF-8 character at byte %i", async (limit, text) => {
+    const path = await write(root, "package-lock.json", "A🦊B");
+    expect(await readBoundedFile(root, path, limit)).toEqual({ text, truncated: limit < 6 });
+  });
+
+  it("cannot extend the hard file ceiling with unsaved new files", async () => {
+    await Promise.all(Array.from({ length: LIMITS.files }, (_, index) => write(root, `.github/workflows/f${index}.yml`, MISSING_TIMEOUT)));
+    await expect(lintWorkspace({ root, content: [{ path: ".github/workflows/new.yml", text: MISSING_TIMEOUT }] })).rejects.toThrow("inventory budget");
+  });
+
+  it("cannot extend the hard aggregate byte ceiling with unsaved new content", async () => {
+    await Promise.all(Array.from({ length: LIMITS.workspaceBytes / LIMITS.fileBytes }, (_, index) => write(root, `.github/workflows/f${index}.yml`, `#${"x".repeat(LIMITS.fileBytes - 2)}\n`)));
+    await expect(lintWorkspace({ root, content: [{ path: ".github/workflows/new.yml", text: MISSING_TIMEOUT }] })).rejects.toThrow("inventory budget");
   });
 
   it("rejects bad requests with actionable errors", async () => {
@@ -161,8 +213,10 @@ describe("confine and resolveRoot", () => {
 describe("fixPreview", () => {
   it("previews safe autofixes without writing", async () => {
     await write(root, WORKFLOW, MISSING_TIMEOUT);
+    const before = await stat(join(root, ...WORKFLOW.split("/")), { bigint: true });
     const preview = await fixPreview({ root, ruleIds: ["workflow/job-timeout"] });
     expect(preview.written).toBe(false);
+    expect(preview).toMatchObject({ inventoryComplete: true, localRulesIgnored: false, parseProblemCount: 0 });
     expect(preview.applied).toBe(1);
     expect(preview.files).toHaveLength(1);
     const [file] = preview.files;
@@ -171,6 +225,32 @@ describe("fixPreview", () => {
     expect(file?.newText).toMatch(/timeout-minutes: \d+/);
     expect(file?.fixes[0]).toMatch(/^workflow\/job-timeout: /);
     expect(await readFile(join(root, ...WORKFLOW.split("/")), "utf8")).toBe(MISSING_TIMEOUT);
+    expect((await stat(join(root, ...WORKFLOW.split("/")), { bigint: true })).mtimeNs).toBe(before.mtimeNs);
+  });
+
+  it("counts omitted diffs and never supplies partial old/new file text", async () => {
+    await Promise.all(Array.from({ length: 22 }, (_, index) => write(root, `.github/workflows/f${index}.yml`, MISSING_TIMEOUT)));
+    const preview = await fixPreview({ root, ruleIds: ["workflow/job-timeout"] });
+    expect(preview.omittedFiles).toBe(2);
+    expect(preview.files.filter((file) => !file.omitted)).toHaveLength(20);
+    for (const file of preview.files.filter((entry) => entry.omitted)) {
+      expect(file).not.toHaveProperty("oldText");
+      expect(file).not.toHaveProperty("newText");
+    }
+    await write(root, WORKFLOW, `${MISSING_TIMEOUT}#${"x".repeat(34_000)}\n`);
+    const large = await fixPreview({ root, paths: [WORKFLOW], ruleIds: ["workflow/job-timeout"] });
+    expect(large.files).toEqual([expect.objectContaining({ path: WORKFLOW, omitted: true })]);
+    expect(large.omittedFiles).toBe(1);
+  });
+
+  it("reports incomplete coverage, parse failures, and ignored local rules even when no diff is returned", async () => {
+    const marker = await forbiddenLocalRule(root);
+    await write(root, WORKFLOW, "jobs: [unterminated\n");
+    const broken = await fixPreview({ root });
+    expect(broken).toMatchObject({ inventoryComplete: true, localRulesIgnored: true, parseProblemCount: 1, files: [], written: false });
+    await write(root, WORKFLOW, "#".repeat(LIMITS.fileBytes + 1));
+    expect(await fixPreview({ root })).toMatchObject({ inventoryComplete: false, localRulesIgnored: true, files: [], written: false });
+    await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("returns nothing when no selected fix applies and rejects unknown rule ids", async () => {

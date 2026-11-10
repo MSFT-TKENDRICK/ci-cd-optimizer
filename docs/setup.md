@@ -4,6 +4,11 @@ CI being green covers the code. This checklist covers the repository settings, c
 deployment also needs. Steps marked **(owner)** create credentials or change who can access what, so a repository or
 organization owner must do them.
 
+For developer-agent use rather than provisioning, start with [Agent interfaces](agents.md): the committed plugin
+and local MCP/ACP need no hosted App. An operator can also [enable authenticated `/acp`](agents.md#hosted-acp-on-your-own-app-deployment)
+on an existing App deployment, with caller user tokens and explicitly pinned repositories; setup does not create
+a public agent service or enable that endpoint automatically.
+
 ## 1. Repository security
 
 Under **Settings → Advanced Security**, turn on:

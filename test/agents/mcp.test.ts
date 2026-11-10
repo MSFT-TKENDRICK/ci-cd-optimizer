@@ -1,8 +1,6 @@
-import { execFile } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMcpServer, MCP_TOOLS, type McpServerOptions } from "../../src/agents/mcp.js";
@@ -10,7 +8,8 @@ import type { LintSummary } from "../../src/agents/workspace.js";
 import type { WorkflowRunPayload } from "../../src/telemetry/snapshot.js";
 import { PROJECT_YAML } from "../review/fixtures.js";
 import { fakeApi, TIMEOUT_ONLY, writes } from "../service/api.js";
-import { MISSING_TIMEOUT, tempDirs, WORKFLOW, write } from "./helpers.js";
+import { forbiddenLocalRule, MISSING_TIMEOUT, tempDirs, WORKFLOW, write } from "./helpers.js";
+import { LIMITS } from "../../src/agents/safety.js";
 
 interface ToolResult {
   isError?: boolean;
@@ -111,6 +110,28 @@ describe("MCP server", () => {
     expect(await failure(client, MCP_TOOLS.lint, { root: join(repo, "missing") })).toMatch(/is not a directory/);
   });
 
+  it("never executes local rules across tools and resources and bounds all tool envelopes", async () => {
+    const marker = await forbiddenLocalRule(repo);
+    const client = await connect({ fallbackRoot: repo });
+    await write(repo, "projects/widget/project.yaml", PROJECT_YAML);
+    for (const [name, args] of [
+      [MCP_TOOLS.lint, {}], [MCP_TOOLS.fixPreview, {}], [MCP_TOOLS.effectiveConfig, {}],
+      [MCP_TOOLS.explainRule, { id: "workflow/job-timeout" }], [MCP_TOOLS.listRules, {}],
+      [MCP_TOOLS.lintContent, { content: [{ path: WORKFLOW, text: MISSING_TIMEOUT }] }],
+      [MCP_TOOLS.validateReviewProject, { path: "projects/widget/project.yaml" }],
+    ] as const) {
+      const result = await call(client, name, args);
+      expect(result.isError).not.toBe(true);
+      expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(LIMITS.outputBytes);
+    }
+    for (const uri of ["cicd://config", "cicd://rules/workflow/job-timeout"]) await client.readResource({ uri });
+    await expect(client.readResource({ uri: "cicd://rules/%ZZ" })).rejects.toThrow("percent encoding");
+    await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
+    const rules = await data<{ total: number; omittedRules: number; rules: unknown[] }>(client, MCP_TOOLS.listRules, { limit: 1 });
+    expect(rules.omittedRules).toBe(rules.total - 1);
+    expect(rules.rules).toHaveLength(1);
+  });
+
   it("analyzes any absolute root when neither --root nor client roots constrain it", async () => {
     const client = await connect({ fallbackRoot: repo });
     expect((await data<LintSummary>(client, MCP_TOOLS.lint, { root: other })).root).toBe(other);
@@ -197,7 +218,7 @@ describe("MCP server GitHub tools", () => {
 
   it("scan an allowed repository as a dry run", async () => {
     const api = github();
-    const client = await connect({ fallbackRoot: repo, remote: { client: api, allow: ["acme/widgets"] } });
+    const client = await connect({ fallbackRoot: repo, remote: { createClient: () => api, allow: ["acme/widgets"] } });
     const tool = (await client.listTools()).tools.find((entry) => entry.name === MCP_TOOLS.scanRepository);
     expect(tool?.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: true });
     expect(tool?.description).toContain("acme/widgets");
@@ -208,7 +229,7 @@ describe("MCP server GitHub tools", () => {
 
   it("report a workflow run's critical path without writing", async () => {
     const api = github();
-    const client = await connect({ fallbackRoot: repo, remote: { client: api, allow: ["acme/widgets"] } });
+    const client = await connect({ fallbackRoot: repo, remote: { createClient: () => api, allow: ["acme/widgets"] } });
     const report = await data<{ status: string; criticalPath: { jobKeys: string[] }; jobs: unknown[]; markdown: string; dryRun: boolean }>(
       client,
       MCP_TOOLS.workflowRunReport,
@@ -221,27 +242,49 @@ describe("MCP server GitHub tools", () => {
     expect(await failure(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 9 })).toMatch(/Workflow run 9 was not found/);
   });
 
+  it("escapes repository-derived report Markdown and restricts Gantt labels", async () => {
+    const untrusted = "<script>alert(1)</script> [click](https://bad.example) | ```\n# injected";
+    const api = fakeApi({
+      repositoryMetadata: REPOSITORY, config: TIMEOUT_ONLY,
+      refs: { abc: { [WORKFLOW]: CI } }, runs: { 2000: { ...RUN, name: untrusted } },
+      jobs: { 2000: JOBS.map((job) => ({ ...job, name: untrusted })) },
+    });
+    const client = await connect({ fallbackRoot: repo, remote: { createClient: () => api, allow: ["acme/widgets"] } });
+    const report = await data<{ markdown: string }>(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 2000, markdown: true });
+    expect(report.markdown).toContain("&lt;script&gt;");
+    expect(report.markdown).not.toContain("<script>");
+    expect(report.markdown).not.toContain("[click](");
+    expect(report.markdown).not.toContain("\n# injected");
+    const diagram = report.markdown.split("```mermaid\n")[1]?.split("```")[0];
+    expect(diagram).toBeDefined();
+    expect(diagram).not.toMatch(/[<>{}()[\]|]/);
+    expect(writes(api)).toEqual([]);
+  });
+
+  it("rejects mismatched run and repository identities before reading jobs", async () => {
+    for (const run of [{ ...RUN, id: 2001 }, { ...RUN, repository: { id: 999 } }]) {
+      const api = fakeApi({ repositoryMetadata: REPOSITORY, runs: { 2000: run } });
+      const client = await connect({ fallbackRoot: repo, remote: { createClient: () => api, allow: ["acme/widgets"] } });
+      expect(await failure(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 2000 })).toContain("identity");
+      expect(api.calls.some((call) => call.route.endsWith("/jobs"))).toBe(false);
+      expect(writes(api)).toEqual([]);
+    }
+  });
+
   it("refuse repositories outside the allowlist before calling GitHub", async () => {
     const api = github();
-    const client = await connect({ fallbackRoot: repo, remote: { client: api, allow: ["acme/widgets"] } });
+    const client = await connect({ fallbackRoot: repo, remote: { createClient: () => api, allow: ["acme/widgets"] } });
     expect(await failure(client, MCP_TOOLS.scanRepository, { repo: "evil/exfil" })).toMatch(/is not in the allowed repositories/);
     expect(await failure(client, MCP_TOOLS.scanRepository, { repo: "not a repo" })).toMatch(/is not an owner\/repo name/);
     expect(api.calls).toEqual([]);
   });
 
   it("refuse a repository that was renamed or transferred", async () => {
-    const client = await connect({ fallbackRoot: repo, remote: { client: github({ id: 42, full_name: "other/widgets" }), allow: ["acme/widgets"] } });
+    const client = await connect({ fallbackRoot: repo, remote: { createClient: () => github({ id: 42, full_name: "other/widgets" }), allow: ["acme/widgets"] } });
     expect(await failure(client, MCP_TOOLS.scanRepository, { repo: "acme/widgets" })).toMatch(/now resolves to other\/widgets/);
   });
 
-  it("allow only the workspace's origin remote when no allowlist is given", async () => {
-    const exec = promisify(execFile);
-    await exec("git", ["init", "-q", repo]);
-    await exec("git", ["-C", repo, "remote", "add", "origin", "git@github.com:acme/widgets.git"]);
-    const client = await connect({ fallbackRoot: repo, remote: { client: github(), serverUrl: "https://github.com" } });
-    expect(await data(client, MCP_TOOLS.scanRepository, { repo: "acme/widgets" })).toMatchObject({ status: "scanned" });
-    expect(await failure(client, MCP_TOOLS.scanRepository, { repo: "acme/gadgets" })).toMatch(/is not in the allowed repositories \(acme\/widgets\)/);
-    const bare = await connect({ fallbackRoot: other, remote: { client: github() } });
-    expect(await failure(bare, MCP_TOOLS.scanRepository, { repo: "acme/widgets" })).toMatch(/no GitHub origin remote/);
+  it("reject an empty allowlist instead of trusting a workspace origin", () => {
+    expect(() => createMcpServer({ fallbackRoot: repo, remote: { createClient: () => github(), allow: [] } })).toThrow("explicit repository allowlist");
   });
 });

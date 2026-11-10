@@ -1,11 +1,12 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { client, methods, PROTOCOL_VERSION, type ActiveSession, type ClientContext, type SessionUpdate } from "@agentclientprotocol/sdk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ACP_COMMANDS, createAcpAgent, helpText } from "../../src/agents/acp.js";
 import { VERSION } from "../../src/version.js";
-import { MISSING_TIMEOUT, tempDirs, WORKFLOW, write } from "./helpers.js";
+import { forbiddenLocalRule, MISSING_TIMEOUT, tempDirs, WORKFLOW, write } from "./helpers.js";
+import { LIMITS } from "../../src/agents/safety.js";
 
 const WITH_TIMEOUT = MISSING_TIMEOUT.replace("runs-on: ubuntu-24.04\n", "runs-on: ubuntu-24.04\n    timeout-minutes: 10\n");
 
@@ -89,7 +90,7 @@ describe("ACP agent", () => {
       const unmatched = await turn(session, "/lint docs/nothing.yml");
       expect(unmatched.text).toContain("No analyzed file matched: `docs/nothing.yml`");
       const bad = await turn(session, "/lint --min loud");
-      expect(bad.text).toContain("**Error:** --min must be info, warn, or error.");
+      expect(bad.text).toContain("min must be info, warn, or error\\.");
       expect(bad.stopReason).toBe("end_turn");
     });
   });
@@ -139,9 +140,22 @@ describe("ACP agent", () => {
     await withAgent(async (ctx) => {
       const session = await start(ctx, empty);
       const result = await turn(session, "/fix-preview");
-      expect(result.text).toBe("No safe autofixes apply to the selected files.");
+      expect(result.text).toBe("No safe autofixes apply to the analyzed selected files.");
       expect(result.updates.some((update) => update.sessionUpdate === "tool_call")).toBe(false);
     });
+  });
+
+  it("never executes local rules and bounds every emitted message", async () => {
+    const marker = await forbiddenLocalRule(repo);
+    await withAgent(async (ctx) => {
+      const session = await start(ctx);
+      for (const prompt of ["/lint", "/fix-preview", "/config", "/explain workflow/job-timeout", "/rules"]) {
+        const result = await turn(session, prompt);
+        expect(result.text).not.toContain("**Error:**");
+        for (const update of result.updates) expect(Buffer.byteLength(JSON.stringify(update))).toBeLessThan(LIMITS.outputBytes);
+      }
+    });
+    await expect(stat(marker)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("explains rules, with usage and did-you-mean errors", async () => {
@@ -150,9 +164,9 @@ describe("ACP agent", () => {
       const known = await turn(session, "/explain workflow/job-timeout");
       expect(known.text).toMatch(/^```text\n[\s\S]*workflow\/job-timeout[\s\S]*```\n\nDocs: https?:\/\//);
       const missing = await turn(session, "/explain");
-      expect(missing.text).toBe("**Error:** Usage: /explain <rule-id>. List the rules with /rules.");
+      expect(missing.text).toContain("Usage: /explain &lt;rule\\-id&gt;\\. List the rules with /rules\\.");
       const typo = await turn(session, "/explain workflow/job-timout");
-      expect(typo.text).toMatch(/\*\*Error:\*\* .*workflow\/job-timeout/);
+      expect(typo.text).toContain('Did you mean "workflow/job\\-timeout"');
     });
   });
 
@@ -180,29 +194,23 @@ describe("ACP agent", () => {
     });
   });
 
-  it("notes ignored MCP servers and extra directories once", async () => {
+  it("explicitly rejects unsupported MCP servers and extra directories", async () => {
     const extra = await dirs.make("cicd-acp-extra-");
     await withAgent(async (ctx) => {
-      const session = await ctx
+      await expect(ctx
         .buildSession(repo)
         .withMcpServer({ name: "other", command: "node", args: [], env: [] })
-        .withAdditionalDirectories([extra])
-        .start();
-      await session.nextUpdate();
-      const first = await turn(session, "/help");
-      expect(first.text).toContain("_This agent does not launch MCP servers; ignored 1 server(s) from the client._");
-      expect(first.text).toContain(`_Only ${repo} is analyzed; additional directories are ignored._`);
-      const second = await turn(session, "/help");
-      expect(second.text).toBe(helpText());
+        .start()).rejects.toMatchObject({ code: -32602 });
+      await expect(ctx.buildSession(repo).withAdditionalDirectories([extra]).start()).rejects.toMatchObject({ code: -32602 });
     });
   });
 
-  it("rejects relative, missing, and unknown sessions with invalid params", async () => {
+  it("rejects relative, missing, and unknown sessions", async () => {
     await withAgent(async (ctx) => {
       await expect(ctx.buildSession("relative/dir").start()).rejects.toMatchObject({ code: -32602 });
       await expect(ctx.buildSession(join(repo, "missing")).start()).rejects.toMatchObject({ code: -32602 });
       await expect(ctx.request(methods.agent.session.prompt, { sessionId: "nope", prompt: [{ type: "text", text: "/lint" }] })).rejects.toMatchObject({
-        code: -32602,
+        code: -32002,
       });
     });
   });
@@ -217,6 +225,41 @@ describe("ACP agent", () => {
       expect((await first).stopReason).toBe("cancelled");
       const after = await ctx.request(methods.agent.session.prompt, { sessionId: session.sessionId, prompt: [{ type: "text", text: "/help" }] });
       expect(after.stopReason).toBe("end_turn");
+    });
+  });
+
+  it("uses every text block, including quoted paths and later-line arguments", async () => {
+    await write(repo, ".github/workflows/with space.yml", MISSING_TIMEOUT);
+    await withAgent(async (ctx) => {
+      const session = await start(ctx);
+      const explained = await turn(session, [{ type: "text", text: "/explain" }, { type: "text", text: "workflow/job-timeout" }]);
+      expect(explained.text).toContain("workflow/job-timeout");
+      const lint = await turn(session, [{ type: "text", text: "/lint\n" }, { type: "text", text: '".github/workflows/with space.yml"' }]);
+      expect(lint.updates.find((update) => update.sessionUpdate === "tool_call")).toMatchObject({ title: "Lint .github/workflows/with space.yml" });
+      expect(lint.text).not.toContain("`.github/workflows/ci.yml:");
+      expect((await turn(session, '/lint "unclosed')).text).toContain("Unclosed quote");
+    });
+  });
+
+  it("rejects malformed or ambiguous resource links without a protocol crash", async () => {
+    await withAgent(async (ctx) => {
+      const session = await start(ctx);
+      for (const uri of ["file:///bad%xx.yml", `${pathToFileURL(join(repo, WORKFLOW)).href}?other`, "file://%"]) {
+        const result = await turn(session, [{ type: "resource_link", uri, name: "untrusted.yml" }]);
+        expect(result.text).toContain("invalid file URI");
+        expect(result.stopReason).toBe("end_turn");
+      }
+    });
+  });
+
+  it("bounds concurrently created sessions and prompt bytes", async () => {
+    await client().connectWith(createAcpAgent({ maxSessions: 2 }), async (ctx) => {
+      await ctx.request(methods.agent.initialize, { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
+      const attempts = await Promise.allSettled(Array.from({ length: 5 }, () => ctx.buildSession(repo).start()));
+      expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(2);
+      const session = attempts.find((attempt) => attempt.status === "fulfilled");
+      if (session?.status !== "fulfilled") throw new Error("Session not created");
+      await expect(ctx.request(methods.agent.session.prompt, { sessionId: session.value.sessionId, prompt: [{ type: "text", text: "x".repeat(262145) }] })).rejects.toMatchObject({ code: -32602 });
     });
   });
 });

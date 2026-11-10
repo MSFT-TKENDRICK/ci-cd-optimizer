@@ -5,3 +5,5 @@ coverage/
 *.pem
 *.log
 .DS_Store
+.agent-test-workspaces/
+.agent-artifacts/

@@ -13,6 +13,7 @@
   },
   "files": [
     "dist",
+    "plugins/ci-cd-optimizer",
     "action.yml",
     "docs",
     "README.md",
@@ -37,6 +38,7 @@
     "agents:acp": "tsx src/acp-bin.ts",
     "preview:mcp": "node test/setup/preview-host.mjs",
     "test:setup": "node --test test/setup/*.node.mjs",
+    "test:agents:package": "node scripts/check-agent-package.mjs",
     "test": "npm run test:setup && vitest run",
     "test:watch": "vitest",
     "prepack": "npm run build"

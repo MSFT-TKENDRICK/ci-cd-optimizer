@@ -30,11 +30,14 @@ node <plugin>/server/cicd-agents.mjs lint --explain <rule-id>
 ```
 
 Ask before running shell commands. Never ask the user to paste tokens into the chat.
+The ordinary CLI refuses configured local rules unless `--allow-local-rules` is supplied. Do not add that flag,
+`--fix`, `--init`, `--output`, or `--sarif` for a read-only fallback. If local rules block the CLI, use MCP/ACP,
+which explicitly ignores them; do not execute repository modules to bypass the refusal.
 
 ## Steps
 
 1. **Baseline.** Call `lint` with `minSeverity: "warn"`. If it reports nothing, call it again with `presets: ["agentic"]`, which adds the rules that matter most when agents open many small pull requests (affected-only testing, concurrency cancellation, merge queues).
-2. **Check coverage.** If `inventoryComplete` is false or `parseProblems` is non-empty, tell the user which files were not analyzed. Do not claim the repository is clean.
+2. **Check coverage.** If `inventoryComplete` is false or `parseProblems` is non-empty, report known gaps and say when unvisited files cannot be enumerated. Report omission counts and output-budget errors; narrow the query rather than claiming the repository is clean.
 3. **Rank.** Group findings by `ruleId` and order by `severity`, then `impact` (`high` first), then count. The usual big wins are:
    - `caching/setup-cache`, `caching/build-tool-cache`, `caching/cache-key`, `caching/docker-layer-cache`: restore dependencies and build output instead of recomputing them.
    - `containers/dependency-layer`, `containers/multi-stage`, `containers/cache-mount`, `containers/shared-base`: bake dependencies into a cached layer and share a base image across a monorepo.
@@ -43,7 +46,7 @@ Ask before running shell commands. Never ask the user to paste tokens into the c
    - `affected/*`, `checkout/*`: build and test only what changed, with shallow or sparse checkouts.
    - `workflow/concurrency`, `workflow/job-timeout`, `workflow/merge-group`: stop wasted and runaway runs.
 4. **Understand.** Call `explain_rule` for each rule you plan to act on. Use its example and references; do not invent a different fix.
-5. **Autofix preview.** For findings with `fixable: true`, call `fix_preview` (optionally with `ruleIds`) and show the user the diff. Apply it only after they agree. Report `conflicts` if any fixes overlapped.
+5. **Autofix preview.** For findings with `fixable: true`, call `fix_preview` (optionally with `ruleIds`) and show the complete diff. Apply it only after they agree and current contents still match `oldText`; otherwise regenerate the preview. Report `conflicts` and `omittedFiles`. Never apply an omitted/partial diff.
 6. **Manual fixes.** For the rest, draft the edit, then call `lint_content` with the new text. Only write the file once that finding is gone and no new `error` appeared.
 7. **Verify.** Call `lint` again on the touched `paths` and report before/after counts.
 
