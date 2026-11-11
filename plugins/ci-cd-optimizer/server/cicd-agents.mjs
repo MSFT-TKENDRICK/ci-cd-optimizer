@@ -73103,7 +73103,7 @@ function stepFindings(ctx, entry2) {
       observedMs: step.durationMs,
       observation: `${label2} ran tests for ${formatMs(step.durationMs)} (${frameworks.join("; ")}).`,
       recommendation: [
-        ...hotspotLines.length ? ["Profile the reported file hotspots before repartitioning; their durations can overlap and are not additive savings. Preserve assertions and isolation."] : [],
+        ...hotspotLines.length ? ["Profile the reported file hotspots before repartitioning; their durations can overlap and are not additive savings. Separate fixture setup, test bodies and teardown; trace idle connection waits before changing shutdown. File timings alone do not identify their cause. Preserve assertions, isolation, active-request draining and intentional timeout/polling coverage."] : [],
         ...ctx.timing.critical ? [
           ...spareJobs.length > 0 ? [
             `Before adding runners, measure moving an independent test partition into an already-prepared compatible job with slack (${spareJobs.map(({ job }) => clip2(job.name, MAX_LABEL)).join(", ")}). Verify matching runtime/dependencies, isolation, acyclic dependencies and identical coverage on every trigger, including drafts and failure paths; the observed slack does not prove compatibility or future capacity.`

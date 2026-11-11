@@ -143,6 +143,8 @@ export async function startDurableServer(
   let stopping = false;
   let closed: Promise<void> | undefined;
   const server = createServer((request, response) => {
+    // server.close() only reaps connections that are idle when shutdown starts.
+    response.once("finish", () => { if (stopping) server.closeIdleConnections(); });
     void middleware(request, response).then(async (handled) => {
       if (handled) return;
       if (agentHandler && await agentHandler(request, response)) return;

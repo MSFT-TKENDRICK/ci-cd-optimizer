@@ -337,6 +337,8 @@ response deadline; further deliveries get HTTP 503 before their body is read, so
 unbounded in-flight work. `WEBHOOK_PATH`, `HOST`, `PORT`, `/ping`, and SIGTERM/SIGINT shutdown remain supported.
 Direct mode retains Probot's existing transport and setup flow. Probot's development `WEBHOOK_PROXY_URL` is supported
 only in direct mode; durable mode rejects it explicitly and requires an endpoint reachable by the webhook sender.
+Durable HTTP shutdown drains active responses and reaps connections that become idle afterward, without
+waiting for their keep-alive expiry or force-closing other active requests.
 
 A failed response or disconnected client does not cancel a database operation already in progress: the commit outcome
 can be unknown, and the operation may finish after the deadline. Late success/failure is logged. Redeliver using the

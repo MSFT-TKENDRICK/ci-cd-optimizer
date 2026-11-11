@@ -1,6 +1,6 @@
 import { createHmac, generateKeyPairSync, randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { createServer, request as httpRequest } from "node:http";
+import { Agent, createServer, request as httpRequest } from "node:http";
 import { setImmediate, setTimeout } from "node:timers/promises";
 import { Probot, ProbotOctokit } from "probot";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -139,6 +139,55 @@ describe("durable HTTP health routes", () => {
       await stopped;
       await app.server.stop();
     } finally { gate.release(); await response; }
+  });
+
+  it("reaps drained keep-alive connections without interrupting active persistence", async () => {
+    const gate = latch();
+    const entered = latch();
+    const persisted = latch();
+    const persisting = latch();
+    const app = await serverHarness(vi.fn(async () => { entered.release(); await gate.promise; }));
+    app.queue.enqueue.mockImplementation(async () => { persisting.release(); await persisted.promise; });
+    const agent = new Agent({ keepAlive: true });
+    const send = (webhook = false) => new Promise<{ status: number | undefined; text: string }>((resolve, reject) => {
+      const request = httpRequest(`${app.origin}${webhook ? "/api/github/webhooks" : "/ready"}`, {
+        agent, method: webhook ? "POST" : "GET",
+        ...(webhook ? { headers: {
+          "content-type": "application/json", "x-github-event": "push", "x-github-delivery": randomUUID(),
+          "x-hub-signature-256": `sha256=${createHmac("sha256", secret).update(event).digest("hex")}`,
+        } } : {}),
+      }, (reply) => {
+        let text = "";
+        reply.setEncoding("utf8").on("data", (chunk: string) => { text += chunk; });
+        reply.once("end", () => resolve({ status: reply.statusCode, text }));
+        reply.once("error", reject);
+      });
+      request.once("error", reject);
+      request.end(webhook ? event : undefined);
+    });
+    const response = send();
+    const acknowledgement = send(true);
+    let closed = false;
+    let stopped: Promise<void> | undefined;
+    try {
+      await Promise.all([entered.promise, persisting.promise]);
+      stopped = app.server.stop();
+      void stopped.then(() => { closed = true; }, () => undefined);
+      await setImmediate();
+      expect(closed).toBe(false);
+      gate.release();
+      expect(await response).toEqual({ status: 503, text: "NOT READY" });
+      await setImmediate();
+      expect(closed).toBe(false);
+      persisted.release();
+      expect(await acknowledgement).toEqual({ status: 200, text: "ok\n" });
+      await expect.poll(() => closed, { timeout: 1000 }).toBe(true);
+      await stopped;
+    } finally {
+      gate.release(); persisted.release(); agent.destroy();
+      await Promise.allSettled([response, acknowledgement]);
+      await (stopped ?? app.server.stop());
+    }
   });
 
   it.each(["/ping", "/ping/", "/ready", "/ready/"])("rejects a webhook path that conflicts with %s", async (path) => {

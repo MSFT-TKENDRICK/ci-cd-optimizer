@@ -416,12 +416,16 @@ describe("attributeRun critical path", () => {
     const found = one(result, "test-runtime", "test");
     expect(found.recommendation).toContain("Profile the reported file hotspots");
     expect(found.recommendation).toContain("not additive savings");
+    expect(found.recommendation).toContain("Separate fixture setup, test bodies and teardown");
+    expect(found.recommendation).toContain("File timings alone do not identify their cause");
+    expect(found.recommendation).toContain("active-request draining and intentional timeout/polling coverage");
     expect(found.evidence.join("\n")).toContain("service test/cli/linter.test.ts: 1.1 s");
     for (const key of ["lint-reusable / lint", "lint", "formal", "postgres", "build"]) {
       expect(found.evidence.join("\n")).toContain(`${key}:`);
     }
     const broadcast = benchmarkRun(run, result, undefined, []);
     const emitted = broadcast.findings.find((entry) => entry.category === "test-runtime")!;
+    expect(emitted.recommendation).toBe(found.recommendation);
     expect(emitted.evidence).toEqual(found.evidence);
     expect(emitted.omittedEvidence).toBe(0);
     for (const summary of evidence.steps[2]!.tests) delete summary.slowFiles;
