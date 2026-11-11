@@ -169,6 +169,11 @@ Layer-cache misses remain findings even when other layers were restored. Partial
 prove that matching entries for the rebuilt layers were published or accessible. Compare immutable build
 inputs (not just commit SHAs), publication, import/export scopes, branch visibility and eviction before
 attributing persistent misses to the Dockerfile or cache backend.
+When `docker/build-push-action` prints its runtime cache access group, GHA miss evidence also retains up
+to three recognized branch/tag/PR-ref permission entries and counts additional recognized lines not
+retained. Unsupported, oversized and malformed lines are ignored; credentials are not decoded.
+This is logged permission evidence, not proof of cache publication, matching layers or restoration.
+Missing or omitted entries do not imply denied access, and a miss alone never justifies broader permissions.
 
 Failed, cancelled and timed-out jobs also report unfinished BuildKit digest transfers when repeated
 unchanged byte/total reports span at least ten seconds on both the log and transfer clocks. Progress,

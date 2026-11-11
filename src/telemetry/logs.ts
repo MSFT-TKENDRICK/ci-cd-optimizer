@@ -111,6 +111,11 @@ export interface LogStep {
   builds: BuildInvocation[];
   toolCache?: "hit" | "download";
   packageCache?: "hit" | "miss";
+  /** At most three recognized access entries printed by the build action, not an authorization decision. */
+  cacheAccess?: {
+    entries: { scope: string; permission: "read" | "write" | "read/write" }[];
+    omittedEntries: number;
+  };
   installedPackages?: number;
   tests: TestSummary[];
 }
@@ -567,6 +572,21 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
     }
     const step = innermost();
     if (!step) continue;
+    const group = groups.at(-1);
+    if (group?.owner === step && group.title === "GitHub Actions runtime token ACs"
+      && /^docker\/build-push-action@/.test(step.uses ?? "") && line.length <= MAX_TEXT) {
+      const access = /^(refs\/(?:heads|tags|pull)\/[A-Za-z0-9._/-]+): (read\/write|read|write)$/.exec(line);
+      const scope = access?.[1];
+      const permission = access?.[2];
+      if (scope && (permission === "read" || permission === "write" || permission === "read/write")) {
+        const reported = step.cacheAccess ??= { entries: [], omittedEntries: 0 };
+        if (!reported.entries.some((entry) => entry.scope === scope && entry.permission === permission)) {
+          if (reported.entries.length < 3) reported.entries.push({ scope, permission });
+          else reported.omittedEntries += 1;
+        }
+      }
+      continue;
+    }
     const command = /^(?:##)?\[command\](.*)$/.exec(line)?.[1];
     if (command !== undefined) {
       if (DOCKER_BUILD.test(command)) step.builds.push(buildFromCommand(command.slice(command.search(DOCKER_BUILD)), ms));

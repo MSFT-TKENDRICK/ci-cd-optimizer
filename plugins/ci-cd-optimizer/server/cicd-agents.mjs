@@ -72586,9 +72586,9 @@ function parseJobLog(text4, options = {}) {
       continue;
     }
     if (line2.startsWith("##[endgroup]")) {
-      const group = groups.pop();
-      if (!group) continue;
-      if (group.header) {
+      const group2 = groups.pop();
+      if (!group2) continue;
+      if (group2.header) {
         if (header) {
           if (header.commands.length) header.step.command = clip(header.commands.join("\n"));
           if (header.step.kind === "action") {
@@ -72605,10 +72605,10 @@ function parseJobLog(text4, options = {}) {
         header = void 0;
         continue;
       }
-      const entry2 = { title: clip(group.title), startMs: group.startMs, endMs: ms, durationMs: ms - group.startMs };
-      if (group.owner === "post") evidence2.post.subGroups.push(entry2);
-      else if (group.owner !== "setup") group.owner.subGroups.push(entry2);
-      if (service && group.title.startsWith("Starting ")) {
+      const entry2 = { title: clip(group2.title), startMs: group2.startMs, endMs: ms, durationMs: ms - group2.startMs };
+      if (group2.owner === "post") evidence2.post.subGroups.push(entry2);
+      else if (group2.owner !== "setup") group2.owner.subGroups.push(entry2);
+      if (service && group2.title.startsWith("Starting ")) {
         service.endMs = ms;
         service = void 0;
       }
@@ -72673,6 +72673,20 @@ ${line2.trim()}`);
     }
     const step = innermost();
     if (!step) continue;
+    const group = groups.at(-1);
+    if (group?.owner === step && group.title === "GitHub Actions runtime token ACs" && /^docker\/build-push-action@/.test(step.uses ?? "") && line2.length <= MAX_TEXT) {
+      const access = /^(refs\/(?:heads|tags|pull)\/[A-Za-z0-9._/-]+): (read\/write|read|write)$/.exec(line2);
+      const scope2 = access?.[1];
+      const permission = access?.[2];
+      if (scope2 && (permission === "read" || permission === "write" || permission === "read/write")) {
+        const reported = step.cacheAccess ??= { entries: [], omittedEntries: 0 };
+        if (!reported.entries.some((entry2) => entry2.scope === scope2 && entry2.permission === permission)) {
+          if (reported.entries.length < 3) reported.entries.push({ scope: scope2, permission });
+          else reported.omittedEntries += 1;
+        }
+      }
+      continue;
+    }
     const command2 = /^(?:##)?\[command\](.*)$/.exec(line2)?.[1];
     if (command2 !== void 0) {
       if (DOCKER_BUILD.test(command2)) step.builds.push(buildFromCommand(command2.slice(command2.search(DOCKER_BUILD)), ms));
@@ -72965,6 +72979,7 @@ function buildFindings(ctx, entry2, build2, index) {
     if (missMs >= MIN_FINDING_MS) {
       const restored = build2.vertices.filter((vertex) => (vertex.kind === "run" || vertex.kind === "copy") && vertex.cached).length;
       const source = build2.cacheFrom.map((spec2) => spec2.raw).join("; ");
+      const access = build2.cacheFrom.some((spec2) => spec2.type === "gha") ? entry2.step.cacheAccess : void 0;
       const cause = restored === 0 ? "No RUN or COPY layer was restored; this alone does not distinguish changed inputs from missing or inaccessible cache entries." : `${restored} other layer(s) were restored, but that does not prove that matching entries for the rebuilt layers were published or accessible.`;
       findings4.push(finding2(ctx, {
         category: "layer-cache-miss",
@@ -72972,8 +72987,15 @@ function buildFindings(ctx, entry2, build2, index) {
         step: entry2.label,
         observedMs: missMs,
         observation: `${entry2.label}: ${misses.length} RUN layer(s) were rebuilt for ${formatMs(missMs)} although the build is configured to restore a cache (cache-from ${source}). ${cause} The log alone does not establish the cause.`,
-        recommendation: "Compare consecutive runs with identical build inputs, including resolved base-image digests, build arguments and context contents, not just the same commit. Check successful cache publication, matching import/export scopes, branch visibility and eviction. If misses persist, investigate cache lookup and backend behavior before restructuring the Dockerfile or changing permissions.",
+        recommendation: [
+          "Compare consecutive runs with identical build inputs, including resolved base-image digests, build arguments and context contents, not just the same commit. Check successful cache publication, matching import/export scopes, branch visibility and eviction.",
+          ...access?.entries.length ? ["Use the action's logged runtime cache access as branch-permission evidence only: it does not prove publication, a matching entry or successful restoration. Missing or omitted entries do not prove denied access. Do not broaden permissions merely because a layer missed."] : [],
+          "If misses persist, investigate cache lookup and backend behavior before restructuring the Dockerfile or changing permissions."
+        ].join(" "),
         evidence: [
+          ...access?.entries.length ? [
+            `Action-reported runtime cache access: ${access.entries.map((entry3) => `${entry3.scope}: ${entry3.permission}`).join("; ")}${access.omittedEntries ? `; ${access.omittedEntries} additional recognized access line(s) not retained` : ""}`
+          ] : [],
           ...[...misses].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
           ...build2.vertices.filter((vertex) => vertex.kind === "cache-import").map(describeVertex),
           ...build2.cacheFrom.map((spec2) => `cache-from: ${spec2.raw}`)
