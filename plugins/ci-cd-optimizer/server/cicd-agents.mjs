@@ -78552,6 +78552,7 @@ function attachFeedback(server, remote, options) {
   const seen = /* @__PURE__ */ new Map();
   const retry = /* @__PURE__ */ new Map();
   const undelivered = /* @__PURE__ */ new Map();
+  const newestNext = /* @__PURE__ */ new Map();
   const lastInventory = new Map(remote.allow.map((repo) => [repo.toLowerCase(), sinceMs]));
   let timer;
   let status = { state: "starting", since: options.since, replayDays: 7, pending: 0 };
@@ -78632,13 +78633,17 @@ function attachFeedback(server, remote, options) {
           fail(`Known producer ${key} is absent from the complete inventory; delivery is incomplete.`);
           failed = true;
         }
-        let fetched = 0;
-        for (const producer of producers) {
-          if (producer.status !== "completed") continue;
+        const eligible2 = producers.filter((producer) => {
           const key = `${repoId}:${producer.id}:${producer.run_attempt}`;
-          if (seen.has(key) || (retry.get(key)?.at ?? 0) > now) continue;
-          if (outbox.size >= MAX_PENDING || fetched >= 4) break;
-          fetched++;
+          return producer.status === "completed" && !seen.has(key) && (retry.get(key)?.at ?? 0) <= now;
+        });
+        let oldest = 0;
+        let newest = eligible2.length - 1;
+        for (let fetched = 0; fetched < 4 && oldest <= newest && outbox.size < MAX_PENDING; fetched++) {
+          const takeNewest = newestNext.get(repo) ?? true;
+          const producer = eligible2[takeNewest ? newest-- : oldest++];
+          newestNext.set(repo, !takeNewest);
+          const key = `${repoId}:${producer.id}:${producer.run_attempt}`;
           try {
             const event = await operation((signal) => readFeedback(access(signal), repo, producer), controller.signal, LIMITS.operationMs);
             const uri = `cicd://feedback/runs/${event.key}`;

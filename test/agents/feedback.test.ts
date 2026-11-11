@@ -130,7 +130,33 @@ describe("verified CI feedback", () => {
     f.state.total = 0;
     vi.spyOn(Date, "now").mockReturnValue(Date.now() + FEEDBACK_REPLAY_MS + 2000);
     await expect.poll(async () => (await status()).replayGap).toBe(true);
-    expect((await status()).error).toMatch(/Undelivered producer 42:3004:1/);
+    expect((await status()).error).toMatch(/Undelivered producer 42:3002:1/);
+  });
+
+  it("shares the replay budget between new results and oldest backlog without duplicates or starvation", async () => {
+    const f = fixture();
+    f.state.producers = Array.from({ length: 10 }, (_, i) => ({ ...f.producer, id: 3000 + i }));
+    f.state.total = 10;
+    const server = createMcpServer({ fallbackRoot: process.cwd(), remote: f.remote, feedback: { since: f.since, pollMs: 200 } });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "fair-replay-test", version: "1" });
+    clients.push(client);
+    await server.connect(serverSide);
+    await client.connect(clientSide);
+    const keys = async () => (await client.listResources()).resources
+      .filter((item) => item.uri.startsWith("cicd://feedback/runs/"))
+      .map((item) => Number(item.uri.split(":").at(-2))).sort((a, b) => a - b);
+    await expect.poll(keys, { interval: 5 }).toEqual([3000, 3001, 3008, 3009]);
+    expect(f.state.logs).toBe(4);
+    for (const id of [3000, 3001, 3008, 3009]) {
+      await client.callTool({ name: "feedback_ack", arguments: { key: `42:${id}:1` } });
+    }
+    f.state.producers.push({ ...f.producer, id: 3010 }, { ...f.producer, id: 3011, status: "in_progress", conclusion: null });
+    f.state.total = 12;
+    await expect.poll(keys, { interval: 5 }).toEqual([3002, 3003, 3007, 3010]);
+    expect(f.state.logs).toBe(8);
+    await expect.poll(keys, { interval: 5 }).toEqual([3002, 3003, 3004, 3005, 3006, 3007, 3010]);
+    expect(f.state.logs).toBe(11);
   });
 
   it("does not mistake continuous failed inventories for successful replay coverage", async () => {
@@ -159,5 +185,32 @@ describe("verified CI feedback", () => {
     await expect.poll(async () => (await status()).replayGap).toBe(true);
     expect((await status()).state).toBe("error");
     expect((await status()).error).toMatch(/No complete inventory/);
+  });
+
+  it("preserves replay fairness when backpressure frees only one slot at a time", async () => {
+    const f = fixture();
+    f.state.producers = Array.from({ length: 56 }, (_, i) => ({ ...f.producer, id: 3000 + i }));
+    f.state.total = 56;
+    const server = createMcpServer({ fallbackRoot: process.cwd(), remote: f.remote, feedback: { since: f.since, pollMs: 50 } });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "fair-backpressure-test", version: "1" });
+    clients.push(client);
+    await server.connect(serverSide);
+    await client.connect(clientSide);
+    const status = async () => JSON.parse(((await client.readResource({ uri: "cicd://feedback/status" })).contents[0] as { text: string }).text);
+    const has = async (id: number) => (await client.listResources()).resources.some((item) => item.uri === `cicd://feedback/runs/42:${id}:1`);
+    await expect.poll(async () => (await status()).state, { timeout: 5000, interval: 10 }).toBe("backpressure");
+    expect(f.state.logs).toBe(50);
+    f.state.producers.push({ ...f.producer, id: 3056 });
+    f.state.total++;
+    await client.callTool({ name: "feedback_ack", arguments: { key: "42:3055:1" } });
+    await expect.poll(() => has(3056)).toBe(true);
+    f.state.producers.push({ ...f.producer, id: 3057 });
+    f.state.total++;
+    await client.callTool({ name: "feedback_ack", arguments: { key: "42:3056:1" } });
+    await expect.poll(() => has(3025)).toBe(true);
+    expect(await has(3057)).toBe(false);
+    expect(f.state.logs).toBe(52);
+    expect((await status()).pending).toBe(50);
   });
 });
