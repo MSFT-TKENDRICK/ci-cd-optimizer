@@ -99,19 +99,31 @@ export async function waitForDatabase(context) {
 
 export async function removeDatabase(context) {
   const { name, run = docker, log = console.log } = context;
-  // Join startup before removal so it cannot create a container after cleanup.
-  const result = await startupResult(context);
-  const id = run("container", "ls", "--all", "--quiet", "--no-trunc", "--filter", `name=^/${name}$`);
-  if (id) {
-    assert.match(id, /^[a-f0-9]{64}$/);
-    run("rm", "--force", "--volumes", id);
-    assert.equal(run("container", "ls", "--all", "--quiet", "--filter", `name=^/${name}$`), "",
-      "PostgreSQL container survived cleanup");
-  } else {
-    assert.equal(result.ok, false, "The started PostgreSQL container disappeared before cleanup");
+  let result;
+  const failures = [];
+  // Normally join startup first. Missing/corrupt results still require removal, but cannot certify cleanup.
+  try {
+    result = await startupResult(context);
+    assert.ok(result.ok, `PostgreSQL startup failed: ${result.error}`);
+  } catch (error) {
+    failures.push(error);
   }
+  try {
+    const id = run("container", "ls", "--all", "--quiet", "--no-trunc", "--filter", `name=^/${name}$`);
+    if (id) {
+      assert.match(id, /^[a-f0-9]{64}$/);
+      run("rm", "--force", "--volumes", id);
+      assert.equal(run("container", "ls", "--all", "--quiet", "--filter", `name=^/${name}$`), "",
+        "PostgreSQL container survived cleanup");
+    } else if (result?.ok) {
+      throw new Error("The started PostgreSQL container disappeared before cleanup");
+    }
+  } catch (error) {
+    failures.push(error);
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, "PostgreSQL startup and cleanup both failed");
   log(`PostgreSQL removed: ${name}`);
-  assert.ok(result.ok, `PostgreSQL startup failed: ${result.error}`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === script) {

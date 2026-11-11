@@ -36,8 +36,10 @@ was tried.
 The app CI smoke starts its disposable PostgreSQL container through
 `test/service/container-postgres.mjs` while preparing the production image. The whole startup runs in a bounded
 worker: `docker run --detach` alone still waits for an image pull. Smoke execution waits for the original database
-health policy, and the always-run cleanup joins startup before removing the container and its anonymous volumes.
-Startup, readiness and cleanup failures fail CI. Overlapping work is not itself proof of a speedup: compare complete
+health policy, and the always-run cleanup waits for startup before removing the container and its anonymous volumes.
+Missing or corrupt startup evidence still triggers best-effort removal, but fails CI rather than certifying cleanup;
+startup and removal failures are both preserved. An interrupted worker still relies on the runner's job-boundary
+process cleanup. Startup, readiness and cleanup failures fail CI. Overlapping work is not itself proof of a speedup: compare complete
 run latency and runner work across fixed-head samples, not only the removed service-initialization step.
 
 ## The loop

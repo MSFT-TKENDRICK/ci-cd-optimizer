@@ -123,3 +123,64 @@ test("cleanup errors cannot be reported as a successful removal", async (t) => {
   finishDatabaseStart({ ...context, run: () => id });
   await assert.rejects(removeDatabase({ ...context, run: () => id }), /survived cleanup/);
 });
+
+test("cleanup waits for a delayed startup result before searching for its container", async (t) => {
+  const context = fixture(t);
+  started(context);
+  let finished = false;
+  let removed = false;
+  await removeDatabase({ ...context, pause: async () => {
+    finishDatabaseStart({ ...context, run: () => id });
+    finished = true;
+  }, run: (...args) => {
+    assert.equal(finished, true);
+    if (args[0] === "rm") { removed = true; return id; }
+    return removed ? "" : id;
+  } });
+  assert.equal(removed, true);
+});
+
+test("cleanup removes a known container despite a missing startup result and preserves the timeout", async (t) => {
+  const context = fixture(t);
+  started(context);
+  let removed = false;
+  const messages = [];
+  await assert.rejects(removeDatabase({ ...context, now: () => Date.now() + 35_000,
+    log: (message) => messages.push(message), run: (...args) => {
+      if (args[0] === "rm") { removed = true; return id; }
+      return removed ? "" : id;
+    },
+  }), /did not report/);
+  assert.equal(removed, true);
+  assert.deepEqual(messages, []);
+});
+
+test("corrupt startup evidence cannot prevent removal or become a success", async (t) => {
+  const context = fixture(t);
+  started(context);
+  writeFileSync(join(context.directory, "result.json"), '{"ok":true}');
+  let removed = false;
+  await assert.rejects(removeDatabase({ ...context, run: (...args) => {
+    if (args[0] === "rm") { removed = true; return id; }
+    return removed ? "" : id;
+  } }));
+  assert.equal(removed, true);
+});
+
+test("startup and removal failures are both retained", async (t) => {
+  const context = fixture(t);
+  started(context);
+  for (const expected of [/did not report/, /pull failed/]) {
+    await assert.rejects(removeDatabase({ ...context, now: () => Date.now() + 35_000,
+      run: () => { throw new Error("Docker daemon unavailable"); },
+    }), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.match(error.errors[0].message, expected);
+      assert.match(error.errors[1].message, /Docker daemon unavailable/);
+      return true;
+    });
+    if (expected.source === "did not report") {
+      assert.throws(() => finishDatabaseStart({ ...context, run: () => { throw new Error("pull failed"); } }), /pull failed/);
+    }
+  }
+});
