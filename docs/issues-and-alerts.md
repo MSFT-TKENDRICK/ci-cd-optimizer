@@ -193,6 +193,16 @@ retained. Unsupported, oversized and malformed lines are ignored; credentials ar
 This is logged permission evidence, not proof of cache publication, matching layers or restoration.
 Missing or omitted entries do not imply denied access, and a miss alone never justifies broader permissions.
 
+When a build imports a layer cache, `layer-materialization` reports Dockerfile-instruction vertices
+reporting both `CACHED` and a completion time, plus completed COPY/ADD vertices without a `CACHED` marker,
+once their union reaches three seconds. A reused layer can still be fetched and unpacked on a fresh
+builder. A copy without a cache marker does not prove changed inputs or a cache failure: a matching entry
+may be absent. Unfinished and errored vertices are excluded. Uncached RUN vertices are left to the
+layer-cache findings, and base-image, internal and export vertices are excluded.
+The finding is diagnosis-only with zero savings bounds: split fetch, unpack and copy time from the build
+record first, then compare instruction ordering, a registry cache or a persistent builder only in a
+controlled interleaved experiment with identical build inputs.
+
 Failed, cancelled and timed-out jobs also report unfinished BuildKit digest transfers when repeated
 unchanged byte/total reports span at least ten seconds on both the log and transfer clocks. Progress,
 counter or timestamp resets start a fresh interval; explicit transfer or vertex completion clears it.
