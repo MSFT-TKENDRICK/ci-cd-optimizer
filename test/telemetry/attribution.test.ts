@@ -212,6 +212,19 @@ describe("attributeRun on run 42856555439", () => {
     expect(one(attribution, "builder-setup", "app").observedMs).toBeGreaterThan(0);
   });
 
+  it.each([true, false])("does not invent a cache-miss cause from partial restoration (restored: %s)", (restored) => {
+    const log = restored ? APP_LOG.replace("#14 DONE 1.6s", "#14 CACHED") : APP_LOG;
+    const found = one(attributeRun(snapshot(), ciLogs([[APP, parseJobLog(log)]])), "layer-cache-miss", "app");
+
+    expect(found.summary).toContain(restored ? "1 other layer(s) were restored" : "No RUN or COPY layer was restored");
+    expect(found.summary).toContain("The log alone does not establish the cause");
+    expect(found.summary).not.toMatch(/rather than to changed inputs|these layers' inputs .* changed|cache was reachable/);
+    expect(found.recommendation).toContain("resolved base-image digests");
+    expect(found.recommendation).toContain("branch visibility");
+    expect(found.recommendation).toContain("backend behavior");
+    expect(found.observedMs).toBeGreaterThan(0);
+  });
+
   it("describes savings only as bounds and never exceeds the observed time or the headroom", () => {
     expect(attribution.bottlenecks.length).toBeGreaterThan(0);
     for (const entry of attribution.bottlenecks) {
