@@ -193,6 +193,65 @@ describe("parseCacheSpec and vertexKind", () => {
 });
 
 describe("parseJobLog builds", () => {
+  const digest = `sha256:${"a".repeat(64)}`;
+  const transfers = (entries: ReadonlyArray<readonly [number, string]>) => parseJobLog(log([
+    [0, "##[group]Run docker buildx build --load ."], [0, "##[endgroup]"],
+    [1, "#23 [stage 3/3] COPY /app /app"], [2, "#23 CACHED"], ...entries,
+  ])).steps[0]?.builds[0]?.vertices[0]?.transfers;
+
+  it("retains a stalled cached transfer using only the interval observed on both clocks", () => {
+    expect(transfers([
+      [6435, `#23 ${digest} 0B / 12.48kB 3.6s`],
+      [863232, `#23 ${digest} 0B / 12.48kB 860.4s`],
+      [863877, "##[error]The operation was canceled."],
+    ])).toEqual([{
+      digest, progress: "0B / 12.48kB", firstMs: BASE + 6435, lastMs: BASE + 863232,
+      elapsedMs: 860400, unchangedMs: 856797,
+    }]);
+    expect(transfers([[1000, `#23 ${digest} 0B / 1MB 1s`], [20000, `#23 ${digest} 0B / 1MB 5s`]])?.[0]?.unchangedMs).toBe(4000);
+    expect(transfers([[1000, `#23 ${digest} 0B / 1MB 1s`], [20000, `#23 ${digest} 0B / 1MB 1s`]])?.[0]?.unchangedMs).toBe(0);
+  });
+
+  it("forgets completed transfers and resets progress, total, counter and timestamp changes", () => {
+    for (const end of [`#23 ${digest} 1MB / 1MB 30s done`, `#23 ${digest} 0B / 1MB 30s done`, "#23 DONE 30.0s"]) {
+      expect(transfers([[1000, `#23 ${digest} 0B / 1MB 1s`], [30000, end]])).toBeUndefined();
+    }
+    for (const [ms, report] of [
+      [30000, "1kB / 1MB 30s"], [30000, "0B / 2MB 30s"], [30000, "0B / 1MB 0.1s"], [500, "0B / 1MB 30s"],
+    ] as const) {
+      expect(transfers([[1000, `#23 ${digest} 0B / 1MB 1s`], [ms, `#23 ${digest} ${report}`]])?.[0]?.unchangedMs).toBe(0);
+    }
+    const recovered = transfers([
+      [1000, `#23 ${digest} 0B / 1MB 1s`], [30000, `#23 ${digest} 0B / 1MB 30s`],
+      [31000, `#23 ${digest} 1kB / 1MB 31s`], [51000, `#23 ${digest} 1kB / 1MB 51s`],
+    ]);
+    expect(recovered?.[0]).toMatchObject({ firstMs: BASE + 31000, lastMs: BASE + 51000, unchangedMs: 20000 });
+  });
+
+  it("rejects malformed or unsafe progress without bridging the invalid report", () => {
+    for (const invalid of [
+      "-1B / 1MB 20s", "0B / 0B 20s", "0B / 1MB NaNs", "0B / 1MB 9007199254740992s",
+      "0B / 9007199254740992TB 20s", "0B / 1MB 1.2.3s", `${"0".repeat(201)}B / 1MB 20s`,
+    ]) {
+      expect(transfers([
+        [1000, `#23 ${digest} 0B / 1MB 1s`], [20000, `#23 ${digest} ${invalid}`],
+        [30000, `#23 ${digest} 0B / 1MB 30s`],
+      ])?.[0]?.unchangedMs).toBe(0);
+    }
+  });
+
+  it("isolates digest progress between vertices, builds and steps", () => {
+    const parsed = parseJobLog(log([
+      [0, "##[group]Run docker build ."], [0, "##[endgroup]"],
+      [1000, `#23 ${digest} 0B / 1MB 1s`], [21000, `#24 ${digest} 0B / 1MB 21s`],
+      [22000, "#0 building with default instance using docker driver"], [23000, `#23 ${digest} 0B / 1MB 23s`],
+      [24000, "##[group]Run docker build ."], [24000, "##[endgroup]"], [25000, `#23 ${digest} 0B / 1MB 25s`],
+    ]));
+    const all = parsed.steps.flatMap((step) => step.builds.flatMap((build) => build.vertices.flatMap((item) => item.transfers ?? [])));
+    expect(all).toHaveLength(4);
+    expect(all.every((item) => item.unchangedMs === 0)).toBe(true);
+  });
+
   it("attributes BuildKit output to the build a script declared, ignoring reprinted vertices and RUN output", () => {
     const evidence = parseJobLog(log([
       [0, "Current runner version: '2.330.0'"],

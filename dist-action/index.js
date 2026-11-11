@@ -42441,7 +42441,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "9f26e312d6d27ee800ea0a76877fbe73fa5ac740c0fb068e7b9e6262eabf3b52",
+  "implementationSha256": "b7511b3196ea318d35e0b2fca8db77411763c6afdb9fb71f44ae1aeddfc4c321",
   "generatorSha256": "3796e86ad20c33e0b41cc5ad4490c09338a37e5c6d2ea7c2b2f9095dbf298aed",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -66768,10 +66768,38 @@ function testLine(step, text7, pending) {
 var BUILD_START_VERTEX = /^\[internal\] load (?:build definition|\.dockerignore|local bake definitions|remote build context)\b/;
 var DOCKER_BUILD = /(?:^|[\s/;&|(])docker(?:\s+buildx)?\s+(?:build|bake)\b/;
 function activeBuild(step) {
-  for (let index = step.builds.length - 1; index >= 0; index -= 1) if (step.builds[index]?.vertices.length) return index;
+  for (let index = step.builds.length - 1; index >= 0; index -= 1) {
+    if (step.builds[index]?.vertices.length || step.builds[index]?.driver) return index;
+  }
   return step.builds.length ? 0 : -1;
 }
-function vertexLine(step, id2, text7, ms) {
+function transferLine(vertex, text7, ms, pending) {
+  const digest = /^(sha256:[a-f0-9]{64})\b/.exec(text7)?.[1];
+  if (!digest) return;
+  const match2 = text7.length <= MAX_TEXT ? /^sha256:[a-f0-9]{64} (\d+(?:\.\d+)?)([kMGT]?B) \/ (\d+(?:\.\d+)?)([kMGT]?B) (\d+(?:\.\d+)?)s( done)?$/.exec(text7) : null;
+  const transfers = pending.get(vertex) ?? /* @__PURE__ */ new Map();
+  const bytes = (value2, unit) => Number(value2) * 1e3 ** ["B", "kB", "MB", "GB", "TB"].indexOf(unit);
+  const current = match2 ? bytes(match2[1], match2[2]) : NaN;
+  const total = match2 ? bytes(match2[3], match2[4]) : NaN;
+  const elapsedMs = match2 ? seconds2(match2[5]) : NaN;
+  if (!match2 || !Number.isSafeInteger(elapsedMs) || !Number.isFinite(current) || !Number.isFinite(total) || current < 0 || total <= 0 || total > Number.MAX_SAFE_INTEGER || current >= total || match2[6]) {
+    transfers.delete(digest);
+    return;
+  }
+  const progress = `${match2[1]}${match2[2]} / ${match2[3]}${match2[4]}`;
+  const previous2 = transfers.get(digest);
+  const restart = !previous2 || previous2.progress !== progress || elapsedMs < previous2.elapsedMs || ms < previous2.lastMs;
+  transfers.set(digest, {
+    digest,
+    progress,
+    firstMs: restart ? ms : previous2.firstMs,
+    lastMs: ms,
+    elapsedMs,
+    firstElapsedMs: restart ? elapsedMs : previous2.firstElapsedMs
+  });
+  pending.set(vertex, transfers);
+}
+function vertexLine(step, id2, text7, ms, pending) {
   const active2 = activeBuild(step);
   let build2 = step.builds[active2];
   const restarted = id2 === 1 && BUILD_START_VERTEX.test(text7) && build2?.vertices.some((vertex2) => vertex2.id > 1) === true;
@@ -66792,12 +66820,16 @@ function vertexLine(step, id2, text7, ms) {
   if (!vertex) {
     vertex = { id: id2, name: clip(text7), kind: vertexKind(text7), firstMs: ms, lastMs: ms, cached: false, error: false, operations: [] };
     build2.vertices.push(vertex);
+    transferLine(vertex, text7, ms, pending);
     return;
   }
   vertex.lastMs = ms;
+  transferLine(vertex, text7, ms, pending);
   let match2;
-  if (match2 = /^DONE ([\d.]+)s$/.exec(text7)) vertex.durationMs = seconds2(match2[1]);
-  else if (text7 === "CACHED") vertex.cached = true;
+  if (match2 = /^DONE ([\d.]+)s$/.exec(text7)) {
+    vertex.durationMs = seconds2(match2[1]);
+    pending.delete(vertex);
+  } else if (text7 === "CACHED") vertex.cached = true;
   else if (/^(?:ERROR|CANCELED)\b/.test(text7)) vertex.error = true;
   else if (!/^\d+\.\d+ /.test(text7) && (match2 = /^(.+?) ([\d.]+)s done$/.exec(text7)) && !/^(?:sha256:|extracting |loading layer |writing layer )/.test(match2[1])) {
     vertex.operations.push({ name: clip(match2[1]), durationMs: seconds2(match2[2]) });
@@ -66823,6 +66855,7 @@ function parseJobLog(text7, options = {}) {
   let pullStartMs;
   const declaredOnly = /* @__PURE__ */ new Set();
   const pendingTests = /* @__PURE__ */ new WeakMap();
+  const pendingTransfers = /* @__PURE__ */ new WeakMap();
   let waitStartMs;
   const innermost = () => {
     for (let index = actions.length - 1; index >= 0; index -= 1) if (actions[index]?.step) return actions[index]?.step;
@@ -66977,7 +67010,7 @@ ${line.trim()}`);
     }
     const vertex = /^#(\d+) (.+)$/.exec(line);
     if (vertex) {
-      vertexLine(step, Number(vertex[1]), vertex[2], ms);
+      vertexLine(step, Number(vertex[1]), vertex[2], ms, pendingTransfers);
       continue;
     }
     if (line.startsWith("Found in cache @ ")) step.toolCache = "hit";
@@ -66993,6 +67026,13 @@ ${line.trim()}`);
   const endMs = evidence2.post.startMs ?? evidence2.lastMs ?? 0;
   const prune = (step) => {
     step.builds = step.builds.filter((build2) => !declaredOnly.has(build2) || build2.vertices.length > 0);
+    for (const vertex of step.builds.flatMap((build2) => build2.vertices)) {
+      const transfers = pendingTransfers.get(vertex);
+      if (transfers?.size) vertex.transfers = [...transfers.values()].map(({ firstElapsedMs, ...transfer }) => ({
+        ...transfer,
+        unchangedMs: Math.min(transfer.lastMs - transfer.firstMs, transfer.elapsedMs - firstElapsedMs)
+      }));
+    }
     step.children.forEach(prune);
   };
   evidence2.steps.forEach(prune);
@@ -67196,6 +67236,25 @@ function buildFindings(ctx, entry2, build2, index) {
   const findings4 = [];
   const detail = `s${entry2.path}b${index}`;
   const covers2 = [entry2.top];
+  const stalled = ["failure", "cancelled", "timed_out"].includes(ctx.job.conclusion ?? "") ? build2.vertices.flatMap((vertex) => (vertex.transfers ?? []).filter((transfer) => transfer.unchangedMs >= UNEXPLAINED_MIN_MS).map((transfer) => ({ vertex, transfer }))) : [];
+  const stalledMs = unionMs(stalled.map(({ transfer }) => [transfer.lastMs - transfer.unchangedMs, transfer.lastMs]), [entry2.step.startMs, entry2.step.endMs]);
+  if (stalledMs >= UNEXPLAINED_MIN_MS) {
+    findings4.push(finding2(ctx, {
+      category: "interrupted-transfer",
+      detail,
+      step: entry2.label,
+      observedMs: stalledMs,
+      removableMs: 0,
+      observation: `${entry2.label}: the ${ctx.job.conclusion} job's retained BuildKit log contains ${stalled.length} layer transfer(s) without observed completion, with repeated unchanged reported progress over ${formatMs(stalledMs)} of non-overlapping observed time. A CACHED vertex does not imply its layers finished transferring. The log does not establish the backend cause or removable cost.`,
+      recommendation: "Investigate the exact digest and transfer interval, cache/registry availability, network and BuildKit worker diagnostics before changing the Dockerfile or cache policy. Compare the same immutable build inputs after diagnosis. Preserve deadlines, retry limits, permissions, cache integrity, cleanup and downstream image assertions; do not treat a successful rerun as an erased failure or the stalled interval as guaranteed savings.",
+      evidence: [
+        ...stalled.slice(0, MAX_LISTED).map(({ vertex, transfer }) => `#${vertex.id}${vertex.cached ? " CACHED" : ""} ${transfer.digest}: ${transfer.progress}; unchanged reports ${formatMs(transfer.unchangedMs)}; transfer counter ${(transfer.elapsedMs / 1e3).toFixed(1)} s; completion not observed`),
+        "Intervals stop at the last progress observation, not the job deadline; concurrent transfers are counted once.",
+        ...stalled.length > MAX_LISTED ? [`${stalled.length - MAX_LISTED} additional transfer details not listed; their intervals are included.`] : []
+      ],
+      covers: covers2
+    }));
+  }
   const exports = build2.vertices.filter((vertex) => vertex.kind === "cache-export");
   const exportMs = vertexUnionMs(exports);
   if (exportMs >= MIN_FINDING_MS) {
@@ -67215,13 +67274,15 @@ function buildFindings(ctx, entry2, build2, index) {
   if (build2.load) {
     const loads = build2.vertices.filter((vertex) => vertex.kind === "image-export" || vertex.kind === "image-load");
     const loadMs = vertexUnionMs(loads);
+    const incomplete = loads.some((vertex) => vertex.durationMs === void 0);
     if (loadMs >= MIN_FINDING_MS) {
       findings4.push(finding2(ctx, {
         category: "image-load",
         detail,
         step: entry2.label,
         observedMs: loadMs,
-        observation: `${entry2.label}: exporting the image and loading it into the runner's Docker engine (load: true) took ${formatMs(loadMs)}.`,
+        ...incomplete ? { removableMs: 0 } : {},
+        observation: incomplete ? `${entry2.label}: the retained log spans ${formatMs(loadMs)} of image export/load output (load: true), but completion was not observed for every vertex. This is not the completed phase duration.` : `${entry2.label}: exporting the image and loading it into the runner's Docker engine (load: true) took ${formatMs(loadMs)}.`,
         recommendation: "Keep load: true only when later steps run the image locally; otherwise drop it (or push instead). When local use is required, the docker driver builds straight into the engine but supports different cache backends, so measure both before switching.",
         evidence: [...loads.map(describeVertex), "load: true"],
         covers: covers2
@@ -67659,7 +67720,7 @@ function attributeRun(snapshot, logs = /* @__PURE__ */ new Map()) {
     }
   }
   bottlenecks.push(...repeatedSetup(shape, evidenceById), ...queueFindings(snapshot, shape));
-  const priority2 = (finding4) => finding4.category === "generated-artifact-drift" ? 2 : finding4.category === "queue-pressure" ? 1 : 0;
+  const priority2 = (finding4) => finding4.category === "interrupted-transfer" ? 3 : finding4.category === "generated-artifact-drift" ? 2 : finding4.category === "queue-pressure" ? 1 : 0;
   bottlenecks.sort((a, b) => priority2(b) - priority2(a) || b.elapsedSavingsBoundMs - a.elapsedSavingsBoundMs || b.runnerSavingsBoundMs - a.runnerSavingsBoundMs || compareText(a.id, b.id));
   gaps.sort((a, b) => (b.ms ?? 0) - (a.ms ?? 0) || compareText(a.kind, b.kind) || compareText(a.jobKey, b.jobKey) || compareText(a.detail, b.detail));
   const jobs = shape.measured.map((timed) => {

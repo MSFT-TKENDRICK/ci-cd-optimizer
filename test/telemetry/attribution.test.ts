@@ -146,6 +146,43 @@ describe("attributeRun on run 42856555439", () => {
     expect(found.summary).toMatch(/load/);
   });
 
+  it("prioritizes observed interrupted transfers without inventing a cause or savings", () => {
+    const digest = `sha256:${"a".repeat(64)}`;
+    const other = `sha256:${"b".repeat(64)}`;
+    const evidence = parseJobLog([
+      ["38:29", "##[group]Run docker buildx build --load ."], ["38:29", "docker buildx build --load ."],
+      ["38:29", "shell: /usr/bin/bash -e {0}"], ["38:29", "##[endgroup]"],
+      ["38:30", "#23 [stage 3/3] COPY /app /app"], ["38:30", "#23 CACHED"],
+      ["38:31", `#23 ${digest} 0B / 12.48kB 3.6s`],
+      ["38:35", `#23 ${other} 0B / 1MB 1s`],
+      ["39:00", "#24 exporting to docker image format"], ["39:05", "#24 exporting layers"],
+      ["39:10", `#23 ${other} 0B / 1MB 36s`],
+      ["39:20", `#23 ${digest} 0B / 12.48kB 52.6s`],
+      ["39:30", "##[error]The operation was canceled."],
+    ].map(([time, text]) => `${at(time!)} ${text}`).join("\n"));
+    for (const conclusion of ["failure", "cancelled", "timed_out"] as const) {
+      const source = snapshot([job(1, "app", "38:29", "39:30", { conclusion })]);
+      const result = attributeRun(source, new Map([[1, evidence]]));
+      const found = one(result, "interrupted-transfer", "app");
+      expect(result.bottlenecks[0]).toBe(found);
+      expect(found).toMatchObject({ observedMs: 49000, elapsedSavingsBoundMs: 0, runnerSavingsBoundMs: 0 });
+      expect(found.summary).toContain("does not establish the backend cause");
+      expect(found.evidence.join(" ")).toContain(`CACHED ${digest}`);
+      expect(found.recommendation).toContain("Preserve deadlines, retry limits");
+      const incomplete = one(result, "image-load", "app");
+      expect(incomplete).toMatchObject({ observedMs: 5000, elapsedSavingsBoundMs: 0, runnerSavingsBoundMs: 0 });
+      expect(incomplete.summary).toContain("not the completed phase duration");
+      const emitted = benchmarkRun(source, result, undefined, []).findings[0]!;
+      expect(emitted).toMatchObject({ category: "interrupted-transfer", observedMs: 49000, runnerSavingsBoundMs: 0 });
+      expect(emitted.evidence.join(" ")).toContain(digest);
+    }
+    const success = snapshot([job(1, "app", "38:29", "39:30")]);
+    expect(attributeRun(success, new Map([[1, evidence]])).bottlenecks.some((item) => item.category === "interrupted-transfer")).toBe(false);
+    evidence.steps[0]!.endMs = Date.parse(at("38:36"));
+    expect(attributeRun(snapshot([job(1, "app", "38:29", "39:30", { conclusion: "failure" })]), new Map([[1, evidence]]))
+      .bottlenecks.some((item) => item.category === "interrupted-transfer")).toBe(false);
+  });
+
   it.each(["image-load", "cache-export"] as const)("uses non-overlapping elapsed intervals for %s findings and thresholds", (category) => {
     for (const { spans, expectedMs } of [
       { spans: [[0, 7500], [2800, 7500]], expectedMs: 7500 },

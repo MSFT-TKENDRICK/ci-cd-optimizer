@@ -33,7 +33,7 @@ const INSTALL_COMMAND =
 export type BottleneckCategory =
   | "cache-export" | "image-load" | "layer-cache-miss" | "builder-setup" | "builder-teardown" | "package-cache"
   | "toolchain-download" | "repeated-command" | "service-startup" | "test-runtime" | "repeated-setup"
-  | "generated-artifact-drift" | "queue-pressure";
+  | "generated-artifact-drift" | "queue-pressure" | "interrupted-transfer";
 
 export interface Bottleneck {
   id: string;
@@ -363,6 +363,28 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
   const detail = `s${entry.path}b${index}`;
   const covers = [entry.top];
 
+  const stalled = ["failure", "cancelled", "timed_out"].includes(ctx.job.conclusion ?? "")
+    ? build.vertices.flatMap((vertex) => (vertex.transfers ?? [])
+      .filter((transfer) => transfer.unchangedMs >= UNEXPLAINED_MIN_MS)
+      .map((transfer) => ({ vertex, transfer })))
+    : [];
+  const stalledMs = unionMs(stalled.map(({ transfer }) =>
+    [transfer.lastMs - transfer.unchangedMs, transfer.lastMs] as const), [entry.step.startMs, entry.step.endMs]);
+  if (stalledMs >= UNEXPLAINED_MIN_MS) {
+    findings.push(finding(ctx, {
+      category: "interrupted-transfer", detail, step: entry.label, observedMs: stalledMs, removableMs: 0,
+      observation: `${entry.label}: the ${ctx.job.conclusion} job's retained BuildKit log contains ${stalled.length} layer transfer(s) without observed completion, with repeated unchanged reported progress over ${formatMs(stalledMs)} of non-overlapping observed time. A CACHED vertex does not imply its layers finished transferring. The log does not establish the backend cause or removable cost.`,
+      recommendation: "Investigate the exact digest and transfer interval, cache/registry availability, network and BuildKit worker diagnostics before changing the Dockerfile or cache policy. Compare the same immutable build inputs after diagnosis. Preserve deadlines, retry limits, permissions, cache integrity, cleanup and downstream image assertions; do not treat a successful rerun as an erased failure or the stalled interval as guaranteed savings.",
+      evidence: [
+        ...stalled.slice(0, MAX_LISTED).map(({ vertex, transfer }) =>
+          `#${vertex.id}${vertex.cached ? " CACHED" : ""} ${transfer.digest}: ${transfer.progress}; unchanged reports ${formatMs(transfer.unchangedMs)}; transfer counter ${(transfer.elapsedMs / 1000).toFixed(1)} s; completion not observed`),
+        "Intervals stop at the last progress observation, not the job deadline; concurrent transfers are counted once.",
+        ...(stalled.length > MAX_LISTED ? [`${stalled.length - MAX_LISTED} additional transfer details not listed; their intervals are included.`] : []),
+      ],
+      covers,
+    }));
+  }
+
   const exports = build.vertices.filter((vertex) => vertex.kind === "cache-export");
   const exportMs = vertexUnionMs(exports);
   if (exportMs >= MIN_FINDING_MS) {
@@ -385,13 +407,17 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
   if (build.load) {
     const loads = build.vertices.filter((vertex) => vertex.kind === "image-export" || vertex.kind === "image-load");
     const loadMs = vertexUnionMs(loads);
+    const incomplete = loads.some((vertex) => vertex.durationMs === undefined);
     if (loadMs >= MIN_FINDING_MS) {
       findings.push(finding(ctx, {
         category: "image-load",
         detail,
         step: entry.label,
         observedMs: loadMs,
-        observation: `${entry.label}: exporting the image and loading it into the runner's Docker engine (load: true) took ${formatMs(loadMs)}.`,
+        ...(incomplete ? { removableMs: 0 } : {}),
+        observation: incomplete
+          ? `${entry.label}: the retained log spans ${formatMs(loadMs)} of image export/load output (load: true), but completion was not observed for every vertex. This is not the completed phase duration.`
+          : `${entry.label}: exporting the image and loading it into the runner's Docker engine (load: true) took ${formatMs(loadMs)}.`,
         recommendation: "Keep load: true only when later steps run the image locally; otherwise drop it (or push instead). When local use is required, the docker driver builds straight into the engine but supports different cache backends, so measure both before switching.",
         evidence: [...loads.map(describeVertex), "load: true"],
         covers,
@@ -879,7 +905,8 @@ export function attributeRun(snapshot: WorkflowSnapshot, logs: ReadonlyMap<numbe
   }
 
   bottlenecks.push(...repeatedSetup(shape, evidenceById), ...queueFindings(snapshot, shape));
-  const priority = (finding: Bottleneck) => finding.category === "generated-artifact-drift" ? 2 : finding.category === "queue-pressure" ? 1 : 0;
+  const priority = (finding: Bottleneck) => finding.category === "interrupted-transfer" ? 3
+    : finding.category === "generated-artifact-drift" ? 2 : finding.category === "queue-pressure" ? 1 : 0;
   bottlenecks.sort((a, b) => priority(b) - priority(a) || b.elapsedSavingsBoundMs - a.elapsedSavingsBoundMs
     || b.runnerSavingsBoundMs - a.runnerSavingsBoundMs || compareText(a.id, b.id));
   gaps.sort((a, b) => (b.ms ?? 0) - (a.ms ?? 0) || compareText(a.kind, b.kind) || compareText(a.jobKey, b.jobKey)

@@ -34,6 +34,16 @@ export interface BuildOperation {
   durationMs: number;
 }
 
+export interface BuildTransfer {
+  digest: string;
+  progress: string;
+  firstMs: number;
+  lastMs: number;
+  elapsedMs: number;
+  /** Repeated unchanged progress, bounded by both log and transfer clocks. */
+  unchangedMs: number;
+}
+
 export interface BuildVertex {
   id: number;
   name: string;
@@ -45,6 +55,8 @@ export interface BuildVertex {
   cached: boolean;
   error: boolean;
   operations: BuildOperation[];
+  /** Incomplete transfers at the end of the retained log; not proof of their backend cause. */
+  transfers?: BuildTransfer[];
 }
 
 export interface CacheSpec {
@@ -307,13 +319,43 @@ function testLine(step: LogStep, text: string, pending: WeakMap<LogStep, TestFil
 const BUILD_START_VERTEX = /^\[internal\] load (?:build definition|\.dockerignore|local bake definitions|remote build context)\b/;
 const DOCKER_BUILD = /(?:^|[\s/;&|(])docker(?:\s+buildx)?\s+(?:build|bake)\b/;
 
-/** The build receiving BuildKit output: the latest one that has vertices, else the first declared one. */
+/** The build receiving BuildKit output: the latest one with vertices or a driver banner, else the first declared one. */
 function activeBuild(step: LogStep): number {
-  for (let index = step.builds.length - 1; index >= 0; index -= 1) if (step.builds[index]?.vertices.length) return index;
+  for (let index = step.builds.length - 1; index >= 0; index -= 1) {
+    if (step.builds[index]?.vertices.length || step.builds[index]?.driver) return index;
+  }
   return step.builds.length ? 0 : -1;
 }
 
-function vertexLine(step: LogStep, id: number, text: string, ms: number): void {
+type PendingTransfer = Omit<BuildTransfer, "unchangedMs"> & { firstElapsedMs: number };
+type PendingTransfers = WeakMap<BuildVertex, Map<string, PendingTransfer>>;
+
+function transferLine(vertex: BuildVertex, text: string, ms: number, pending: PendingTransfers): void {
+  const digest = /^(sha256:[a-f0-9]{64})\b/.exec(text)?.[1];
+  if (!digest) return;
+  const match = text.length <= MAX_TEXT
+    ? /^sha256:[a-f0-9]{64} (\d+(?:\.\d+)?)([kMGT]?B) \/ (\d+(?:\.\d+)?)([kMGT]?B) (\d+(?:\.\d+)?)s( done)?$/.exec(text) : null;
+  const transfers = pending.get(vertex) ?? new Map<string, PendingTransfer>();
+  const bytes = (value: string, unit: string): number => Number(value) * 1000 ** ["B", "kB", "MB", "GB", "TB"].indexOf(unit);
+  const current = match ? bytes(match[1]!, match[2]!) : NaN;
+  const total = match ? bytes(match[3]!, match[4]!) : NaN;
+  const elapsedMs = match ? seconds(match[5]!) : NaN;
+  if (!match || !Number.isSafeInteger(elapsedMs) || !Number.isFinite(current) || !Number.isFinite(total)
+    || current < 0 || total <= 0 || total > Number.MAX_SAFE_INTEGER || current >= total || match[6]) {
+    transfers.delete(digest);
+    return;
+  }
+  const progress = `${match[1]}${match[2]} / ${match[3]}${match[4]}`;
+  const previous = transfers.get(digest);
+  const restart = !previous || previous.progress !== progress || elapsedMs < previous.elapsedMs || ms < previous.lastMs;
+  transfers.set(digest, {
+    digest, progress, firstMs: restart ? ms : previous.firstMs, lastMs: ms, elapsedMs,
+    firstElapsedMs: restart ? elapsedMs : previous.firstElapsedMs,
+  });
+  pending.set(vertex, transfers);
+}
+
+function vertexLine(step: LogStep, id: number, text: string, ms: number, pending: PendingTransfers): void {
   const active = activeBuild(step);
   let build = step.builds[active];
   // BuildKit restarts its numbering for every build. A later build in the same step starts with a `#0` banner or,
@@ -337,12 +379,16 @@ function vertexLine(step: LogStep, id: number, text: string, ms: number): void {
   if (!vertex) {
     vertex = { id, name: clip(text), kind: vertexKind(text), firstMs: ms, lastMs: ms, cached: false, error: false, operations: [] };
     build.vertices.push(vertex);
+    transferLine(vertex, text, ms, pending);
     return;
   }
   vertex.lastMs = ms;
+  transferLine(vertex, text, ms, pending);
   let match: RegExpExecArray | null;
-  if ((match = /^DONE ([\d.]+)s$/.exec(text))) vertex.durationMs = seconds(match[1] as string);
-  else if (text === "CACHED") vertex.cached = true;
+  if ((match = /^DONE ([\d.]+)s$/.exec(text))) {
+    vertex.durationMs = seconds(match[1] as string);
+    pending.delete(vertex);
+  } else if (text === "CACHED") vertex.cached = true;
   else if (/^(?:ERROR|CANCELED)\b/.test(text)) vertex.error = true;
   else if (!/^\d+\.\d+ /.test(text) && (match = /^(.+?) ([\d.]+)s done$/.exec(text))
     && !/^(?:sha256:|extracting |loading layer |writing layer )/.test(match[1] as string)) {
@@ -368,6 +414,7 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
   let pullStartMs: number | undefined;
   const declaredOnly = new Set<BuildInvocation>();
   const pendingTests = new WeakMap<LogStep, TestFileTiming[]>();
+  const pendingTransfers: PendingTransfers = new WeakMap();
   let waitStartMs: number | undefined;
 
   const innermost = (): LogStep | undefined => {
@@ -527,7 +574,7 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
     }
     const vertex = /^#(\d+) (.+)$/.exec(line);
     if (vertex) {
-      vertexLine(step, Number(vertex[1]), vertex[2] as string, ms);
+      vertexLine(step, Number(vertex[1]), vertex[2] as string, ms, pendingTransfers);
       continue;
     }
     if (line.startsWith("Found in cache @ ")) step.toolCache = "hit";
@@ -545,6 +592,12 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
   // A script that merely mentions `docker build` (or skips it) produced no BuildKit output; keep only builds that ran.
   const prune = (step: LogStep): void => {
     step.builds = step.builds.filter((build) => !declaredOnly.has(build) || build.vertices.length > 0);
+    for (const vertex of step.builds.flatMap((build) => build.vertices)) {
+      const transfers = pendingTransfers.get(vertex);
+      if (transfers?.size) vertex.transfers = [...transfers.values()].map(({ firstElapsedMs, ...transfer }) => ({
+        ...transfer, unchangedMs: Math.min(transfer.lastMs - transfer.firstMs, transfer.elapsedMs - firstElapsedMs),
+      }));
+    }
     step.children.forEach(prune);
   };
   evidence.steps.forEach(prune);
