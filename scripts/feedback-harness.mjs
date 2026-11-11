@@ -158,7 +158,7 @@ export async function connectFeedback(session, { root, config, env = process.env
     throw new Error("Feedback needs an approved GITHUB_TOKEN or GH_TOKEN. No alternate credential source was used.");
   }
   const since = new Date(Math.max(Date.parse(config.since), Date.now() - WINDOW)).toISOString();
-  try { await session.rpc.mcp.startServer({
+  const server = {
     serverName: SERVER,
     config: {
       type: "stdio", command: "node", cwd: root, tools: ["*"],
@@ -167,7 +167,14 @@ export async function connectFeedback(session, { root, config, env = process.env
         ...(config.auth === "github-cli" ? ["--github-cli-auth"] : [])],
       ...(config.auth === "environment" ? { env: { GITHUB_TOKEN: token } } : {}),
     },
-  }); } catch (error) { unsubscribe(); throw error; }
+  };
+  try {
+    const { servers } = await session.rpc.mcp.listConfigured();
+    const existing = servers.find((item) => item.name === SERVER);
+    if (existing && !existing.enabled) throw new Error("The CI feedback MCP server is disabled; the harness will not enable it.");
+    if (existing) await session.rpc.mcp.restartServer(server);
+    else await session.rpc.mcp.startServer(server);
+  } catch (error) { unsubscribe(); throw error; }
   await drain();
   if (!stopped) {
     timer = setInterval(() => { void drain(); }, 60_000);

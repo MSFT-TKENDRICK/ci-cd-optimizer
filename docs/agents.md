@@ -200,6 +200,8 @@ stdio MCP process through the live harness and subscribes to native resource-lis
 Devcontainer startup and Copilot setup steps prepare this configuration. A host supporting Copilot SDK extensions
 must load `.github/extensions/ci-feedback`; setup completion alone does not prove a cloud host supports this bridge.
 Verify `ci_feedback_connection_status` in the actual session. Reload extensions after configuration changes.
+Reload restarts the existing session-scoped MCP server with the current bundle and replay configuration;
+it never re-enables a disabled server.
 The distroless production App image is not the development container and does not run this editor harness.
 
 The bridge queues fixed remediation guidance plus explicitly untrusted benchmark evidence into its own conversation.
