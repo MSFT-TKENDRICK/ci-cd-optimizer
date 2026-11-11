@@ -90,6 +90,7 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `ssdf`, `all`
 | [`redundancy/duplicate-command`](#redundancy-duplicate-command) | practice | info | strict |  | Review repeated non-trivial shell commands for potentially redundant work. |
 | [`redundancy/shadowed-env`](#redundancy-shadowed-env) | practice | info | recommended, strict | yes | A job or step should not redefine an environment variable to the value it already inherits. |
 | [`redundancy/toolchain-version-drift`](#redundancy-toolchain-version-drift) | practice | warn | agentic, strict |  | Workflows should agree on the toolchain version they install with each setup action. |
+| [`redundancy/source-cli-with-committed-bundle`](#redundancy-source-cli-with-committed-bundle) | insight | info | insights |  | Jobs that install dependencies only to run a TypeScript CLI from source could run the committed action bundle instead. |
 | [`testing/playwright-browser-cache`](#testing-playwright-browser-cache) | practice | warn | recommended, agentic, strict |  | Evaluate browser reuse when Playwright downloads are a measured bottleneck. |
 | [`testing/tool-incremental-cache`](#testing-tool-incremental-cache) | practice | info | agentic, strict |  | ESLint, tsc and Jest should keep their incremental caches between CI runs. |
 | [`testing/watch-mode-in-ci`](#testing-watch-mode-in-ci) | practice | warn | recommended, agentic, strict |  | Test runners and compilers in CI should run once instead of in watch mode. |
@@ -3089,6 +3090,43 @@ After:
 References:
 
 - <https://github.com/actions/setup-node/blob/main/docs/advanced-usage.md#node-version-file>
+
+<a id="redundancy-source-cli-with-committed-bundle"></a>
+
+### redundancy/source-cli-with-committed-bundle
+
+Jobs that install dependencies only to run a TypeScript CLI from source could run the committed action bundle instead.
+
+**Why:** A JavaScript action commits a self-contained bundle so it runs without installing anything. A job that installs the full dependency tree just to start the same CLI through tsx or ts-node pays for the install and the on-the-fly compilation on every run, although the bundle in the repository already contains that code. When a generated-output check keeps the bundle in sync with the source, running it with `node` gives the same behaviour without the install.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: insight; default severity: info; impact: low
+- Presets: `insights`
+
+Before:
+
+```yaml
+# action.yml: runs: { using: node24, main: dist/index.js }
+# package.json: "cli": "tsx src/bin.ts"
+steps:
+  - uses: actions/checkout@v4
+  - uses: actions/setup-node@v4
+  - run: npm ci
+  - run: npm run --silent cli -- report --pr 1
+```
+
+After:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: actions/setup-node@v4
+  - run: node dist/index.js report --pr 1
+```
+
+References:
+
+- <https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-javascript-action>
 
 ## Ruleset: testing
 

@@ -9,8 +9,8 @@
 #   - record present: the trusted CLI repeats intake itself through the API for the pull request it names;
 #   - record missing or invalid: any open pull request at this commit that touches projects/ fails closed.
 # Every open pull request whose head is this commit is evaluated, and the status succeeds only if all of them pass.
-# Dependencies come from the default-branch npm cache scope only; caches written by pull request runs are scoped to
-# their refs/pull/* ref and are not visible here.
+# Nothing is installed or restored from a cache: only the default branch's committed bundle (dist-action/index.js,
+# which CI keeps in sync with src/) runs.
 name: Review intake comment
 
 on:
@@ -61,7 +61,9 @@ jobs:
           persist-credentials: false
 
       - if: github.event.workflow_run.event == 'pull_request'
-        uses: ./.github/actions/setup
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
 
       - name: Validate intake record
         id: record
@@ -88,7 +90,7 @@ jobs:
           dir="$RUNNER_TEMP/intake-record"
           parsed="$RUNNER_TEMP/intake-record.out"
           if gh run download "$RUN_ID" --repo "$REPO" --name review-intake --dir "$dir" &&
-            npm run --silent cli -- review intake-artifact "$dir/intake.json" --expected-sha "$EXPECTED_SHA" > "$parsed"; then
+            node dist-action/index.js review intake-artifact "$dir/intake.json" --expected-sha "$EXPECTED_SHA" > "$parsed"; then
             cat "$parsed" >> "$GITHUB_OUTPUT"
             echo "record=present" >> "$GITHUB_OUTPUT"
           else
@@ -107,7 +109,7 @@ jobs:
           pr_args=()
           if [ "$RECORD" = "present" ]; then pr_args=(--pr "$PR_NUMBER"); fi
           status=0
-          npm run --silent cli -- review intake-status --head-sha "$EXPECTED_SHA" "${pr_args[@]}" \
+          node dist-action/index.js review intake-status --head-sha "$EXPECTED_SHA" "${pr_args[@]}" \
             --record "${RECORD:-invalid}" --comment --status --output "$GITHUB_STEP_SUMMARY" || status=$?
           # Exit code 1 is a failing verdict that the status and comment already report; anything else is an error.
           if [ "$status" -gt 1 ]; then exit "$status"; fi

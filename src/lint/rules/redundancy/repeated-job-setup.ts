@@ -1,10 +1,7 @@
 import type { JobModel, StepModel, WorkflowModel } from "../../parsers/workflow.js";
 import { commandWords } from "../caching/shared.js";
 import { commandsOf, defineRule } from "../helpers.js";
-import { hash, setupActionOf, stepSignature } from "./shared.js";
-
-const INSTALL =
-  /^(?:npm (?:ci|install|i)|pnpm (?:install|i)|yarn(?: install)?|bun install|pip3? install|python3? -m pip install|poetry install|uv sync|bundle install|go mod download|composer install|dotnet restore)\b/;
+import { hash, INSTALL_COMMAND, setupActionOf, stepSignature } from "./shared.js";
 
 interface Candidate {
   workflow: WorkflowModel;
@@ -16,7 +13,7 @@ function isSetup(step: StepModel): boolean {
   if (setupActionOf(step)) return true;
   const name = step.uses?.action?.name ?? "";
   if (/\/setup-|\/action-setup$/.test(name)) return true;
-  return commandsOf(step).some(({ command }) => INSTALL.test(commandWords(command).join(" ")));
+  return commandsOf(step).some(({ command }) => INSTALL_COMMAND.test(commandWords(command).join(" ")));
 }
 
 function commonPrefix(candidates: Candidate[]): number {

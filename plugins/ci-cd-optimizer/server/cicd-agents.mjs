@@ -3714,22 +3714,22 @@ var require_errors2 = __commonJS({
   "node_modules/yaml/dist/errors.js"(exports) {
     "use strict";
     var YAMLError = class extends Error {
-      constructor(name, pos, code3, message) {
+      constructor(name, pos, code3, message2) {
         super();
         this.name = name;
         this.code = code3;
-        this.message = message;
+        this.message = message2;
         this.pos = pos;
       }
     };
     var YAMLParseError = class extends YAMLError {
-      constructor(pos, code3, message) {
-        super("YAMLParseError", pos, code3, message);
+      constructor(pos, code3, message2) {
+        super("YAMLParseError", pos, code3, message2);
       }
     };
     var YAMLWarning = class extends YAMLError {
-      constructor(pos, code3, message) {
-        super("YAMLWarning", pos, code3, message);
+      constructor(pos, code3, message2) {
+        super("YAMLWarning", pos, code3, message2);
       }
     };
     var prettifyError2 = (src, lc) => (error62) => {
@@ -4409,8 +4409,8 @@ var require_compose_collection = __commonJS({
         const { anchor: anchor2, newlineAfterProp: nl } = props;
         const lastProp = anchor2 && tagToken ? anchor2.offset > tagToken.offset ? anchor2 : tagToken : anchor2 ?? tagToken;
         if (lastProp && (!nl || nl.offset < lastProp.offset)) {
-          const message = "Missing newline after block sequence props";
-          onError(lastProp, "MISSING_CHAR", message);
+          const message2 = "Missing newline after block sequence props";
+          onError(lastProp, "MISSING_CHAR", message2);
         }
       }
       const expType = token.type === "block-map" ? "map" : token.type === "block-seq" ? "seq" : token.start.source === "{" ? "map" : "seq";
@@ -4482,15 +4482,15 @@ var require_resolve_block_scalar = __commonJS({
             trimIndent = indent.length;
         } else {
           if (indent.length < trimIndent) {
-            const message = "Block scalars with more-indented leading empty lines must use an explicit indentation indicator";
-            onError(offset + indent.length, "MISSING_CHAR", message);
+            const message2 = "Block scalars with more-indented leading empty lines must use an explicit indentation indicator";
+            onError(offset + indent.length, "MISSING_CHAR", message2);
           }
           if (header.indent === 0)
             trimIndent = indent.length;
           contentStart = i;
           if (trimIndent === 0 && !ctx.atRoot) {
-            const message = "Block scalar values in collections must be indented";
-            onError(offset, "BAD_INDENT", message);
+            const message2 = "Block scalar values in collections must be indented";
+            onError(offset, "BAD_INDENT", message2);
           }
           break;
         }
@@ -4513,8 +4513,8 @@ var require_resolve_block_scalar = __commonJS({
           content3 = content3.slice(0, -1);
         if (content3 && indent.length < trimIndent) {
           const src = header.indent ? "explicit indentation indicator" : "first line";
-          const message = `Block scalar lines must not be less indented than their ${src}`;
-          onError(offset - content3.length - (crlf ? 2 : 1), "BAD_INDENT", message);
+          const message2 = `Block scalar lines must not be less indented than their ${src}`;
+          onError(offset - content3.length - (crlf ? 2 : 1), "BAD_INDENT", message2);
           indent = "";
         }
         if (type === Scalar5.Scalar.BLOCK_LITERAL) {
@@ -4592,8 +4592,8 @@ var require_resolve_block_scalar = __commonJS({
             break;
           case "comment":
             if (strict && !hasSpace) {
-              const message = "Comments must be separated from other tokens by white space characters";
-              onError(token, "MISSING_CHAR", message);
+              const message2 = "Comments must be separated from other tokens by white space characters";
+              onError(token, "MISSING_CHAR", message2);
             }
             length += token.source.length;
             comment = token.source.substring(1);
@@ -4604,8 +4604,8 @@ var require_resolve_block_scalar = __commonJS({
             break;
           /* istanbul ignore next should not happen */
           default: {
-            const message = `Unexpected token in block scalar header: ${token.type}`;
-            onError(token, "UNEXPECTED_TOKEN", message);
+            const message2 = `Unexpected token in block scalar header: ${token.type}`;
+            onError(token, "UNEXPECTED_TOKEN", message2);
             const ts = token.source;
             if (ts && typeof ts === "string")
               length += ts.length;
@@ -4998,13 +4998,13 @@ var require_compose_node = __commonJS({
             if (anchor2)
               node2.anchor = anchor2.source.substring(1);
           } catch (error62) {
-            const message = error62 instanceof Error ? error62.message : String(error62);
-            onError(token, "RESOURCE_EXHAUSTION", message);
+            const message2 = error62 instanceof Error ? error62.message : String(error62);
+            onError(token, "RESOURCE_EXHAUSTION", message2);
           }
           break;
         default: {
-          const message = token.type === "error" ? token.message : `Unsupported token (type: ${token.type})`;
-          onError(token, "UNEXPECTED_TOKEN", message);
+          const message2 = token.type === "error" ? token.message : `Unsupported token (type: ${token.type})`;
+          onError(token, "UNEXPECTED_TOKEN", message2);
           isSrcToken = false;
         }
       }
@@ -5160,12 +5160,12 @@ var require_composer = __commonJS({
         this.prelude = [];
         this.errors = [];
         this.warnings = [];
-        this.onError = (source, code3, message, warning) => {
+        this.onError = (source, code3, message2, warning) => {
           const pos = getErrorPos(source);
           if (warning)
-            this.warnings.push(new errors.YAMLWarning(pos, code3, message));
+            this.warnings.push(new errors.YAMLWarning(pos, code3, message2));
           else
-            this.errors.push(new errors.YAMLParseError(pos, code3, message));
+            this.errors.push(new errors.YAMLParseError(pos, code3, message2));
         };
         this.directives = new directives.Directives({ version: options.version || "1.2" });
         this.options = options;
@@ -5235,10 +5235,10 @@ ${cb}` : comment;
           console.dir(token, { depth: null });
         switch (token.type) {
           case "directive":
-            this.directives.add(token.source, (offset, message, warning) => {
+            this.directives.add(token.source, (offset, message2, warning) => {
               const pos = getErrorPos(token);
               pos[0] += offset;
-              this.onError(pos, "BAD_DIRECTIVE", message, warning);
+              this.onError(pos, "BAD_DIRECTIVE", message2, warning);
             });
             this.prelude.push(token.source);
             this.atDirectives = true;
@@ -5327,12 +5327,12 @@ var require_cst_scalar = __commonJS({
     var stringifyString = require_stringifyString();
     function resolveAsScalar(token, strict = true, onError) {
       if (token) {
-        const _onError = (pos, code3, message) => {
+        const _onError = (pos, code3, message2) => {
           const offset = typeof pos === "number" ? pos : Array.isArray(pos) ? pos[0] : pos.offset;
           if (onError)
-            onError(offset, code3, message);
+            onError(offset, code3, message2);
           else
-            throw new errors.YAMLParseError([offset, offset + 1], code3, message);
+            throw new errors.YAMLParseError([offset, offset + 1], code3, message2);
         };
         switch (token.type) {
           case "scalar":
@@ -6492,8 +6492,8 @@ var require_parser = __commonJS({
         }
         const type = cst.tokenType(source);
         if (!type) {
-          const message = `Not a YAML token: ${source}`;
-          yield* this.pop({ type: "error", offset: this.offset, message, source });
+          const message2 = `Not a YAML token: ${source}`;
+          yield* this.pop({ type: "error", offset: this.offset, message: message2, source });
           this.offset += source.length;
         } else if (type === "scalar") {
           this.atNewLine = false;
@@ -6583,8 +6583,8 @@ var require_parser = __commonJS({
       *pop(error62) {
         const token = error62 ?? this.stack.pop();
         if (!token) {
-          const message = "Tried to pop an empty stack";
-          yield { type: "error", offset: this.offset, source: "", message };
+          const message2 = "Tried to pop an empty stack";
+          yield { type: "error", offset: this.offset, source: "", message: message2 };
         } else if (this.stack.length === 0) {
           yield token;
         } else {
@@ -8575,8 +8575,8 @@ function prefixIssues(path, issues) {
     return iss;
   });
 }
-function unwrapMessage(message) {
-  return typeof message === "string" ? message : message?.message;
+function unwrapMessage(message2) {
+  return typeof message2 === "string" ? message2 : message2?.message;
 }
 function sizeCaps(defChecks) {
   const caps = [];
@@ -8606,7 +8606,7 @@ function finalizeIssue(iss, ctx, config2) {
       iss.schema = iss.inst;
   }
   const schemaError = iss.schema !== iss.inst ? iss.schema?._zod.def?.error : void 0;
-  const message = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
+  const message2 = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
   const full = {};
   for (const k of Object.keys(iss)) {
     if (k === "inst" || k === "schema" || k === "continue" || k === "input" || k === "__proto__")
@@ -8614,7 +8614,7 @@ function finalizeIssue(iss, ctx, config2) {
     full[k] = iss[k];
   }
   full.path ?? (full.path = []);
-  full.message = message;
+  full.message = message2;
   if (ctx?.reportInput) {
     full.input = iss.input;
   }
@@ -20353,8 +20353,8 @@ var globalRegistry = globalThis.__zod_globalRegistry;
 var INVALID = /* @__PURE__ */ Symbol.for("zod.compile.invalid");
 var FALLBACK_FLAG = /* @__PURE__ */ Symbol.for("zod.compile.fallback");
 var ZodCompileAsyncError = class extends Error {
-  constructor(message = "z.compile does not support async refinements, transforms, or checks") {
-    super(message);
+  constructor(message2 = "z.compile does not support async refinements, transforms, or checks") {
+    super(message2);
     this.name = "ZodCompileAsyncError";
   }
 };
@@ -23054,12 +23054,12 @@ function initializeContext(params) {
     external: params?.external ?? void 0
   };
 }
-function handleUnrepresentable(schema, ctx, json4, params, message) {
-  const result = typeof ctx.unrepresentable === "function" ? ctx.unrepresentable({ zodSchema: schema, path: params.path, message }) : ctx.unrepresentable;
+function handleUnrepresentable(schema, ctx, json4, params, message2) {
+  const result = typeof ctx.unrepresentable === "function" ? ctx.unrepresentable({ zodSchema: schema, path: params.path, message: message2 }) : ctx.unrepresentable;
   if (result === "any")
     return false;
   if (result === void 0 || result === "throw")
-    throw new Error(message);
+    throw new Error(message2);
   Object.assign(json4, result);
   return true;
 }
@@ -28351,8 +28351,8 @@ var Handled = {
   /**
    * Leaves a message unhandled so later handlers can process it.
    */
-  no(message, retry = false) {
-    return { handled: false, message, retry };
+  no(message2, retry = false) {
+    return { handled: false, message: message2, retry };
   }
 };
 function rejectedPromise(error62) {
@@ -28373,14 +28373,14 @@ function errorDetails(error62) {
 function isZodError(error62) {
   return typeof error62 === "object" && error62 !== null && "name" in error62 && error62.name === "ZodError" && "issues" in error62 && Array.isArray(error62.issues) && "format" in error62 && typeof error62.format === "function";
 }
-function describeInvalidMessage(message) {
-  if (Array.isArray(message)) {
+function describeInvalidMessage(message2) {
+  if (Array.isArray(message2)) {
     return { type: "array" };
   }
-  if (isRecord(message)) {
-    return { type: "object", keys: Object.keys(message) };
+  if (isRecord(message2)) {
+    return { type: "object", keys: Object.keys(message2) };
   }
-  return { type: message === null ? "null" : typeof message };
+  return { type: message2 === null ? "null" : typeof message2 };
 }
 function errorToResult(error62) {
   if (error62 instanceof RequestError) {
@@ -28603,8 +28603,8 @@ var Connection = class {
   addDynamicHandler(handler) {
     this.dynamicHandlers.add(handler);
     if (this.retryQueue.length > 0) {
-      for (const message of this.retryQueue.splice(0)) {
-        void this.processIncomingMessage(message).catch((error62) => this.close(error62));
+      for (const message2 of this.retryQueue.splice(0)) {
+        void this.processIncomingMessage(message2).catch((error62) => this.close(error62));
       }
     }
     return new HandlerRegistration(() => {
@@ -28737,12 +28737,12 @@ var Connection = class {
   }
   legacyHandler(requestHandler, notificationHandler) {
     return {
-      handleMessage: async (message, cx) => {
-        if (message.kind === "request") {
-          const result = await requestHandler(message.method, message.params, cx);
-          await message.responder.respond(result);
+      handleMessage: async (message2, cx) => {
+        if (message2.kind === "request") {
+          const result = await requestHandler(message2.method, message2.params, cx);
+          await message2.responder.respond(result);
         } else {
-          await notificationHandler(message.method, message.params, cx);
+          await notificationHandler(message2.method, message2.params, cx);
         }
         return Handled.yes();
       }
@@ -28755,14 +28755,14 @@ var Connection = class {
       this.receiveReader = reader;
       try {
         while (!this.abortController.signal.aborted) {
-          const { value: message, done } = await reader.read();
+          const { value: message2, done } = await reader.read();
           if (this.abortController.signal.aborted) {
             break;
           }
           if (done) {
             break;
           }
-          this.receiveUnvalidatedMessage(message);
+          this.receiveUnvalidatedMessage(message2);
         }
       } finally {
         if (this.receiveReader === reader) {
@@ -28776,44 +28776,44 @@ var Connection = class {
       this.close(closeError);
     }
   }
-  receiveUnvalidatedMessage(message) {
-    if (Array.isArray(message)) {
+  receiveUnvalidatedMessage(message2) {
+    if (Array.isArray(message2)) {
       void this.sendMessage(protocolErrorResponse(RequestError.invalidRequest(void 0, "JSON-RPC batches are not supported"))).catch(() => {
       });
       return;
     }
-    if (!isRequestMessage(message) && !isNotificationMessage(message) && !isResponseShapedMessage(message)) {
-      void this.sendMessage(protocolErrorResponse(RequestError.invalidRequest(message))).catch(() => {
+    if (!isRequestMessage(message2) && !isNotificationMessage(message2) && !isResponseShapedMessage(message2)) {
+      void this.sendMessage(protocolErrorResponse(RequestError.invalidRequest(message2))).catch(() => {
       });
       return;
     }
-    this.receiveMessage(message);
+    this.receiveMessage(message2);
   }
-  receiveMessage(message) {
+  receiveMessage(message2) {
     if (this.abortController.signal.aborted) {
       return Promise.resolve();
     }
-    if (!isRecord(message)) {
-      console.error("Invalid message", describeInvalidMessage(message));
+    if (!isRecord(message2)) {
+      console.error("Invalid message", describeInvalidMessage(message2));
       return Promise.resolve();
     }
-    if ("method" in message) {
-      if (!("id" in message)) {
-        this.handleProtocolNotification(message);
+    if ("method" in message2) {
+      if (!("id" in message2)) {
+        this.handleProtocolNotification(message2);
       }
-      return this.processIncomingMessage(this.toIncomingMessage(message)).catch((error62) => this.close(error62));
-    } else if ("id" in message) {
-      this.handleResponse(message);
+      return this.processIncomingMessage(this.toIncomingMessage(message2)).catch((error62) => this.close(error62));
+    } else if ("id" in message2) {
+      this.handleResponse(message2);
     } else {
-      console.error("Invalid message", describeInvalidMessage(message));
+      console.error("Invalid message", describeInvalidMessage(message2));
     }
     return Promise.resolve();
   }
-  async processIncomingMessage(message) {
+  async processIncomingMessage(message2) {
     if (this.abortController.signal.aborted) {
       return;
     }
-    let current = message;
+    let current = message2;
     let retry = false;
     try {
       for (const handler of [
@@ -28848,7 +28848,7 @@ var Connection = class {
         const response = errorToResult(error62);
         if ("error" in response) {
           console.error("Error handling notification", {
-            method: message.method,
+            method: message2.method,
             code: response.error.code,
             message: response.error.message
           });
@@ -28856,37 +28856,37 @@ var Connection = class {
       }
     }
   }
-  toIncomingMessage(message) {
-    if ("id" in message) {
+  toIncomingMessage(message2) {
+    if ("id" in message2) {
       const abortController = new AbortController();
-      this.incomingRequests.set(message.id, abortController);
+      this.incomingRequests.set(message2.id, abortController);
       const finishRequest = () => {
-        if (this.incomingRequests.get(message.id) === abortController) {
-          this.incomingRequests.delete(message.id);
+        if (this.incomingRequests.get(message2.id) === abortController) {
+          this.incomingRequests.delete(message2.id);
         }
       };
-      const responder = new RequestResponder(message.id, (result) => {
+      const responder = new RequestResponder(message2.id, (result) => {
         const response = {
           jsonrpc: "2.0",
-          id: nullIdResponders.has(responder) ? null : message.id,
+          id: nullIdResponders.has(responder) ? null : message2.id,
           ...result
         };
         return this.sendMessage(response);
       }, abortController.signal, finishRequest);
       return {
         kind: "request",
-        method: message.method,
-        params: message.params,
-        raw: message,
+        method: message2.method,
+        params: message2.params,
+        raw: message2,
         signal: abortController.signal,
         responder
       };
     }
     return {
       kind: "notification",
-      method: message.method,
-      params: message.params,
-      raw: message
+      method: message2.method,
+      params: message2.params,
+      raw: message2
     };
   }
   handleResponse(response) {
@@ -28902,18 +28902,18 @@ var Connection = class {
       } else if ("result" in response) {
         pendingResponse.resolve(response.result);
       } else {
-        const { code: code3, message, data } = response.error;
-        pendingResponse.reject(new RequestError(code3, message, data));
+        const { code: code3, message: message2, data } = response.error;
+        pendingResponse.reject(new RequestError(code3, message2, data));
       }
     } else {
       console.error("Got response to unknown request", response.id);
     }
   }
-  handleProtocolNotification(message) {
-    if (message.method !== CANCEL_REQUEST_METHOD) {
+  handleProtocolNotification(message2) {
+    if (message2.method !== CANCEL_REQUEST_METHOD) {
       return;
     }
-    const requestId = cancelRequestId(message.params);
+    const requestId = cancelRequestId(message2.params);
     if (requestId === void 0) {
       return;
     }
@@ -28926,7 +28926,7 @@ var Connection = class {
   closedReason() {
     return this.abortController.signal.reason ?? new Error("ACP connection closed");
   }
-  async sendMessage(message) {
+  async sendMessage(message2) {
     if (this.abortController.signal.aborted) {
       return rejectedPromise(this.closedReason());
     }
@@ -28936,7 +28936,7 @@ var Connection = class {
       }
       const writer = this.stream.writable.getWriter();
       try {
-        await writer.write(message);
+        await writer.write(message2);
       } finally {
         writer.releaseLock();
       }
@@ -28981,7 +28981,7 @@ var ConnectionBuilder = class {
    */
   onReceiveMessage(handler) {
     return this.withHandler({
-      handleMessage: async (message, cx) => await handler(message, cx) ?? Handled.no(message),
+      handleMessage: async (message2, cx) => await handler(message2, cx) ?? Handled.no(message2),
       describe: () => this.connectionName ?? "onReceiveMessage"
     });
   }
@@ -28990,12 +28990,12 @@ var ConnectionBuilder = class {
    */
   onReceiveRequest(method, parse6, handler) {
     return this.withHandler({
-      handleMessage: async (message, cx) => {
-        if (message.kind !== "request" || message.method !== method) {
-          return Handled.no(message);
+      handleMessage: async (message2, cx) => {
+        if (message2.kind !== "request" || message2.method !== method) {
+          return Handled.no(message2);
         }
-        const request = parse6(message.params);
-        return await handler(request, message.responder, cx) ?? Handled.yes();
+        const request = parse6(message2.params);
+        return await handler(request, message2.responder, cx) ?? Handled.yes();
       },
       describe: () => `${this.connectionName ?? "request"}:${method}`
     });
@@ -29005,11 +29005,11 @@ var ConnectionBuilder = class {
    */
   onReceiveNotification(method, parse6, handler) {
     return this.withHandler({
-      handleMessage: async (message, cx) => {
-        if (message.kind !== "notification" || message.method !== method) {
-          return Handled.no(message);
+      handleMessage: async (message2, cx) => {
+        if (message2.kind !== "notification" || message2.method !== method) {
+          return Handled.no(message2);
         }
-        const notification = parse6(message.params);
+        const notification = parse6(message2.params);
         return await handler(notification, cx) ?? Handled.yes();
       },
       describe: () => `${this.connectionName ?? "notification"}:${method}`
@@ -29040,8 +29040,8 @@ var RequestError = class _RequestError extends Error {
    * Additional JSON-RPC error data.
    */
   data;
-  constructor(code3, message, data) {
-    super(message);
+  constructor(code3, message2, data) {
+    super(message2);
     this.code = code3;
     this.name = "RequestError";
     this.data = data;
@@ -29309,8 +29309,8 @@ function ndJsonStream(output3, input3, options = {}) {
   let cancelled = false;
   let inputReader;
   let outputWrite = Promise.resolve();
-  const writeJson = (message) => {
-    const content3 = JSON.stringify(message) + "\n";
+  const writeJson = (message2) => {
+    const content3 = JSON.stringify(message2) + "\n";
     const write = outputWrite.then(async () => {
       const writer = output3.getWriter();
       try {
@@ -29331,19 +29331,19 @@ function ndJsonStream(output3, input3, options = {}) {
         if (!trimmedLine) {
           return;
         }
-        let message;
+        let message2;
         try {
-          message = JSON.parse(trimmedLine);
+          message2 = JSON.parse(trimmedLine);
         } catch {
           await writeJson(protocolErrorResponse(RequestError.parseError()));
           return;
         }
-        if (Array.isArray(message)) {
+        if (Array.isArray(message2)) {
           await writeJson(protocolErrorResponse(RequestError.invalidRequest(void 0, "JSON-RPC batches are not supported")));
-        } else if (isRecord(message)) {
-          controller.enqueue(message);
+        } else if (isRecord(message2)) {
+          controller.enqueue(message2);
         } else {
-          await writeJson(protocolErrorResponse(RequestError.invalidRequest(message)));
+          await writeJson(protocolErrorResponse(RequestError.invalidRequest(message2)));
         }
       };
       const reader = input3.getReader();
@@ -29400,8 +29400,8 @@ function ndJsonStream(output3, input3, options = {}) {
     }
   });
   const writable = new WritableStream({
-    write(message) {
-      return writeJson(message);
+    write(message2) {
+      return writeJson(message2);
     }
   });
   return { readable, writable };
@@ -29449,10 +29449,10 @@ function registerAppRequest(builder, spec2, context2, handler, serializeResponse
   };
   if (spec2.method === "*") {
     builder.withFallbackHandler({
-      handleMessage: async (message, cx) => {
-        if (message.kind !== "request")
-          return Handled.no(message);
-        await handle(message.params, message.responder, cx, message.method);
+      handleMessage: async (message2, cx) => {
+        if (message2.kind !== "request")
+          return Handled.no(message2);
+        await handle(message2.params, message2.responder, cx, message2.method);
         return Handled.yes();
       }
     });
@@ -29463,10 +29463,10 @@ function registerAppRequest(builder, spec2, context2, handler, serializeResponse
 function registerAppNotification(builder, spec2, context2, handler) {
   if (spec2.method === "*") {
     builder.withFallbackHandler({
-      handleMessage: async (message, cx) => {
-        if (message.kind !== "notification")
-          return Handled.no(message);
-        await handler(context2(message.params, cx, cx.signal, message.method));
+      handleMessage: async (message2, cx) => {
+        if (message2.kind !== "notification")
+          return Handled.no(message2);
+        await handler(context2(message2.params, cx, cx.signal, message2.method));
         return Handled.yes();
       }
     });
@@ -29485,16 +29485,16 @@ function ndJsonStream2(output3, input3, options) {
 var initializedConnections = /* @__PURE__ */ new WeakSet();
 function agentInitializationGate(enabled) {
   return {
-    handleMessage(message, cx) {
-      if (message.kind !== "request" || !enabled() || initializedConnections.has(cx)) {
-        return Handled.no(message);
+    handleMessage(message2, cx) {
+      if (message2.kind !== "request" || !enabled() || initializedConnections.has(cx)) {
+        return Handled.no(message2);
       }
-      if (message.method !== AGENT_METHODS.initialize) {
-        return message.responder.respondWithError(RequestError.invalidRequest(void 0, `ACP connection must be initialized before '${message.method}'`)).then(() => Handled.yes());
+      if (message2.method !== AGENT_METHODS.initialize) {
+        return message2.responder.respondWithError(RequestError.invalidRequest(void 0, `ACP connection must be initialized before '${message2.method}'`)).then(() => Handled.yes());
       }
-      const { responder } = message;
+      const { responder } = message2;
       return Handled.no({
-        ...message,
+        ...message2,
         responder: new RequestResponder(responder.id, (result) => {
           if ("result" in result) {
             initializedConnections.add(cx);
@@ -29954,11 +29954,11 @@ var ActiveSession = class _ActiveSession {
   async readText() {
     let output3 = "";
     for (; ; ) {
-      const message = await this.nextUpdate();
-      if (message.kind === "stop") {
+      const message2 = await this.nextUpdate();
+      if (message2.kind === "stop") {
         return output3;
       }
-      const { update } = message;
+      const { update } = message2;
       if (update.sessionUpdate === "agent_message_chunk" && update.content.type === "text") {
         output3 += update.content.text;
       }
@@ -30083,11 +30083,11 @@ function clientNotificationContext(params, agent2, signal, method) {
 }
 var SessionUpdateRouter = class {
   activeSessions = /* @__PURE__ */ new Map();
-  handleMessage(message) {
-    if (message.kind !== "notification" || message.method !== CLIENT_METHODS.session_update) {
-      return Handled.no(message);
+  handleMessage(message2) {
+    if (message2.kind !== "notification" || message2.method !== CLIENT_METHODS.session_update) {
+      return Handled.no(message2);
     }
-    const notification = zSessionNotification.parse(message.params);
+    const notification = zSessionNotification.parse(message2.params);
     const update = {
       kind: "session_update",
       notification,
@@ -30099,7 +30099,7 @@ var SessionUpdateRouter = class {
         session.enqueue(update);
       }
     }
-    return Handled.no(message);
+    return Handled.no(message2);
   }
   attach(response, updates) {
     const sessions = this.activeSessions.get(response.sessionId) ?? /* @__PURE__ */ new Set();
@@ -30286,7 +30286,7 @@ var ClientApp = class {
       this.builder.name(options.name);
     }
     this.builder.withHandler({
-      handleMessage: (message, cx) => sessionUpdateRouter(cx).handleMessage(message),
+      handleMessage: (message2, cx) => sessionUpdateRouter(cx).handleMessage(message2),
       describe: () => "client-session-update-router"
     });
   }
@@ -31518,8 +31518,8 @@ var OAuthError = class OAuthError2 extends Error {
     if (typeof this !== "function") throw new TypeError("isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`");
     return brandedHasInstance(this, value);
   }
-  constructor(code3, message, errorUri) {
-    super(message);
+  constructor(code3, message2, errorUri) {
+    super(message2);
     this.code = code3;
     this.errorUri = errorUri;
     this.name = "OAuthError";
@@ -31595,8 +31595,8 @@ var SdkError = class extends Error {
   * failure as `{ cause }` so it is reachable through the `Error.cause` chain that
   * loggers and error trackers walk.
   */
-  constructor(code3, message, data, options) {
-    super(message, options);
+  constructor(code3, message2, data, options) {
+    super(message2, options);
     this.code = code3;
     this.data = data;
     this.name = "SdkError";
@@ -31610,8 +31610,8 @@ var SdkHttpError = class extends SdkError {
   /**
   * @param options - Standard `ErrorOptions`, forwarded to `Error` (see {@linkcode SdkError}).
   */
-  constructor(code3, message, data, options) {
-    super(code3, message, data, options);
+  constructor(code3, message2, data, options) {
+    super(code3, message2, data, options);
     this.name = "SdkHttpError";
   }
   get status() {
@@ -33796,8 +33796,8 @@ var ProtocolError = class ProtocolError2 extends Error {
     if (typeof this !== "function") throw new TypeError("isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`");
     return brandedHasInstance(this, value);
   }
-  constructor(code3, message, data) {
-    super(message);
+  constructor(code3, message2, data) {
+    super(message2);
     this.code = code3;
     this.data = data;
     this.name = "ProtocolError";
@@ -33806,35 +33806,35 @@ var ProtocolError = class ProtocolError2 extends Error {
   /**
   * Factory method to create the appropriate error type based on the error code and data
   */
-  static fromError(code3, message, data) {
+  static fromError(code3, message2, data) {
     if (code3 === ProtocolErrorCode.UrlElicitationRequired && data) {
       const errorData = data;
-      if (errorData.elicitations) return new UrlElicitationRequiredError(errorData.elicitations, message);
+      if (errorData.elicitations) return new UrlElicitationRequiredError(errorData.elicitations, message2);
     }
     if (code3 === ProtocolErrorCode.UnsupportedProtocolVersion && data) {
       const errorData = data;
       if (Array.isArray(errorData.supported) && typeof errorData.requested === "string") return new UnsupportedProtocolVersionError({
         supported: errorData.supported,
         requested: errorData.requested
-      }, message);
+      }, message2);
     }
     if (code3 === ProtocolErrorCode.InvalidParams || code3 === ProtocolErrorCode.ResourceNotFound) {
       const errorData = data;
-      if (typeof errorData?.uri === "string" && (code3 === ProtocolErrorCode.ResourceNotFound || Object.keys(errorData).length === 1)) return new ResourceNotFoundError(errorData.uri, message);
+      if (typeof errorData?.uri === "string" && (code3 === ProtocolErrorCode.ResourceNotFound || Object.keys(errorData).length === 1)) return new ResourceNotFoundError(errorData.uri, message2);
     }
     if (code3 === ProtocolErrorCode.MissingRequiredClientCapability && data) {
       const errorData = data;
-      if (errorData.requiredCapabilities !== null && typeof errorData.requiredCapabilities === "object" && !Array.isArray(errorData.requiredCapabilities)) return new MissingRequiredClientCapabilityError({ requiredCapabilities: errorData.requiredCapabilities }, message);
+      if (errorData.requiredCapabilities !== null && typeof errorData.requiredCapabilities === "object" && !Array.isArray(errorData.requiredCapabilities)) return new MissingRequiredClientCapabilityError({ requiredCapabilities: errorData.requiredCapabilities }, message2);
     }
-    return new ProtocolError2(code3, message, data);
+    return new ProtocolError2(code3, message2, data);
   }
 };
 var ResourceNotFoundError = class extends ProtocolError {
   static {
     Object.defineProperty(this, "mcpBrand", { value: "mcp.ResourceNotFoundError" });
   }
-  constructor(uri, message = `Resource not found: ${uri}`) {
-    super(ProtocolErrorCode.InvalidParams, message, { uri });
+  constructor(uri, message2 = `Resource not found: ${uri}`) {
+    super(ProtocolErrorCode.InvalidParams, message2, { uri });
   }
   /** The URI that was requested and not found. */
   get uri() {
@@ -33845,8 +33845,8 @@ var UrlElicitationRequiredError = class extends ProtocolError {
   static {
     Object.defineProperty(this, "mcpBrand", { value: "mcp.UrlElicitationRequiredError" });
   }
-  constructor(elicitations, message = `URL elicitation${elicitations.length > 1 ? "s" : ""} required`) {
-    super(ProtocolErrorCode.UrlElicitationRequired, message, { elicitations });
+  constructor(elicitations, message2 = `URL elicitation${elicitations.length > 1 ? "s" : ""} required`) {
+    super(ProtocolErrorCode.UrlElicitationRequired, message2, { elicitations });
   }
   get elicitations() {
     return this.data?.elicitations ?? [];
@@ -33856,8 +33856,8 @@ var UnsupportedProtocolVersionError = class extends ProtocolError {
   static {
     Object.defineProperty(this, "mcpBrand", { value: "mcp.UnsupportedProtocolVersionError" });
   }
-  constructor(data, message = `Unsupported protocol version: ${data.requested}`) {
-    super(ProtocolErrorCode.UnsupportedProtocolVersion, message, data);
+  constructor(data, message2 = `Unsupported protocol version: ${data.requested}`) {
+    super(ProtocolErrorCode.UnsupportedProtocolVersion, message2, data);
   }
   /**
   * Protocol versions the receiver supports.
@@ -33876,8 +33876,8 @@ var MissingRequiredClientCapabilityError = class extends ProtocolError {
   static {
     Object.defineProperty(this, "mcpBrand", { value: "mcp.MissingRequiredClientCapabilityError" });
   }
-  constructor(data, message = `Missing required client capabilities: ${Object.keys(data.requiredCapabilities).join(", ")}`) {
-    super(ProtocolErrorCode.MissingRequiredClientCapability, message, data);
+  constructor(data, message2 = `Missing required client capabilities: ${Object.keys(data.requiredCapabilities).join(", ")}`) {
+    super(ProtocolErrorCode.MissingRequiredClientCapability, message2, data);
   }
   /**
   * The capabilities the server requires from the client to process the
@@ -35084,17 +35084,17 @@ var RESERVED_ENVELOPE_META_KEYS = [
   LOG_LEVEL_META_KEY
 ];
 var RETRY_PARAMS_KEYS = ["inputResponses", "requestState"];
-function liftWireOnlyMaterial(message, kind) {
-  const params = message.params;
+function liftWireOnlyMaterial(message2, kind) {
+  const params = message2.params;
   if (!isPlainObject$1(params)) return {
-    message,
+    message: message2,
     lifted: {}
   };
   const meta3 = params._meta;
   const envelopeKeys = isPlainObject$1(meta3) ? RESERVED_ENVELOPE_META_KEYS.filter((key) => key in meta3) : [];
   const retryKeys = kind === "request" ? RETRY_PARAMS_KEYS.filter((key) => key in params) : [];
   if (envelopeKeys.length === 0 && retryKeys.length === 0) return {
-    message,
+    message: message2,
     lifted: {}
   };
   const lifted = {};
@@ -35117,7 +35117,7 @@ function liftWireOnlyMaterial(message, kind) {
   }
   return {
     message: {
-      ...message,
+      ...message2,
       params: nextParams
     },
     lifted
@@ -35244,12 +35244,12 @@ var Protocol = class {
   * byte-identical. User-supplied `_meta` keys are spread last so they win
   * over the auto-attached envelope keys.
   */
-  _envelopeOutbound(message) {
+  _envelopeOutbound(message2) {
     const envelope = this._outboundMetaEnvelope();
-    if (envelope === void 0) return message;
-    const params = message.params ?? {};
+    if (envelope === void 0) return message2;
+    const params = message2.params ?? {};
     return {
-      ...message,
+      ...message2,
       params: {
         ...params,
         _meta: {
@@ -35348,12 +35348,12 @@ var Protocol = class {
       this._onerror(error62);
     };
     const _onmessage = this._transport?.onmessage;
-    this._transport.onmessage = (message, extra) => {
-      _onmessage?.(message, extra);
-      if (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) this._onresponse(message);
-      else if (isJSONRPCRequest(message)) this._onrequest(message, extra);
-      else if (isJSONRPCNotification(message)) this._onnotification(message, extra);
-      else this._onerror(/* @__PURE__ */ new Error(`Unknown message type: ${JSON.stringify(message)}`));
+    this._transport.onmessage = (message2, extra) => {
+      _onmessage?.(message2, extra);
+      if (isJSONRPCResultResponse(message2) || isJSONRPCErrorResponse(message2)) this._onresponse(message2);
+      else if (isJSONRPCRequest(message2)) this._onrequest(message2, extra);
+      else if (isJSONRPCNotification(message2)) this._onnotification(message2, extra);
+      else this._onerror(/* @__PURE__ */ new Error(`Unknown message type: ${JSON.stringify(message2)}`));
     };
     transport.setSupportedProtocolVersions?.(this._supportedProtocolVersions);
     await this._transport.start();
@@ -35415,13 +35415,13 @@ var Protocol = class {
       return;
     }
     const capturedTransport = this._transport;
-    const sendErrorResponse = (code3, message, data) => {
+    const sendErrorResponse = (code3, message2, data) => {
       const errorResponse = {
         jsonrpc: "2.0",
         id: request.id,
         error: {
           code: code3,
-          message,
+          message: message2,
           ...data !== void 0 && { data }
         }
       };
@@ -36015,8 +36015,8 @@ var ReadBuffer = class {
 function deserializeMessage(line2) {
   return JSONRPCMessageSchema.parse(JSON.parse(line2));
 }
-function serializeMessage(message) {
-  return JSON.stringify(message) + "\n";
+function serializeMessage(message2) {
+  return JSON.stringify(message2) + "\n";
 }
 var TOOL_NAME_REGEX = /^[A-Za-z0-9._-]{1,128}$/;
 function validateToolName(name) {
@@ -37469,11 +37469,11 @@ var require_errors = /* @__PURE__ */ __commonJSMin(((exports) => {
     if (schemaPath) schPath = (0, codegen_1.str)`${schPath}${(0, util_1.getErrorPath)(schemaPath, util_1.Type.Str)}`;
     return [E.schemaPath, schPath];
   }
-  function extraErrorProps(cxt, { params, message }, keyValues) {
+  function extraErrorProps(cxt, { params, message: message2 }, keyValues) {
     const { keyword, data, schemaValue, it } = cxt;
     const { opts, propertyName, topSchemaRef, schemaPath } = it;
     keyValues.push([E.keyword, keyword], [E.params, typeof params == "function" ? params(cxt) : params || (0, codegen_1._)`{}`]);
-    if (opts.messages) keyValues.push([E.message, typeof message == "function" ? message(cxt) : message]);
+    if (opts.messages) keyValues.push([E.message, typeof message2 == "function" ? message2(cxt) : message2]);
     if (opts.verbose) keyValues.push([E.schema, schemaValue], [E.parentSchema, (0, codegen_1._)`${topSchemaRef}${schemaPath}`], [names_1.default.data, data]);
     if (propertyName) keyValues.push([E.propertyName, propertyName]);
   }
@@ -40150,9 +40150,9 @@ var require_core$3 = /* @__PURE__ */ __commonJSMin(((exports) => {
       }
       const valid = this.validate($schema, schema);
       if (!valid && throwOrLogError) {
-        const message = "schema is invalid: " + this.errorsText();
-        if (this.opts.validateSchema === "log") this.logger.error(message);
-        else throw new Error(message);
+        const message2 = "schema is invalid: " + this.errorsText();
+        if (this.opts.validateSchema === "log") this.logger.error(message2);
+        else throw new Error(message2);
       }
       return valid;
     }
@@ -43713,7 +43713,7 @@ var PerRequestHTTPServerTransport = class {
   * transport is closed before a response was produced (for example because
   * the client disconnected).
   */
-  async handleMessage(message, extra) {
+  async handleMessage(message2, extra) {
     if (this._used) throw new Error("PerRequestHTTPServerTransport serves exactly one exchange; construct a new transport per request");
     if (!this._started || this.onmessage === void 0) throw new Error("PerRequestHTTPServerTransport is not connected: connect a server to this transport before handling a message");
     if (this._closed) throw new Error("PerRequestHTTPServerTransport is closed");
@@ -43728,8 +43728,8 @@ var PerRequestHTTPServerTransport = class {
       ...extra?.request !== void 0 && { request: extra.request },
       ...extra?.authInfo !== void 0 && { authInfo: extra.authInfo }
     };
-    if (isJSONRPCRequest(message)) {
-      this._requestId = message.id;
+    if (isJSONRPCRequest(message2)) {
+      this._requestId = message2.id;
       let resolve4;
       let reject;
       const promise2 = new Promise((promiseResolve, promiseReject) => {
@@ -43749,31 +43749,31 @@ var PerRequestHTTPServerTransport = class {
       }
       this._dispatchWindowOpen = true;
       try {
-        this.onmessage(message, messageExtra);
+        this.onmessage(message2, messageExtra);
       } finally {
         this._dispatchWindowOpen = false;
       }
       if (this._responseMode === "sse" && !this._closed && !this._deferredResponse.settled) this.upgradeToSse();
       return promise2;
     }
-    this.onmessage(message, messageExtra);
+    this.onmessage(message2, messageExtra);
     return new Response(null, { status: 202 });
   }
-  async send(message, options) {
+  async send(message2, options) {
     if (this._closed) return;
-    const isResponse = isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message);
-    const relatedId = isResponse ? message.id : options?.relatedRequestId;
+    const isResponse = isJSONRPCResultResponse(message2) || isJSONRPCErrorResponse(message2);
+    const relatedId = isResponse ? message2.id : options?.relatedRequestId;
     if (this._requestId === void 0 || relatedId === void 0 || relatedId !== this._requestId) {
-      if (isResponse) this.onerror?.(/* @__PURE__ */ new Error(`Received a response for an unknown request id: ${String(message.id)}`));
+      if (isResponse) this.onerror?.(/* @__PURE__ */ new Error(`Received a response for an unknown request id: ${String(message2.id)}`));
       return;
     }
     if (isResponse) {
       if (this._terminalDelivered) return;
       this._terminalDelivered = true;
-      const errorCode = isJSONRPCErrorResponse(message) ? message.error.code : void 0;
+      const errorCode = isJSONRPCErrorResponse(message2) ? message2.error.code : void 0;
       const ladderStatus = errorCode !== void 0 && (this._dispatchWindowOpen || errorCode === ProtocolErrorCode.MissingRequiredClientCapability) ? LADDER_ERROR_HTTP_STATUS[errorCode] : void 0;
       if (ladderStatus !== void 0 && this._sse === void 0) {
-        this.settleResponse(Response.json(message, {
+        this.settleResponse(Response.json(message2, {
           status: ladderStatus,
           headers: { "Content-Type": "application/json" }
         }));
@@ -43782,11 +43782,11 @@ var PerRequestHTTPServerTransport = class {
       }
       if (this._sse !== void 0 || this._responseMode === "sse") {
         if (this._sse === void 0) this.upgradeToSse();
-        this.writeMessageFrame(message);
+        this.writeMessageFrame(message2);
         this.finalizeStream();
         return;
       }
-      this.settleResponse(Response.json(message, {
+      this.settleResponse(Response.json(message2, {
         status: 200,
         headers: { "Content-Type": "application/json" }
       }));
@@ -43795,7 +43795,7 @@ var PerRequestHTTPServerTransport = class {
     }
     if (this._responseMode === "json") return;
     if (this._sse === void 0) this.upgradeToSse();
-    this.writeMessageFrame(message);
+    this.writeMessageFrame(message2);
   }
   /**
   * Writes an SSE comment frame (a keep-alive heartbeat). Dropped when the
@@ -43869,9 +43869,9 @@ var PerRequestHTTPServerTransport = class {
     }
     queueMicrotask(() => void this.close());
   }
-  writeMessageFrame(message) {
+  writeMessageFrame(message2) {
     this.writeFrame(`event: message
-data: ${JSON.stringify(message)}
+data: ${JSON.stringify(message2)}
 
 `);
   }
@@ -43921,15 +43921,15 @@ function syntheticElicitationId() {
   const hex3 = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
   return `${hex3.slice(0, 8)}-${hex3.slice(8, 12)}-${hex3.slice(12, 16)}-${hex3.slice(16, 20)}-${hex3.slice(20)}`;
 }
-function legacyShimFailure(method, message) {
+function legacyShimFailure(method, message2) {
   if (method === "tools/call") return {
     content: [{
       type: "text",
-      text: message
+      text: message2
     }],
     isError: true
   };
-  throw new ProtocolError(ProtocolErrorCode.InternalError, message);
+  throw new ProtocolError(ProtocolErrorCode.InternalError, message2);
 }
 var LegacyInputRequiredShim = class {
   constructor(_host) {
@@ -45386,9 +45386,9 @@ var StdioServerTransport = class {
   }
   processReadBuffer() {
     while (true) try {
-      const message = this._readBuffer.readMessage();
-      if (message === null) break;
-      this.onmessage?.(message);
+      const message2 = this._readBuffer.readMessage();
+      if (message2 === null) break;
+      this.onmessage?.(message2);
     } catch (error62) {
       this.onerror?.(error62);
     }
@@ -45405,10 +45405,10 @@ var StdioServerTransport = class {
     this._readBuffer.clear();
     this.onclose?.();
   }
-  send(message) {
+  send(message2) {
     if (this._closed) return Promise.reject(/* @__PURE__ */ new Error("StdioServerTransport is closed"));
     return new Promise((resolve4, reject) => {
-      const json4 = serializeMessage(message);
+      const json4 = serializeMessage(message2);
       let settled = false;
       const onError = (error62) => {
         if (settled) return;
@@ -47963,8 +47963,8 @@ var _dafny = (function() {
     yield v;
   };
   $module.HaltException = class HaltException extends Error {
-    constructor(message) {
-      super(message);
+    constructor(message2) {
+      super(message2);
     }
   };
   $module.HandleHaltExceptions = function(f) {
@@ -49989,8 +49989,8 @@ function didYouMean(value, candidates2) {
 }
 var Validator = class {
   problems = [];
-  problem(path, message) {
-    this.problems.push({ path, message });
+  problem(path, message2) {
+    this.problems.push({ path, message: message2 });
   }
   unknownKeys(path, value, allowed2) {
     for (const key of Object.keys(value)) {
@@ -50142,8 +50142,8 @@ function validateConfig(input3, rules16) {
       const options = v.record(`rules.${rawId}[1]`, value[1]);
       const allowed2 = Object.keys(rule.meta.defaultOptions);
       v.unknownKeys(`rules.${rawId}[1]`, options, allowed2);
-      for (const message of rule.meta.validateOptions?.(options) ?? []) {
-        v.problem(`rules.${rawId}[1]`, message);
+      for (const message2 of rule.meta.validateOptions?.(options) ?? []) {
+        v.problem(`rules.${rawId}[1]`, message2);
       }
       config2.rules[id2] = [severity3, options];
     } else {
@@ -53471,7 +53471,7 @@ var apt_hygiene_default = defineRule({
           const apkCached = mounts.some((mount) => /^\/(var\/cache\/apk|etc\/apk\/cache)/.test(mount.target));
           const verbs = commands.map(aptVerb);
           const updates = commands.filter((_, index) => verbs[index] === "update");
-          const installs = commands.filter((_, index) => ["install", "upgrade", "dist-upgrade", "full-upgrade"].includes(verbs[index] ?? ""));
+          const installs2 = commands.filter((_, index) => ["install", "upgrade", "dist-upgrade", "full-upgrade"].includes(verbs[index] ?? ""));
           for (const command2 of commands) {
             const install2 = systemInstall(command2.words);
             if (!install2) continue;
@@ -53516,7 +53516,7 @@ var apt_hygiene_default = defineRule({
               });
             }
           }
-          if (updates.length > 0 && installs.length === 0 && !commands.some(runsScript)) {
+          if (updates.length > 0 && installs2.length === 0 && !commands.some(runsScript)) {
             const [update] = updates;
             if (!update) continue;
             report({
@@ -55669,7 +55669,7 @@ function preamble(file2, model, stage) {
   if (isInternalBase(model, stage)) return void 0;
   const packages = /* @__PURE__ */ new Map();
   const commands = [];
-  let installs = 0;
+  let installs2 = 0;
   for (const instruction2 of stage.instructions) {
     if (contextSources(instruction2) !== void 0) break;
     if (instruction2.keyword !== "RUN") continue;
@@ -55680,15 +55680,15 @@ function preamble(file2, model, stage) {
         const set2 = packages.get(system.installer) ?? /* @__PURE__ */ new Set();
         for (const name of system.packages) set2.add(name.replace(/^["']|["']$/g, ""));
         packages.set(system.installer, set2);
-        installs += 1;
+        installs2 += 1;
         continue;
       }
       if (HOUSEKEEPING.test(text4) || isDependencyInstall(command2)) continue;
-      if (TOOL_INSTALL.test(text4)) installs += 1;
+      if (TOOL_INSTALL.test(text4)) installs2 += 1;
       commands.push(text4);
     }
   }
-  if (installs === 0) return void 0;
+  if (installs2 === 0) return void 0;
   const steps2 = [
     ...[...packages].sort(([a], [b]) => a.localeCompare(b)).map(([installer, names]) => `${installer}: ${[...names].sort().join(" ")}`),
     ...commands
@@ -60324,7 +60324,7 @@ var flake_nixconfig_cache_not_trusted_default = defineRule({
       const jobCount = new Set(misses.map((miss) => `${miss.view.model.workflow.path}:${miss.view.model.job.id}`)).size;
       const more = jobCount > 1 ? ` (and ${jobCount - 1} more job${jobCount > 2 ? "s" : ""})` : "";
       const listed = first.urls.filter((url2) => url2.key === firstUrl2.key).map((url2) => code(url2.raw)).join(", ");
-      const message = `\`nixConfig.${firstUrl2.key}\` adds ${listed}, but job \`${view.model.job.id}\` (\`${view.model.workflow.path}\`) runs \`${target.display}\` on this flake without recognized preceding acceptance or equivalent substituter configuration${more}. The setting may be ignored; external configuration and daemon policy are not established by this inspection.`;
+      const message2 = `\`nixConfig.${firstUrl2.key}\` adds ${listed}, but job \`${view.model.job.id}\` (\`${view.model.workflow.path}\`) runs \`${target.display}\` on this flake without recognized preceding acceptance or equivalent substituter configuration${more}. The setting may be ignored; external configuration and daemon policy are not established by this inspection.`;
       const hosts = uncovered.flatMap((url2) => url2.host ?? []);
       const matchingKeys = keys.filter((key) => hosts.some((host) => key.toLowerCase().startsWith(host)));
       const keyText = (matchingKeys.length > 0 ? matchingKeys : keys).join(" ") || hosts.map((host) => `<public key of ${host}>`).join(" ");
@@ -60357,7 +60357,7 @@ ${snippet2}`];
         path,
         line: firstUrl2.entry.line,
         key: `${path}:nixconfig-cache`,
-        message,
+        message: message2,
         suggestion: parts.join("\n"),
         related: misses.slice(1).map((miss) => ({ path: miss.target.path, line: miss.target.line }))
       });
@@ -63699,6 +63699,7 @@ var SETUP_ACTIONS = {
   "dtolnay/rust-toolchain": {},
   "erlef/setup-beam": {}
 };
+var INSTALL_COMMAND = /^(?:npm (?:ci|install|i)|pnpm (?:install|i)|yarn(?: install)?|bun install|pip3? install|python3? -m pip install|poetry install|uv sync|bundle install|go mod download|composer install|dotnet restore)\b/;
 function setupActionOf(step) {
   const action = step.uses?.action;
   if (action?.kind !== "remote" || action.name === void 0) return void 0;
@@ -64030,12 +64031,11 @@ var rebuild_per_job_default = defineRule({
 });
 
 // src/lint/rules/redundancy/repeated-job-setup.ts
-var INSTALL2 = /^(?:npm (?:ci|install|i)|pnpm (?:install|i)|yarn(?: install)?|bun install|pip3? install|python3? -m pip install|poetry install|uv sync|bundle install|go mod download|composer install|dotnet restore)\b/;
 function isSetup(step) {
   if (setupActionOf(step)) return true;
   const name = step.uses?.action?.name ?? "";
   if (/\/setup-|\/action-setup$/.test(name)) return true;
-  return commandsOf(step).some(({ command: command2 }) => INSTALL2.test(commandWords(command2).join(" ")));
+  return commandsOf(step).some(({ command: command2 }) => INSTALL_COMMAND.test(commandWords(command2).join(" ")));
 }
 function commonPrefix(candidates2) {
   let length = 0;
@@ -64193,6 +64193,114 @@ var shadowed_env_default = defineRule({
   }
 });
 
+// src/lint/rules/redundancy/source-cli-with-committed-bundle.ts
+var DEPENDENCY_CONSUMERS = /* @__PURE__ */ new Set(["npm", "npx", "pnpm", "yarn", "bun", "bunx", "node", "tsx", "ts-node", "deno", "tsc", "vitest", "jest", "eslint"]);
+var OPAQUE_CONSUMER = /(^|[\s;&|(])(npx|npm|node|tsx|ts-node|pnpm|yarn|bunx?)\s/;
+var SOURCE_RUNNER = /^(?:tsx|ts-node)\s/;
+var RUN_FLAGS = /* @__PURE__ */ new Set(["--silent", "-s", "--if-present"]);
+function committedBundle(project) {
+  const action = project.actions.find((entry2) => entry2.path === "action.yml" || entry2.path === "action.yaml");
+  if (!action) return void 0;
+  const runs = field(action.source, action.source.doc.contents, "runs")?.value ?? null;
+  if (!runs) return void 0;
+  const using = stringValue(field(action.source, runs, "using")?.value ?? null);
+  const main = stringValue(field(action.source, runs, "main")?.value ?? null);
+  if (!using || !/^node\d+$/.test(using) || !main) return void 0;
+  return { path: action.path, main: main.replace(/^\.\//, "") };
+}
+function npmRun(words6) {
+  if (words6[0] !== "npm" || words6[1] !== "run" && words6[1] !== "run-script") return void 0;
+  let index = 2;
+  while (RUN_FLAGS.has(words6[index] ?? "")) index += 1;
+  const script = words6[index];
+  if (!script || script.startsWith("-")) return void 0;
+  const rest = words6.slice(index + 1);
+  if (rest.length > 0 && rest[0] !== "--") return void 0;
+  return { script, args: rest.slice(1) };
+}
+function sourceCli(words6, scripts) {
+  const run2 = npmRun(words6);
+  if (!run2) return void 0;
+  const body = scripts[run2.script];
+  if (typeof body !== "string" || !SOURCE_RUNNER.test(body)) return void 0;
+  return { ...run2, body };
+}
+function invocations(job, scripts) {
+  if (job.workingDirectory) return [];
+  return job.steps.flatMap(
+    (step) => step.workingDirectory ? [] : commandsOf(step).flatMap(({ command: command2, line: line2 }) => {
+      const match = sourceCli(commandWords(command2), scripts);
+      return match ? [{ line: line2, command: command2.trim(), ...match }] : [];
+    })
+  );
+}
+function dependencyFree(steps2, scripts) {
+  for (const step of steps2) {
+    if (step.uses?.action?.name === "actions/github-script") return false;
+    const script = step.run?.value;
+    if (!script) continue;
+    const commands = commandsOf(step);
+    if (commands.length === 0 && OPAQUE_CONSUMER.test(script)) return false;
+    for (const { command: command2 } of commands) {
+      const words6 = commandWords(command2);
+      if (INSTALL_COMMAND.test(words6.join(" ")) || sourceCli(words6, scripts)) continue;
+      if (words6.length === 0 ? OPAQUE_CONSUMER.test(command2) : DEPENDENCY_CONSUMERS.has(words6[0] ?? "") || command2.includes("node_modules")) return false;
+    }
+  }
+  return true;
+}
+function installs(steps2) {
+  return steps2.some((step) => commandsOf(step).some(({ command: command2 }) => INSTALL_COMMAND.test(commandWords(command2).join(" "))));
+}
+function message(workflow, job, invocation, bundle) {
+  const command2 = invocation.command.length > 120 ? `${invocation.command.slice(0, 117)}...` : invocation.command;
+  return `Job \`${job.id}\` in ${workflow.path} installs dependencies only to run \`${command2}\` from source (\`${invocation.body}\`), although \`${bundle.path}\` ships the bundled entry point \`${bundle.main}\`.`;
+}
+var source_cli_with_committed_bundle_default = defineRule({
+  meta: {
+    id: "redundancy/source-cli-with-committed-bundle",
+    ruleset: "redundancy",
+    description: "Jobs that install dependencies only to run a TypeScript CLI from source could run the committed action bundle instead.",
+    rationale: "A JavaScript action commits a self-contained bundle so it runs without installing anything. A job that installs the full dependency tree just to start the same CLI through tsx or ts-node pays for the install and the on-the-fly compilation on every run, although the bundle in the repository already contains that code. When a generated-output check keeps the bundle in sync with the source, running it with `node` gives the same behaviour without the install.",
+    kind: "insight",
+    defaultSeverity: "info",
+    presets: ["insights"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-javascript-action"],
+    impact: "low",
+    example: {
+      bad: '# action.yml: runs: { using: node24, main: dist/index.js }\n# package.json: "cli": "tsx src/bin.ts"\nsteps:\n  - uses: actions/checkout@v4\n  - uses: actions/setup-node@v4\n  - run: npm ci\n  - run: npm run --silent cli -- report --pr 1',
+      good: "steps:\n  - uses: actions/checkout@v4\n  - uses: actions/setup-node@v4\n  - run: node dist/index.js report --pr 1"
+    }
+  },
+  check({ project, report }) {
+    const scripts = project.rootManifest?.json.scripts;
+    if (!scripts || typeof scripts !== "object") return;
+    const bundle = committedBundle(project);
+    if (!bundle) return;
+    const table2 = scripts;
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        if (job.uses) continue;
+        const [first] = invocations(job, table2);
+        if (!first) continue;
+        const steps2 = project.expandedSteps(job);
+        if (!installs(steps2) || !dependencyFree(steps2, table2)) continue;
+        const args = first.args.join(" ");
+        report({
+          path: workflow.path,
+          line: first.line,
+          key: `${job.key}.source-cli-bundle.${first.script}`,
+          message: message(workflow, job, first, bundle),
+          suggestion: `If \`${bundle.main}\` routes the same command and a generated-output check keeps it current, drop the dependency install and run \`node ${bundle.main}${args ? ` ${args}` : ""}\` after setting up Node.`,
+          confidence: "medium"
+        });
+      }
+    }
+  }
+});
+
 // src/lint/rules/redundancy/toolchain-version-drift.ts
 function normalize4(raw) {
   const version2 = raw.trim().replace(/^v/i, "").replace(/(?:\.[x*])+$/i, "");
@@ -64289,7 +64397,8 @@ var rules8 = [
   rebuild_per_job_default,
   duplicate_command_default,
   shadowed_env_default,
-  toolchain_version_drift_default
+  toolchain_version_drift_default,
+  source_cli_with_committed_bundle_default
 ];
 
 // src/lint/rules/registries/ghcr.ts
@@ -64716,7 +64825,7 @@ var github_npm_default = defineRule({
 var rules9 = [ghcr_default, github_npm_default];
 
 // src/lint/rules/security/shared.ts
-var import_yaml19 = __toESM(require_dist2(), 1);
+var import_yaml20 = __toESM(require_dist2(), 1);
 var PRIVILEGED_TRIGGERS = ["pull_request_target", "workflow_run", "issue_comment"];
 function isPrivileged(workflow) {
   return workflow.kind === "workflow" && hasTrigger(workflow, ...PRIVILEGED_TRIGGERS);
@@ -64855,9 +64964,9 @@ function executesWorkspace(step) {
   }
 }
 function directChild3(node2, key) {
-  if (!(0, import_yaml19.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml19.isPair)(item) && (0, import_yaml19.isScalar)(item.key) && String(item.key.value) === key);
-  return pair && !(0, import_yaml19.isAlias)(pair.value) ? pair.value : void 0;
+  if (!(0, import_yaml20.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml20.isPair)(item) && (0, import_yaml20.isScalar)(item.key) && String(item.key.value) === key);
+  return pair && !(0, import_yaml20.isAlias)(pair.value) ? pair.value : void 0;
 }
 function directStep(workflow, step) {
   const match = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -64865,10 +64974,10 @@ function directStep(workflow, step) {
   const root2 = rootNode2(workflow);
   const parent = match[1] !== void 0 ? directChild3(directChild3(root2, "jobs"), match[1]) : directChild3(root2, "runs");
   const stepsNode = directChild3(parent, "steps");
-  if (!(0, import_yaml19.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml20.isSeq)(stepsNode)) return void 0;
   const node2 = stepsNode.items[Number(match[2])];
-  if (!(0, import_yaml19.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
-  if (node2.items.some((pair) => !(0, import_yaml19.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
+  if (!(0, import_yaml20.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
+  if (node2.items.some((pair) => !(0, import_yaml20.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
   return node2;
 }
 
@@ -65234,9 +65343,9 @@ var mutable_remote_ref_default = defineRule({
 });
 
 // src/lint/rules/security/persisted-credentials.ts
-var import_yaml21 = __toESM(require_dist2(), 1);
+var import_yaml22 = __toESM(require_dist2(), 1);
 var UPLOAD_ACTIONS = ["actions/upload-artifact", "actions/upload-artifact/merge"];
-var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml21.Scalar.PLAIN, import_yaml21.Scalar.QUOTE_DOUBLE, import_yaml21.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml22.Scalar.PLAIN, import_yaml22.Scalar.QUOTE_DOUBLE, import_yaml22.Scalar.QUOTE_SINGLE]);
 var WORKSPACE_ROOT = /^(?:\.\/?|\$\{\{\s*github\.workspace\s*\}\}\/?)$/;
 function uploadsGitDirectory(step, file2) {
   if (!usesAction(step, ...UPLOAD_ACTIONS)) return false;
@@ -65260,7 +65369,7 @@ function addPersistCredentials(file2, workflow, step) {
   const description = "Set persist-credentials: false";
   if (step.with.size > 0 || step.uses?.kind !== "literal") {
     const withNode = directWith(workflow, step);
-    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value !== "<<");
+    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml22.isScalar)(pair.key) && pair.key.value !== "<<");
     const first = pairs[0];
     const last = pairs[pairs.length - 1];
     if (!first || !last) return void 0;
@@ -65268,14 +65377,14 @@ function addPersistCredentials(file2, workflow, step) {
     const indent2 = indentOf(file2.content, firstLine);
     const lastLine = lineOfNode(workflow.source, last.key);
     const value = last.value;
-    const endsOnKeyLine = (0, import_yaml21.isScalar)(value) && SINGLE_LINE.has(value.type) && value.range !== void 0 && value.range !== null && workflow.source.lineCounter.linePos(Math.max(value.range[0], value.range[1] - 1)).line === lastLine;
+    const endsOnKeyLine = (0, import_yaml22.isScalar)(value) && SINGLE_LINE.has(value.type) && value.range !== void 0 && value.range !== null && workflow.source.lineCounter.linePos(Math.max(value.range[0], value.range[1] - 1)).line === lastLine;
     const line2 = `${indent2}persist-credentials: false`;
     return fix(description, insertLinesAfter(file2, endsOnKeyLine ? lastLine : firstLine - 1, [line2]));
   }
   const node2 = directStep(workflow, step);
-  if (!node2 || node2.items.some((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
-  const usesPair = node2.items.find((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value === "uses");
-  if (!usesPair || !(0, import_yaml21.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
+  if (!node2 || node2.items.some((pair) => (0, import_yaml22.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
+  const usesPair = node2.items.find((pair) => (0, import_yaml22.isScalar)(pair.key) && pair.key.value === "uses");
+  if (!usesPair || !(0, import_yaml22.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
   const usesLine = lineOfNode(workflow.source, usesPair.key);
   const text4 = lineText(file2.content, usesLine);
   const match = /^(\s*)(-\s+)?uses\s*:/.exec(text4);
@@ -66264,7 +66373,7 @@ var tool_incremental_cache_default = defineRule({
 });
 
 // src/lint/rules/testing/unconditional-debug-upload.ts
-var import_yaml24 = __toESM(require_dist2(), 1);
+var import_yaml25 = __toESM(require_dist2(), 1);
 var DEBUG_PATH = /(^|[/\\])(?:playwright-report|test-results|traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)/i;
 var HEAVY_PATH = /(^|[/\\])(?:traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)|\.(?:zip|webm|mp4|png)$/i;
 var MACHINE_READABLE = /junit|\.(?:xml|json|trx|sarif|lcov)$|coverage/i;
@@ -66338,7 +66447,7 @@ var unconditional_debug_upload_default = defineRule({
         const file2 = project.files.get(workflow.path);
         const first = file2 ? lineText(file2.content, step.line) : "";
         const dash = /^(\s*)-\s+[\w-]+:/.exec(first);
-        if (file2 && dash && (0, import_yaml24.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
+        if (file2 && dash && (0, import_yaml25.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
           applied = fix("Upload only when the job fails", insertLinesAfter(file2, step.line, [`${dash[1] ?? ""}  if: failure()`]));
         }
       }
@@ -66917,10 +67026,10 @@ function propertyDecided(project, build2, properties, flags) {
   return properties.some((property) => buildMentions(build2, property));
 }
 function undecidedBuild(project, build2, properties, flags) {
-  const invocations = build2.invocations.filter(
+  const invocations2 = build2.invocations.filter(
     (invocation) => !propertyDecided(project, { ...build2, invocations: [invocation] }, properties, flags)
   );
-  return invocations.length > 0 ? { ...build2, invocations } : void 0;
+  return invocations2.length > 0 ? { ...build2, invocations: invocations2 } : void 0;
 }
 function related(build2) {
   return build2.properties ? [{ path: build2.properties.path, line: 1 }] : [];
@@ -68706,9 +68815,9 @@ var rules14 = [
 ];
 
 // src/lint/rules/workflow/artifact-retention.ts
-var import_yaml31 = __toESM(require_dist2(), 1);
+var import_yaml32 = __toESM(require_dist2(), 1);
 var UPLOAD_ACTIONS2 = /* @__PURE__ */ new Set(["actions/upload-artifact", "actions/upload-artifact/merge"]);
-var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml31.Scalar.PLAIN, import_yaml31.Scalar.QUOTE_DOUBLE, import_yaml31.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml32.Scalar.PLAIN, import_yaml32.Scalar.QUOTE_DOUBLE, import_yaml32.Scalar.QUOTE_SINGLE]);
 function retentionDays(value) {
   if (typeof value === "number") return value;
   if (typeof value === "string" && /^\s*\d+\s*$/.test(value)) return Number(value);
@@ -68716,7 +68825,7 @@ function retentionDays(value) {
 }
 function addRetention(file2, workflow, step, days) {
   const withNode = directWith(workflow, step);
-  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml31.isScalar)(pair.key) && pair.key.value !== "<<");
+  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml32.isScalar)(pair.key) && pair.key.value !== "<<");
   const first = pairs[0];
   const last = pairs[pairs.length - 1];
   if (!first || !last) return void 0;
@@ -68724,7 +68833,7 @@ function addRetention(file2, workflow, step, days) {
   const indent = indentOf(file2.content, firstLine);
   const lastLine = lineOfNode(workflow.source, last.key);
   const value = last.value;
-  const endsOnKeyLine = (0, import_yaml31.isScalar)(value) && SINGLE_LINE2.has(value.type) && value.range !== void 0 && value.range !== null && workflow.source.lineCounter.linePos(Math.max(value.range[0], value.range[1] - 1)).line === lastLine;
+  const endsOnKeyLine = (0, import_yaml32.isScalar)(value) && SINGLE_LINE2.has(value.type) && value.range !== void 0 && value.range !== null && workflow.source.lineCounter.linePos(Math.max(value.range[0], value.range[1] - 1)).line === lastLine;
   const line2 = `${indent}retention-days: ${days}`;
   return fix(
     `Set retention-days: ${days}`,
@@ -69040,7 +69149,7 @@ var LIGHT_ACTIONS = /* @__PURE__ */ new Set([
   "amannn/action-semantic-pull-request"
 ]);
 var INFO_COMMANDS = /* @__PURE__ */ new Set(["echo", "printf", "ls", "pwd", "date", "true", "uname", "whoami", "nproc", "df", "free"]);
-var INSTALL3 = /^(npm (ci|install|i)|pnpm (install|i)|yarn( install)?|bun (install|i)|uv sync)(\s+--?[\w-]+(=\S+)?)*$/;
+var INSTALL2 = /^(npm (ci|install|i)|pnpm (install|i)|yarn( install)?|bun (install|i)|uv sync)(\s+--?[\w-]+(=\S+)?)*$/;
 var LIGHT_TOOLS = /* @__PURE__ */ new Set([
   "prettier",
   "biome",
@@ -69096,7 +69205,7 @@ function scriptCommands(project, name) {
   return typeof script === "string" ? script.split(/&&|;/).map((part) => part.trim()).filter(Boolean) : void 0;
 }
 function lightCommand(project, command2, depth = 0) {
-  if (informational(command2) || INSTALL3.test(command2) || lightTool(command2)) return true;
+  if (informational(command2) || INSTALL2.test(command2) || lightTool(command2)) return true;
   const script = SCRIPT_RUN.exec(command2);
   const name = script?.[2] ?? script?.[4];
   if (!name || depth > 1 || ["install", "add", "dlx", "exec", "run"].includes(name)) return false;
@@ -69173,7 +69282,7 @@ var larger_runner_unjustified_default = defineRule({
 });
 
 // src/lint/rules/workflow/matrix-explosion.ts
-var import_yaml35 = __toESM(require_dist2(), 1);
+var import_yaml36 = __toESM(require_dist2(), 1);
 var LIMIT = 256;
 var ENUMERATION_CAP = 5e4;
 var isPrimitive2 = (value) => value === null || ["string", "number", "boolean"].includes(typeof value);
@@ -69185,7 +69294,7 @@ function records2(value) {
 }
 function scalarTexts(source, content3, node2) {
   const nodes = items(source, node2);
-  const texts = nodes.map((item) => (0, import_yaml35.isScalar)(item) && item.range ? content3.slice(item.range[0], item.range[1]) : void 0);
+  const texts = nodes.map((item) => (0, import_yaml36.isScalar)(item) && item.range ? content3.slice(item.range[0], item.range[1]) : void 0);
   const flowSafe = (text4) => text4 !== void 0 && !text4.includes("\n") && (/^["']/.test(text4) || !/[,[\]{}]/.test(text4));
   return texts.every(flowSafe) ? texts : void 0;
 }
@@ -69687,7 +69796,7 @@ Inspect ${tool2.rangeFiles.join(" and ")} before reusing them: constraints may a
 });
 
 // src/lint/rules/workflow/unnecessary-needs-serialization.ts
-var import_yaml38 = __toESM(require_dist2(), 1);
+var import_yaml39 = __toESM(require_dist2(), 1);
 var DEPLOY = /deploy|release|publish|promote|rollout|ship/i;
 var GATE = /test|lint|build|check|verify|validat|typecheck|compile|scan|audit|\bci\b|e2e|smoke|format|fmt|analy|codeql|security|review|approv|gate|guard|preflight|sanity|wait|lock|migrat|provision|setup-env|infra/i;
 var STANDARD_RUNNER = /^(ubuntu|windows|macos)-(latest|\d[\w.]*)(-arm|-intel)?$/;
@@ -69700,7 +69809,7 @@ var SETUP_ACTIONS3 = /* @__PURE__ */ new Set([
   "ruby/setup-ruby"
 ]);
 var INFO_COMMANDS2 = /* @__PURE__ */ new Set(["echo", "printf", "cat", "ls", "pwd", "date", "true", "uname", "whoami", "df", "nproc", "free"]);
-var INSTALL4 = /^(npm (ci|install|i)|pnpm (install|i)|yarn( install)?|bun (install|i)|pip3? install|python3? -m pip install|bundle install|go mod download|dotnet restore|composer install|poetry install|uv sync)(\s|$)/;
+var INSTALL3 = /^(npm (ci|install|i)|pnpm (install|i)|yarn( install)?|bun (install|i)|pip3? install|python3? -m pip install|bundle install|go mod download|dotnet restore|composer install|poetry install|uv sync)(\s|$)/;
 function jobNode6(workflow, job) {
   const source = workflow.source;
   return field(source, field(source, source.doc.contents, "jobs")?.value, job.id)?.value;
@@ -69736,14 +69845,14 @@ function inertStep(project, step) {
   const commands = commandsOf(step);
   if (commands.length === 0) return void 0;
   if (commands.every(({ command: command2 }) => informational2(command2))) return "echo";
-  if (commands.every(({ command: command2 }) => informational2(command2) || INSTALL4.test(command2))) return "install";
+  if (commands.every(({ command: command2 }) => informational2(command2) || INSTALL3.test(command2))) return "install";
   return void 0;
 }
 function needsLine(workflow, job, dependency) {
   const source = workflow.source;
   const needs = field(source, jobNode6(workflow, job), "needs");
   if (!needs) return job.line;
-  const item = items(source, needs.value).find((node2) => (0, import_yaml38.isScalar)(node2) && String(node2.value) === dependency);
+  const item = items(source, needs.value).find((node2) => (0, import_yaml39.isScalar)(node2) && String(node2.value) === dependency);
   return item ? lineOfNode(source, item) : needs.line;
 }
 function standardHosted(job) {
@@ -69844,7 +69953,7 @@ var allRules = [
 
 // src/github/git.ts
 var DELETED_REF = "0".repeat(40);
-async function commitFiles(client, repo, baseSha, files, message) {
+async function commitFiles(client, repo, baseSha, files, message2) {
   const base2 = await client.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", { ...repo, commit_sha: baseSha });
   const baseTree = base2.data.tree.sha;
   const tree = await client.request("POST /repos/{owner}/{repo}/git/trees", {
@@ -69854,7 +69963,7 @@ async function commitFiles(client, repo, baseSha, files, message) {
   });
   const commit = await client.request("POST /repos/{owner}/{repo}/git/commits", {
     ...repo,
-    message,
+    message: message2,
     tree: tree.data.sha,
     parents: [baseSha]
   });
@@ -71338,7 +71447,7 @@ function snapshotIdentity(snapshot) {
 }
 
 // src/knowledge/extract.ts
-var import_yaml41 = __toESM(require_dist2(), 1);
+var import_yaml42 = __toESM(require_dist2(), 1);
 var packageName3 = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 var managers = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
 var toolFiles = {
@@ -71469,7 +71578,7 @@ function extractKnowledge(repository, revision, input3, options = {}) {
   if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
   else if (pnpm) {
     try {
-      const parsed = (0, import_yaml41.parseDocument)(pnpm.content, { uniqueKeys: true });
+      const parsed = (0, import_yaml42.parseDocument)(pnpm.content, { uniqueKeys: true });
       if (parsed.errors.length) throw new Error("Invalid workspace YAML");
       const value = parsed.toJS();
       addWorkspace(record5(value) ? value.packages : void 0, pnpm, "/packages");
@@ -72807,7 +72916,7 @@ var MAX_LISTED = 5;
 var INFRA_STEP = /^(?:set up job|complete job|initialize containers|stop containers|post\b)/i;
 var CHECKOUT_STEP = /\bactions\/checkout\b/i;
 var SETUP_STEP = /\b(?:set\s*up|setup|install|restore|cache|dependenc|deps|bootstrap|toolchain|prepare)/i;
-var INSTALL_COMMAND = /\b(?:npm\s+(?:ci|install|i)|pnpm\s+(?:install|i)|yarn\s+install|pip3?\s+install|poetry\s+install|bundle\s+install|composer\s+install|go\s+mod\s+download|dotnet\s+restore)\b/i;
+var INSTALL_COMMAND2 = /\b(?:npm\s+(?:ci|install|i)|pnpm\s+(?:install|i)|yarn\s+install|pip3?\s+install|poetry\s+install|bundle\s+install|composer\s+install|go\s+mod\s+download|dotnet\s+restore)\b/i;
 function isCoverageGap(value) {
   return value !== void 0 && typeof value.kind === "string" && typeof value.detail === "string";
 }
@@ -73121,7 +73230,7 @@ function stepFindings(ctx, entry2) {
   }
   if (step.packageCache === "miss") {
     const position = entry2.siblings.indexOf(step);
-    const install2 = entry2.siblings.slice(position + 1).find((sibling) => INSTALL_COMMAND.test(sibling.command ?? sibling.title));
+    const install2 = entry2.siblings.slice(position + 1).find((sibling) => INSTALL_COMMAND2.test(sibling.command ?? sibling.title));
     const installed = install2?.installedPackages !== void 0 ? ` ${install2.installedPackages} packages` : "";
     const firstMiss = ctx.located.find((other) => other.step.packageCache === "miss");
     const failure2 = firstMiss === entry2 ? cacheSaveFailure(ctx.evidence) : void 0;
@@ -73147,7 +73256,7 @@ function stepFindings(ctx, entry2) {
   if (step.packageCache === "hit") {
     const install2 = entry2.siblings[entry2.siblings.indexOf(step) + 1];
     const rawCommand = install2?.kind === "script" ? install2.command : void 0;
-    if (install2 && rawCommand !== void 0 && INSTALL_COMMAND.exec(rawCommand.trim())?.index === 0 && !/[\r\n;&|`$<>\u2026]/.test(rawCommand) && install2.durationMs >= MIN_FINDING_MS) {
+    if (install2 && rawCommand !== void 0 && INSTALL_COMMAND2.exec(rawCommand.trim())?.index === 0 && !/[\r\n;&|`$<>\u2026]/.test(rawCommand) && install2.durationMs >= MIN_FINDING_MS) {
       const command2 = clip2(rawCommand, MAX_LABEL);
       findings4.push(finding2(ctx, {
         category: "package-cache",
@@ -73295,7 +73404,7 @@ function normalizeSetup(name) {
 function setupSteps(timed, evidence2) {
   const apiSteps = (timed.job.steps ?? []).filter((step) => step.conclusion !== "skipped");
   const steps2 = apiSteps.length > 0 ? apiSteps.map((step) => ({ name: step.name, ms: step.durationMs })) : (evidence2?.steps ?? []).map((step) => ({ name: step.title, ms: step.durationMs }));
-  return steps2.filter((step) => !INFRA_STEP.test(step.name) && !CHECKOUT_STEP.test(step.name) && (SETUP_STEP.test(step.name) || INSTALL_COMMAND.test(step.name)));
+  return steps2.filter((step) => !INFRA_STEP.test(step.name) && !CHECKOUT_STEP.test(step.name) && (SETUP_STEP.test(step.name) || INSTALL_COMMAND2.test(step.name)));
 }
 function repeatedSetup(shape, evidenceById) {
   const groups = /* @__PURE__ */ new Map();
@@ -74018,7 +74127,7 @@ function escapeCell(value) {
 }
 
 // src/telemetry/snapshot.ts
-var import_yaml42 = __toESM(require_dist2(), 1);
+var import_yaml43 = __toESM(require_dist2(), 1);
 function isExternalCheckRun(job, key) {
   return key === void 0 && !job.runner_id && !job.runner_name && !job.steps?.length && typeof job.html_url === "string" && !/\/actions\/runs\/\d+\/job\/\d+/.test(job.html_url);
 }
@@ -74028,7 +74137,7 @@ function workflowPath(path) {
 function parseJobDefinitions(text4) {
   let document;
   try {
-    document = (0, import_yaml42.parse)(text4);
+    document = (0, import_yaml43.parse)(text4);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -74468,8 +74577,8 @@ ${report.unmatchedObjectives.length} configured job budgets did not match an obs
 
 // src/github/rest.ts
 var RequestError2 = class extends Error {
-  constructor(message, status, response) {
-    super(message);
+  constructor(message2, status, response) {
+    super(message2);
     this.status = status;
     this.response = response;
     this.name = "RequestError";
@@ -74522,7 +74631,7 @@ function validateMitigationApplicationEvent(event) {
 }
 
 // src/recipes/recipe.ts
-var import_yaml43 = __toESM(require_dist2(), 1);
+var import_yaml44 = __toESM(require_dist2(), 1);
 
 // src/service/recipe-knowledge.ts
 function time3(value) {
@@ -76227,6 +76336,23 @@ var RULE_ASSURANCE = {
       "optionalModelCertificates": []
     },
     {
+      "id": "redundancy/source-cli-with-committed-bundle",
+      "metadataSha256": "3b1f9d0566f315248c19b760f70d1bf6a3886f89bf950fdabc65690ea7892c7b",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Jobs that install dependencies only to run a TypeScript CLI from source could run the committed action bundle instead."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A JavaScript action commits a self-contained bundle so it runs without installing anything. A job that installs the full dependency tree just to start the same CLI through tsx or ts-node pays for the install and the on-the-fly compilation on every run, although the bundle in the repository already contains that code. When a generated-output check keeps the bundle in sync with the source, running it with `node` gives the same behaviour without the install."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
       "id": "redundancy/toolchain-version-drift",
       "metadataSha256": "8df1ec7208b6386248e08af78fdb9499232d1ae773812ed60de8cdb11b76673d",
       "detector": {
@@ -77154,7 +77280,7 @@ function explainRuleText(id2, rules16, severities) {
 }
 
 // src/review/project.ts
-var import_yaml44 = __toESM(require_dist2(), 1);
+var import_yaml45 = __toESM(require_dist2(), 1);
 
 // src/review/escape.ts
 var LINE_BREAKS = /[\r\n\t\v\f\u0085\u2028\u2029]+/g;
@@ -77189,7 +77315,7 @@ function parseStrictYaml(text4, maxBytes, label2) {
   if (/^%/m.test(text4)) return { problems: [`${label2} must not contain YAML directives (lines starting with %).`] };
   let documents;
   try {
-    documents = (0, import_yaml44.parseAllDocuments)(text4, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+    documents = (0, import_yaml45.parseAllDocuments)(text4, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
   } catch (error62) {
     return { problems: [`${label2} is not valid YAML (${describeValue(error62 instanceof Error ? error62.message : String(error62))}).`] };
   }
@@ -77202,20 +77328,20 @@ function parseStrictYaml(text4, maxBytes, label2) {
   for (const issue2 of [...document.errors, ...document.warnings]) {
     problems.push(`${label2} is not valid YAML: ${issue2.code} at line ${issue2.linePos?.[0]?.line ?? "?"}.`);
   }
-  if (!(0, import_yaml44.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
-  (0, import_yaml44.visit)(document, {
+  if (!(0, import_yaml45.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
+  (0, import_yaml45.visit)(document, {
     Alias() {
       problems.push(`${label2} must not use YAML aliases (*name).`);
-      return import_yaml44.visit.BREAK;
+      return import_yaml45.visit.BREAK;
     },
     Node(_key, node2) {
       if (node2.anchor) problems.push(`${label2} must not use YAML anchors (&name).`);
       if (node2.tag) problems.push(`${label2} must not use YAML tags (${describeValue(node2.tag)}).`);
     },
     Pair(_key, pair) {
-      if (!(0, import_yaml44.isScalar)(pair.key) || typeof pair.key.value !== "string") {
+      if (!(0, import_yaml45.isScalar)(pair.key) || typeof pair.key.value !== "string") {
         problems.push(`${label2} keys must be plain strings.`);
-        return import_yaml44.visit.SKIP;
+        return import_yaml45.visit.SKIP;
       }
       if (pair.key.value === "<<") problems.push(`${label2} must not use YAML merge keys (<<).`);
       return void 0;
@@ -77707,7 +77833,7 @@ async function analyze(request) {
   return { ...loaded, root: root2, input: loadedInput, result, selected, unmatched };
 }
 function slim(diagnostic) {
-  const message = sanitizeMarkdown(diagnostic.message, 2048);
+  const message2 = sanitizeMarkdown(diagnostic.message, 2048);
   const suggestion5 = diagnostic.suggestion ? sanitizeMarkdown(diagnostic.suggestion, 2048) : void 0;
   const description = diagnostic.fix ? sanitizeMarkdown(diagnostic.fix.description, 1024) : void 0;
   return {
@@ -77715,7 +77841,7 @@ function slim(diagnostic) {
     ruleset: diagnostic.ruleset,
     severity: diagnostic.severity,
     kind: diagnostic.kind,
-    message: message.text,
+    message: message2.text,
     path: diagnostic.path,
     line: diagnostic.line,
     column: diagnostic.column,
@@ -77726,7 +77852,7 @@ function slim(diagnostic) {
     fingerprint: diagnostic.fingerprint,
     fixable: Boolean(diagnostic.fix?.edits.length),
     ...description ? { fixDescription: description.text } : {},
-    omittedCharacters: message.omittedCharacters + (suggestion5?.omittedCharacters ?? 0) + (description?.omittedCharacters ?? 0)
+    omittedCharacters: message2.omittedCharacters + (suggestion5?.omittedCharacters ?? 0) + (description?.omittedCharacters ?? 0)
   };
 }
 function countSeverities(diagnostics) {
@@ -77762,8 +77888,8 @@ async function lintWorkspace(request) {
     inventoryComplete: analysis.input.inventoryComplete,
     ...page2,
     parseProblems: result.parseProblems.filter((problem) => analysis.selected(problem.path)).slice(0, 100).map((problem) => {
-      const message = sanitizeMarkdown(problem.message, 2048);
-      return { ...problem, message: message.text, omittedCharacters: message.omittedCharacters };
+      const message2 = sanitizeMarkdown(problem.message, 2048);
+      return { ...problem, message: message2.text, omittedCharacters: message2.omittedCharacters };
     }),
     skipped: result.skipped.slice(0, 100),
     unmatched: analysis.unmatched.slice(0, 100),
@@ -77975,8 +78101,8 @@ async function remoteScan(access, request) {
       omittedParseProblems: Math.max(0, parseProblemCount - 100),
       parseProblems: scan2.result.parseProblems.slice(0, 100).map((problem) => {
         const path = sanitizeMarkdown(problem.path, 1024);
-        const message = sanitizeMarkdown(problem.message, 2048);
-        return { path: path.text, line: problem.line, message: message.text, omittedCharacters: path.omittedCharacters + message.omittedCharacters };
+        const message2 = sanitizeMarkdown(problem.message, 2048);
+        return { path: path.text, line: problem.line, message: message2.text, omittedCharacters: path.omittedCharacters + message2.omittedCharacters };
       })
     } : {},
     dryRun: true
@@ -78792,16 +78918,16 @@ function attachFeedback(server, remote, options) {
     status = { ...status, pending: outbox.size };
     return { content: [{ type: "text", text: JSON.stringify({ acknowledged: seen.has(key), key, pending: outbox.size }) }] };
   });
-  const fail = (message) => {
-    status = { ...status, state: "error", error: message, pending: outbox.size };
-    if (message === lastError) return;
-    lastError = message;
+  const fail = (message2) => {
+    status = { ...status, state: "error", error: message2, pending: outbox.size };
+    if (message2 === lastError) return;
+    lastError = message2;
     errorResource?.remove();
-    const hash5 = createHash6("sha256").update(message).digest("hex").slice(0, 16);
+    const hash5 = createHash6("sha256").update(message2).digest("hex").slice(0, 16);
     errorResource = server.registerResource(`feedback-error-${hash5}`, `cicd://feedback/errors/${hash5}`, {
       title: "CI benchmark delivery gap",
       mimeType: "application/json"
-    }, (uri) => resource(uri, { error: message, since: status.since }));
+    }, (uri) => resource(uri, { error: message2, since: status.since }));
   };
   const tick = async () => {
     const now = Date.now();
@@ -78871,9 +78997,9 @@ function attachFeedback(server, remote, options) {
             undelivered.delete(key);
           } catch (error62) {
             if (controller.signal.aborted) break;
-            const message = `Producer ${producer.id}/${producer.run_attempt}: ${agentErrorMessage(error62, "Feedback collection failed; check access, transport and operation budgets.")}`;
-            retry.set(key, { at: now + 5 * 6e4, created: Date.parse(producer.created_at), message });
-            fail(message);
+            const message2 = `Producer ${producer.id}/${producer.run_attempt}: ${agentErrorMessage(error62, "Feedback collection failed; check access, transport and operation budgets.")}`;
+            retry.set(key, { at: now + 5 * 6e4, created: Date.parse(producer.created_at), message: message2 });
+            fail(message2);
             failed = true;
           }
         }
@@ -79080,8 +79206,8 @@ async function guardResult(run2) {
   try {
     return ok(await run2());
   } catch (error62) {
-    const message = agentErrorMessage(error62, "Operation failed or was cancelled. No changes were made.");
-    return { isError: true, content: [{ type: "text", text: sanitizeMarkdown(message, 4096).text }] };
+    const message2 = agentErrorMessage(error62, "Operation failed or was cancelled. No changes were made.");
+    return { isError: true, content: [{ type: "text", text: sanitizeMarkdown(message2, 4096).text }] };
   }
 }
 var strip = (value) => Object.fromEntries(Object.entries(value).filter(([, entry2]) => entry2 !== void 0));
@@ -79721,12 +79847,12 @@ function unusedDirectiveDiagnostics(unused, severity3, known2) {
   return unused.map((directive) => {
     const name = `cicd-optimizer-disable-${directive.kind}`;
     const unknown3 = directive.ids.filter((id2) => !known2.includes(id2)).map((id2) => ` "${id2}" is not a known rule or ruleset.${didYouMean(id2, known2)}`).join("");
-    const message = directive.ids.length === 0 ? `Unused ${name} directive: it suppressed no problems.` : `Unused ${name} directive for ${directive.ids.map((id2) => `"${id2}"`).join(", ")}: no matching problems were suppressed.${unknown3}`;
+    const message2 = directive.ids.length === 0 ? `Unused ${name} directive: it suppressed no problems.` : `Unused ${name} directive for ${directive.ids.map((id2) => `"${id2}"`).join(", ")}: no matching problems were suppressed.${unknown3}`;
     return {
       ruleId: UNUSED_DIRECTIVE_RULE_ID,
       ruleset: "meta",
       severity: severity3,
-      message,
+      message: message2,
       path: directive.path,
       line: directive.line,
       column: 1,

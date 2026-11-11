@@ -3721,22 +3721,22 @@ var require_errors = __commonJS({
   "node_modules/yaml/dist/errors.js"(exports) {
     "use strict";
     var YAMLError = class extends Error {
-      constructor(name, pos, code3, message) {
+      constructor(name, pos, code3, message2) {
         super();
         this.name = name;
         this.code = code3;
-        this.message = message;
+        this.message = message2;
         this.pos = pos;
       }
     };
     var YAMLParseError = class extends YAMLError {
-      constructor(pos, code3, message) {
-        super("YAMLParseError", pos, code3, message);
+      constructor(pos, code3, message2) {
+        super("YAMLParseError", pos, code3, message2);
       }
     };
     var YAMLWarning = class extends YAMLError {
-      constructor(pos, code3, message) {
-        super("YAMLWarning", pos, code3, message);
+      constructor(pos, code3, message2) {
+        super("YAMLWarning", pos, code3, message2);
       }
     };
     var prettifyError2 = (src, lc) => (error63) => {
@@ -4416,8 +4416,8 @@ var require_compose_collection = __commonJS({
         const { anchor: anchor2, newlineAfterProp: nl } = props;
         const lastProp = anchor2 && tagToken ? anchor2.offset > tagToken.offset ? anchor2 : tagToken : anchor2 ?? tagToken;
         if (lastProp && (!nl || nl.offset < lastProp.offset)) {
-          const message = "Missing newline after block sequence props";
-          onError(lastProp, "MISSING_CHAR", message);
+          const message2 = "Missing newline after block sequence props";
+          onError(lastProp, "MISSING_CHAR", message2);
         }
       }
       const expType = token.type === "block-map" ? "map" : token.type === "block-seq" ? "seq" : token.start.source === "{" ? "map" : "seq";
@@ -4489,15 +4489,15 @@ var require_resolve_block_scalar = __commonJS({
             trimIndent = indent.length;
         } else {
           if (indent.length < trimIndent) {
-            const message = "Block scalars with more-indented leading empty lines must use an explicit indentation indicator";
-            onError(offset + indent.length, "MISSING_CHAR", message);
+            const message2 = "Block scalars with more-indented leading empty lines must use an explicit indentation indicator";
+            onError(offset + indent.length, "MISSING_CHAR", message2);
           }
           if (header.indent === 0)
             trimIndent = indent.length;
           contentStart = i;
           if (trimIndent === 0 && !ctx.atRoot) {
-            const message = "Block scalar values in collections must be indented";
-            onError(offset, "BAD_INDENT", message);
+            const message2 = "Block scalar values in collections must be indented";
+            onError(offset, "BAD_INDENT", message2);
           }
           break;
         }
@@ -4520,8 +4520,8 @@ var require_resolve_block_scalar = __commonJS({
           content2 = content2.slice(0, -1);
         if (content2 && indent.length < trimIndent) {
           const src = header.indent ? "explicit indentation indicator" : "first line";
-          const message = `Block scalar lines must not be less indented than their ${src}`;
-          onError(offset - content2.length - (crlf ? 2 : 1), "BAD_INDENT", message);
+          const message2 = `Block scalar lines must not be less indented than their ${src}`;
+          onError(offset - content2.length - (crlf ? 2 : 1), "BAD_INDENT", message2);
           indent = "";
         }
         if (type === Scalar5.Scalar.BLOCK_LITERAL) {
@@ -4599,8 +4599,8 @@ var require_resolve_block_scalar = __commonJS({
             break;
           case "comment":
             if (strict && !hasSpace) {
-              const message = "Comments must be separated from other tokens by white space characters";
-              onError(token, "MISSING_CHAR", message);
+              const message2 = "Comments must be separated from other tokens by white space characters";
+              onError(token, "MISSING_CHAR", message2);
             }
             length += token.source.length;
             comment = token.source.substring(1);
@@ -4611,8 +4611,8 @@ var require_resolve_block_scalar = __commonJS({
             break;
           /* istanbul ignore next should not happen */
           default: {
-            const message = `Unexpected token in block scalar header: ${token.type}`;
-            onError(token, "UNEXPECTED_TOKEN", message);
+            const message2 = `Unexpected token in block scalar header: ${token.type}`;
+            onError(token, "UNEXPECTED_TOKEN", message2);
             const ts = token.source;
             if (ts && typeof ts === "string")
               length += ts.length;
@@ -5005,13 +5005,13 @@ var require_compose_node = __commonJS({
             if (anchor2)
               node2.anchor = anchor2.source.substring(1);
           } catch (error63) {
-            const message = error63 instanceof Error ? error63.message : String(error63);
-            onError(token, "RESOURCE_EXHAUSTION", message);
+            const message2 = error63 instanceof Error ? error63.message : String(error63);
+            onError(token, "RESOURCE_EXHAUSTION", message2);
           }
           break;
         default: {
-          const message = token.type === "error" ? token.message : `Unsupported token (type: ${token.type})`;
-          onError(token, "UNEXPECTED_TOKEN", message);
+          const message2 = token.type === "error" ? token.message : `Unsupported token (type: ${token.type})`;
+          onError(token, "UNEXPECTED_TOKEN", message2);
           isSrcToken = false;
         }
       }
@@ -5167,12 +5167,12 @@ var require_composer = __commonJS({
         this.prelude = [];
         this.errors = [];
         this.warnings = [];
-        this.onError = (source, code3, message, warning) => {
+        this.onError = (source, code3, message2, warning) => {
           const pos = getErrorPos(source);
           if (warning)
-            this.warnings.push(new errors.YAMLWarning(pos, code3, message));
+            this.warnings.push(new errors.YAMLWarning(pos, code3, message2));
           else
-            this.errors.push(new errors.YAMLParseError(pos, code3, message));
+            this.errors.push(new errors.YAMLParseError(pos, code3, message2));
         };
         this.directives = new directives.Directives({ version: options.version || "1.2" });
         this.options = options;
@@ -5242,10 +5242,10 @@ ${cb}` : comment;
           console.dir(token, { depth: null });
         switch (token.type) {
           case "directive":
-            this.directives.add(token.source, (offset, message, warning) => {
+            this.directives.add(token.source, (offset, message2, warning) => {
               const pos = getErrorPos(token);
               pos[0] += offset;
-              this.onError(pos, "BAD_DIRECTIVE", message, warning);
+              this.onError(pos, "BAD_DIRECTIVE", message2, warning);
             });
             this.prelude.push(token.source);
             this.atDirectives = true;
@@ -5334,12 +5334,12 @@ var require_cst_scalar = __commonJS({
     var stringifyString = require_stringifyString();
     function resolveAsScalar(token, strict = true, onError) {
       if (token) {
-        const _onError = (pos, code3, message) => {
+        const _onError = (pos, code3, message2) => {
           const offset = typeof pos === "number" ? pos : Array.isArray(pos) ? pos[0] : pos.offset;
           if (onError)
-            onError(offset, code3, message);
+            onError(offset, code3, message2);
           else
-            throw new errors.YAMLParseError([offset, offset + 1], code3, message);
+            throw new errors.YAMLParseError([offset, offset + 1], code3, message2);
         };
         switch (token.type) {
           case "scalar":
@@ -6499,8 +6499,8 @@ var require_parser = __commonJS({
         }
         const type = cst.tokenType(source);
         if (!type) {
-          const message = `Not a YAML token: ${source}`;
-          yield* this.pop({ type: "error", offset: this.offset, message, source });
+          const message2 = `Not a YAML token: ${source}`;
+          yield* this.pop({ type: "error", offset: this.offset, message: message2, source });
           this.offset += source.length;
         } else if (type === "scalar") {
           this.atNewLine = false;
@@ -6590,8 +6590,8 @@ var require_parser = __commonJS({
       *pop(error63) {
         const token = error63 ?? this.stack.pop();
         if (!token) {
-          const message = "Tried to pop an empty stack";
-          yield { type: "error", offset: this.offset, source: "", message };
+          const message2 = "Tried to pop an empty stack";
+          yield { type: "error", offset: this.offset, source: "", message: message2 };
         } else if (this.stack.length === 0) {
           yield token;
         } else {
@@ -8177,8 +8177,8 @@ function postgres(x) {
   Error.captureStackTrace(error63, postgres);
   return error63;
 }
-function generic(code3, message) {
-  const error63 = Object.assign(new Error(code3 + ": " + message), { code: code3 });
+function generic(code3, message2) {
+  const error63 = Object.assign(new Error(code3 + ": " + message2), { code: code3 });
   Error.captureStackTrace(error63, generic);
   return error63;
 }
@@ -11801,14 +11801,14 @@ function Subscribe(postgres2, options) {
     function data(x) {
       if (x[0] === 119) {
         received = max(received, x.readBigUInt64BE(9));
-        parse10(x.subarray(25), relations, sql.options.parsers, message, options.transform);
+        parse10(x.subarray(25), relations, sql.options.parsers, message2, options.transform);
       } else if (x[0] === 107) {
         received = max(received, x.readBigUInt64BE(1));
         idle() && (acked = max(acked, received));
         x[17] && status();
       }
     }
-    function message(kind, x, info) {
+    function message2(kind, x, info) {
       if (kind === "begin")
         return transaction2 = { lsn: x.lsn, end: null, time: x.time, xid: x.xid };
       if (kind === "commit") {
@@ -11932,7 +11932,7 @@ function max(a, b) {
 function Time(x) {
   return new Date(Date.UTC(2e3, 0, 1) + Number(x / 1000n));
 }
-function parse10(x, relations, parsers, message, transform2) {
+function parse10(x, relations, parsers, message2, transform2) {
   const type = x[0];
   if (type === 82) {
     let i = 1;
@@ -11956,18 +11956,18 @@ function parse10(x, relations, parsers, message, transform2) {
       i += 4;
     }
   } else if (type === 66) {
-    message("begin", { lsn: x.readBigUInt64BE(1), time: Time(x.readBigInt64BE(9)), xid: x.readUInt32BE(17) });
+    message2("begin", { lsn: x.readBigUInt64BE(1), time: Time(x.readBigInt64BE(9)), xid: x.readUInt32BE(17) });
   } else if (type === 67) {
-    message("commit", { lsn: x.readBigUInt64BE(2), end: x.readBigUInt64BE(10) });
+    message2("commit", { lsn: x.readBigUInt64BE(2), end: x.readBigUInt64BE(10) });
   } else if (type === 73) {
     const relation = relations[x.readUInt32BE(1)];
-    message("change", tuples(x, relation.columns, 8, transform2).row, { command: "insert", relation });
+    message2("change", tuples(x, relation.columns, 8, transform2).row, { command: "insert", relation });
   } else if (type === 68) {
     let i = 1;
     const relation = relations[x.readUInt32BE(i)];
     i += 4;
     const key2 = x[i] === 75;
-    message(
+    message2(
       "change",
       key2 || x[i] === 79 ? tuples(x, relation.columns, i += 3, transform2).row : null,
       { command: "delete", relation, key: key2 }
@@ -11980,11 +11980,11 @@ function parse10(x, relations, parsers, message, transform2) {
     const xs = key2 || x[i] === 79 ? tuples(x, relation.columns, i += 3, transform2) : null;
     xs && (i = xs.i);
     const { row } = tuples(x, relation.columns, i + 3, transform2);
-    message("change", row, { command: "update", relation, key: key2, old: xs && xs.row });
+    message2("change", row, { command: "update", relation, key: key2, old: xs && xs.row });
   } else if (type === 84) {
     const count = x.readUInt32BE(1), flags = x[5];
     for (let i = 0; i < count; i++) {
-      message("change", null, {
+      message2("change", null, {
         command: "truncate",
         relation: relations[x.readUInt32BE(6 + i * 4)],
         cascade: (flags & 1) === 1,
@@ -13639,8 +13639,8 @@ import { dirname, isAbsolute, resolve } from "node:path";
 
 // src/github/rest.ts
 var RequestError = class extends Error {
-  constructor(message, status, response) {
-    super(message);
+  constructor(message2, status, response) {
+    super(message2);
     this.status = status;
     this.response = response;
     this.name = "RequestError";
@@ -13683,8 +13683,8 @@ function restClient(options = {}) {
       } catch {
       }
       if (!response.ok) {
-        const message = data?.message ?? response.statusText;
-        throw new RequestError(`${method} ${path} \u2192 ${response.status}: ${message}`, response.status, data);
+        const message2 = data?.message ?? response.statusText;
+        throw new RequestError(`${method} ${path} \u2192 ${response.status}: ${message2}`, response.status, data);
       }
       return { status: response.status, data };
     }
@@ -16717,7 +16717,7 @@ var apt_hygiene_default = defineRule({
           const apkCached = mounts.some((mount) => /^\/(var\/cache\/apk|etc\/apk\/cache)/.test(mount.target));
           const verbs = commands.map(aptVerb);
           const updates = commands.filter((_, index) => verbs[index] === "update");
-          const installs = commands.filter((_, index) => ["install", "upgrade", "dist-upgrade", "full-upgrade"].includes(verbs[index] ?? ""));
+          const installs2 = commands.filter((_, index) => ["install", "upgrade", "dist-upgrade", "full-upgrade"].includes(verbs[index] ?? ""));
           for (const command of commands) {
             const install2 = systemInstall(command.words);
             if (!install2) continue;
@@ -16762,7 +16762,7 @@ var apt_hygiene_default = defineRule({
               });
             }
           }
-          if (updates.length > 0 && installs.length === 0 && !commands.some(runsScript)) {
+          if (updates.length > 0 && installs2.length === 0 && !commands.some(runsScript)) {
             const [update2] = updates;
             if (!update2) continue;
             report({
@@ -18915,7 +18915,7 @@ function preamble(file2, model, stage) {
   if (isInternalBase(model, stage)) return void 0;
   const packages = /* @__PURE__ */ new Map();
   const commands = [];
-  let installs = 0;
+  let installs2 = 0;
   for (const instruction2 of stage.instructions) {
     if (contextSources(instruction2) !== void 0) break;
     if (instruction2.keyword !== "RUN") continue;
@@ -18926,15 +18926,15 @@ function preamble(file2, model, stage) {
         const set2 = packages.get(system.installer) ?? /* @__PURE__ */ new Set();
         for (const name of system.packages) set2.add(name.replace(/^["']|["']$/g, ""));
         packages.set(system.installer, set2);
-        installs += 1;
+        installs2 += 1;
         continue;
       }
       if (HOUSEKEEPING.test(text7) || isDependencyInstall(command)) continue;
-      if (TOOL_INSTALL.test(text7)) installs += 1;
+      if (TOOL_INSTALL.test(text7)) installs2 += 1;
       commands.push(text7);
     }
   }
-  if (installs === 0) return void 0;
+  if (installs2 === 0) return void 0;
   const steps2 = [
     ...[...packages].sort(([a], [b]) => a.localeCompare(b)).map(([installer, names]) => `${installer}: ${[...names].sort().join(" ")}`),
     ...commands
@@ -23628,7 +23628,7 @@ var flake_nixconfig_cache_not_trusted_default = defineRule({
       const jobCount = new Set(misses.map((miss) => `${miss.view.model.workflow.path}:${miss.view.model.job.id}`)).size;
       const more = jobCount > 1 ? ` (and ${jobCount - 1} more job${jobCount > 2 ? "s" : ""})` : "";
       const listed = first.urls.filter((url2) => url2.key === firstUrl2.key).map((url2) => code(url2.raw)).join(", ");
-      const message = `\`nixConfig.${firstUrl2.key}\` adds ${listed}, but job \`${view2.model.job.id}\` (\`${view2.model.workflow.path}\`) runs \`${target.display}\` on this flake without recognized preceding acceptance or equivalent substituter configuration${more}. The setting may be ignored; external configuration and daemon policy are not established by this inspection.`;
+      const message2 = `\`nixConfig.${firstUrl2.key}\` adds ${listed}, but job \`${view2.model.job.id}\` (\`${view2.model.workflow.path}\`) runs \`${target.display}\` on this flake without recognized preceding acceptance or equivalent substituter configuration${more}. The setting may be ignored; external configuration and daemon policy are not established by this inspection.`;
       const hosts2 = uncovered.flatMap((url2) => url2.host ?? []);
       const matchingKeys = keys.filter((key2) => hosts2.some((host) => key2.toLowerCase().startsWith(host)));
       const keyText = (matchingKeys.length > 0 ? matchingKeys : keys).join(" ") || hosts2.map((host) => `<public key of ${host}>`).join(" ");
@@ -23661,7 +23661,7 @@ ${snippet2}`];
         path,
         line: firstUrl2.entry.line,
         key: `${path}:nixconfig-cache`,
-        message,
+        message: message2,
         suggestion: parts2.join("\n"),
         related: misses.slice(1).map((miss) => ({ path: miss.target.path, line: miss.target.line }))
       });
@@ -27003,6 +27003,7 @@ var SETUP_ACTIONS = {
   "dtolnay/rust-toolchain": {},
   "erlef/setup-beam": {}
 };
+var INSTALL_COMMAND = /^(?:npm (?:ci|install|i)|pnpm (?:install|i)|yarn(?: install)?|bun install|pip3? install|python3? -m pip install|poetry install|uv sync|bundle install|go mod download|composer install|dotnet restore)\b/;
 function setupActionOf(step) {
   const action = step.uses?.action;
   if (action?.kind !== "remote" || action.name === void 0) return void 0;
@@ -27334,12 +27335,11 @@ var rebuild_per_job_default = defineRule({
 });
 
 // src/lint/rules/redundancy/repeated-job-setup.ts
-var INSTALL2 = /^(?:npm (?:ci|install|i)|pnpm (?:install|i)|yarn(?: install)?|bun install|pip3? install|python3? -m pip install|poetry install|uv sync|bundle install|go mod download|composer install|dotnet restore)\b/;
 function isSetup(step) {
   if (setupActionOf(step)) return true;
   const name = step.uses?.action?.name ?? "";
   if (/\/setup-|\/action-setup$/.test(name)) return true;
-  return commandsOf(step).some(({ command }) => INSTALL2.test(commandWords(command).join(" ")));
+  return commandsOf(step).some(({ command }) => INSTALL_COMMAND.test(commandWords(command).join(" ")));
 }
 function commonPrefix(candidates2) {
   let length = 0;
@@ -27497,6 +27497,114 @@ var shadowed_env_default = defineRule({
   }
 });
 
+// src/lint/rules/redundancy/source-cli-with-committed-bundle.ts
+var DEPENDENCY_CONSUMERS = /* @__PURE__ */ new Set(["npm", "npx", "pnpm", "yarn", "bun", "bunx", "node", "tsx", "ts-node", "deno", "tsc", "vitest", "jest", "eslint"]);
+var OPAQUE_CONSUMER = /(^|[\s;&|(])(npx|npm|node|tsx|ts-node|pnpm|yarn|bunx?)\s/;
+var SOURCE_RUNNER = /^(?:tsx|ts-node)\s/;
+var RUN_FLAGS = /* @__PURE__ */ new Set(["--silent", "-s", "--if-present"]);
+function committedBundle(project) {
+  const action = project.actions.find((entry2) => entry2.path === "action.yml" || entry2.path === "action.yaml");
+  if (!action) return void 0;
+  const runs = field(action.source, action.source.doc.contents, "runs")?.value ?? null;
+  if (!runs) return void 0;
+  const using = stringValue(field(action.source, runs, "using")?.value ?? null);
+  const main = stringValue(field(action.source, runs, "main")?.value ?? null);
+  if (!using || !/^node\d+$/.test(using) || !main) return void 0;
+  return { path: action.path, main: main.replace(/^\.\//, "") };
+}
+function npmRun(words6) {
+  if (words6[0] !== "npm" || words6[1] !== "run" && words6[1] !== "run-script") return void 0;
+  let index = 2;
+  while (RUN_FLAGS.has(words6[index] ?? "")) index += 1;
+  const script = words6[index];
+  if (!script || script.startsWith("-")) return void 0;
+  const rest = words6.slice(index + 1);
+  if (rest.length > 0 && rest[0] !== "--") return void 0;
+  return { script, args: rest.slice(1) };
+}
+function sourceCli(words6, scripts) {
+  const run4 = npmRun(words6);
+  if (!run4) return void 0;
+  const body = scripts[run4.script];
+  if (typeof body !== "string" || !SOURCE_RUNNER.test(body)) return void 0;
+  return { ...run4, body };
+}
+function invocations(job, scripts) {
+  if (job.workingDirectory) return [];
+  return job.steps.flatMap(
+    (step) => step.workingDirectory ? [] : commandsOf(step).flatMap(({ command, line }) => {
+      const match2 = sourceCli(commandWords(command), scripts);
+      return match2 ? [{ line, command: command.trim(), ...match2 }] : [];
+    })
+  );
+}
+function dependencyFree(steps2, scripts) {
+  for (const step of steps2) {
+    if (step.uses?.action?.name === "actions/github-script") return false;
+    const script = step.run?.value;
+    if (!script) continue;
+    const commands = commandsOf(step);
+    if (commands.length === 0 && OPAQUE_CONSUMER.test(script)) return false;
+    for (const { command } of commands) {
+      const words6 = commandWords(command);
+      if (INSTALL_COMMAND.test(words6.join(" ")) || sourceCli(words6, scripts)) continue;
+      if (words6.length === 0 ? OPAQUE_CONSUMER.test(command) : DEPENDENCY_CONSUMERS.has(words6[0] ?? "") || command.includes("node_modules")) return false;
+    }
+  }
+  return true;
+}
+function installs(steps2) {
+  return steps2.some((step) => commandsOf(step).some(({ command }) => INSTALL_COMMAND.test(commandWords(command).join(" "))));
+}
+function message(workflow, job, invocation, bundle) {
+  const command = invocation.command.length > 120 ? `${invocation.command.slice(0, 117)}...` : invocation.command;
+  return `Job \`${job.id}\` in ${workflow.path} installs dependencies only to run \`${command}\` from source (\`${invocation.body}\`), although \`${bundle.path}\` ships the bundled entry point \`${bundle.main}\`.`;
+}
+var source_cli_with_committed_bundle_default = defineRule({
+  meta: {
+    id: "redundancy/source-cli-with-committed-bundle",
+    ruleset: "redundancy",
+    description: "Jobs that install dependencies only to run a TypeScript CLI from source could run the committed action bundle instead.",
+    rationale: "A JavaScript action commits a self-contained bundle so it runs without installing anything. A job that installs the full dependency tree just to start the same CLI through tsx or ts-node pays for the install and the on-the-fly compilation on every run, although the bundle in the repository already contains that code. When a generated-output check keeps the bundle in sync with the source, running it with `node` gives the same behaviour without the install.",
+    kind: "insight",
+    defaultSeverity: "info",
+    presets: ["insights"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-javascript-action"],
+    impact: "low",
+    example: {
+      bad: '# action.yml: runs: { using: node24, main: dist/index.js }\n# package.json: "cli": "tsx src/bin.ts"\nsteps:\n  - uses: actions/checkout@v4\n  - uses: actions/setup-node@v4\n  - run: npm ci\n  - run: npm run --silent cli -- report --pr 1',
+      good: "steps:\n  - uses: actions/checkout@v4\n  - uses: actions/setup-node@v4\n  - run: node dist/index.js report --pr 1"
+    }
+  },
+  check({ project, report }) {
+    const scripts = project.rootManifest?.json.scripts;
+    if (!scripts || typeof scripts !== "object") return;
+    const bundle = committedBundle(project);
+    if (!bundle) return;
+    const table2 = scripts;
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        if (job.uses) continue;
+        const [first] = invocations(job, table2);
+        if (!first) continue;
+        const steps2 = project.expandedSteps(job);
+        if (!installs(steps2) || !dependencyFree(steps2, table2)) continue;
+        const args = first.args.join(" ");
+        report({
+          path: workflow.path,
+          line: first.line,
+          key: `${job.key}.source-cli-bundle.${first.script}`,
+          message: message(workflow, job, first, bundle),
+          suggestion: `If \`${bundle.main}\` routes the same command and a generated-output check keeps it current, drop the dependency install and run \`node ${bundle.main}${args ? ` ${args}` : ""}\` after setting up Node.`,
+          confidence: "medium"
+        });
+      }
+    }
+  }
+});
+
 // src/lint/rules/redundancy/toolchain-version-drift.ts
 function normalize4(raw) {
   const version2 = raw.trim().replace(/^v/i, "").replace(/(?:\.[x*])+$/i, "");
@@ -27593,7 +27701,8 @@ var rules8 = [
   rebuild_per_job_default,
   duplicate_command_default,
   shadowed_env_default,
-  toolchain_version_drift_default
+  toolchain_version_drift_default,
+  source_cli_with_committed_bundle_default
 ];
 
 // src/lint/rules/registries/ghcr.ts
@@ -28020,7 +28129,7 @@ var github_npm_default = defineRule({
 var rules9 = [ghcr_default, github_npm_default];
 
 // src/lint/rules/security/shared.ts
-var import_yaml18 = __toESM(require_dist(), 1);
+var import_yaml19 = __toESM(require_dist(), 1);
 var PRIVILEGED_TRIGGERS = ["pull_request_target", "workflow_run", "issue_comment"];
 function isPrivileged(workflow) {
   return workflow.kind === "workflow" && hasTrigger(workflow, ...PRIVILEGED_TRIGGERS);
@@ -28159,9 +28268,9 @@ function executesWorkspace(step) {
   }
 }
 function directChild3(node2, key2) {
-  if (!(0, import_yaml18.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml18.isPair)(item) && (0, import_yaml18.isScalar)(item.key) && String(item.key.value) === key2);
-  return pair && !(0, import_yaml18.isAlias)(pair.value) ? pair.value : void 0;
+  if (!(0, import_yaml19.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml19.isPair)(item) && (0, import_yaml19.isScalar)(item.key) && String(item.key.value) === key2);
+  return pair && !(0, import_yaml19.isAlias)(pair.value) ? pair.value : void 0;
 }
 function directStep(workflow, step) {
   const match2 = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -28169,10 +28278,10 @@ function directStep(workflow, step) {
   const root = rootNode2(workflow);
   const parent = match2[1] !== void 0 ? directChild3(directChild3(root, "jobs"), match2[1]) : directChild3(root, "runs");
   const stepsNode = directChild3(parent, "steps");
-  if (!(0, import_yaml18.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml19.isSeq)(stepsNode)) return void 0;
   const node2 = stepsNode.items[Number(match2[2])];
-  if (!(0, import_yaml18.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
-  if (node2.items.some((pair) => !(0, import_yaml18.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
+  if (!(0, import_yaml19.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
+  if (node2.items.some((pair) => !(0, import_yaml19.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
   return node2;
 }
 
@@ -28538,9 +28647,9 @@ var mutable_remote_ref_default = defineRule({
 });
 
 // src/lint/rules/security/persisted-credentials.ts
-var import_yaml20 = __toESM(require_dist(), 1);
+var import_yaml21 = __toESM(require_dist(), 1);
 var UPLOAD_ACTIONS = ["actions/upload-artifact", "actions/upload-artifact/merge"];
-var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml20.Scalar.PLAIN, import_yaml20.Scalar.QUOTE_DOUBLE, import_yaml20.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml21.Scalar.PLAIN, import_yaml21.Scalar.QUOTE_DOUBLE, import_yaml21.Scalar.QUOTE_SINGLE]);
 var WORKSPACE_ROOT = /^(?:\.\/?|\$\{\{\s*github\.workspace\s*\}\}\/?)$/;
 function uploadsGitDirectory(step, file2) {
   if (!usesAction(step, ...UPLOAD_ACTIONS)) return false;
@@ -28564,7 +28673,7 @@ function addPersistCredentials(file2, workflow, step) {
   const description = "Set persist-credentials: false";
   if (step.with.size > 0 || step.uses?.kind !== "literal") {
     const withNode = directWith(workflow, step);
-    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml20.isScalar)(pair.key) && pair.key.value !== "<<");
+    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value !== "<<");
     const first = pairs[0];
     const last = pairs[pairs.length - 1];
     if (!first || !last) return void 0;
@@ -28572,14 +28681,14 @@ function addPersistCredentials(file2, workflow, step) {
     const indent2 = indentOf(file2.content, firstLine);
     const lastLine = lineOfNode(workflow.source, last.key);
     const value2 = last.value;
-    const endsOnKeyLine = (0, import_yaml20.isScalar)(value2) && SINGLE_LINE.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
+    const endsOnKeyLine = (0, import_yaml21.isScalar)(value2) && SINGLE_LINE.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
     const line = `${indent2}persist-credentials: false`;
     return fix(description, insertLinesAfter(file2, endsOnKeyLine ? lastLine : firstLine - 1, [line]));
   }
   const node2 = directStep(workflow, step);
-  if (!node2 || node2.items.some((pair) => (0, import_yaml20.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
-  const usesPair = node2.items.find((pair) => (0, import_yaml20.isScalar)(pair.key) && pair.key.value === "uses");
-  if (!usesPair || !(0, import_yaml20.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
+  if (!node2 || node2.items.some((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
+  const usesPair = node2.items.find((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value === "uses");
+  if (!usesPair || !(0, import_yaml21.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
   const usesLine = lineOfNode(workflow.source, usesPair.key);
   const text7 = lineText(file2.content, usesLine);
   const match2 = /^(\s*)(-\s+)?uses\s*:/.exec(text7);
@@ -29568,7 +29677,7 @@ var tool_incremental_cache_default = defineRule({
 });
 
 // src/lint/rules/testing/unconditional-debug-upload.ts
-var import_yaml23 = __toESM(require_dist(), 1);
+var import_yaml24 = __toESM(require_dist(), 1);
 var DEBUG_PATH = /(^|[/\\])(?:playwright-report|test-results|traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)/i;
 var HEAVY_PATH = /(^|[/\\])(?:traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)|\.(?:zip|webm|mp4|png)$/i;
 var MACHINE_READABLE = /junit|\.(?:xml|json|trx|sarif|lcov)$|coverage/i;
@@ -29642,7 +29751,7 @@ var unconditional_debug_upload_default = defineRule({
         const file2 = project.files.get(workflow.path);
         const first = file2 ? lineText(file2.content, step.line) : "";
         const dash = /^(\s*)-\s+[\w-]+:/.exec(first);
-        if (file2 && dash && (0, import_yaml23.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
+        if (file2 && dash && (0, import_yaml24.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
           applied = fix("Upload only when the job fails", insertLinesAfter(file2, step.line, [`${dash[1] ?? ""}  if: failure()`]));
         }
       }
@@ -30221,10 +30330,10 @@ function propertyDecided(project, build2, properties, flags) {
   return properties.some((property) => buildMentions(build2, property));
 }
 function undecidedBuild(project, build2, properties, flags) {
-  const invocations = build2.invocations.filter(
+  const invocations2 = build2.invocations.filter(
     (invocation) => !propertyDecided(project, { ...build2, invocations: [invocation] }, properties, flags)
   );
-  return invocations.length > 0 ? { ...build2, invocations } : void 0;
+  return invocations2.length > 0 ? { ...build2, invocations: invocations2 } : void 0;
 }
 function related(build2) {
   return build2.properties ? [{ path: build2.properties.path, line: 1 }] : [];
@@ -32010,9 +32119,9 @@ var rules14 = [
 ];
 
 // src/lint/rules/workflow/artifact-retention.ts
-var import_yaml30 = __toESM(require_dist(), 1);
+var import_yaml31 = __toESM(require_dist(), 1);
 var UPLOAD_ACTIONS2 = /* @__PURE__ */ new Set(["actions/upload-artifact", "actions/upload-artifact/merge"]);
-var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml30.Scalar.PLAIN, import_yaml30.Scalar.QUOTE_DOUBLE, import_yaml30.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml31.Scalar.PLAIN, import_yaml31.Scalar.QUOTE_DOUBLE, import_yaml31.Scalar.QUOTE_SINGLE]);
 function retentionDays(value2) {
   if (typeof value2 === "number") return value2;
   if (typeof value2 === "string" && /^\s*\d+\s*$/.test(value2)) return Number(value2);
@@ -32020,7 +32129,7 @@ function retentionDays(value2) {
 }
 function addRetention(file2, workflow, step, days) {
   const withNode = directWith(workflow, step);
-  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml30.isScalar)(pair.key) && pair.key.value !== "<<");
+  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml31.isScalar)(pair.key) && pair.key.value !== "<<");
   const first = pairs[0];
   const last = pairs[pairs.length - 1];
   if (!first || !last) return void 0;
@@ -32028,7 +32137,7 @@ function addRetention(file2, workflow, step, days) {
   const indent = indentOf(file2.content, firstLine);
   const lastLine = lineOfNode(workflow.source, last.key);
   const value2 = last.value;
-  const endsOnKeyLine = (0, import_yaml30.isScalar)(value2) && SINGLE_LINE2.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
+  const endsOnKeyLine = (0, import_yaml31.isScalar)(value2) && SINGLE_LINE2.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
   const line = `${indent}retention-days: ${days}`;
   return fix(
     `Set retention-days: ${days}`,
@@ -32344,7 +32453,7 @@ var LIGHT_ACTIONS = /* @__PURE__ */ new Set([
   "amannn/action-semantic-pull-request"
 ]);
 var INFO_COMMANDS = /* @__PURE__ */ new Set(["echo", "printf", "ls", "pwd", "date", "true", "uname", "whoami", "nproc", "df", "free"]);
-var INSTALL3 = /^(npm (ci|install|i)|pnpm (install|i)|yarn( install)?|bun (install|i)|uv sync)(\s+--?[\w-]+(=\S+)?)*$/;
+var INSTALL2 = /^(npm (ci|install|i)|pnpm (install|i)|yarn( install)?|bun (install|i)|uv sync)(\s+--?[\w-]+(=\S+)?)*$/;
 var LIGHT_TOOLS = /* @__PURE__ */ new Set([
   "prettier",
   "biome",
@@ -32400,7 +32509,7 @@ function scriptCommands(project, name) {
   return typeof script === "string" ? script.split(/&&|;/).map((part2) => part2.trim()).filter(Boolean) : void 0;
 }
 function lightCommand(project, command, depth = 0) {
-  if (informational(command) || INSTALL3.test(command) || lightTool(command)) return true;
+  if (informational(command) || INSTALL2.test(command) || lightTool(command)) return true;
   const script = SCRIPT_RUN.exec(command);
   const name = script?.[2] ?? script?.[4];
   if (!name || depth > 1 || ["install", "add", "dlx", "exec", "run"].includes(name)) return false;
@@ -32477,7 +32586,7 @@ var larger_runner_unjustified_default = defineRule({
 });
 
 // src/lint/rules/workflow/matrix-explosion.ts
-var import_yaml34 = __toESM(require_dist(), 1);
+var import_yaml35 = __toESM(require_dist(), 1);
 var LIMIT = 256;
 var ENUMERATION_CAP = 5e4;
 var isPrimitive2 = (value2) => value2 === null || ["string", "number", "boolean"].includes(typeof value2);
@@ -32489,7 +32598,7 @@ function records2(value2) {
 }
 function scalarTexts(source, content2, node2) {
   const nodes = items(source, node2);
-  const texts = nodes.map((item) => (0, import_yaml34.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
+  const texts = nodes.map((item) => (0, import_yaml35.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
   const flowSafe = (text7) => text7 !== void 0 && !text7.includes("\n") && (/^["']/.test(text7) || !/[,[\]{}]/.test(text7));
   return texts.every(flowSafe) ? texts : void 0;
 }
@@ -32991,7 +33100,7 @@ Inspect ${tool2.rangeFiles.join(" and ")} before reusing them: constraints may a
 });
 
 // src/lint/rules/workflow/unnecessary-needs-serialization.ts
-var import_yaml37 = __toESM(require_dist(), 1);
+var import_yaml38 = __toESM(require_dist(), 1);
 var DEPLOY = /deploy|release|publish|promote|rollout|ship/i;
 var GATE = /test|lint|build|check|verify|validat|typecheck|compile|scan|audit|\bci\b|e2e|smoke|format|fmt|analy|codeql|security|review|approv|gate|guard|preflight|sanity|wait|lock|migrat|provision|setup-env|infra/i;
 var STANDARD_RUNNER = /^(ubuntu|windows|macos)-(latest|\d[\w.]*)(-arm|-intel)?$/;
@@ -33004,7 +33113,7 @@ var SETUP_ACTIONS3 = /* @__PURE__ */ new Set([
   "ruby/setup-ruby"
 ]);
 var INFO_COMMANDS2 = /* @__PURE__ */ new Set(["echo", "printf", "cat", "ls", "pwd", "date", "true", "uname", "whoami", "df", "nproc", "free"]);
-var INSTALL4 = /^(npm (ci|install|i)|pnpm (install|i)|yarn( install)?|bun (install|i)|pip3? install|python3? -m pip install|bundle install|go mod download|dotnet restore|composer install|poetry install|uv sync)(\s|$)/;
+var INSTALL3 = /^(npm (ci|install|i)|pnpm (install|i)|yarn( install)?|bun (install|i)|pip3? install|python3? -m pip install|bundle install|go mod download|dotnet restore|composer install|poetry install|uv sync)(\s|$)/;
 function jobNode6(workflow, job) {
   const source = workflow.source;
   return field(source, field(source, source.doc.contents, "jobs")?.value, job.id)?.value;
@@ -33040,14 +33149,14 @@ function inertStep(project, step) {
   const commands = commandsOf(step);
   if (commands.length === 0) return void 0;
   if (commands.every(({ command }) => informational2(command))) return "echo";
-  if (commands.every(({ command }) => informational2(command) || INSTALL4.test(command))) return "install";
+  if (commands.every(({ command }) => informational2(command) || INSTALL3.test(command))) return "install";
   return void 0;
 }
 function needsLine(workflow, job, dependency) {
   const source = workflow.source;
   const needs = field(source, jobNode6(workflow, job), "needs");
   if (!needs) return job.line;
-  const item = items(source, needs.value).find((node2) => (0, import_yaml37.isScalar)(node2) && String(node2.value) === dependency);
+  const item = items(source, needs.value).find((node2) => (0, import_yaml38.isScalar)(node2) && String(node2.value) === dependency);
   return item ? lineOfNode(source, item) : needs.line;
 }
 function standardHosted(job) {
@@ -34528,6 +34637,23 @@ var RULE_ASSURANCE = {
       "optionalModelCertificates": []
     },
     {
+      "id": "redundancy/source-cli-with-committed-bundle",
+      "metadataSha256": "3b1f9d0566f315248c19b760f70d1bf6a3886f89bf950fdabc65690ea7892c7b",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Jobs that install dependencies only to run a TypeScript CLI from source could run the committed action bundle instead."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A JavaScript action commits a self-contained bundle so it runs without installing anything. A job that installs the full dependency tree just to start the same CLI through tsx or ts-node pays for the install and the on-the-fly compilation on every run, although the bundle in the repository already contains that code. When a generated-output check keeps the bundle in sync with the source, running it with `node` gives the same behaviour without the install."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
       "id": "redundancy/toolchain-version-drift",
       "metadataSha256": "8df1ec7208b6386248e08af78fdb9499232d1ae773812ed60de8cdb11b76673d",
       "detector": {
@@ -35393,7 +35519,7 @@ function assuranceText(id2) {
 }
 
 // src/lint/config.ts
-var import_yaml39 = __toESM(require_dist(), 1);
+var import_yaml40 = __toESM(require_dist(), 1);
 
 // node_modules/bignumber.js/bignumber.mjs
 var isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
@@ -37837,8 +37963,8 @@ var _dafny = (function() {
     yield v;
   };
   $module.HaltException = class HaltException extends Error {
-    constructor(message) {
-      super(message);
+    constructor(message2) {
+      super(message2);
     }
   };
   $module.HandleHaltExceptions = function(f2) {
@@ -39863,8 +39989,8 @@ function didYouMean(value2, candidates2) {
 }
 var Validator = class {
   problems = [];
-  problem(path, message) {
-    this.problems.push({ path, message });
+  problem(path, message2) {
+    this.problems.push({ path, message: message2 });
   }
   unknownKeys(path, value2, allowed2) {
     for (const key2 of Object.keys(value2)) {
@@ -40016,8 +40142,8 @@ function validateConfig(input3, rules16) {
       const options = v.record(`rules.${rawId}[1]`, value2[1]);
       const allowed2 = Object.keys(rule.meta.defaultOptions);
       v.unknownKeys(`rules.${rawId}[1]`, options, allowed2);
-      for (const message of rule.meta.validateOptions?.(options) ?? []) {
-        v.problem(`rules.${rawId}[1]`, message);
+      for (const message2 of rule.meta.validateOptions?.(options) ?? []) {
+        v.problem(`rules.${rawId}[1]`, message2);
       }
       config2.rules[id2] = [severity, options];
     } else {
@@ -40139,7 +40265,7 @@ function validateConfig(input3, rules16) {
 function parseConfigText(text7, rules16, path = CONFIG_PATHS[0] ?? "config") {
   let raw;
   try {
-    raw = (0, import_yaml39.parse)(text7, { maxAliasCount: 100 });
+    raw = (0, import_yaml40.parse)(text7, { maxAliasCount: 100 });
   } catch (error63) {
     return {
       config: structuredClone(DEFAULT_CONFIG),
@@ -40563,7 +40689,7 @@ function renderRulesMarkdown(rules16) {
 var VERSION = "0.2.0";
 
 // src/cli/experiments.ts
-var import_yaml45 = __toESM(require_dist(), 1);
+var import_yaml46 = __toESM(require_dist(), 1);
 import { appendFile, readdir as readdir3, readFile as readFile4, stat as stat5 } from "node:fs/promises";
 import { join as join7 } from "node:path";
 import { parseArgs as parseArgs3 } from "node:util";
@@ -40621,7 +40747,7 @@ async function ensureLabels(client, repo, labels) {
 
 // src/github/git.ts
 var DELETED_REF = "0".repeat(40);
-async function commitFiles(client, repo, baseSha, files, message) {
+async function commitFiles(client, repo, baseSha, files, message2) {
   const base2 = await client.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", { ...repo, commit_sha: baseSha });
   const baseTree = base2.data.tree.sha;
   const tree = await client.request("POST /repos/{owner}/{repo}/git/trees", {
@@ -40631,7 +40757,7 @@ async function commitFiles(client, repo, baseSha, files, message) {
   });
   const commit = await client.request("POST /repos/{owner}/{repo}/git/commits", {
     ...repo,
-    message,
+    message: message2,
     tree: tree.data.sha,
     parents: [baseSha]
   });
@@ -40947,7 +41073,7 @@ function decodeCiEvidence(value2) {
 }
 
 // src/experiments/manifest.ts
-var import_yaml41 = __toESM(require_dist(), 1);
+var import_yaml42 = __toESM(require_dist(), 1);
 var EXPERIMENT_PREFIX = "experiments/";
 var TRUNK = "trunk";
 var NAME2 = /^[a-z0-9][a-z0-9-]{1,47}$/;
@@ -41045,13 +41171,13 @@ function validateManifest(input3, options = {}) {
 }
 function parseManifest2(text7, options = {}) {
   try {
-    return validateManifest((0, import_yaml41.parse)(text7), options);
+    return validateManifest((0, import_yaml42.parse)(text7), options);
   } catch (error63) {
     return { problems: [{ path: "experiment.yml", message: error63.message }] };
   }
 }
 function serializeManifest(manifest) {
-  return (0, import_yaml41.stringify)(manifest, { lineWidth: 0 });
+  return (0, import_yaml42.stringify)(manifest, { lineWidth: 0 });
 }
 function scoreRubric(scores, rubric) {
   const total = rubric.criteria.reduce((sum2, criterion) => sum2 + criterion.weight, 0) || 1;
@@ -41139,7 +41265,7 @@ function reduceCandidates(candidates2, minimum, influence, running, expired) {
 }
 
 // src/experiments/config.ts
-var import_yaml42 = __toESM(require_dist(), 1);
+var import_yaml43 = __toESM(require_dist(), 1);
 var HILL_CLIMB_CONFIG_PATH = ".github/hill-climb.yml";
 var CORPUS_METRICS = ["precision", "recall", "f1", "fixRate", "durationMs"];
 var DEFAULT_RUBRIC = {
@@ -41264,7 +41390,7 @@ function validateHillClimbConfig(input3) {
 function parseHillClimbConfig(text7) {
   if (text7 === void 0) return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [] };
   try {
-    const raw = (0, import_yaml42.parse)(text7);
+    const raw = (0, import_yaml43.parse)(text7);
     return validateHillClimbConfig(raw ?? {});
   } catch (error63) {
     return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [{ path: HILL_CLIMB_CONFIG_PATH, message: error63.message }] };
@@ -41598,7 +41724,7 @@ function mergeMeasurement(measurements, update2) {
 }
 
 // src/experiments/corpus.ts
-var import_yaml43 = __toESM(require_dist(), 1);
+var import_yaml44 = __toESM(require_dist(), 1);
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join as join2, relative as relative2, sep } from "node:path";
 var ratio = (numerator, denominator) => denominator === 0 ? 1 : numerator / denominator;
@@ -41706,7 +41832,7 @@ async function walk(root, directory = root) {
   return files.flat().sort();
 }
 function parseCase(id2, text7, files) {
-  const raw = (0, import_yaml43.parse)(text7) ?? {};
+  const raw = (0, import_yaml44.parse)(text7) ?? {};
   const expected = Array.isArray(raw.expected) ? raw.expected.map((entry2) => {
     const item = entry2;
     if (typeof item.rule !== "string" || typeof item.path !== "string") throw new Error(`${id2}: expected entries need rule and path`);
@@ -42429,7 +42555,7 @@ function parseMeasurements(text7) {
 }
 
 // src/experiments/propose.ts
-var import_yaml44 = __toESM(require_dist(), 1);
+var import_yaml45 = __toESM(require_dist(), 1);
 
 // src/formal/generated/manifest.ts
 var PROOF_BUILD = {
@@ -42441,7 +42567,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "9ba0048d201e36e0768b421f9402f03bb52377e2ae396533d6bd83918b49b404",
+  "implementationSha256": "6afe44f53111ac1a120dbf97c94a5027d893243d8cfed214c76b523a5504a2f6",
   "generatorSha256": "ea737477f2d148397dbd83697441713e2f12a542ce95f706181ff9563fb64699",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -42603,7 +42729,7 @@ function validateProposal(text7, options) {
   const expiresAt = new Date(now2.getTime() + options.config.selection.maxAgeDays * DAY2).toISOString();
   let raw;
   try {
-    raw = (0, import_yaml44.parse)(text7);
+    raw = (0, import_yaml45.parse)(text7);
   } catch (error63) {
     return { errors: [`manifest: ${error63.message}`] };
   }
@@ -43319,12 +43445,12 @@ function unusedDirectiveDiagnostics(unused, severity, known2) {
   return unused.map((directive) => {
     const name = `cicd-optimizer-disable-${directive.kind}`;
     const unknown4 = directive.ids.filter((id2) => !known2.includes(id2)).map((id2) => ` "${id2}" is not a known rule or ruleset.${didYouMean(id2, known2)}`).join("");
-    const message = directive.ids.length === 0 ? `Unused ${name} directive: it suppressed no problems.` : `Unused ${name} directive for ${directive.ids.map((id2) => `"${id2}"`).join(", ")}: no matching problems were suppressed.${unknown4}`;
+    const message2 = directive.ids.length === 0 ? `Unused ${name} directive: it suppressed no problems.` : `Unused ${name} directive for ${directive.ids.map((id2) => `"${id2}"`).join(", ")}: no matching problems were suppressed.${unknown4}`;
     return {
       ruleId: UNUSED_DIRECTIVE_RULE_ID,
       ruleset: "meta",
       severity,
-      message,
+      message: message2,
       path: directive.path,
       line: directive.line,
       column: 1,
@@ -43653,7 +43779,7 @@ function structured(value2) {
   try {
     return JSON.parse(value2);
   } catch {
-    return (0, import_yaml45.parse)(value2);
+    return (0, import_yaml46.parse)(value2);
   }
 }
 async function measurementFiles(io, path) {
@@ -43888,7 +44014,7 @@ async function evaluateCommand(args, io) {
       config: config2,
       engineVersion: ENGINE_API_VERSION,
       exec: io.exec ?? shellExec,
-      log: (message) => io.stderr(message)
+      log: (message2) => io.stderr(message2)
     });
     await writeText(io, values2.output && files.length === 1 ? values2.output : file2, JSON.stringify(result.measurements, null, 2));
   }
@@ -44883,7 +45009,7 @@ function classifyIssueOutcome(issue2) {
 }
 
 // src/recipes/recipe.ts
-var import_yaml46 = __toESM(require_dist(), 1);
+var import_yaml47 = __toESM(require_dist(), 1);
 var RECIPES_DIR = "recipes";
 var RECIPE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 var MAX_PATCH_CHARS = 6e4;
@@ -44975,7 +45101,7 @@ function buildRecipe(options) {
   return { recipe, changed: serializeRecipe(recipe) !== serializeRecipe(previous2) };
 }
 function serializeRecipe(recipe) {
-  return (0, import_yaml46.stringify)(recipe, { lineWidth: 0 });
+  return (0, import_yaml47.stringify)(recipe, { lineWidth: 0 });
 }
 var isRecord4 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 var strings2 = (value2) => Array.isArray(value2) ? value2.filter((item) => typeof item === "string") : [];
@@ -44983,7 +45109,7 @@ var num = (value2) => typeof value2 === "number" && Number.isFinite(value2) ? va
 function parseRecipe(text7) {
   let raw;
   try {
-    raw = (0, import_yaml46.parse)(text7, { maxAliasCount: 100 });
+    raw = (0, import_yaml47.parse)(text7, { maxAliasCount: 100 });
   } catch (error63) {
     return { problems: [`Invalid YAML: ${error63.message}`] };
   }
@@ -45216,7 +45342,7 @@ function recipeIssue(recipe, plan, options) {
 
 // src/knowledge/extract.ts
 init_identity();
-var import_yaml47 = __toESM(require_dist(), 1);
+var import_yaml48 = __toESM(require_dist(), 1);
 var packageName3 = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 var managers = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
 var toolFiles = {
@@ -45347,7 +45473,7 @@ function extractKnowledge(repository, revision, input3, options = {}) {
   if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
   else if (pnpm) {
     try {
-      const parsed = (0, import_yaml47.parseDocument)(pnpm.content, { uniqueKeys: true });
+      const parsed = (0, import_yaml48.parseDocument)(pnpm.content, { uniqueKeys: true });
       if (parsed.errors.length) throw new Error("Invalid workspace YAML");
       const value2 = parsed.toJS();
       addWorkspace(record4(value2) ? value2.packages : void 0, pnpm, "/packages");
@@ -45746,14 +45872,14 @@ async function recipeStatus(client, target, recipe, server = "https://github.com
 }
 
 // src/recipes/rollout.ts
-var import_yaml48 = __toESM(require_dist(), 1);
+var import_yaml49 = __toESM(require_dist(), 1);
 var DEFAULT_ROLLOUT = { waves: [1, 3, "25%", "100%"], minSamples: 5, minCompatibility: 0.7 };
 var REPO_NAME = /^[\w.-]+\/[\w.-]+$/;
 function parseRolloutTargets(text7) {
   const problems = [];
   let raw;
   try {
-    raw = (0, import_yaml48.parse)(text7);
+    raw = (0, import_yaml49.parse)(text7);
   } catch (error63) {
     return { repositories: [], canaries: [], config: DEFAULT_ROLLOUT, problems: [`Invalid YAML: ${error63.message}`] };
   }
@@ -45885,10 +46011,10 @@ async function usingKnowledgeStore(io, enabled, action, options = {}) {
     try {
       await owned?.close?.();
     } catch (cleanupError) {
-      const message = (value2) => value2 instanceof Error ? value2.message : String(value2);
+      const message2 = (value2) => value2 instanceof Error ? value2.message : String(value2);
       throw new AggregateError(
         [operationError, cleanupError],
-        `${message(operationError)}; database cleanup also failed: ${message(cleanupError)}`,
+        `${message2(operationError)}; database cleanup also failed: ${message2(cleanupError)}`,
         { cause: cleanupError }
       );
     }
@@ -48085,8 +48211,8 @@ function prefixIssues(path, issues) {
     return iss;
   });
 }
-function unwrapMessage(message) {
-  return typeof message === "string" ? message : message?.message;
+function unwrapMessage(message2) {
+  return typeof message2 === "string" ? message2 : message2?.message;
 }
 function sizeCaps(defChecks) {
   const caps = [];
@@ -48116,7 +48242,7 @@ function finalizeIssue(iss, ctx, config2) {
       iss.schema = iss.inst;
   }
   const schemaError = iss.schema !== iss.inst ? iss.schema?._zod.def?.error : void 0;
-  const message = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
+  const message2 = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
   const full = {};
   for (const k of Object.keys(iss)) {
     if (k === "inst" || k === "schema" || k === "continue" || k === "input" || k === "__proto__")
@@ -48124,7 +48250,7 @@ function finalizeIssue(iss, ctx, config2) {
     full[k] = iss[k];
   }
   full.path ?? (full.path = []);
-  full.message = message;
+  full.message = message2;
   if (ctx?.reportInput) {
     full.input = iss.input;
   }
@@ -59863,8 +59989,8 @@ var globalRegistry = globalThis.__zod_globalRegistry;
 var INVALID = /* @__PURE__ */ Symbol.for("zod.compile.invalid");
 var FALLBACK_FLAG = /* @__PURE__ */ Symbol.for("zod.compile.fallback");
 var ZodCompileAsyncError = class extends Error {
-  constructor(message = "z.compile does not support async refinements, transforms, or checks") {
-    super(message);
+  constructor(message2 = "z.compile does not support async refinements, transforms, or checks") {
+    super(message2);
     this.name = "ZodCompileAsyncError";
   }
 };
@@ -62564,12 +62690,12 @@ function initializeContext(params) {
     external: params?.external ?? void 0
   };
 }
-function handleUnrepresentable(schema, ctx, json5, params, message) {
-  const result = typeof ctx.unrepresentable === "function" ? ctx.unrepresentable({ zodSchema: schema, path: params.path, message }) : ctx.unrepresentable;
+function handleUnrepresentable(schema, ctx, json5, params, message2) {
+  const result = typeof ctx.unrepresentable === "function" ? ctx.unrepresentable({ zodSchema: schema, path: params.path, message: message2 }) : ctx.unrepresentable;
   if (result === "any")
     return false;
   if (result === void 0 || result === "throw")
-    throw new Error(message);
+    throw new Error(message2);
   Object.assign(json5, result);
   return true;
 }
@@ -67142,7 +67268,7 @@ var MAX_LISTED = 5;
 var INFRA_STEP = /^(?:set up job|complete job|initialize containers|stop containers|post\b)/i;
 var CHECKOUT_STEP = /\bactions\/checkout\b/i;
 var SETUP_STEP = /\b(?:set\s*up|setup|install|restore|cache|dependenc|deps|bootstrap|toolchain|prepare)/i;
-var INSTALL_COMMAND = /\b(?:npm\s+(?:ci|install|i)|pnpm\s+(?:install|i)|yarn\s+install|pip3?\s+install|poetry\s+install|bundle\s+install|composer\s+install|go\s+mod\s+download|dotnet\s+restore)\b/i;
+var INSTALL_COMMAND2 = /\b(?:npm\s+(?:ci|install|i)|pnpm\s+(?:install|i)|yarn\s+install|pip3?\s+install|poetry\s+install|bundle\s+install|composer\s+install|go\s+mod\s+download|dotnet\s+restore)\b/i;
 function isCoverageGap(value2) {
   return value2 !== void 0 && typeof value2.kind === "string" && typeof value2.detail === "string";
 }
@@ -67456,7 +67582,7 @@ function stepFindings(ctx, entry2) {
   }
   if (step.packageCache === "miss") {
     const position = entry2.siblings.indexOf(step);
-    const install2 = entry2.siblings.slice(position + 1).find((sibling) => INSTALL_COMMAND.test(sibling.command ?? sibling.title));
+    const install2 = entry2.siblings.slice(position + 1).find((sibling) => INSTALL_COMMAND2.test(sibling.command ?? sibling.title));
     const installed = install2?.installedPackages !== void 0 ? ` ${install2.installedPackages} packages` : "";
     const firstMiss = ctx.located.find((other) => other.step.packageCache === "miss");
     const failure2 = firstMiss === entry2 ? cacheSaveFailure(ctx.evidence) : void 0;
@@ -67482,7 +67608,7 @@ function stepFindings(ctx, entry2) {
   if (step.packageCache === "hit") {
     const install2 = entry2.siblings[entry2.siblings.indexOf(step) + 1];
     const rawCommand = install2?.kind === "script" ? install2.command : void 0;
-    if (install2 && rawCommand !== void 0 && INSTALL_COMMAND.exec(rawCommand.trim())?.index === 0 && !/[\r\n;&|`$<>\u2026]/.test(rawCommand) && install2.durationMs >= MIN_FINDING_MS) {
+    if (install2 && rawCommand !== void 0 && INSTALL_COMMAND2.exec(rawCommand.trim())?.index === 0 && !/[\r\n;&|`$<>\u2026]/.test(rawCommand) && install2.durationMs >= MIN_FINDING_MS) {
       const command = clip2(rawCommand, MAX_LABEL);
       findings4.push(finding2(ctx, {
         category: "package-cache",
@@ -67630,7 +67756,7 @@ function normalizeSetup(name) {
 function setupSteps(timed, evidence2) {
   const apiSteps = (timed.job.steps ?? []).filter((step) => step.conclusion !== "skipped");
   const steps2 = apiSteps.length > 0 ? apiSteps.map((step) => ({ name: step.name, ms: step.durationMs })) : (evidence2?.steps ?? []).map((step) => ({ name: step.title, ms: step.durationMs }));
-  return steps2.filter((step) => !INFRA_STEP.test(step.name) && !CHECKOUT_STEP.test(step.name) && (SETUP_STEP.test(step.name) || INSTALL_COMMAND.test(step.name)));
+  return steps2.filter((step) => !INFRA_STEP.test(step.name) && !CHECKOUT_STEP.test(step.name) && (SETUP_STEP.test(step.name) || INSTALL_COMMAND2.test(step.name)));
 }
 function repeatedSetup(shape, evidenceById) {
   const groups = /* @__PURE__ */ new Map();
@@ -68346,7 +68472,7 @@ function escapeCell(value2) {
 }
 
 // src/telemetry/snapshot.ts
-var import_yaml49 = __toESM(require_dist(), 1);
+var import_yaml50 = __toESM(require_dist(), 1);
 init_history();
 function isExternalCheckRun(job, key2) {
   return key2 === void 0 && !job.runner_id && !job.runner_name && !job.steps?.length && typeof job.html_url === "string" && !/\/actions\/runs\/\d+\/job\/\d+/.test(job.html_url);
@@ -68357,7 +68483,7 @@ function workflowPath(path) {
 function parseJobDefinitions(text7) {
   let document;
   try {
-    document = (0, import_yaml49.parse)(text7);
+    document = (0, import_yaml50.parse)(text7);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -69701,7 +69827,7 @@ function capComment(body, max2 = MAX_COMMENT_LENGTH) {
 }
 
 // src/review/project.ts
-var import_yaml50 = __toESM(require_dist(), 1);
+var import_yaml51 = __toESM(require_dist(), 1);
 var PROJECT_FILE = "project.yaml";
 var PROJECT_MAX_BYTES = 8 * 1024;
 var NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -69717,7 +69843,7 @@ function parseStrictYaml(text7, maxBytes, label2) {
   if (/^%/m.test(text7)) return { problems: [`${label2} must not contain YAML directives (lines starting with %).`] };
   let documents;
   try {
-    documents = (0, import_yaml50.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+    documents = (0, import_yaml51.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
   } catch (error63) {
     return { problems: [`${label2} is not valid YAML (${describeValue(error63 instanceof Error ? error63.message : String(error63))}).`] };
   }
@@ -69730,20 +69856,20 @@ function parseStrictYaml(text7, maxBytes, label2) {
   for (const issue2 of [...document.errors, ...document.warnings]) {
     problems.push(`${label2} is not valid YAML: ${issue2.code} at line ${issue2.linePos?.[0]?.line ?? "?"}.`);
   }
-  if (!(0, import_yaml50.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
-  (0, import_yaml50.visit)(document, {
+  if (!(0, import_yaml51.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
+  (0, import_yaml51.visit)(document, {
     Alias() {
       problems.push(`${label2} must not use YAML aliases (*name).`);
-      return import_yaml50.visit.BREAK;
+      return import_yaml51.visit.BREAK;
     },
     Node(_key, node2) {
       if (node2.anchor) problems.push(`${label2} must not use YAML anchors (&name).`);
       if (node2.tag) problems.push(`${label2} must not use YAML tags (${describeValue(node2.tag)}).`);
     },
     Pair(_key, pair) {
-      if (!(0, import_yaml50.isScalar)(pair.key) || typeof pair.key.value !== "string") {
+      if (!(0, import_yaml51.isScalar)(pair.key) || typeof pair.key.value !== "string") {
         problems.push(`${label2} keys must be plain strings.`);
-        return import_yaml50.visit.SKIP;
+        return import_yaml51.visit.SKIP;
       }
       if (pair.key.value === "<<") problems.push(`${label2} must not use YAML merge keys (<<).`);
       return void 0;
@@ -70022,8 +70148,8 @@ function renderMarkdown(report, options = {}) {
     if (report.findings.length > 0) {
       lines.push("", "| Severity | Rule | Location | Finding |", "| --- | --- | --- | --- |");
       for (const item of report.findings.slice(0, MAX_MARKDOWN_FINDINGS)) {
-        const message = item.suggestion ? `${item.message} Suggestion: ${item.suggestion}` : item.message;
-        lines.push(`| ${item.severity} | ${escapeInline(item.ruleId, 80)} | ${escapeInline(`${item.path}:${item.line}`, 160)} | ${escapeInline(message)} |`);
+        const message2 = item.suggestion ? `${item.message} Suggestion: ${item.suggestion}` : item.message;
+        lines.push(`| ${item.severity} | ${escapeInline(item.ruleId, 80)} | ${escapeInline(`${item.path}:${item.line}`, 160)} | ${escapeInline(message2)} |`);
       }
       const omitted = summary3.error + summary3.warn + summary3.info - report.redacted.count - Math.min(report.findings.length, MAX_MARKDOWN_FINDINGS);
       if (omitted > 0) lines.push("", `_${plural2(omitted, "more finding")} not shown._`);
@@ -70734,37 +70860,37 @@ import { readFile as readFile8 } from "node:fs/promises";
 import { parseArgs as parseArgs11 } from "node:util";
 
 // src/formal/cache-key.ts
-var import_yaml51 = __toESM(require_dist(), 1);
+var import_yaml52 = __toESM(require_dist(), 1);
 var CONTEXTS = ["sha", "run_id", "run_number", "run_attempt", "ref", "event_name"];
 function extractCacheKey(source, job, step) {
-  const document = (0, import_yaml51.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
+  const document = (0, import_yaml52.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
   if (document.errors.length || document.warnings.length) throw new Error("Workflow YAML must parse without errors or warnings.");
-  (0, import_yaml51.visit)(document, (_key, node2) => {
-    if ((0, import_yaml51.isAlias)(node2)) throw new Error("YAML aliases are outside the extraction contract.");
-    if ((0, import_yaml51.isMap)(node2) && node2.items.some((pair) => (0, import_yaml51.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
+  (0, import_yaml52.visit)(document, (_key, node2) => {
+    if ((0, import_yaml52.isAlias)(node2)) throw new Error("YAML aliases are outside the extraction contract.");
+    if ((0, import_yaml52.isMap)(node2) && node2.items.some((pair) => (0, import_yaml52.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
   });
   const jobs = document.get("jobs", true);
-  if (!(0, import_yaml51.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
+  if (!(0, import_yaml52.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
   const selected = jobs.get(job, true);
-  if (!(0, import_yaml51.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
+  if (!(0, import_yaml52.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
   const steps2 = selected.get("steps", true);
-  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml51.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
+  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml52.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
   const action = steps2.items[step];
-  if (!(0, import_yaml51.isMap)(action)) throw new Error("Selected step is not a mapping.");
+  if (!(0, import_yaml52.isMap)(action)) throw new Error("Selected step is not a mapping.");
   const uses = action.get("uses", true);
-  if (!(0, import_yaml51.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
+  if (!(0, import_yaml52.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
     throw new Error("Selected step must use a literal actions/cache, actions/cache/restore or actions/cache/save reference.");
   }
   const inputs = action.get("with", true);
-  if (!(0, import_yaml51.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
+  if (!(0, import_yaml52.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
   const inputNames = inputs.items.map((pair) => {
-    if (!(0, import_yaml51.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
+    if (!(0, import_yaml52.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
     return pair.key.value.toLowerCase();
   });
   if (new Set(inputNames).size !== inputNames.length) throw new Error("Case-colliding cache input names are unsupported.");
   if (inputNames.includes("restore-keys") || inputNames.includes("enablecrossosarchive")) throw new Error("restore-keys and cross-OS archive inputs are outside this model.");
   const key2 = inputs.get("key", true);
-  if (!(0, import_yaml51.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
+  if (!(0, import_yaml52.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
   scalarString(key2.value);
   const [start2, end] = key2.range;
   return {

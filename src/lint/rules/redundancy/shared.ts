@@ -29,6 +29,10 @@ export const SETUP_ACTIONS: Record<string, SetupAction> = {
   "erlef/setup-beam": {},
 };
 
+/** Dependency install commands, matched against `commandWords(command).join(" ")`. */
+export const INSTALL_COMMAND =
+  /^(?:npm (?:ci|install|i)|pnpm (?:install|i)|yarn(?: install)?|bun install|pip3? install|python3? -m pip install|poetry install|uv sync|bundle install|go mod download|composer install|dotnet restore)\b/;
+
 export function setupActionOf(step: StepModel): string | undefined {
   const action = step.uses?.action;
   if (action?.kind !== "remote" || action.name === undefined) return undefined;
