@@ -33,6 +33,13 @@ was tried.
 | `rules` | The linter: new rules, fewer false positives, better fixes. | The benchmark [corpus](../corpus/README.md): precision, recall, fix rate, lint duration. Each arm is built in its own worktree. |
 | `pipeline` | CI/CD itself, such as caching, sparse checkout, job graph, or container layers. | Successful first-attempt `workflow_dispatch` runs reporting each recorded head/branch: run timestamp span or a named job's duration. See the workload caveats below. |
 
+The app CI smoke starts its disposable PostgreSQL container through
+`test/service/container-postgres.mjs` while preparing the production image. The whole startup runs in a bounded
+worker: `docker run --detach` alone still waits for an image pull. Smoke execution waits for the original database
+health policy, and the always-run cleanup joins startup before removing the container and its anonymous volumes.
+Startup, readiness and cleanup failures fail CI. Overlapping work is not itself proof of a speedup: compare complete
+run latency and runner work across fixed-head samples, not only the removed service-initialization step.
+
 ## The loop
 
 ### 1. Generator: weekly ([experiment-generator.md](../.github/workflows/experiment-generator.md))
