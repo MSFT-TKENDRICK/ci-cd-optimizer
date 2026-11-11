@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
-      - run: npm test
+      - run: npm test -- --project service
 
   postgres:
     # The hosted App's telemetry store, against a real server; skipped by `npm test` when DATABASE_URL is unset.
@@ -88,7 +88,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
+        id: dependencies
       - run: npm run lint
+      # Reuse this job's prepared dependencies and slack rather than adding another runner.
+      # Keep UI coverage on draft PRs and after lint failure; build is skipped on drafts.
+      - name: Setup UI tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: npx vitest run --project setup-ui
 
   formal:
     runs-on: ubuntu-24.04

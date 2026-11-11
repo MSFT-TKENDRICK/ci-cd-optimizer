@@ -441,6 +441,10 @@ Postgres integration tests run when `DATABASE_URL` is set. Use only a disposable
 isolated schemas, and readiness permission tests create a temporary NOLOGIN role (requiring `CREATEROLE`) and remove
 its grants and role afterward. CI provides its own disposable Postgres service; never use production credentials.
 
+`npm test` still runs both Vitest projects and the Node setup tests locally. CI runs the `service` project
+and Node tests in the test job, and the `setup-ui` project in the lint job using its existing dependency
+installation. UI tests also run on draft PRs and after a lint failure, provided dependency setup succeeded.
+
 Rules live in `src/lint/rules/<ruleset>/<rule>.ts` and are tested with the ESLint-style `RuleTester` in
 `test/lint/rule-tester.ts`. Every rule needs valid and invalid cases plus autofix output checks. New rules should
 also add a corpus case ([corpus/README.md](corpus/README.md)) so precision and recall stay measured.
