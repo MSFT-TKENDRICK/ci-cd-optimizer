@@ -77124,6 +77124,13 @@ import { isAbsolute as isAbsolute2, join as join3, relative as relative4, sep as
 var AgentError = class extends Error {
   name = "AgentError";
 };
+function agentErrorMessage(error62, fallback) {
+  if (error62 instanceof AgentError) return error62.message;
+  if (error62 instanceof DOMException && error62.name === "TimeoutError") {
+    return "Upstream read timed out. Analysis or feedback delivery is incomplete; retry within the existing access and operation limits.";
+  }
+  return fallback;
+}
 var LIMITS = {
   requestBytes: 256 * 1024,
   outputBytes: 128 * 1024,
@@ -78661,7 +78668,7 @@ function attachFeedback(server, remote, options) {
             undelivered.delete(key);
           } catch (error62) {
             if (controller.signal.aborted) break;
-            const message = `Producer ${producer.id}/${producer.run_attempt}: ${error62 instanceof AgentError ? error62.message : "Feedback collection failed; check access, transport and operation budgets."}`;
+            const message = `Producer ${producer.id}/${producer.run_attempt}: ${agentErrorMessage(error62, "Feedback collection failed; check access, transport and operation budgets.")}`;
             retry.set(key, { at: now + 5 * 6e4, created: Date.parse(producer.created_at), message });
             fail(message);
             failed = true;
@@ -78683,7 +78690,7 @@ function attachFeedback(server, remote, options) {
         }
       }
     } catch (error62) {
-      if (!controller.signal.aborted) fail(error62 instanceof AgentError ? error62.message : "Feedback inventory failed; check access, transport and operation budgets.");
+      if (!controller.signal.aborted) fail(agentErrorMessage(error62, "Feedback inventory failed; check access, transport and operation budgets."));
     } finally {
       if (!controller.signal.aborted) {
         timer = setTimeout(() => {
@@ -78870,7 +78877,7 @@ async function guardResult(run2) {
   try {
     return ok(await run2());
   } catch (error62) {
-    const message = error62 instanceof AgentError ? error62.message : "Operation failed or was cancelled. No changes were made.";
+    const message = agentErrorMessage(error62, "Operation failed or was cancelled. No changes were made.");
     return { isError: true, content: [{ type: "text", text: sanitizeMarkdown(message, 4096).text }] };
   }
 }

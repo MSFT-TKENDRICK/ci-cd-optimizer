@@ -216,6 +216,8 @@ at most four eligible producers per repository, alternating newest and oldest so
 behind the entire replay history and older events still make progress. Alternation survives single-slot backpressure;
 delivery order is not chronological.
 Collection and replay gaps remain visible in status/error resources. Long-offline gaps cannot be reconstructed by this bounded feed.
+An upstream read timeout is reported explicitly without exposing download URLs, credentials or raw exception messages.
+It is incomplete analysis or delivery, not an empty result; existing deadlines, cancellation and retry backoff still apply.
 Keep the harness running to receive recommendations; a different session does not share its delivery receipts.
 Polling and reconnecting do not trigger CI. Every remediation still follows the user's existing authorization.
 

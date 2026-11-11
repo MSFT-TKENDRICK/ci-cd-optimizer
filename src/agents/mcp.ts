@@ -7,7 +7,7 @@ import { VERSION } from "../version.js";
 import { PRESETS } from "../lint/config.js";
 import { RULESETS } from "../lint/rules/index.js";
 import { normalizeRepository, operationAccess, remoteRunReport, remoteScan, type RemoteOptions } from "./remote.js";
-import { boundedResult, LIMITS, operation, sanitizeMarkdown, WorkLimiter } from "./safety.js";
+import { agentErrorMessage, boundedResult, LIMITS, operation, sanitizeMarkdown, WorkLimiter } from "./safety.js";
 import { attachFeedback, type FeedbackOptions } from "./feedback.js";
 import {
   AgentError,
@@ -98,7 +98,7 @@ async function guardResult(run: () => Promise<Record<string, unknown>>): Promise
   try {
     return ok(await run());
   } catch (error) {
-    const message = error instanceof AgentError ? error.message : "Operation failed or was cancelled. No changes were made.";
+    const message = agentErrorMessage(error, "Operation failed or was cancelled. No changes were made.");
     return { isError: true, content: [{ type: "text", text: sanitizeMarkdown(message, 4096).text }] };
   }
 }

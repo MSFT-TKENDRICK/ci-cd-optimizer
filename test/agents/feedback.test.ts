@@ -24,18 +24,22 @@ function fixture() {
     findings: [], omittedFindings: 0, gaps: ["No completed jobs."], omittedGaps: 0,
     rework: { observedAttempts: 1, failedAttempts: 0, artifactDriftAttempts: 0, artifactDriftRunnerMs: 0, unclassifiedFailedAttempts: 0 },
   };
-  const state = { total: 1, corrupt: false, sourceId: 2000, calls: 0, logs: 0, inventoryFails: false, producers: [producer] };
+  const state = { total: 1, corrupt: false, sourceId: 2000, calls: 0, logs: 0, inventoryFails: false, timeout: "", producers: [producer] };
   const fetcher: typeof fetch = async (input) => {
     state.calls++;
     const path = decodeURIComponent(new URL(String(input)).pathname);
     if (path === "/user") return Response.json({ id: 1, type: "User" });
     if (path === "/repos/acme/widgets") return Response.json({ id: 42, full_name: "acme/widgets", default_branch: "main", permissions: { pull: true } });
     if (path.endsWith("/actions/workflows/cicd-optimizer-telemetry.yml")) return Response.json({ id: 8, path: FEEDBACK_WORKFLOW, state: "active" });
-    if (path.endsWith("/actions/workflows/8/runs")) return state.inventoryFails
-      ? Response.json({}, { status: 500 }) : Response.json({ total_count: state.total, workflow_runs: state.producers });
+    if (path.endsWith("/actions/workflows/8/runs")) {
+      if (state.timeout === "inventory") throw new DOMException("private download URL", "TimeoutError");
+      return state.inventoryFails
+        ? Response.json({}, { status: 500 }) : Response.json({ total_count: state.total, workflow_runs: state.producers });
+    }
     if (/\/actions\/runs\/\d+\/attempts\/1\/jobs$/.test(path)) return Response.json({ total_count: 1, jobs: [{ id: 55, name: "telemetry", status: "completed" }] });
     if (path.endsWith("/actions/jobs/55/logs")) {
       state.logs++;
+      if (state.timeout === "log") throw new DOMException("private download URL", "TimeoutError");
       return new Response(state.corrupt ? "Missing benchmark" : encodeBenchmark(benchmark).split("\n").map((line) => `${created} ${line}`).join("\n"));
     }
     if (path.endsWith("/actions/runs/2000/attempts/1")) return Response.json({
@@ -51,6 +55,34 @@ function fixture() {
 }
 
 describe("verified CI feedback", () => {
+  it.each(["inventory", "log"])("reports a %s timeout without leaking details or losing recovery", async (phase) => {
+    const f = fixture();
+    f.state.timeout = phase;
+    const server = createMcpServer({ fallbackRoot: process.cwd(), remote: f.remote, feedback: { since: f.since, pollMs: 20 } });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "timeout-test", version: "1" });
+    clients.push(client);
+    await server.connect(serverSide);
+    await client.connect(clientSide);
+    const status = async () => JSON.parse(((await client.readResource({ uri: "cicd://feedback/status" })).contents[0] as { text: string }).text);
+    await expect.poll(async () => (await status()).state).toBe("error");
+    expect((await status()).error).toContain("Upstream read timed out.");
+    const resources = (await client.listResources()).resources;
+    expect(resources.some((item) => item.uri.startsWith("cicd://feedback/runs/"))).toBe(false);
+    const error = resources.find((item) => item.uri.startsWith("cicd://feedback/errors/"))!;
+    const report = JSON.stringify(await client.readResource({ uri: error.uri }));
+    expect(report).toContain("delivery is incomplete");
+    expect(report).not.toContain("private download URL");
+    f.state.timeout = "";
+    if (phase === "log") {
+      await new Promise((resolve) => setTimeout(resolve, 70));
+      expect(f.state.logs).toBe(1);
+      vi.spyOn(Date, "now").mockReturnValue(Date.now() + 301000);
+    }
+    await expect.poll(async () => (await client.listResources()).resources.some((item) => item.uri === "cicd://feedback/runs/42:3000:1")).toBe(true);
+    await expect.poll(async () => (await status()).state).toBe("watching");
+  });
+
   it("verifies the default-branch producer, framed payload and exact source attempt", async () => {
     const f = fixture();
     expect(await f.inventory()).toEqual([f.producer]);
