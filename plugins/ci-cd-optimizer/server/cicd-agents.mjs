@@ -72393,27 +72393,44 @@ function finishStep(step, endMs) {
   step.durationMs = step.endMs - step.startMs;
   if (step.kind === "action") step.uses = clip(step.title.replace(/^Run /, ""));
 }
-function testLine(step, text4) {
+function testLine(step, text4, pending) {
   let match;
   const last = step.tests.at(-1);
-  if (match = /^\s*Test Files\s+.*\((\d+)\)\s*$/.exec(text4)) {
-    step.tests.push({ framework: "vitest", files: Number(match[1]), phases: {} });
+  if (/^\s*RUN\s+v\d+\.\d+\.\d+(?:[-+][\w.-]+)?(?:\s|$)/.test(text4)) {
+    pending.set(step, []);
+  } else if (pending.has(step) && (match = /^\s*[✓✔×❯]\s+(.{1,200}?\.[cm]?[jt]sx?)\s+\(\d+ tests?(?: \| \d+ (?:failed|skipped|todo))*\)\s+(\d+(?:\.\d+)?)\s*(ms|s)\s*$/.exec(text4))) {
+    const label2 = match[1].trim();
+    const durationMs = seconds2(match[2], match[3]);
+    if (label2.length > MAX_TEXT || !Number.isSafeInteger(durationMs) || durationMs <= 0) return;
+    const files = pending.get(step);
+    const existing = files.find((file2) => file2.label === label2);
+    if (existing) existing.durationMs = Math.max(existing.durationMs, durationMs);
+    else files.push({ label: label2, durationMs });
+    files.sort((a, b) => b.durationMs - a.durationMs || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+    files.splice(3);
+  } else if (match = /^\s*Test Files\s+.*\((\d+)\)\s*$/.exec(text4)) {
+    const slowFiles = pending.get(step);
+    step.tests.push({ framework: "vitest", files: Number(match[1]), phases: {}, ...slowFiles?.length ? { slowFiles } : {} });
+    pending.delete(step);
   } else if (last?.framework === "vitest" && (match = /^\s*Tests\s+.*\((\d+)\)\s*$/.exec(text4))) {
     last.tests = Number(match[1]);
   } else if (last?.framework === "vitest" && last.durationMs === void 0 && (match = /^\s*Duration\s+([\d.]+)(ms|s|m)\b(?:\s*\((.*)\))?/.exec(text4))) {
     last.durationMs = seconds2(match[1], match[2]);
     for (const phase of (match[3] ?? "").matchAll(/([a-z]+) ([\d.]+)%/g)) last.phases[phase[1]] = Number(phase[2]);
   } else if (match = /^\s*Test Suites:.*?(\d+) total/.exec(text4)) {
+    pending.delete(step);
     step.tests.push({ framework: "jest", files: Number(match[1]), phases: {} });
   } else if (last?.framework === "jest" && (match = /^\s*Tests:.*?(\d+) total/.exec(text4))) {
     last.tests = Number(match[1]);
   } else if (last?.framework === "jest" && last.durationMs === void 0 && (match = /^\s*Time:\s+([\d.]+) ?(ms|s|m)\b/.exec(text4))) {
     last.durationMs = seconds2(match[1], match[2]);
   } else if (match = /^[#ℹ] tests (\d+)$/.exec(text4)) {
+    pending.delete(step);
     step.tests.push({ framework: "node-test", tests: Number(match[1]), phases: {} });
   } else if (last?.framework === "node-test" && last.durationMs === void 0 && (match = /^[#ℹ] duration_ms ([\d.]+)$/.exec(text4))) {
     last.durationMs = Math.round(Number(match[1]));
   } else if (match = /^=+ (.*\d+ (?:passed|failed).*) in ([\d.]+)s\b.*=+$/.exec(text4)) {
+    pending.delete(step);
     const tests = [...match[1].matchAll(/(\d+) (?:passed|failed|skipped|errors?|xfailed|xpassed)/g)].reduce((sum2, item) => sum2 + Number(item[1]), 0);
     step.tests.push({ framework: "pytest", tests, durationMs: seconds2(match[2]), phases: {} });
   }
@@ -72475,6 +72492,7 @@ function parseJobLog(text4, options = {}) {
   let service;
   let pullStartMs;
   const declaredOnly = /* @__PURE__ */ new Set();
+  const pendingTests = /* @__PURE__ */ new WeakMap();
   let waitStartMs;
   const innermost = () => {
     for (let index = actions.length - 1; index >= 0; index -= 1) if (actions[index]?.step) return actions[index]?.step;
@@ -72639,7 +72657,7 @@ ${line2.trim()}`);
     else {
       const added = /^added (\d+) packages?\b/.exec(line2);
       if (added) step.installedPackages = Number(added[1]);
-      else testLine(step, line2);
+      else testLine(step, line2, pendingTests);
     }
   }
   const endMs = evidence2.post.startMs ?? evidence2.lastMs ?? 0;
@@ -72815,7 +72833,7 @@ function finding2(ctx, draft) {
     onCriticalPath: ctx.timing.critical,
     summary: `${draft.observation} ${boundSentence(ctx.shape, ctx.job.name, ctx.timing, elapsedSavingsBoundMs, runnerSavingsBoundMs)}`,
     recommendation: draft.recommendation,
-    evidence: draft.evidence.map((line2) => clip2(line2, MAX_EVIDENCE))
+    evidence: draft.evidence.map((line2) => clip2(line2, 1200))
   };
 }
 function vertexMs(vertex) {
@@ -73011,9 +73029,12 @@ function stepFindings(ctx, entry2) {
       return `${summary.framework}${counts.length > 0 ? `: ${counts.join(", ")}` : ""}`;
     });
     const phaseLines = step.tests.filter((summary) => Object.keys(summary.phases).length > 0).map((summary) => `${summary.framework} phase shares: ${Object.entries(summary.phases).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([phase, share]) => `${phase} ${share}%`).join(", ")}`);
+    const hotspotLines = step.tests.filter((summary) => summary.framework === "vitest").flatMap((summary, index) => summary.slowFiles?.length ? [`vitest invocation ${index + 1} slowest reported files (durations may overlap): ${summary.slowFiles.map((file2) => `${file2.label}: ${formatMs(file2.durationMs)}`).join("; ")}`] : []);
     const importShare = Math.max(0, ...step.tests.map((summary) => summary.phases.import ?? 0));
     const spareJobs = ctx.timing.critical && ctx.job.needs.length === 0 ? ctx.shape.measured.filter(({ job }) => job.id !== ctx.job.id && job.needs.length === 0 && (ctx.shape.timing.get(job.id)?.slackMs ?? 0) >= MIN_TEST_RUNTIME_MS).sort((a, b) => (ctx.shape.timing.get(b.job.id)?.slackMs ?? 0) - (ctx.shape.timing.get(a.job.id)?.slackMs ?? 0)).slice(0, MAX_LISTED) : [];
-    const spareEvidence = spareJobs.map(({ job }) => `${clip2(job.name, MAX_LABEL)}: ${formatMs(ctx.shape.timing.get(job.id)?.slackMs ?? 0)} of observed slack; workload compatibility is unverified`);
+    const spareEvidence = spareJobs.length ? [
+      `Observed spare-job slack (workload compatibility is unverified): ${spareJobs.map(({ job }) => `${clip2(job.name, MAX_LABEL)}: ${formatMs(ctx.shape.timing.get(job.id)?.slackMs ?? 0)}`).join("; ")}`
+    ] : [];
     findings4.push(finding2(ctx, {
       category: "test-runtime",
       detail: `s${entry2.path}`,
@@ -73021,6 +73042,7 @@ function stepFindings(ctx, entry2) {
       observedMs: step.durationMs,
       observation: `${label2} ran tests for ${formatMs(step.durationMs)} (${frameworks.join("; ")}).`,
       recommendation: [
+        ...hotspotLines.length ? ["Profile the reported file hotspots before repartitioning; their durations can overlap and are not additive savings. Preserve assertions and isolation."] : [],
         ...ctx.timing.critical ? [
           ...spareJobs.length > 0 ? [
             `Before adding runners, measure moving an independent test partition into an already-prepared compatible job with slack (${spareJobs.map(({ job }) => clip2(job.name, MAX_LABEL)).join(", ")}). Verify matching runtime/dependencies, isolation, acyclic dependencies and identical coverage on every trigger, including drafts and failure paths; the observed slack does not prove compatibility or future capacity.`
@@ -73033,7 +73055,7 @@ function stepFindings(ctx, entry2) {
         ...importShare >= 20 ? [`Imports take ${importShare}% of the test time, so trimming heavy imports from the module graph would cut work in every shard.`] : [],
         ...!ctx.timing.critical ? ["This job is off the critical path, so it only shortens the run once the critical path is reduced."] : []
       ].join(" "),
-      evidence: [...frameworks, ...phaseLines, ...spareEvidence],
+      evidence: [...frameworks, ...phaseLines, ...hotspotLines, ...spareEvidence],
       covers: [entry2.top]
     }));
   }

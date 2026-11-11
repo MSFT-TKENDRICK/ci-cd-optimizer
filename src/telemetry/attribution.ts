@@ -318,7 +318,7 @@ function finding(ctx: JobContext, draft: Draft): Bottleneck {
     onCriticalPath: ctx.timing.critical,
     summary: `${draft.observation} ${boundSentence(ctx.shape, ctx.job.name, ctx.timing, elapsedSavingsBoundMs, runnerSavingsBoundMs)}`,
     recommendation: draft.recommendation,
-    evidence: draft.evidence.map((line) => clip(line, MAX_EVIDENCE)),
+    evidence: draft.evidence.map((line) => clip(line, 1_200)),
   };
 }
 
@@ -550,6 +550,11 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
       .map((summary) => `${summary.framework} phase shares: ${Object.entries(summary.phases)
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .map(([phase, share]) => `${phase} ${share}%`).join(", ")}`);
+    const hotspotLines = step.tests.filter((summary) => summary.framework === "vitest")
+      .flatMap((summary, index) => summary.slowFiles?.length
+        ? [`vitest invocation ${index + 1} slowest reported files (durations may overlap): ${summary.slowFiles
+          .map((file) => `${file.label}: ${formatMs(file.durationMs)}`).join("; ")}`]
+        : []);
     const importShare = Math.max(0, ...step.tests.map((summary) => summary.phases.import ?? 0));
     const spareJobs = ctx.timing.critical && ctx.job.needs.length === 0
       ? ctx.shape.measured.filter(({ job }) => job.id !== ctx.job.id && job.needs.length === 0
@@ -557,8 +562,10 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
         .sort((a, b) => (ctx.shape.timing.get(b.job.id)?.slackMs ?? 0) - (ctx.shape.timing.get(a.job.id)?.slackMs ?? 0))
         .slice(0, MAX_LISTED)
       : [];
-    const spareEvidence = spareJobs.map(({ job }) =>
-      `${clip(job.name, MAX_LABEL)}: ${formatMs(ctx.shape.timing.get(job.id)?.slackMs ?? 0)} of observed slack; workload compatibility is unverified`);
+    const spareEvidence = spareJobs.length ? [
+      `Observed spare-job slack (workload compatibility is unverified): ${spareJobs.map(({ job }) =>
+        `${clip(job.name, MAX_LABEL)}: ${formatMs(ctx.shape.timing.get(job.id)?.slackMs ?? 0)}`).join("; ")}`,
+    ] : [];
     findings.push(finding(ctx, {
       category: "test-runtime",
       detail: `s${entry.path}`,
@@ -566,6 +573,7 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
       observedMs: step.durationMs,
       observation: `${label} ran tests for ${formatMs(step.durationMs)} (${frameworks.join("; ")}).`,
       recommendation: [
+        ...(hotspotLines.length ? ["Profile the reported file hotspots before repartitioning; their durations can overlap and are not additive savings. Preserve assertions and isolation."] : []),
         ...(ctx.timing.critical ? [
           ...(spareJobs.length > 0 ? [
             `Before adding runners, measure moving an independent test partition into an already-prepared compatible job with slack (${spareJobs.map(({ job }) => clip(job.name, MAX_LABEL)).join(", ")}). Verify matching runtime/dependencies, isolation, acyclic dependencies and identical coverage on every trigger, including drafts and failure paths; the observed slack does not prove compatibility or future capacity.`,
@@ -578,7 +586,7 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
         ...(importShare >= 20 ? [`Imports take ${importShare}% of the test time, so trimming heavy imports from the module graph would cut work in every shard.`] : []),
         ...(!ctx.timing.critical ? ["This job is off the critical path, so it only shortens the run once the critical path is reduced."] : []),
       ].join(" "),
-      evidence: [...frameworks, ...phaseLines, ...spareEvidence],
+      evidence: [...frameworks, ...phaseLines, ...hotspotLines, ...spareEvidence],
       covers: [entry.top],
     }));
   }

@@ -99,6 +99,11 @@ describe("sanitized CI job logs", () => {
       {
         framework: "vitest", files: 237, tests: 3994, durationMs: 51_810,
         phases: { tests: 59, import: 25, environment: 8, transform: 6, setup: 2, worker: 1 },
+        slowFiles: [
+          { label: "service  test/cli/linter.test.ts", durationMs: 1092 },
+          { label: "service  test/experiments/github.test.ts", durationMs: 197 },
+          { label: "service  test/review/intake.test.ts", durationMs: 143 },
+        ],
       },
     ]);
     expect(evidence.post.durationMs).toBe(812);
@@ -272,6 +277,67 @@ describe("parseJobLog builds", () => {
 });
 
 describe("parseJobLog structure", () => {
+  it("keeps the largest three distinct reported Vitest file labels without summing repeats or projects", () => {
+    const output = [
+      "##[group]Run npm test", "##[endgroup]", " RUN v5.0.5 /workspace",
+      " \u001b[32m✓\u001b[39m  service  test/setup/bundle.test.mjs (17 tests) 11416ms",
+      " ✓ |service| test/agents/hosted.test.ts (21 tests) 7.465s",
+      " ✓ |setup-ui| test/agents/hosted.test.ts (21 tests | 2 skipped) 7500ms",
+      " ✓ |service| test/agents/hosted.test.ts (21 tests) 7.465s",
+      " ✓ |service| test/agents/hosted.test.ts (21 tests) 6s",
+      " ✓ service test/webhooks/ingress.test.ts (22 tests) 7404ms",
+      " ✓ test/fast.spec.ts (1 test) 0.1ms",
+      " Test Files  5 passed (5)", " Tests  82 passed (82)", " Duration  20s (tests 62%)",
+    ];
+    const tests = parseJobLog(log(output.map((text, index) => [index, text]))).steps[0]?.tests;
+    expect(tests).toEqual([{
+      framework: "vitest", files: 5, tests: 82, durationMs: 20_000, phases: { tests: 62 },
+      slowFiles: [
+        { label: "service  test/setup/bundle.test.mjs", durationMs: 11_416 },
+        { label: "|setup-ui| test/agents/hosted.test.ts", durationMs: 7500 },
+        { label: "|service| test/agents/hosted.test.ts", durationMs: 7465 },
+      ],
+    }]);
+  });
+
+  it("bounds and orders file evidence while rejecting malformed, unsafe and oversized durations or labels", () => {
+    const output = [
+      "##[group]Run npm test", "##[endgroup]", " RUN v5.0.5 /workspace",
+      ...Array.from({ length: 20 }, (_, index) => ` ✓ test/${String(index).padStart(2, "0")}.test.ts (1 test) 1000ms`),
+      " ✓ test/bad.test.ts (1 test) 1.2.3s", " ✓ test/negative.test.ts (1 test) -20s",
+      ` ✓ test/overflow.test.ts (1 test) ${"9".repeat(400)}s`,
+      " ✓ test/unsafe.test.ts (1 test) 9007199254740992ms",
+      ` ✓ ${"x".repeat(201)}.test.ts (1 test) 100000ms`,
+      " ✓ individual test is slow 200000ms", " stdout | test/printed.test.ts (1 test) 20000ms",
+      " Test Files  20 passed (20)", " Duration  2s",
+    ];
+    expect(parseJobLog(log(output.map((text, index) => [index, text]))).steps[0]?.tests[0]?.slowFiles).toEqual([
+      { label: "test/00.test.ts", durationMs: 1000 },
+      { label: "test/01.test.ts", durationMs: 1000 },
+      { label: "test/02.test.ts", durationMs: 1000 },
+    ]);
+  });
+
+  it("does not leak orphan file timings across invocations, frameworks or steps", () => {
+    const output = [
+      "##[group]Run npm test", "##[endgroup]",
+      " ✓ test/orphan.test.ts (1 test) 99s", " Test Files  1 passed (1)",
+      " RUN v5.0.5 /workspace", " ✓ test/interrupted.test.ts (1 test) 99s",
+      " RUN v5.0.5 /workspace", " ✓ test/current.test.ts (1 test) 2s", " Test Files  1 passed (1)",
+      " ✓ test/reprinted.test.ts (1 test) 99s", " Test Files  1 passed (1)",
+      " RUN v5.0.5 /workspace", " ✓ test/abandoned.test.ts (1 test) 99s", "Test Suites: 1 passed, 1 total",
+      " Test Files  1 passed (1)",
+      " RUN v5.0.5 /workspace", " ✓ test/old-step.test.ts (1 test) 99s",
+      "##[group]Run another test", "##[endgroup]", " Test Files  1 passed (1)",
+      " RUN v5.0.5 /workspace", " ✓ test/truncated.test.ts (1 test) 99s",
+    ];
+    const steps = parseJobLog(log(output.map((text, index) => [index, text])), { truncated: true }).steps;
+    expect(steps[0]?.tests.map((summary) => summary.slowFiles)).toEqual([
+      undefined, [{ label: "test/current.test.ts", durationMs: 2000 }], undefined, undefined, undefined,
+    ]);
+    expect(steps[1]?.tests).toEqual([{ framework: "vitest", files: 1, phases: {} }]);
+  });
+
   it("measures service pulls and health polling during job setup", () => {
     const evidence = parseJobLog(log([
       [0, "Current runner version: '2.330.0'"],
