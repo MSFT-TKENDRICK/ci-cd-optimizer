@@ -537,6 +537,24 @@ describe("parseJobLog structure", () => {
     });
   });
 
+  it("distinguishes release-archive downloads from reused installs in script steps", () => {
+    const script = (at: number, command: string, output: string) => [
+      [at, `##[group]Run ${command}`], [at, command], [at, "shell: /usr/bin/bash -e {0}"], [at, "##[endgroup]"], [at + 100, output],
+    ] as const;
+    const evidence = parseJobLog(log([
+      ...script(0, "npm run formal:setup", "Downloading https://github.com/dafny-lang/dafny/releases/download/v4.11.0/dafny-4.11.0-x64-ubuntu-22.04.zip"),
+      ...script(3500, "npm run formal:setup", "Reusing verified toolchain at .proof-tools/4.11.0"),
+      ...script(4000, "npm pack", "Downloading https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz"),
+      [4500, "Post job cleanup."],
+    ]));
+    expect(evidence.steps).toEqual([
+      expect.objectContaining({ kind: "script", durationMs: 3500, toolCache: "download", toolSource: "release" }),
+      expect.objectContaining({ kind: "script", durationMs: 500, toolCache: "hit" }),
+      expect.not.objectContaining({ toolCache: expect.anything() }),
+    ]);
+    expect(evidence.steps[1]).not.toHaveProperty("toolSource");
+  });
+
   it("reads Jest, node:test, pytest and Vitest summaries", () => {
     const evidence = parseJobLog(log([
       [0, "##[group]Run npm test"],

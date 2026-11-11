@@ -720,6 +720,36 @@ describe("collectJobLogs", () => {
   });
 });
 
+describe("attributeRun release toolchain installs", () => {
+  const DOWNLOAD = "Downloading https://github.com/dafny-lang/dafny/releases/download/v4.11.0/dafny-4.11.0-x64-ubuntu-22.04.zip";
+  const releaseSetupLog = (marker: string) => [
+    `${at("00:00")} ##[group]Run npm run formal:setup`,
+    `${at("00:00")} npm run formal:setup`,
+    `${at("00:00")} shell: /usr/bin/bash -e {0}`,
+    `${at("00:00")} ##[endgroup]`,
+    `${at("00:00")} > node scripts/formal-toolchain.mjs`,
+    `${at("00:00")} ${marker}`,
+    `${at("00:04")} { version: '4.11.0+fcb2042d6d043a2634f0854338c08feeaaaf4ae2' }`,
+    `${at("00:04")} Post job cleanup.`,
+  ].join("\n");
+  const attribute = (marker: string) =>
+    attributeRun(snapshot([job(1, "setup", "00:00", "00:04")]), new Map([[1, parseJobLog(releaseSetupLog(marker))]]));
+
+  it("attributes an uncached pinned release download inside a script step", () => {
+    const found = one(attribute(DOWNLOAD), "toolchain-download", "setup");
+    expect(found).toMatchObject({ step: "Run npm run formal:setup", observedMs: 4_000 });
+    expect(found.summary).toContain("pinned release archive");
+    expect(found.recommendation).toContain("lock file");
+    expect(found.recommendation).toContain("integrity");
+    expect(found.evidence).toEqual(["Run npm run formal:setup: release archive download with no reused install, 4.0 s"]);
+  });
+
+  it("reports nothing when the step reuses a verified install", () => {
+    expect(attribute("Reusing verified toolchain at .proof-tools/4.11.0").bottlenecks
+      .filter((entry) => entry.category === "toolchain-download")).toEqual([]);
+  });
+});
+
 describe("formatMs", () => {
   it("formats seconds and minutes", () => {
     expect(formatMs(22_500)).toBe("22.5 s");

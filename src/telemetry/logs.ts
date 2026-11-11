@@ -112,6 +112,8 @@ export interface LogStep {
   subGroups: LogSubGroup[];
   builds: BuildInvocation[];
   toolCache?: "hit" | "download";
+  /** Set when the downloaded toolchain came from a pinned release archive rather than a runner tool cache. */
+  toolSource?: "release";
   packageCache?: "hit" | "miss";
   /** At most three recognized access entries printed by the build action, not an authorization decision. */
   cacheAccess?: {
@@ -600,8 +602,12 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
       vertexLine(step, Number(vertex[1]), vertex[2] as string, ms, pendingTransfers);
       continue;
     }
-    if (line.startsWith("Found in cache @ ")) step.toolCache = "hit";
+    if (line.startsWith("Found in cache @ ") || /^Reusing verified (?:[\w-]+ )?toolchain at \S/.test(line)) step.toolCache = "hit";
     else if (/^(?:Attempting to download|Acquiring) \S/.test(line)) step.toolCache ??= "download";
+    else if (/^Downloading https:\/\/\S+\/releases\/download\/\S+\.(?:zip|tar\.gz|tgz|tar\.xz)$/.test(line)) {
+      step.toolCache ??= "download";
+      if (step.toolCache === "download") step.toolSource = "release";
+    }
     else if (/^Cache restored from key: |^Cache hit for: |^Cache restored successfully/.test(line)) step.packageCache = "hit";
     else if (/^(?:\S+ )?cache is not found$|^Cache not found for (?:input )?keys?:/i.test(line)) step.packageCache = "miss";
     else {

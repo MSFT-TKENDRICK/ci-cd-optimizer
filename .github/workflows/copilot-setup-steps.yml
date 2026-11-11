@@ -3,9 +3,20 @@ name: Copilot Setup Steps
 on:
   workflow_dispatch:
   push:
-    paths: [.github/workflows/copilot-setup-steps.yml, scripts/agent-startup.mjs]
+    branches: [main]
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+      - .github/actions/setup/**
+      - formal/toolchain.json
+      - scripts/agent-startup.mjs
+      - scripts/formal-toolchain.mjs
   pull_request:
-    paths: [.github/workflows/copilot-setup-steps.yml, scripts/agent-startup.mjs]
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+      - .github/actions/setup/**
+      - formal/toolchain.json
+      - scripts/agent-startup.mjs
+      - scripts/formal-toolchain.mjs
 
 permissions:
   contents: read
