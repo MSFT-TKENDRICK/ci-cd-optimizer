@@ -33,7 +33,7 @@ const INSTALL_COMMAND =
 export type BottleneckCategory =
   | "cache-export" | "image-load" | "layer-cache-miss" | "builder-setup" | "builder-teardown" | "package-cache"
   | "toolchain-download" | "repeated-command" | "service-startup" | "test-runtime" | "repeated-setup"
-  | "generated-artifact-drift" | "queue-pressure" | "interrupted-transfer";
+  | "generated-artifact-drift" | "queue-pressure" | "interrupted-transfer" | "layer-cache-unknown";
 
 export interface Bottleneck {
   id: string;
@@ -425,23 +425,28 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
     }
   }
 
-  if (build.cacheFrom.length > 0) {
-    const misses = build.vertices.filter((vertex) => vertex.kind === "run" && !vertex.cached && !vertex.error);
-    const missMs = vertexUnionMs(misses);
-    if (missMs >= MIN_FINDING_MS) {
+  for (const executionOutput of [true, false]) {
+    const vertices = build.vertices.filter((vertex) => vertex.kind === "run" && !vertex.cached && !vertex.error
+      && (vertex.executionOutput === true) === executionOutput);
+    const observedMs = vertexUnionMs(vertices);
+    if (build.cacheFrom.length > 0 && observedMs >= MIN_FINDING_MS) {
       const restored = build.vertices.filter((vertex) => (vertex.kind === "run" || vertex.kind === "copy") && vertex.cached).length;
       const source = build.cacheFrom.map((spec) => spec.raw).join("; ");
       const access = build.cacheFrom.some((spec) => spec.type === "gha") ? entry.step.cacheAccess : undefined;
       const cause = restored === 0
-        ? "No RUN or COPY layer was restored; this alone does not distinguish changed inputs from missing or inaccessible cache entries."
-        : `${restored} other layer(s) were restored, but that does not prove that matching entries for the rebuilt layers were published or accessible.`;
+        ? "No RUN or COPY vertex was marked CACHED; this alone does not distinguish changed inputs from missing or inaccessible cache entries."
+        : `${restored} other RUN or COPY vertex/vertices were marked CACHED, but that does not prove that matching entries for these vertices were published or accessible.`;
       findings.push(finding(ctx, {
-        category: "layer-cache-miss",
+        category: executionOutput ? "layer-cache-miss" : "layer-cache-unknown",
         detail,
         step: entry.label,
-        observedMs: missMs,
-        observation: `${entry.label}: ${misses.length} RUN layer(s) were rebuilt for ${formatMs(missMs)} although the build is configured to restore a cache (cache-from ${source}). ${cause} The log alone does not establish the cause.`,
+        observedMs,
+        ...(!executionOutput ? { removableMs: 0 } : {}),
+        observation: executionOutput
+          ? `${entry.label}: ${vertices.length} RUN vertex/vertices produced timed command output without a CACHED marker, spanning ${formatMs(observedMs)} of vertex time despite cache-from ${source}. Vertex time can include materialization, not just command execution. ${cause} The log alone does not establish the cause.`
+          : `${entry.label}: ${vertices.length} RUN vertex/vertices span ${formatMs(observedMs)} without a CACHED marker or timed command output (cache-from ${source}). They may be materializing cached layers or executing silently; the retained log does not establish a rebuild or removable cost. ${cause}`,
         recommendation: [
+          ...(!executionOutput ? ["Inspect the build record's cache status and execution trace before treating these vertices as misses. Missing output is not proof of either a cache hit or a rebuild, and layer-transfer output alone is not command execution. Do not expose credentials or signed URLs from build records."] : []),
           "Compare consecutive runs with identical build inputs, including resolved base-image digests, build arguments and context contents, not just the same commit. Check successful cache publication, matching import/export scopes, branch visibility and eviction.",
           ...(access?.entries.length ? ["Use the action's logged runtime cache access as branch-permission evidence only: it does not prove publication, a matching entry or successful restoration. Missing or omitted entries do not prove denied access. Do not broaden permissions merely because a layer missed."] : []),
           "If misses persist, investigate cache lookup and backend behavior before restructuring the Dockerfile or changing permissions.",
@@ -450,7 +455,7 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
           ...(access?.entries.length ? [
             `Action-reported runtime cache access: ${access.entries.map((entry) => `${entry.scope}: ${entry.permission}`).join("; ")}${access.omittedEntries ? `; ${access.omittedEntries} additional recognized access line(s) not retained` : ""}`,
           ] : []),
-          ...[...misses].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
+          ...[...vertices].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
           ...build.vertices.filter((vertex) => vertex.kind === "cache-import").map(describeVertex),
           ...build.cacheFrom.map((spec) => `cache-from: ${spec.raw}`),
         ],

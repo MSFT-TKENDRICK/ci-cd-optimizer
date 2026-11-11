@@ -165,8 +165,15 @@ Profiling guidance separates fixture setup, test bodies and teardown, including 
 waits before changing shutdown. File timing alone cannot diagnose the cause. Preserve active-request
 draining and intentional timeout/polling coverage rather than shortening deadlines to improve timings.
 
-Layer-cache misses remain findings even when other layers were restored. Partial restoration does not
-prove that matching entries for the rebuilt layers were published or accessible. Compare immutable build
+Layer-cache misses require timed RUN command output, not merely the absence of `CACHED`. BuildKit can
+materialize a cached RUN result without printing that marker. Unmarked RUN vertices without command
+output remain separate `layer-cache-unknown` findings with zero savings; silent execution is also possible.
+Inspect build-record cache status and execution traces to resolve the ambiguity without exposing credentials
+or signed URLs. Timed command output is retained only as a boolean, never as command-output contents.
+Even for observed execution, vertex time can include materialization and is not pure command runtime.
+
+Layer-cache misses remain findings even when other vertices were marked cached. Partial restoration does not
+prove that matching entries for the executed vertices were published or accessible. Compare immutable build
 inputs (not just commit SHAs), publication, import/export scopes, branch visibility and eviction before
 attributing persistent misses to the Dockerfile or cache backend.
 When `docker/build-push-action` prints its runtime cache access group, GHA miss evidence also retains up
