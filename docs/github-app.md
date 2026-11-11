@@ -258,7 +258,11 @@ readiness. Configure separate queue-age/failure/restart monitoring and perform t
 
 ### Production-image verification
 
-CI runs `test/service/container-smoke.mjs` against the actual image in both direct and Postgres modes. Each run
+CI runs `test/service/container-smoke-suite.mjs` against one built image. It launches the unchanged
+`container-smoke.mjs` workers concurrently in direct and Postgres modes, removes database configuration from
+the direct worker, and waits for both workers to finish even if one fails. Each worker reports its exit and duration;
+the suite fails if either worker or its cleanup fails. Standard Node test summaries let the
+telemetry parser attribute this test time without mistaking concurrency for unexplained work. Each run
 creates an internal Docker network, uses ephemeral test keys, and binds a synthetic
 GitHub HTTP API only to that network's host gateway. Startup health is first checked through a published loopback
 port; the external bridge is then disconnected and internal-only attachment is asserted before any webhook or
