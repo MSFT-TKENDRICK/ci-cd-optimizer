@@ -42441,7 +42441,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "95fb469c6aa183ffe3584b2ed36f8fffd720ba718ff0b4ba5fb98361bf99f91f",
+  "implementationSha256": "93adbdbfd4d0dfd983f821c13fb951380e958fd36d89c617fc9dd63e6be1ed56",
   "generatorSha256": "3796e86ad20c33e0b41cc5ad4490c09338a37e5c6d2ea7c2b2f9095dbf298aed",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -67446,7 +67446,7 @@ function jobFindings(ctx) {
       step: "Initialize containers",
       observedMs: startupMs,
       observation: `Starting service container ${clip2(service.name, MAX_LABEL)}${service.image ? ` (${clip2(service.image, MAX_LABEL)})` : ""} took ${formatMs(startupMs)} before the first step could run (${parts2.join(", ")}).`,
-      recommendation: "Run the service only in jobs that use it, prefer a smaller image, and tune the health-check interval; or start it with docker run --detach early in the job so it boots while other steps run instead of blocking the first step.",
+      recommendation: "Use the service only in jobs that need it. Measure a compatible smaller image or overlap the entire pull/create/start command with independent work using a bounded background worker: docker run --detach still waits for the image pull. Preserve the health policy and gate every consumer on readiness. Join startup before cleanup; always attempt container and anonymous-volume removal, including failed startups, and propagate startup and cleanup errors. Compare whole-run latency and total runner work before accepting a change.",
       evidence: [`${clip2(service.name, MAX_LABEL)}${service.image ? ` ${clip2(service.image, MAX_LABEL)}` : ""}: ${parts2.join(", ")}`]
     }));
   }
