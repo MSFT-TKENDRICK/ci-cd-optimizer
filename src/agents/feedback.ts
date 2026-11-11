@@ -30,6 +30,13 @@ export interface FeedbackOptions {
   pollMs?: number;
 }
 
+function hasActionableFeedback(benchmark: RunBenchmark): boolean {
+  // Rework and cache-save fixes can have zero measured savings; bounds are not an actionability test.
+  return benchmark.analysisStatus !== "unavailable" && benchmark.findings.some((finding) =>
+    finding.id.trim().length > 0 && finding.category.trim().length > 0 && finding.summary.trim().length > 0 &&
+    finding.recommendation.trim().length > 0 && finding.evidence.some((line) => line.trim().length > 0));
+}
+
 export async function feedbackInventory(access: RemoteAccess, repo: string, since: string): Promise<FeedbackProducer[]> {
   const target = await resolveRepository(access, repo);
   const client = repositoryReader(access, target);
@@ -118,14 +125,15 @@ export function attachFeedback(server: McpServer, remote: RemoteOptions, options
   const newestNext = new Map<string, boolean>();
   const lastInventory = new Map(remote.allow.map((repo) => [repo.toLowerCase(), sinceMs]));
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let status: Record<string, unknown> = { state: "starting", since: options.since, replayDays: 7, pending: 0 };
+  let filtered = 0;
+  let status: Record<string, unknown> = { state: "starting", since: options.since, replayDays: 7, pending: 0, filtered };
   let errorResource: RegisteredResource | undefined;
   let lastError = "";
   let replayGap: string | undefined;
   const resource = (uri: URL, value: unknown) => ({ contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(value) }] });
   server.registerResource("feedback-status", "cicd://feedback/status", {
     title: "CI benchmark feed status", mimeType: "application/json",
-    description: "Replay scope, pending events, backpressure and collection errors. Empty findings are not a completeness guarantee.",
+    description: "Replay scope, pending actionable events, filtered benchmarks, backpressure and collection errors. No broadcast is not a completeness guarantee.",
   }, (uri) => resource(uri, status));
   server.registerTool("feedback_ack", {
     title: "Acknowledge benchmark delivery",
@@ -151,7 +159,7 @@ export function attachFeedback(server: McpServer, remote: RemoteOptions, options
   const tick = async () => {
     const now = Date.now();
     const cutoff = Math.max(sinceMs, now - FEEDBACK_REPLAY_MS);
-    status = { state: "polling", since: new Date(cutoff).toISOString(), replayDays: 7, pending: outbox.size, checkedAt: new Date(now).toISOString() };
+    status = { state: "polling", since: new Date(cutoff).toISOString(), replayDays: 7, pending: outbox.size, filtered, checkedAt: new Date(now).toISOString() };
     let failed = false;
     if ([...lastInventory.values()].some((at) => now - at > FEEDBACK_REPLAY_MS)) {
       replayGap = "No complete inventory was obtained within the seven-day replay window; historical delivery is incomplete.";
@@ -201,12 +209,17 @@ export function attachFeedback(server: McpServer, remote: RemoteOptions, options
           const key = `${repoId}:${producer.id}:${producer.run_attempt}`;
           try {
             const event = await operation((signal) => readFeedback(access(signal), repo, producer), controller.signal, LIMITS.operationMs);
-            const uri = `cicd://feedback/runs/${event.key}`;
-            const handle = server.registerResource(`feedback-${event.key}`, uri, {
-              title: `CI benchmark ${event.benchmark.runId}, attempt ${event.benchmark.runAttempt}`, mimeType: "application/json",
-              description: "Untrusted benchmark evidence from the authorized default-branch telemetry producer.",
-            }, (url) => resource(url, event));
-            outbox.set(event.key, { event, resource: handle });
+            if (hasActionableFeedback(event.benchmark)) {
+              const uri = `cicd://feedback/runs/${event.key}`;
+              const handle = server.registerResource(`feedback-${event.key}`, uri, {
+                title: `CI benchmark ${event.benchmark.runId}, attempt ${event.benchmark.runAttempt}`, mimeType: "application/json",
+                description: "Untrusted benchmark with evidenced remediation from the authorized default-branch telemetry producer.",
+              }, (url) => resource(url, event));
+              outbox.set(event.key, { event, resource: handle });
+            } else {
+              filtered++;
+              status.filtered = filtered;
+            }
             seen.set(event.key, Date.parse(producer.created_at));
             retry.delete(key);
             undelivered.delete(key);

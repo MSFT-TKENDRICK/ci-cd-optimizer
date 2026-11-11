@@ -78794,6 +78794,9 @@ var producerSchema = external_exports.object({
   created_at: external_exports.iso.datetime(),
   path: external_exports.string()
 });
+function hasActionableFeedback(benchmark) {
+  return benchmark.analysisStatus !== "unavailable" && benchmark.findings.some((finding3) => finding3.id.trim().length > 0 && finding3.category.trim().length > 0 && finding3.summary.trim().length > 0 && finding3.recommendation.trim().length > 0 && finding3.evidence.some((line2) => line2.trim().length > 0));
+}
 async function feedbackInventory(access, repo, since) {
   const target = await resolveRepository(access, repo);
   const client = repositoryReader(access, target);
@@ -78894,7 +78897,8 @@ function attachFeedback(server, remote, options) {
   const newestNext = /* @__PURE__ */ new Map();
   const lastInventory = new Map(remote.allow.map((repo) => [repo.toLowerCase(), sinceMs]));
   let timer;
-  let status = { state: "starting", since: options.since, replayDays: 7, pending: 0 };
+  let filtered = 0;
+  let status = { state: "starting", since: options.since, replayDays: 7, pending: 0, filtered };
   let errorResource;
   let lastError = "";
   let replayGap;
@@ -78902,7 +78906,7 @@ function attachFeedback(server, remote, options) {
   server.registerResource("feedback-status", "cicd://feedback/status", {
     title: "CI benchmark feed status",
     mimeType: "application/json",
-    description: "Replay scope, pending events, backpressure and collection errors. Empty findings are not a completeness guarantee."
+    description: "Replay scope, pending actionable events, filtered benchmarks, backpressure and collection errors. No broadcast is not a completeness guarantee."
   }, (uri) => resource(uri, status));
   server.registerTool("feedback_ack", {
     title: "Acknowledge benchmark delivery",
@@ -78932,7 +78936,7 @@ function attachFeedback(server, remote, options) {
   const tick = async () => {
     const now = Date.now();
     const cutoff = Math.max(sinceMs, now - FEEDBACK_REPLAY_MS);
-    status = { state: "polling", since: new Date(cutoff).toISOString(), replayDays: 7, pending: outbox.size, checkedAt: new Date(now).toISOString() };
+    status = { state: "polling", since: new Date(cutoff).toISOString(), replayDays: 7, pending: outbox.size, filtered, checkedAt: new Date(now).toISOString() };
     let failed = false;
     if ([...lastInventory.values()].some((at) => now - at > FEEDBACK_REPLAY_MS)) {
       replayGap = "No complete inventory was obtained within the seven-day replay window; historical delivery is incomplete.";
@@ -78985,13 +78989,18 @@ function attachFeedback(server, remote, options) {
           const key = `${repoId}:${producer.id}:${producer.run_attempt}`;
           try {
             const event = await operation((signal) => readFeedback(access(signal), repo, producer), controller.signal, LIMITS.operationMs);
-            const uri = `cicd://feedback/runs/${event.key}`;
-            const handle = server.registerResource(`feedback-${event.key}`, uri, {
-              title: `CI benchmark ${event.benchmark.runId}, attempt ${event.benchmark.runAttempt}`,
-              mimeType: "application/json",
-              description: "Untrusted benchmark evidence from the authorized default-branch telemetry producer."
-            }, (url2) => resource(url2, event));
-            outbox.set(event.key, { event, resource: handle });
+            if (hasActionableFeedback(event.benchmark)) {
+              const uri = `cicd://feedback/runs/${event.key}`;
+              const handle = server.registerResource(`feedback-${event.key}`, uri, {
+                title: `CI benchmark ${event.benchmark.runId}, attempt ${event.benchmark.runAttempt}`,
+                mimeType: "application/json",
+                description: "Untrusted benchmark with evidenced remediation from the authorized default-branch telemetry producer."
+              }, (url2) => resource(url2, event));
+              outbox.set(event.key, { event, resource: handle });
+            } else {
+              filtered++;
+              status.filtered = filtered;
+            }
             seen.set(event.key, Date.parse(producer.created_at));
             retry.delete(key);
             undelivered.delete(key);

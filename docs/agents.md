@@ -200,6 +200,17 @@ repository numeric identity and exact source attempt/SHA before exposing it as
 `cicd://feedback/runs/<repository-id>:<producer-run>:<producer-attempt>`.
 Integrity framing alone is not authentication. Legacy producer runs without frames are coverage errors.
 
+Benchmarking stays **per run; optimization broadcasts are actionable-only**. The watcher publishes a run resource
+only when analysis is available and at least one identified bottleneck has a nonblank summary, remediation
+recommendation and supporting evidence. Clean/skipped reports without findings, gap-only or unavailable analysis,
+omission counts alone, and findings without remediation or evidence do not enqueue agent instructions.
+They remain in the producer's benchmark log and on-demand reports. Successfully filtered producers are marked
+processed within the replay scope without occupying an outbox slot or requiring an acknowledgement; the status
+resource's process-lifetime `filtered` count records these decisions. No broadcast does **not** mean no opportunities.
+Savings need not be positive: generated-artifact drift and cache-save failures can warrant fixes without proven
+removable work. A partial report with an actionable finding still broadcasts its full bounded payload, including
+gaps and omissions; the receiver must verify applicability and retrieve exact-run evidence before remediation.
+
 ```powershell
 node scripts/agent-startup.mjs --repo MSFT-TKENDRICK/ci-cd-optimizer --auth github-cli
 ```

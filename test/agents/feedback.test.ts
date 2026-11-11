@@ -20,8 +20,17 @@ function fixture() {
   const benchmark: RunBenchmark = {
     schema: BENCHMARK_SCHEMA, repository: "acme/widgets", repositoryId: 42, runId: 2000, runAttempt: 1,
     headSha: "a".repeat(40), workflowId: 7, workflowPath: ".github/workflows/ci.yml", conclusion: "success",
-    collectedAt: created, analysisStatus: "unavailable", metrics: null, previous: null, jobs: [], omittedJobs: 0,
-    findings: [], omittedFindings: 0, gaps: ["No completed jobs."], omittedGaps: 0,
+    collectedAt: created, analysisStatus: "complete",
+    metrics: { elapsedMs: 20000, initialQueueMs: 0, queueInclusiveMs: 20000, runnerMs: 18000, observedRunnerMs: 18000 },
+    previous: null, jobs: [{ id: 1, key: "test", name: "test", durationMs: 18000, observedRunnerSharePct: 100, readyQueueMs: 2000 }], omittedJobs: 0,
+    findings: [{
+      id: "test:package-cache", category: "package-cache", jobKey: "test", jobName: "test",
+      observedMs: 5000, elapsedSavingsBoundMs: 5000, runnerSavingsBoundMs: 5000,
+      summary: "Dependency installation ran without a download cache.",
+      recommendation: "Use a lockfile-keyed download cache while preserving installation and integrity checks.",
+      evidence: ["npm ci took 5 seconds; no package cache was restored."], omittedEvidence: 0,
+    }],
+    omittedFindings: 0, gaps: [], omittedGaps: 0,
     rework: { observedAttempts: 1, failedAttempts: 0, artifactDriftAttempts: 0, artifactDriftRunnerMs: 0, unclassifiedFailedAttempts: 0 },
   };
   const state = { total: 1, corrupt: false, sourceId: 2000, calls: 0, logs: 0, inventoryFails: false, timeout: "", producers: [producer] };
@@ -44,7 +53,7 @@ function fixture() {
     }
     if (path.endsWith("/actions/runs/2000/attempts/1")) return Response.json({
       id: state.sourceId, run_attempt: 1, head_sha: benchmark.headSha, workflow_id: 7, repository: { id: 42 }, status: "completed",
-      conclusion: "success", path: ".github/workflows/ci.yml",
+      conclusion: benchmark.conclusion, path: ".github/workflows/ci.yml",
     });
     return Response.json({}, { status: 404 });
   };
@@ -55,6 +64,69 @@ function fixture() {
 }
 
 describe("verified CI feedback", () => {
+  it.each([
+    "clean", "skipped", "gap-only", "unavailable", "omitted-only", "no-recommendation", "no-evidence",
+  ])("does not broadcast or repeatedly fetch a %s benchmark", async (kind) => {
+    const f = fixture();
+    if (kind === "no-recommendation") f.benchmark.findings[0]!.recommendation = " \n ";
+    else if (kind === "no-evidence") f.benchmark.findings[0]!.evidence = [" \t "];
+    else f.benchmark.findings = [];
+    if (kind === "skipped") f.benchmark.conclusion = "skipped";
+    if (kind === "gap-only" || kind === "omitted-only") {
+      f.benchmark.analysisStatus = "partial";
+      f.benchmark.gaps = ["Log evidence is incomplete; absence of findings is not a clean result."];
+    }
+    if (kind === "omitted-only") f.benchmark.omittedFindings = 2;
+    if (kind === "unavailable") {
+      f.benchmark.analysisStatus = "unavailable";
+      f.benchmark.metrics = null;
+      f.benchmark.gaps = ["Analysis unavailable."];
+    }
+    const server = createMcpServer({ fallbackRoot: process.cwd(), remote: f.remote, feedback: { since: f.since, pollMs: 20 } });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "quiet-feedback-test", version: "1" });
+    clients.push(client);
+    let changes = 0;
+    client.setNotificationHandler("notifications/resources/list_changed", () => { changes++; });
+    await server.connect(serverSide);
+    await client.connect(clientSide);
+    const status = async () => JSON.parse(((await client.readResource({ uri: "cicd://feedback/status" })).contents[0] as { text: string }).text);
+    await expect.poll(async () => (await status()).state).toBe("watching");
+    expect((await client.listResources()).resources.some((item) => item.uri.startsWith("cicd://feedback/runs/"))).toBe(false);
+    expect(await status()).toMatchObject({ filtered: 1, pending: 0, undelivered: 0 });
+    const calls = f.state.calls;
+    await expect.poll(() => f.state.calls).toBeGreaterThan(calls);
+    expect(f.state.logs).toBe(1);
+    expect(changes).toBe(0);
+    expect((await f.read()).benchmark).toEqual(f.benchmark);
+  });
+
+  it("still delivers evidenced remediation with gaps and zero savings bounds", async () => {
+    const f = fixture();
+    f.benchmark.analysisStatus = "partial";
+    f.benchmark.conclusion = "failure";
+    f.benchmark.gaps = ["Another job log is unavailable."];
+    f.benchmark.findings = [{
+      ...f.benchmark.findings[0]!, id: "test:parity", category: "generated-artifact-drift",
+      elapsedSavingsBoundMs: 0, runnerSavingsBoundMs: 0,
+      summary: "Generated output parity failed; failed work is rework exposure, not proven savings.",
+      recommendation: "Regenerate and commit the bundle with its sources; preserve the parity gate.",
+      evidence: ["dist-action/index.js is stale."],
+    }];
+    const server = createMcpServer({ fallbackRoot: process.cwd(), remote: f.remote, feedback: { since: f.since, pollMs: 20 } });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "actionable-partial-test", version: "1" });
+    clients.push(client);
+    await server.connect(serverSide);
+    await client.connect(clientSide);
+    const uri = "cicd://feedback/runs/42:3000:1";
+    await expect.poll(async () => (await client.listResources()).resources.some((item) => item.uri === uri)).toBe(true);
+    const result = await client.readResource({ uri });
+    expect(JSON.parse((result.contents[0] as { text: string }).text).benchmark).toEqual(f.benchmark);
+    await client.callTool({ name: "feedback_ack", arguments: { key: "42:3000:1" } });
+    expect((await client.listResources()).resources.some((item) => item.uri === uri)).toBe(false);
+  });
+
   it.each(["inventory", "log"])("reports a %s timeout without leaking details or losing recovery", async (phase) => {
     const f = fixture();
     f.state.timeout = phase;
