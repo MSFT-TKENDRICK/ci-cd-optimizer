@@ -136,6 +136,11 @@ The telemetry report includes:
 - Coverage gaps for unavailable, truncated, or unfetched logs and time not explained by reported steps.
 - Why comparison is withheld or why no comparable baseline was found in the bounded evidence window.
 
+Skipped jobs remain in the job inventory and dependency graph but have no execution or runner-queue bars.
+Their timestamps can be synthetic or reversed. Reports state how many were omitted from the execution timeline;
+when none executed, they show an explicit no-execution message instead of an empty Gantt chart.
+This does not change timing metrics or establish an optimization benefit.
+
 Attribution requires a complete job inventory and resolved workflow definitions. Log retrieval is bounded to eight jobs
 per report; unavailable or skipped logs remain visible as coverage gaps. Savings are upper bounds from observed time,
 not predicted results or measured improvements, and overlapping findings must not be added together.

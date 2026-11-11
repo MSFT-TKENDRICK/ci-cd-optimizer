@@ -153,9 +153,14 @@ export function calculateCriticalPath(jobs: JobSnapshot[]): CriticalPath {
 
 function createGantt(snapshot: WorkflowSnapshot, criticalKeys: readonly string[]): string {
   const critical = new Set(criticalKeys);
-  const jobs = [...snapshot.jobs].sort(
+  const jobs = snapshot.jobs.filter((job) => job.conclusion !== "skipped").sort(
     (left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt),
   );
+  const skippedCount = snapshot.jobs.length - jobs.length;
+  const skippedNote = skippedCount > 0
+    ? [`_${skippedCount} skipped job(s) omitted from the execution timeline; job inventory is unchanged._`]
+    : [];
+  if (jobs.length === 0) return ["No executed jobs to plot.", ...skippedNote].join("\n\n");
   const waits = jobs.filter((job) => job.queuedAt && (job.queueMs ?? 0) >= QUEUE_THRESHOLD_MS);
   const tags = (job: JobSnapshot) =>
     [critical.has(job.key) ? "crit" : "", job.conclusion === "success" ? "done" : job.conclusion === "failure" ? "active" : ""]
@@ -185,6 +190,7 @@ function createGantt(snapshot: WorkflowSnapshot, criticalKeys: readonly string[]
     "```",
     "",
     "_Red bars are on the critical path; the runner queue lane shows time jobs spent waiting for a runner._",
+    ...skippedNote,
   ].join("\n");
 }
 

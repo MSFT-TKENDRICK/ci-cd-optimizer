@@ -42441,7 +42441,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "941e0accd1d9dcf868bf89499757caf7c6425959232dd5f9ae10184918016d1e",
+  "implementationSha256": "77679e3689ae8b2c5a7b36b682630dc83c247566ac63b908f37265abdecaccda",
   "generatorSha256": "3796e86ad20c33e0b41cc5ad4490c09338a37e5c6d2ea7c2b2f9095dbf298aed",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -68108,9 +68108,12 @@ function calculateCriticalPath(jobs) {
 }
 function createGantt(snapshot, criticalKeys) {
   const critical = new Set(criticalKeys);
-  const jobs = [...snapshot.jobs].sort(
+  const jobs = snapshot.jobs.filter((job) => job.conclusion !== "skipped").sort(
     (left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt)
   );
+  const skippedCount = snapshot.jobs.length - jobs.length;
+  const skippedNote = skippedCount > 0 ? [`_${skippedCount} skipped job(s) omitted from the execution timeline; job inventory is unchanged._`] : [];
+  if (jobs.length === 0) return ["No executed jobs to plot.", ...skippedNote].join("\n\n");
   const waits = jobs.filter((job) => job.queuedAt && (job.queueMs ?? 0) >= QUEUE_THRESHOLD_MS);
   const tags = (job) => [critical.has(job.key) ? "crit" : "", job.conclusion === "success" ? "done" : job.conclusion === "failure" ? "active" : ""].filter(Boolean).map((tag) => `${tag}, `).join("");
   return [
@@ -68131,7 +68134,8 @@ function createGantt(snapshot, criticalKeys) {
     ),
     "```",
     "",
-    "_Red bars are on the critical path; the runner queue lane shows time jobs spent waiting for a runner._"
+    "_Red bars are on the critical path; the runner queue lane shows time jobs spent waiting for a runner._",
+    ...skippedNote
   ].join("\n");
 }
 function slowestSteps(snapshot, limit3 = 10) {

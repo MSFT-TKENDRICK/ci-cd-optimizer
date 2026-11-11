@@ -423,6 +423,9 @@ export async function remoteRunReport(access: RemoteAccess, request: {
     // Render trusted layout with escaped repository strings; never forward the App's raw repository-derived Markdown.
     const mermaidLabel = (value: string) => value.replace(/[^a-zA-Z0-9 _.-]/g, " ").slice(0, 80);
     const timestamp = (value: string) => new Date(value).toISOString().replace(/\.\d{3}Z$/, "");
+    const pageJobs = snapshot.jobs.slice(jobOffset, jobOffset + 100);
+    const timelineJobs = pageJobs.filter((job) => job.conclusion !== "skipped");
+    const skippedCount = pageJobs.length - timelineJobs.length;
     const markdown = sanitizeMarkdown([
       `## ${escapeMarkdown(snapshot.workflowName)} performance snapshot`,
       `Run ${snapshot.runId}, attempt ${snapshot.runAttempt}; duration ${jobsComplete ? `${snapshot.durationMs} ms` : "unavailable (incomplete job telemetry)"}; queue ${snapshot.queueMs ?? "unavailable"} ms.`,
@@ -454,10 +457,18 @@ export async function remoteRunReport(access: RemoteAccess, request: {
         : []),
       "", "| Job | Duration (ms) | Conclusion |", "|---|---:|---|",
       ...report.jobs.map((job) => `| ${escapeMarkdown(job.name)} | ${job.durationMs} | ${escapeMarkdown(job.conclusion ?? "unknown")} |`),
-      "", "```mermaid", "gantt", `    title ${mermaidLabel(snapshot.workflowName)}`,
-      "    dateFormat YYYY-MM-DDTHH:mm:ss", "    section Jobs",
-      ...snapshot.jobs.slice(jobOffset, jobOffset + 100).map((job, index) => `    ${mermaidLabel(job.name)} :j${index}, ${timestamp(job.startedAt)}, ${timestamp(job.completedAt)}`),
-      "```",
+      "",
+      ...(timelineJobs.length > 0
+        ? [
+            "```mermaid", "gantt", `    title ${mermaidLabel(snapshot.workflowName)}`,
+            "    dateFormat YYYY-MM-DDTHH:mm:ss", "    section Jobs",
+            ...timelineJobs.map((job, index) => `    ${mermaidLabel(job.name)} :j${index}, ${timestamp(job.startedAt)}, ${timestamp(job.completedAt)}`),
+            "```",
+          ]
+        : ["No executed jobs to plot on this page."]),
+      ...(skippedCount > 0
+        ? [`${skippedCount} skipped job(s) omitted from the execution timeline on this page; job inventory is unchanged.`]
+        : []),
     ].join("\n"), MAX_REPORT_CHARS);
     report.markdown = markdown.text;
     report.markdownTruncated = markdown.truncated;
