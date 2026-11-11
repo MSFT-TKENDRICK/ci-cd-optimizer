@@ -125,6 +125,16 @@ describe("processWorkflowRun", () => {
     expect(store.snapshots.filter((item) => item.runId === 1999).map((item) => item.runAttempt)).toEqual([1, 2]);
   });
 
+  it("retains classified failed attempts in benchmark history after a successful retry", async () => {
+    const store = seeded();
+    await store.save({ ...snapshot(1999, 100, [["build", 100]]), conclusion: "failure",
+      failureAnalysis: { categories: ["generated-artifact-drift"], jobsWithLogs: 1, jobs: 1 } });
+    await store.save({ ...snapshot(1999, 100, [["build", 100]]), runAttempt: 2 });
+    const result = await processWorkflowRun(api(), repo, run(), { store, alerts: false });
+    expect(result.benchmark?.rework).toMatchObject({ artifactDriftAttempts: 1, artifactDriftRunnerMs: 100000 });
+    expect(result.samples).toBe(12);
+  });
+
   it("skips runs that are not completed", async () => {
     const client = api();
     expect(await processWorkflowRun(client, repo, run({ status: "in_progress" }))).toEqual({ status: "skipped", reason: "Run is in_progress." });

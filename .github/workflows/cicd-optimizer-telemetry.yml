@@ -1,11 +1,26 @@
-# Snapshots every completed CI, Container, and daily self-application run, compares it with prior runs, writes the Gantt / critical-path
+# Snapshots every independently triggered workflow except itself, compares it with prior runs, writes the Gantt / critical-path
 # report to the run summary and a check run, and opens or resolves duration-regression alert issues.
 # Snapshots persist between runs in an actions/cache entry; without one, history is rebuilt from the Actions API.
 name: CI/CD Optimizer telemetry
 
 on:
   workflow_run:
-    workflows: [CI, Container, CI/CD Optimizer daily]
+    # Explicit names avoid self-triggered chains of skipped telemetry runs. Coverage is checked by tests.
+    workflows:
+      - CI
+      - Container
+      - CI/CD Optimizer daily
+      - CI/CD Optimizer scan
+      - Verify saved CI/CD Optimizer App
+      - Copilot Setup Steps
+      - Experiment arm
+      - Hill-climbing experiment generator
+      - Hill-climbing experiment grader
+      - Recipe publish
+      - Recipe rollout
+      - Review intake
+      - Review intake comment
+      - Review scheduled
     types: [completed]
 
 permissions:
@@ -45,7 +60,7 @@ jobs:
         uses: ./
         with:
           command: telemetry
-          args: --run-id ${{ github.event.workflow_run.id }} --store .cicd-telemetry/runs.jsonl --check
+          args: --run-id ${{ github.event.workflow_run.id }} --run-attempt ${{ github.event.workflow_run.run_attempt }} --store .cicd-telemetry/runs.jsonl --check --broadcast
 
       # Each run saves a new immutable entry; restore-keys picks the newest, and old entries age out of the cache.
       - name: Save snapshot store

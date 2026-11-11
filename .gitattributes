@@ -1,5 +1,6 @@
 .github/workflows/*.lock.yml linguist-generated=true
-dist-action/** linguist-generated=true
+dist-action/** linguist-generated=true text eol=lf
+.githooks/** text eol=lf
 dist-setup/** linguist-generated=true text eol=lf
 plugins/ci-cd-optimizer/server/** linguist-generated=true text eol=lf
 formal/** text eol=lf

@@ -11,7 +11,7 @@ export interface GitHubReaderOptions {
   responseBytes?: number;
 }
 
-/** A new reader per operation: GET only, no redirects, bounded bytes/request count/deadlines, and no ambient credentials. */
+/** A new reader per operation: GET only, bounded bytes/request count/deadlines, and no ambient credentials. */
 export function githubReader(token: string, options: GitHubReaderOptions = {}): GitHubClient {
   const base = new URL(options.baseUrl ?? "https://api.github.com");
   if (base.protocol !== "https:" || base.username || base.password || base.search || base.hash) throw new AgentError("GitHub API URL must be an HTTPS URL without credentials, query, or fragment.");
@@ -40,10 +40,32 @@ export function githubReader(token: string, options: GitHubReaderOptions = {}): 
       }
       const deadline = AbortSignal.timeout(options.timeoutMs ?? LIMITS.httpMs);
       const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
-      const response = await request(url, {
-        method: "GET", redirect: "error", signal,
+      const log = route === "GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs";
+      let response = await request(url, {
+        method: "GET", redirect: log ? "manual" : "error", signal,
         headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28", "user-agent": "ci-cd-optimizer-agents" },
       });
+      if (log && response.status === 302) {
+        const location = response.headers.get("location");
+        await response.body?.cancel();
+        let destination: URL;
+        try {
+          destination = new URL(location ?? "");
+        } catch {
+          throw new AgentError("GitHub returned an invalid log download URL.");
+        }
+        // Only the authenticated GitHub response can supply this URL. Never forward its credential
+        // to storage, accept arbitrary redirect targets, or follow a second redirect.
+        const githubStorage = base.hostname === "api.github.com" &&
+          (/^[a-z0-9-]+\.blob\.core\.windows\.net$/.test(destination.hostname) ||
+            /^[a-z0-9.-]+\.actions\.githubusercontent\.com$/.test(destination.hostname));
+        if (destination.protocol !== "https:" || destination.username || destination.password || destination.hash ||
+            (destination.port && destination.port !== "443") || (!githubStorage && destination.origin !== base.origin)) {
+          throw new AgentError("GitHub log download destination is not allowed.");
+        }
+        if (++requests > LIMITS.githubRequests) throw new AgentError("GitHub request budget exceeded; narrow the operation.");
+        response = await request(destination, { method: "GET", redirect: "error", signal });
+      }
       const limit = options.responseBytes ?? LIMITS.githubResponseBytes;
       const reader = response.body?.getReader();
       const abortRead = () => { void reader?.cancel(signal.reason).catch(() => undefined); };
@@ -68,8 +90,10 @@ export function githubReader(token: string, options: GitHubReaderOptions = {}): 
       }
       signal.throwIfAborted();
       if (!response.ok) throw new RequestError(`GitHub read failed (${response.status}).`, response.status);
+      const text = Buffer.concat(chunks).toString("utf8");
+      if (log) return { status: response.status, data: text };
       try {
-        return { status: response.status, data: JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown };
+        return { status: response.status, data: JSON.parse(text) as unknown };
       } catch {
         throw new AgentError("GitHub returned invalid JSON.");
       }

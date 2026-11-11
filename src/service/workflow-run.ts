@@ -6,7 +6,8 @@ import { applyIssueActions, listManagedIssues, type AppliedIssueAction } from ".
 import type { IssueAction, SkippedIssue } from "../issues/plan.js";
 import type { LintConfig } from "../lint/config.js";
 import { computeBaseline } from "../telemetry/baseline.js";
-import { byCompletion, latestAttempts } from "../telemetry/history.js";
+import { benchmarkRun, type RunBenchmark } from "../telemetry/benchmark.js";
+import { attemptIdentity, byCompletion, latestAttempts } from "../telemetry/history.js";
 import { comparableHistory, comparisonKey, diagnoseBaseline, jobBaselines, jobHistoryApplies, summarizeBaselineGap, thinJobHistory } from "../telemetry/context.js";
 import { attributeRun, collectJobLogs, type RunAttribution } from "../telemetry/attribution.js";
 import { createTelemetryReport } from "../telemetry/report.js";
@@ -51,6 +52,7 @@ export interface WorkflowRunResult {
   jobBaselines?: JobBaseline[];
   attribution?: RunAttribution;
   attributionUnavailable?: string;
+  benchmark?: Omit<RunBenchmark, "schema" | "repositoryId" | "collectedAt">;
 }
 
 const PULL_REQUEST_EVENTS = new Set(["pull_request", "pull_request_target"]);
@@ -102,6 +104,18 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
     return { status: "skipped", reason: "The run has no completed jobs.", snapshot, ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}) };
   }
 
+  const attributionReady = snapshot.provenance?.jobsComplete === true && snapshot.provenance.definitionKnown;
+  const attributionUnavailable = attributionReady
+    ? undefined
+    : "Bottleneck attribution was withheld because the Actions job inventory or workflow job definitions are incomplete.";
+  const attribution = attributionReady ? attributeRun(snapshot, await collectJobLogs(client, repo, snapshot)) : undefined;
+  if (attribution && snapshot.conclusion !== "success") {
+    snapshot.failureAnalysis = {
+      categories: [...new Set(attribution.bottlenecks.filter((finding) => finding.category === "generated-artifact-drift").map((finding) => finding.category))],
+      jobsWithLogs: attribution.coverage.jobsWithLogs,
+      jobs: attribution.coverage.jobs,
+    };
+  }
   const history = await loadHistory(client, repo, run, snapshot, { limit: historyLimit(config), minSamples: config.alerts.minSamples }, options, knowledgeComparison !== undefined);
   if (knowledgeComparison?.newerAttemptObserved || history.some((item) => item.runId === snapshot.runId && item.runAttempt > snapshot.runAttempt)) {
     return { status: "skipped", reason: "A newer attempt is already recorded.", snapshot, ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}) };
@@ -111,11 +125,6 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
   // The durable knowledge path reports its own per-run exclusions and per-job distributions.
   const diagnostic = knowledgeComparison ? undefined : diagnoseBaseline(history, snapshot);
   const jobs = knowledgeComparison ? [] : jobBaselines(history, snapshot, historyLimit(config));
-  const attributionReady = snapshot.provenance?.jobsComplete === true && snapshot.provenance.definitionKnown;
-  const attributionUnavailable = attributionReady
-    ? undefined
-    : "Bottleneck attribution was withheld because the Actions job inventory or workflow job definitions are incomplete.";
-  const attribution = attributionReady ? attributeRun(snapshot, await collectJobLogs(client, repo, snapshot)) : undefined;
   const report = createTelemetryReport(snapshot, baseline, {
     ...(diagnostic ? { diagnostic } : {}),
     jobBaselines: jobs,
@@ -128,6 +137,7 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
     status: "processed", snapshot, samples: prior.length, report, ...(baseline ? { baseline } : {}),
     ...(diagnostic ? { baselineDiagnostic: diagnostic } : {}), ...(jobs.length ? { jobBaselines: jobs } : {}),
     ...(attribution ? { attribution } : {}), ...(attributionUnavailable ? { attributionUnavailable } : {}),
+    benchmark: benchmarkRun(snapshot, attribution, prior.at(-1), history),
     ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}),
   };
 
@@ -138,7 +148,7 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
   if (contextKey && !knowledgeComparison?.alertHistoryUncertain && !newerRunObserved && options.alerts !== false && config.alerts.enabled && remote.problems.length === 0 && alertsApply(run, config.alerts.branches, branch)) {
     const series = buildSeries([...prior, snapshot]);
     const existing = await listManagedIssues(client, repo, "alert");
-    const branchRuns = history.filter((item) => item.workflowId === snapshot.workflowId && item.branch === snapshot.branch).slice(-historyLimit(config));
+    const branchRuns = latestAttempts(history).filter((item) => item.workflowId === snapshot.workflowId && item.branch === snapshot.branch).slice(-historyLimit(config));
     const activeContexts = branchRuns.length >= historyLimit(config)
       ? new Set(branchRuns.map(comparisonKey).filter((key): key is string => key !== undefined))
       : undefined;
@@ -199,19 +209,22 @@ async function loadHistory(
   if (!options.dryRun) await store.save(snapshot);
   const [current, stored] = await Promise.all([
     store.history({ ...query, runId: snapshot.runId, limit: 1 }),
-    store.history(query),
+    store.history({ ...query, attempts: "all" }),
   ]);
   let history = stored;
   if (!immutableHistory && comparable && thin(history)) {
     const fetched = await backfill();
-    if (!options.dryRun) for (const item of fetched) await store.save(item);
-    history = merge(history, fetched, query.limit);
+    const recorded = new Set(history.map(attemptIdentity));
+    if (!options.dryRun) for (const item of fetched) if (!recorded.has(attemptIdentity(item))) await store.save(item);
+    // Backfilled timings do not replace log-backed evidence already recorded for the same completed attempt.
+    history = merge(fetched, history, query.limit);
   }
   return merge(history, [...current, snapshot], query.limit + 1);
 }
 
 function merge(left: readonly WorkflowSnapshot[], right: readonly WorkflowSnapshot[], limit: number): WorkflowSnapshot[] {
-  return latestAttempts([...left, ...right]).sort(byCompletion).slice(-limit);
+  const attempts = new Map([...left, ...right].map((run) => [attemptIdentity(run), run]));
+  return [...attempts.values()].sort(byCompletion).slice(-limit);
 }
 
 function headline(snapshot: WorkflowSnapshot, baseline?: WorkflowBaseline, diagnostic?: BaselineDiagnostic): string {

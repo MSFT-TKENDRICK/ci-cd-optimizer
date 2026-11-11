@@ -57,6 +57,25 @@ describe("cicd-mcp arguments", () => {
     await expect(mcpCommand(["--enable-remote", "--root", root], io({ GITHUB_TOKEN: "t" }))).rejects.toThrow("explicit --repo");
     await expect(mcpCommand(["--enable-remote"], io({ GITHUB_TOKEN: "t", GITHUB_SERVER_URL: "https://ghe.example.com" }))).rejects.toThrow("explicit --repo");
   });
+
+  it("only watches with an explicit bounded replay scope and remote authorization", async () => {
+    const since = new Date(Date.now() - 60000).toISOString();
+    const args = ["--enable-remote", "--repo", "a/b", "--watch", "--since", since];
+    expect(await mcpCommand(args, io({ GH_TOKEN: "t" }))).toMatchObject({ feedback: { since } });
+    await expect(mcpCommand(["--watch", "--since", since], io({ GH_TOKEN: "t" }))).rejects.toThrow(/--watch requires/);
+    await expect(mcpCommand(args.slice(0, -1).concat("2000-01-01T00:00:00Z"), io({ GH_TOKEN: "t" }))).rejects.toThrow(/seven days/);
+  });
+
+  it("uses gh credentials only by explicit opt-in and never falls back after failure", async () => {
+    let reads = 0;
+    const input = { ...io({ GH_TOKEN: "ambient" }), githubCliToken: async () => { reads++; return "explicit"; } };
+    await mcpCommand(["--enable-remote", "--repo", "a/b"], input);
+    expect(reads).toBe(0);
+    await mcpCommand(["--enable-remote", "--repo", "a/b", "--github-cli-auth"], input);
+    expect(reads).toBe(1);
+    input.githubCliToken = async () => { throw new Error("No login"); };
+    await expect(mcpCommand(["--enable-remote", "--repo", "a/b", "--github-cli-auth"], input)).rejects.toThrow(/no alternate/);
+  });
 });
 
 describe("cicd-acp arguments", () => {

@@ -175,6 +175,58 @@ describe("explicit bounded GitHub reader", () => {
     await expect(api.request("GET /user")).rejects.toThrow("response budget");
   });
 
+  it("reads job logs as text and follows one authorized storage redirect without credentials", async () => {
+    const calls: string[] = [];
+    const text = "2026-11-11T00:00:00Z ##[error]dist-action is stale\n";
+    const api = githubReader("test-token", { fetch: async (url, init) => {
+      calls.push(String(url));
+      if (calls.length === 1) {
+        expect(init?.redirect).toBe("manual");
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-token");
+        return new Response(null, { status: 302, headers: { location: "https://results.blob.core.windows.net/logs/job?sig=test" } });
+      }
+      expect(init?.redirect).toBe("error");
+      expect(new Headers(init?.headers).has("authorization")).toBe(false);
+      return new Response(text);
+    } });
+    expect(await api.request("GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs", { owner: "acme", repo: "widgets", job_id: 1 }))
+      .toMatchObject({ data: text });
+    expect(calls).toHaveLength(2);
+    const direct = githubReader("token", { fetch: async () => new Response(text) });
+    expect((await direct.request("GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs", { owner: "acme", repo: "widgets", job_id: 1 })).data).toBe(text);
+  });
+
+  it.each([
+    "https://evil.example/log", "http://results.blob.core.windows.net/log", "https://results.blob.core.windows.net.evil.example/log",
+    "https://user:pass@results.blob.core.windows.net/log", "https://results.blob.core.windows.net:444/log", "not a URL",
+  ])("rejects unsafe log redirects: %s", async (location) => {
+    let calls = 0;
+    const api = githubReader("token", { fetch: async () => {
+      calls += 1;
+      return new Response(null, { status: 302, headers: { location } });
+    } });
+    await expect(api.request("GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs", { owner: "acme", repo: "widgets", job_id: 1 }))
+      .rejects.toThrow(/log download/);
+    expect(calls).toBe(1);
+  });
+
+  it("applies the same byte and deadline budgets to downloaded log bodies", async () => {
+    const api = githubReader("token", { responseBytes: 16, fetch: async (url) =>
+      new URL(String(url)).hostname === "api.github.com"
+        ? new Response(null, { status: 302, headers: { location: "https://results.blob.core.windows.net/log" } })
+        : new Response("x".repeat(17)) });
+    await expect(api.request("GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs", { owner: "acme", repo: "widgets", job_id: 1 }))
+      .rejects.toThrow("response budget");
+    let cancelled = false;
+    const stalled = githubReader("token", { timeoutMs: 20, fetch: async (url) =>
+      new URL(String(url)).hostname === "api.github.com"
+        ? new Response(null, { status: 302, headers: { location: "https://results.blob.core.windows.net/log" } })
+        : new Response(new ReadableStream({ cancel() { cancelled = true; } })) });
+    await expect(stalled.request("GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs", { owner: "acme", repo: "widgets", job_id: 1 }))
+      .rejects.toMatchObject({ name: "TimeoutError" });
+    expect(cancelled).toBe(true);
+  });
+
   it("aborts stalled response bodies, parent cancellation, and excessive request counts", async () => {
     let cancelled = false;
     const stalled = githubReader("token", { timeoutMs: 20, fetch: async () => new Response(new ReadableStream({ cancel() { cancelled = true; } })) });

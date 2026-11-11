@@ -23,12 +23,13 @@ export async function runMcp(argv: string[]): Promise<void> {
     else if (command.kind === "version") process.stdout.write(`${VERSION}\n`);
     else {
       for (const notice of command.notices) process.stderr.write(`cicd-mcp: ${notice}\n`);
-      const { root, fallbackRoot, pluginRoot, remote } = command;
+      const { root, fallbackRoot, pluginRoot, remote, feedback } = command;
       const server = createMcpServer({
         ...(root ? { root } : {}),
         fallbackRoot,
         ...(pluginRoot ? { pluginRoot } : {}),
         ...(remote ? { remote } : {}),
+        ...(feedback ? { feedback } : {}),
       });
       const stop = () => void server.close().finally(() => process.exit(0));
       process.once("SIGINT", stop);

@@ -17,7 +17,7 @@ export interface JobSnapshot {
   completedAt: string;
   durationMs: number;
   needs: string[];
-  /** When the job became ready to run; `startedAt - queuedAt` is time spent waiting for a runner. */
+  /** GitHub job creation time; may include dependency waiting. Use readyQueueMs to subtract known dependencies. */
   queuedAt?: string;
   queueMs?: number;
   runnerName?: string;
@@ -47,6 +47,8 @@ export interface WorkflowSnapshot {
   durationMs: number;
   htmlUrl?: string;
   jobs: JobSnapshot[];
+  /** Persisted classification, not an assertion that all failed-run work could have been avoided. */
+  failureAnalysis?: { categories: string[]; jobsWithLogs: number; jobs: number };
   provenance?: {
     version: 1;
     collector: "github-actions-rest";

@@ -1,0 +1,22 @@
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+  push:
+    paths: [.github/workflows/copilot-setup-steps.yml, scripts/agent-startup.mjs]
+  pull_request:
+    paths: [.github/workflows/copilot-setup-steps.yml, scripts/agent-startup.mjs]
+
+permissions:
+  contents: read
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: npm run formal:setup
+      - name: Configure the harness-owned MCP feed without storing credentials
+        run: node scripts/agent-startup.mjs --repo "$GITHUB_REPOSITORY" --auth environment --install-hooks

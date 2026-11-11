@@ -1,0 +1,9 @@
+{
+  "name": "CI/CD Optimizer development",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "npm ci --no-audit --no-fund && npm run formal:setup",
+  "postStartCommand": "node scripts/agent-startup.mjs --repo MSFT-TKENDRICK/ci-cd-optimizer --auth github-cli --install-hooks"
+}
