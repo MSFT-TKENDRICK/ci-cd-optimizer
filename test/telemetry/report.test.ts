@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeBaseline, median } from "../../src/telemetry/baseline.js";
+import { attributeRun } from "../../src/telemetry/attribution.js";
 import { calculateCriticalPath, createTelemetryReport } from "../../src/telemetry/report.js";
 import { MemoryTelemetryStore } from "../../src/telemetry/store.js";
 import type { WorkflowSnapshot } from "../../src/telemetry/types.js";
@@ -60,6 +61,15 @@ describe("workflow telemetry", () => {
     expect(report).toContain("gantt");
     expect(report).toContain("flowchart LR");
     expect(report).toContain("build → test");
+  });
+
+  it("reports bounded bottleneck evidence and explicit coverage gaps", () => {
+    const attribution = attributeRun(snapshot);
+    const report = createTelemetryReport(snapshot, undefined, { attribution });
+    expect(report).toContain("### Bottleneck evidence");
+    expect(report).toContain("Savings are evidence-based upper bounds");
+    expect(report).toContain("#### Evidence coverage gaps");
+    expect(report).toContain("log-not-fetched");
   });
 
   it("persists and compares historical snapshots", async () => {
@@ -124,5 +134,21 @@ describe("workflow telemetry", () => {
     expect(report.slice(report.indexOf("### Jobs slower than baseline"))).not.toContain("| Test |");
     expect(report).toContain("waited over a minute for a runner");
     expect(report).toContain("`ubuntu-latest`");
+  });
+
+  it("explains a missing baseline and flags per-job regressions only with enough samples", () => {
+    const diagnostic = { examined: 5, eligible: 2, comparable: 0, excluded: { "job-set-changed": 2, unsuccessful: 3 } };
+    const enough = [{ key: "build", name: "Build", sampleCount: 3, medianDurationMs: 20_000 }];
+    const report = createTelemetryReport(snapshot, undefined, { diagnostic, jobBaselines: enough });
+    expect(report).toContain("No run-level baseline: 5 earlier run(s) examined, 0 comparable.\n\n- 3 excluded — The workflow did not complete successfully.\n- 2 excluded — The workflow's job set");
+    expect(report).toContain("| Build | 1m 0s | 20s | 3 | +40s |");
+    expect(report).toContain("### Jobs slower than baseline");
+    const thin = createTelemetryReport(snapshot, undefined, { diagnostic, jobBaselines: [{ ...enough[0]!, sampleCount: 2 }] });
+    expect(thin).toContain("### Per-job history");
+    expect(thin).not.toContain("### Jobs slower than baseline");
+    expect(createTelemetryReport(snapshot, undefined, { diagnostic: { examined: 0, eligible: 0, comparable: 0, excluded: {} } }))
+      .toContain("No comparable historical baseline is available in the retained/backfilled evidence window. No earlier runs of this workflow were found.");
+    expect(createTelemetryReport(snapshot, { sampleCount: 1, medianDurationMs: 100_000, medianQueueMs: 0, jobs: {} }, { jobBaselines: enough }))
+      .not.toContain("### Per-job history");
   });
 });

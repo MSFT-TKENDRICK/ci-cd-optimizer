@@ -1,5 +1,6 @@
 import type { JobModel, WorkflowModel } from "../../parsers/workflow.js";
 import { anyUses, commandWords } from "../caching/shared.js";
+import { jobBuilds, siteDockerfile, type BuildSite } from "../containers/buildx.js";
 import { commandsOf, defineRule } from "../helpers.js";
 import { stable, workingDirectory } from "./shared.js";
 
@@ -32,9 +33,9 @@ export default defineRule({
   meta: {
     id: "redundancy/rebuild-per-job",
     ruleset: "redundancy",
-    description: "Several jobs in a workflow should not each rebuild the same project from scratch.",
+    description: "Repeated builds across CI jobs and workflows should be assessed for verified artifact or layer reuse.",
     rationale:
-      "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.",
+      "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. The same Dockerfile declared in different workflows is also only a reuse candidate: triggers, revisions, inputs, targets and platforms may differ. Where consumers can safely share a verified immutable artifact or cached layers, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["agentic", "strict"],
@@ -86,6 +87,33 @@ export default defineRule({
           related: others.map((entry) => ({ path: workflow.path, line: entry.line })),
         });
       }
+    }
+    const containerBuilds = new Map<string, Map<string, BuildSite>>();
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        for (const site of jobBuilds(workflow, job)) {
+          const dockerfile = siteDockerfile(project, site);
+          if (!dockerfile) continue;
+          const sites = containerBuilds.get(dockerfile.path) ?? new Map<string, BuildSite>();
+          if (!sites.has(workflow.path)) sites.set(workflow.path, site);
+          containerBuilds.set(dockerfile.path, sites);
+        }
+      }
+    }
+    for (const [dockerfile, sites] of containerBuilds) {
+      if (sites.size < 2) continue;
+      const [first, ...others] = [...sites.values()].sort((a, b) => a.workflow.path.localeCompare(b.workflow.path));
+      if (!first) continue;
+      report({
+        path: first.workflow.path,
+        line: first.command?.line ?? first.step.line,
+        key: `container-reuse.${dockerfile}`,
+        message: `\`${dockerfile}\` is declared as a build input in ${sites.size} workflows; review cross-workflow artifact or layer reuse.`,
+        suggestion:
+          "Compare the commit, context, target, platform, build arguments, conditions, and side effects before reusing an immutable image by digest. When final images must differ, assess a shared remote layer cache with compatible inputs and trust boundaries. No savings have been measured; validate behavior and measure transfer costs before removing any build.",
+        confidence: "low",
+        related: others.map((site) => ({ path: site.workflow.path, line: site.command?.line ?? site.step.line })),
+      });
     }
   },
 });

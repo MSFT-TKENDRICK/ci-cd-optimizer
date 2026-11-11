@@ -7,11 +7,12 @@ import type { IssueAction, SkippedIssue } from "../issues/plan.js";
 import type { LintConfig } from "../lint/config.js";
 import { computeBaseline } from "../telemetry/baseline.js";
 import { byCompletion, latestAttempts } from "../telemetry/history.js";
-import { comparableHistory, comparisonKey } from "../telemetry/context.js";
+import { comparableHistory, comparisonKey, diagnoseBaseline, jobBaselines, jobHistoryApplies, summarizeBaselineGap, thinJobHistory } from "../telemetry/context.js";
+import { attributeRun, collectJobLogs, type RunAttribution } from "../telemetry/attribution.js";
 import { createTelemetryReport } from "../telemetry/report.js";
 import { buildWorkflowSnapshot, loadJobDefinitions, loadRunHistory, type WorkflowRunPayload } from "../telemetry/snapshot.js";
 import type { TelemetryStore } from "../telemetry/store.js";
-import type { WorkflowBaseline, WorkflowSnapshot } from "../telemetry/types.js";
+import type { BaselineDiagnostic, JobBaseline, WorkflowBaseline, WorkflowSnapshot } from "../telemetry/types.js";
 import { matchesGlob } from "../utils.js";
 import { publishCheck, TELEMETRY_CHECK_PREFIX } from "./checks.js";
 import type { KnowledgeStore } from "../knowledge/types.js";
@@ -44,6 +45,12 @@ export interface WorkflowRunResult {
   checkRunId?: number;
   knowledge?: RunKnowledge;
   knowledgeSkipped?: "invalid-config";
+  /** Why earlier runs were or were not usable as a run-level baseline (mutable history path only). */
+  baselineDiagnostic?: BaselineDiagnostic;
+  /** Per-job medians that survive unrelated job-set changes (mutable history path only). */
+  jobBaselines?: JobBaseline[];
+  attribution?: RunAttribution;
+  attributionUnavailable?: string;
 }
 
 const PULL_REQUEST_EVENTS = new Set(["pull_request", "pull_request_target"]);
@@ -101,10 +108,26 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
   }
   const prior = (knowledgeComparison?.history ?? comparableHistory(history, snapshot)).sort(byCompletion).slice(-historyLimit(config));
   const baseline = computeBaseline(prior, snapshot);
-  const report = createTelemetryReport(snapshot, baseline) + (knowledge ? describeRunKnowledge(knowledge) : "") +
+  // The durable knowledge path reports its own per-run exclusions and per-job distributions.
+  const diagnostic = knowledgeComparison ? undefined : diagnoseBaseline(history, snapshot);
+  const jobs = knowledgeComparison ? [] : jobBaselines(history, snapshot, historyLimit(config));
+  const attributionReady = snapshot.provenance?.jobsComplete === true && snapshot.provenance.definitionKnown;
+  const attributionUnavailable = attributionReady
+    ? undefined
+    : "Bottleneck attribution was withheld because the Actions job inventory or workflow job definitions are incomplete.";
+  const attribution = attributionReady ? attributeRun(snapshot, await collectJobLogs(client, repo, snapshot)) : undefined;
+  const report = createTelemetryReport(snapshot, baseline, {
+    ...(diagnostic ? { diagnostic } : {}),
+    jobBaselines: jobs,
+    ...(attribution ? { attribution } : {}),
+    ...(attributionUnavailable ? { attributionUnavailable } : {}),
+  }) +
+    (knowledge ? describeRunKnowledge(knowledge) : "") +
     (knowledgeSkipped ? "\n\nProject declaration collection was skipped because the repository configuration is invalid." : "");
   const result: WorkflowRunResult = {
     status: "processed", snapshot, samples: prior.length, report, ...(baseline ? { baseline } : {}),
+    ...(diagnostic ? { baselineDiagnostic: diagnostic } : {}), ...(jobs.length ? { jobBaselines: jobs } : {}),
+    ...(attribution ? { attribution } : {}), ...(attributionUnavailable ? { attributionUnavailable } : {}),
     ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}),
   };
 
@@ -143,7 +166,7 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
       name: `${TELEMETRY_CHECK_PREFIX} (${snapshot.workflowName})`,
       headSha: snapshot.headSha,
       conclusion: "neutral",
-      title: headline(snapshot, baseline),
+      title: headline(snapshot, baseline, diagnostic),
       summary: report,
       ...(snapshot.htmlUrl ? { detailsUrl: snapshot.htmlUrl } : {}),
     });
@@ -166,18 +189,20 @@ async function loadHistory(
 ): Promise<WorkflowSnapshot[]> {
   const query = { owner: repo.owner, repo: repo.repo, workflowId: snapshot.workflowId, branch: snapshot.branch, limit: Math.max(200, limit + 1) };
   const backfill = () => loadRunHistory(client, repo, { workflowId: snapshot.workflowId, branch: snapshot.branch, limit, excludeRunId: run.id });
+  // History also serves baseline diagnostics and per-job baselines, so it is loaded even when the run-level
+  // comparison key is unavailable; backfill only when a run- or job-level comparison could still use it.
+  const comparable = comparisonKey(snapshot) !== undefined || jobHistoryApplies(snapshot);
+  const thin = (items: readonly WorkflowSnapshot[]) =>
+    (comparisonKey(snapshot) !== undefined && comparableHistory(items, snapshot).length < minSamples) || thinJobHistory(items, snapshot, minSamples);
   const store = options.store;
-  if (!store) return !immutableHistory && comparisonKey(snapshot) ? merge(await backfill(), [snapshot], limit + 1) : [snapshot];
+  if (!store) return !immutableHistory && comparable ? merge(await backfill(), [snapshot], limit + 1) : [snapshot];
   if (!options.dryRun) await store.save(snapshot);
-  if (!comparisonKey(snapshot)) {
-    return latestAttempts([...(await store.history({ ...query, runId: snapshot.runId, limit: 1 })), snapshot]);
-  }
   const [current, stored] = await Promise.all([
     store.history({ ...query, runId: snapshot.runId, limit: 1 }),
     store.history(query),
   ]);
   let history = stored;
-  if (!immutableHistory && comparisonKey(snapshot) && comparableHistory(history, snapshot).length < minSamples) {
+  if (!immutableHistory && comparable && thin(history)) {
     const fetched = await backfill();
     if (!options.dryRun) for (const item of fetched) await store.save(item);
     history = merge(history, fetched, query.limit);
@@ -189,9 +214,9 @@ function merge(left: readonly WorkflowSnapshot[], right: readonly WorkflowSnapsh
   return latestAttempts([...left, ...right]).sort(byCompletion).slice(-limit);
 }
 
-function headline(snapshot: WorkflowSnapshot, baseline?: WorkflowBaseline): string {
+function headline(snapshot: WorkflowSnapshot, baseline?: WorkflowBaseline, diagnostic?: BaselineDiagnostic): string {
   const minutes = (snapshot.durationMs / 60_000).toFixed(1);
-  if (!baseline || baseline.medianDurationMs === 0) return `${minutes} min (no baseline yet)`;
+  if (!baseline || baseline.medianDurationMs === 0) return `${minutes} min (${summarizeBaselineGap(diagnostic)})`;
   const delta = ((snapshot.durationMs - baseline.medianDurationMs) / baseline.medianDurationMs) * 100;
   return `${minutes} min (${delta >= 0 ? "+" : ""}${delta.toFixed(0)}% vs ${baseline.sampleCount}-run median)`;
 }

@@ -13,7 +13,7 @@ npm run cli -- lint . -c .github/ci-cd-optimizer.yml   # validates the file as p
 schemaVersion: 1
 enabled: true
 
-# Presets: recommended (default), strict, agentic, github, insights, all. Later presets add rules.
+# Presets: recommended (default), strict, agentic, github, insights, ssdf, all. Later presets add rules.
 extends: [recommended, agentic]
 
 # Set every rule in a ruleset at once: off | info | warn | error.
@@ -52,6 +52,7 @@ Presets:
 | `strict` | Stricter hermeticity and checkout hygiene, such as SHA-pinned actions and sparse checkout everywhere. |
 | `github` | Recommends GHCR and the GitHub npm registry for organization-wide reuse. |
 | `insights` | Architecture signals: monolith decomposition, shared base images. |
+| `ssdf` | Opt-in repository-visible evidence checks for NIST SP 800-218 SSDF v1.1. See [SSDF evidence reporting](ssdf.md). |
 | `all` | Every rule. |
 
 Rule options and defaults are listed per rule in [rules.md](rules.md). Generated gh-aw `.lock.yml` workflows are

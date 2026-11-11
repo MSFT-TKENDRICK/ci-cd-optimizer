@@ -9,12 +9,13 @@ import { rules as packages } from "./packages/index.js";
 import { rules as redundancy } from "./redundancy/index.js";
 import { rules as registries } from "./registries/index.js";
 import { rules as security } from "./security/index.js";
+import { rules as ssdf } from "./ssdf/index.js";
 import { rules as testing } from "./testing/index.js";
 import { rules as toolchains } from "./toolchains/index.js";
 import { rules as triggers } from "./triggers/index.js";
 import { rules as workflow } from "./workflow/index.js";
 
-export const RULESETS = ["workflow", "checkout", "affected", "caching", "hermeticity", "containers", "packages", "registries", "security", "triggers", "redundancy", "testing", "nix", "toolchains"] as const;
+export const RULESETS = ["workflow", "checkout", "affected", "caching", "hermeticity", "containers", "packages", "registries", "security", "ssdf", "triggers", "redundancy", "testing", "nix", "toolchains"] as const;
 
 export const allRules: AnyRule[] = [
   ...workflow,
@@ -26,6 +27,7 @@ export const allRules: AnyRule[] = [
   ...packages,
   ...registries,
   ...security,
+  ...ssdf,
   ...triggers,
   ...redundancy,
   ...testing,

@@ -1970,7 +1970,7 @@ ${indent}${line2}` : "\n";
           str2 += ",";
         } else if (ctx.options.trailingComma) {
           if (ctx.options.lineWidth > 0) {
-            reqNewline || (reqNewline = lines.reduce((sum, line2) => sum + line2.length + 2, 2) + (str2.length + 2) > ctx.options.lineWidth);
+            reqNewline || (reqNewline = lines.reduce((sum2, line2) => sum2 + line2.length + 2, 2) + (str2.length + 2) > ctx.options.lineWidth);
           }
           if (reqNewline) {
             str2 += ",";
@@ -1986,7 +1986,7 @@ ${indent}${line2}` : "\n";
         return start + end;
       } else {
         if (!reqNewline) {
-          const len = lines.reduce((sum, line2) => sum + line2.length + 2, 2);
+          const len = lines.reduce((sum2, line2) => sum2 + line2.length + 2, 2);
           reqNewline = ctx.options.lineWidth > 0 && len > ctx.options.lineWidth;
         }
         if (reqNewline) {
@@ -10476,13 +10476,13 @@ var CC_SANITIZE = /[- ]/g;
 function isLuhnAlgo(digits) {
   let length = digits.length;
   let bit = 1;
-  let sum = 0;
+  let sum2 = 0;
   while (length) {
     const value = digits.charCodeAt(--length) - 48;
     bit ^= 1;
-    sum += bit ? [0, 2, 4, 6, 8, 1, 3, 5, 7, 9][value] : value;
+    sum2 += bit ? [0, 2, 4, 6, 8, 1, 3, 5, 7, 9][value] : value;
   }
-  return sum % 10 === 0;
+  return sum2 % 10 === 0;
 }
 function isValidCreditCard(input3) {
   if (!creditCard.test(input3))
@@ -37245,13 +37245,13 @@ var require_util = /* @__PURE__ */ __commonJSMin(((exports) => {
     const { opts, self } = it;
     if (!opts.strictSchema) return;
     if (typeof schema === "boolean") return;
-    const rules15 = self.RULES.keywords;
-    for (const key in schema) if (!rules15[key]) checkStrictMode(it, `unknown keyword: "${key}"`);
+    const rules16 = self.RULES.keywords;
+    for (const key in schema) if (!rules16[key]) checkStrictMode(it, `unknown keyword: "${key}"`);
   }
   exports.checkUnknownRules = checkUnknownRules;
-  function schemaHasRules(schema, rules15) {
+  function schemaHasRules(schema, rules16) {
     if (typeof schema == "boolean") return !schema;
-    for (const key in schema) if (rules15[key]) return true;
+    for (const key in schema) if (rules16[key]) return true;
     return false;
   }
   exports.schemaHasRules = schemaHasRules;
@@ -38499,9 +38499,9 @@ var require_validate = /* @__PURE__ */ __commonJSMin(((exports) => {
     if (ts.length > 1 && !(ts.length === 2 && ts.includes("null"))) strictTypesError(it, "use allowUnionTypes to allow union type keyword");
   }
   function checkKeywordTypes(it, ts) {
-    const rules15 = it.self.RULES.all;
-    for (const keyword in rules15) {
-      const rule = rules15[keyword];
+    const rules16 = it.self.RULES.all;
+    for (const keyword in rules16) {
+      const rule = rules16[keyword];
       if (typeof rule == "object" && (0, applicability_1.shouldUseRule)(it.schema, rule)) {
         const { type } = rule.definition;
         if (type.length && !type.some((t) => hasApplicableType(ts, t))) strictTypesError(it, `missing type "${type.join(",")}" for keyword "${keyword}"`);
@@ -40260,14 +40260,14 @@ var require_core$3 = /* @__PURE__ */ __commonJSMin(((exports) => {
       return errors.map((e) => `${dataVar}${e.instancePath} ${e.message}`).reduce((text4, msg) => text4 + separator + msg);
     }
     $dataMetaSchema(metaSchema, keywordsJsonPointers) {
-      const rules15 = this.RULES.all;
+      const rules16 = this.RULES.all;
       metaSchema = JSON.parse(JSON.stringify(metaSchema));
       for (const jsonPointer of keywordsJsonPointers) {
         const segments = jsonPointer.split("/").slice(1);
         let keywords = metaSchema;
         for (const seg of segments) keywords = keywords[seg];
-        for (const key in rules15) {
-          const rule = rules15[key];
+        for (const key in rules16) {
+          const rule = rules16[key];
           if (typeof rule != "object") continue;
           const { $data } = rule.definition;
           const schema = keywords[key];
@@ -45870,9 +45870,9 @@ function clone2(configObject) {
     };
   })();
   BigNumber2.sum = function() {
-    var i = 1, args = arguments, sum = new BigNumber2(args[0]);
-    for (; i < args.length; ) sum = sum.plus(args[i++]);
-    return sum;
+    var i = 1, args = arguments, sum2 = new BigNumber2(args[0]);
+    for (; i < args.length; ) sum2 = sum2.plus(args[i++]);
+    return sum2;
   };
   convertBase = /* @__PURE__ */ (function() {
     var decimal = "0123456789";
@@ -49879,7 +49879,7 @@ function durationPolicyProblems(config2) {
 
 // src/lint/config.ts
 var CONFIG_PATHS = [".github/ci-cd-optimizer.yml", ".github/ci-cd-optimizer.yaml"];
-var PRESETS = ["recommended", "strict", "agentic", "github", "insights", "all"];
+var PRESETS = ["recommended", "strict", "agentic", "github", "insights", "ssdf", "all"];
 var SEVERITIES = ["off", "info", "warn", "error"];
 var IMPACTS = ["low", "medium", "high"];
 var DEPRECATED_RULE_IDS = {
@@ -50053,11 +50053,11 @@ function migrateLegacyConfig(raw) {
   if (!legacyKeys.some((key) => key in raw)) return void 0;
   const migrated = { ...raw };
   if (Array.isArray(raw.disabledRules)) {
-    const rules15 = isRecord2(raw.rules) ? { ...raw.rules } : {};
+    const rules16 = isRecord2(raw.rules) ? { ...raw.rules } : {};
     for (const id of raw.disabledRules) {
-      if (typeof id === "string") rules15[DEPRECATED_RULE_IDS[id] ?? id] = "off";
+      if (typeof id === "string") rules16[DEPRECATED_RULE_IDS[id] ?? id] = "off";
     }
-    migrated.rules = rules15;
+    migrated.rules = rules16;
   }
   if ("failOnSeverity" in raw) {
     const map2 = { high: "error", medium: "warn", low: "info", never: "never" };
@@ -50074,7 +50074,7 @@ function migrateLegacyConfig(raw) {
   for (const key of legacyKeys) delete migrated[key];
   return migrated;
 }
-function validateConfig(input3, rules15) {
+function validateConfig(input3, rules16) {
   const v = new Validator();
   if (input3 === void 0 || input3 === null) return { config: structuredClone(DEFAULT_CONFIG), problems: [], migrated: false };
   if (!isRecord2(input3)) {
@@ -50102,8 +50102,8 @@ function validateConfig(input3, rules15) {
   if (raw.schemaVersion !== void 0 && raw.schemaVersion !== 1) {
     v.problem("schemaVersion", `Unsupported schemaVersion ${String(raw.schemaVersion)}; expected 1.`);
   }
-  const ruleIds = rules15.map((rule) => rule.meta.id);
-  const rulesetNames = [...new Set(rules15.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules16.map((rule) => rule.meta.id);
+  const rulesetNames = [...new Set(rules16.map((rule) => rule.meta.ruleset))];
   const config2 = structuredClone(DEFAULT_CONFIG);
   if (raw.localRules !== void 0) {
     if (Array.isArray(raw.localRules) && raw.localRules.every((entry2) => typeof entry2 === "string")) {
@@ -50112,7 +50112,7 @@ function validateConfig(input3, rules15) {
       v.problem("localRules", "Expected a list of repository-relative .js or .mjs paths.");
     }
   }
-  const skipLocal = config2.localRules.length > 0 && !rules15.some((rule) => rule.meta.ruleset === "local");
+  const skipLocal = config2.localRules.length > 0 && !rules16.some((rule) => rule.meta.ruleset === "local");
   const isSkippedLocal = (id) => skipLocal && id.startsWith("local/");
   config2.enabled = v.boolean("enabled", raw.enabled, true);
   config2.extends = v.strings("extends", raw.extends, DEFAULT_CONFIG.extends).filter((preset, index) => {
@@ -50132,7 +50132,7 @@ function validateConfig(input3, rules15) {
     const id = DEPRECATED_RULE_IDS[rawId] ?? rawId;
     if (isSkippedLocal(id)) continue;
     if (id !== rawId) v.problem(`rules.${rawId}`, `Rule "${rawId}" is deprecated; use "${id}".`);
-    const rule = rules15.find((candidate) => candidate.meta.id === id);
+    const rule = rules16.find((candidate) => candidate.meta.id === id);
     if (!rule) {
       v.problem(`rules.${rawId}`, `Unknown rule "${rawId}".${didYouMean(rawId, ruleIds)}`);
       continue;
@@ -50262,7 +50262,7 @@ function validateConfig(input3, rules15) {
   v.problems.push(...durationPolicyProblems(config2.durations));
   return { config: config2, problems: v.problems, migrated: legacy !== void 0 };
 }
-function parseConfigText(text4, rules15, path = CONFIG_PATHS[0] ?? "config") {
+function parseConfigText(text4, rules16, path = CONFIG_PATHS[0] ?? "config") {
   let raw;
   try {
     raw = (0, import_yaml.parse)(text4, { maxAliasCount: 100 });
@@ -50273,11 +50273,11 @@ function parseConfigText(text4, rules15, path = CONFIG_PATHS[0] ?? "config") {
       migrated: false
     };
   }
-  return validateConfig(raw, rules15);
+  return validateConfig(raw, rules16);
 }
-function resolveRules(config2, rules15, presetOverride) {
+function resolveRules(config2, rules16, presetOverride) {
   const presets = presetOverride ?? config2.extends;
-  return rules15.flatMap((rule) => {
+  return rules16.flatMap((rule) => {
     const setting = config2.rules[rule.meta.id];
     const level2 = resolveSeverity([
       ...presets.map((preset) => preset === "all" || rule.meta.presets.includes(preset) ? rule.meta.defaultSeverity : void 0),
@@ -50440,6 +50440,9 @@ function isInventoryPath(path) {
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
   if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
   if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;
+  if (/^(?:\.github\/|docs\/)?CODEOWNERS$/.test(path)) return true;
+  if (/^(?:SECURITY\.md|\.github\/SECURITY\.md|docs\/SECURITY\.md)$/.test(path)) return true;
+  if (/^\.github\/ISSUE_TEMPLATE\/[^/]+(?:\.ya?ml|\.md)$/i.test(path)) return true;
   if (/(^|\/)\.cargo\/config(\.toml)?$/.test(path) || /(^|\/)gradle\/wrapper\/gradle-wrapper\.properties$/.test(path)) return true;
   const name = path.slice(path.lastIndexOf("/") + 1);
   if (BASENAMES.has(name)) return true;
@@ -51547,14 +51550,14 @@ var test_selection_default = defineRule({
         if (skipsPullRequests(job)) continue;
         for (const entry2 of jobCommands(project, workflow, job)) {
           if (skipsPullRequests(entry2.owner) || skipsPullRequests(entry2.step)) continue;
-          const finding2 = detect(project, entry2.command);
-          if (!finding2) continue;
+          const finding3 = detect(project, entry2.command);
+          if (!finding3) continue;
           report({
             path: entry2.path,
             line: entry2.line,
-            key: `${entry2.owner.key}:${finding2.tool}`,
-            message: `\`${finding2.tool}\` runs ${finding2.what} on every pull request instead of only what the change affects.`,
-            suggestion: finding2.suggestion
+            key: `${entry2.owner.key}:${finding3.tool}`,
+            message: `\`${finding3.tool}\` runs ${finding3.what} on every pull request instead of only what the change affects.`,
+            suggestion: finding3.suggestion
           });
         }
       }
@@ -52657,21 +52660,21 @@ var setup_cache_default = defineRule({
         const all = project.expandedSteps(job);
         for (const step of job.steps) {
           const before = all.slice(0, Math.max(0, all.indexOf(step)));
-          let finding2;
-          if (usesAction(step, "actions/setup-node")) finding2 = checkNode(project, step, before, all, file2);
-          else if (usesAction(step, "actions/setup-python")) finding2 = checkPython(project, step, before, all);
-          else if (usesAction(step, "actions/setup-java")) finding2 = checkJava(project, step, all);
-          else if (usesAction(step, "actions/setup-go")) finding2 = checkGo(step, all);
-          else if (usesAction(step, "actions/setup-dotnet")) finding2 = checkDotnet(project, step, all);
-          if (!finding2) continue;
-          const autofix = finding2.fixValue ? cacheFix(file2, step, finding2.fixValue) : void 0;
+          let finding3;
+          if (usesAction(step, "actions/setup-node")) finding3 = checkNode(project, step, before, all, file2);
+          else if (usesAction(step, "actions/setup-python")) finding3 = checkPython(project, step, before, all);
+          else if (usesAction(step, "actions/setup-java")) finding3 = checkJava(project, step, all);
+          else if (usesAction(step, "actions/setup-go")) finding3 = checkGo(step, all);
+          else if (usesAction(step, "actions/setup-dotnet")) finding3 = checkDotnet(project, step, all);
+          if (!finding3) continue;
+          const autofix = finding3.fixValue ? cacheFix(file2, step, finding3.fixValue) : void 0;
           report({
             path: workflow.path,
-            line: finding2.line ?? step.uses?.line ?? step.line,
+            line: finding3.line ?? step.uses?.line ?? step.line,
             key: `${step.key}:no-cache`,
-            message: finding2.message,
-            suggestion: finding2.suggestion,
-            ...finding2.impact ? { impact: finding2.impact } : {},
+            message: finding3.message,
+            suggestion: finding3.suggestion,
+            ...finding3.impact ? { impact: finding3.impact } : {},
             ...autofix ? { fix: autofix } : {}
           });
         }
@@ -53867,10 +53870,10 @@ var buildx_load_multiplatform_default = defineRule({
         if (runner === void 0 || customDaemon(job)) continue;
         const native = runnerArch(job) === "arm64" ? "linux/arm64" : "linux/amd64";
         for (const site of jobBuilds(workflow, job)) {
-          const finding2 = inspect(site);
-          if (!finding2) continue;
-          const nativeBuild = finding2.platforms.find((platform) => archOf(platform) === archOf(native)) ?? native;
-          const others = finding2.platforms.join(",");
+          const finding3 = inspect(site);
+          if (!finding3) continue;
+          const nativeBuild = finding3.platforms.find((platform) => archOf(platform) === archOf(native)) ?? native;
+          const others = finding3.platforms.join(",");
           const snippet2 = site.command ? [
             `${site.command.build.invocation} --platform ${nativeBuild} --load -t app:test .`,
             `${site.command.build.invocation} --platform ${others} --push -t <registry>/<image>:<tag> .`
@@ -53888,9 +53891,9 @@ var buildx_load_multiplatform_default = defineRule({
           ].join("\n");
           report({
             path: workflow.path,
-            line: finding2.line,
-            key: `${job.key}:${site.step.key}:load-multiplatform:${finding2.line}`,
-            message: `\`${finding2.load}\` with ${finding2.platforms.length} platforms (\`${others}\`) on \`${runner}\` requires a multi-platform-compatible Docker image store/exporter. If the daemon still uses the classic image store, loading fails; verify the actual daemon rather than inferring it from the runner label.`,
+            line: finding3.line,
+            key: `${job.key}:${site.step.key}:load-multiplatform:${finding3.line}`,
+            message: `\`${finding3.load}\` with ${finding3.platforms.length} platforms (\`${others}\`) on \`${runner}\` requires a multi-platform-compatible Docker image store/exporter. If the daemon still uses the classic image store, loading fails; verify the actual daemon rather than inferring it from the runner label.`,
             suggestion: `Load only the native platform for testing and push the multi-platform image separately:
 ${snippet2}
 Or enable the containerd image store before building:
@@ -54250,7 +54253,7 @@ function commandFindings(text4) {
 }
 function findings(text4) {
   return splitShellCommands(text4).flatMap(
-    ({ command: command2, offset }) => commandFindings(command2).map((finding2) => ({ ...finding2, offset: offset + finding2.offset }))
+    ({ command: command2, offset }) => commandFindings(command2).map((finding3) => ({ ...finding3, offset: offset + finding3.offset }))
   );
 }
 function clean(text4) {
@@ -54259,13 +54262,13 @@ function clean(text4) {
 function newlines(text4) {
   return text4.match(/\n/g)?.length ?? 0;
 }
-function describe4(finding2) {
-  const source = finding2.url ? `${finding2.url.startsWith("http://") ? "over plain HTTP from " : "from "}\`${finding2.url}\`` : "from the network";
-  const command2 = finding2.command.length > 120 ? `${finding2.command.slice(0, 117)}...` : finding2.command;
-  return `\`${command2}\` executes a script downloaded ${source} with \`${finding2.interpreter}\` without verifying a checksum or signature`;
+function describe4(finding3) {
+  const source = finding3.url ? `${finding3.url.startsWith("http://") ? "over plain HTTP from " : "from "}\`${finding3.url}\`` : "from the network";
+  const command2 = finding3.command.length > 120 ? `${finding3.command.slice(0, 117)}...` : finding3.command;
+  return `\`${command2}\` executes a script downloaded ${source} with \`${finding3.interpreter}\` without verifying a checksum or signature`;
 }
-function downloadUrl(finding2) {
-  return finding2.url && !/[$`]/.test(finding2.url) ? `'${finding2.url.replace(/'/g, "'\\''")}'` : '"${INSTALLER_URL:?Set the reviewed installer URL}"';
+function downloadUrl(finding3) {
+  return finding3.url && !/[$`]/.test(finding3.url) ? `'${finding3.url.replace(/'/g, "'\\''")}'` : '"${INSTALLER_URL:?Set the reviewed installer URL}"';
 }
 var curl_pipe_shell_default = defineRule({
   meta: {
@@ -54297,18 +54300,18 @@ var curl_pipe_shell_default = defineRule({
           const shell = step.shell ?? job.shell ?? workflow.shell;
           if (shell && /^(pwsh|powershell|cmd|python)\b/i.test(shell.trim())) continue;
           const text4 = clean(step.run.value);
-          for (const finding2 of findings(text4)) {
-            const line2 = runLine(step, finding2.offset);
-            const url2 = downloadUrl(finding2);
+          for (const finding3 of findings(text4)) {
+            const line2 = runLine(step, finding3.offset);
+            const url2 = downloadUrl(finding3);
             report({
               path: workflow.path,
               line: line2,
-              key: `${step.key}:curl-pipe-shell:${line2}:${finding2.offset}`,
-              message: `${describe4(finding2)} before execution: downloaded code receives the permissions and environment available to this step.`,
+              key: `${step.key}:curl-pipe-shell:${line2}:${finding3.offset}`,
+              message: `${describe4(finding3)} before execution: downloaded code receives the permissions and environment available to this step.`,
               suggestion: `Download to a file and execute only after that exact file passes a trusted, pinned checksum. This structural example is not drop-in: preserve the original interpreter, arguments, environment and sourcing semantics:
   curl -fsSLo install.sh ${url2} && \\
   echo "<sha256>  install.sh" | sha256sum -c - && \\
-  ${finding2.interpreter === "eval" ? "sh" : finding2.interpreter} install.sh`,
+  ${finding3.interpreter === "eval" ? "sh" : finding3.interpreter} install.sh`,
               impact: "high",
               confidence: "medium"
             });
@@ -54323,14 +54326,14 @@ var curl_pipe_shell_default = defineRule({
         if (instruction2.keyword !== "RUN") continue;
         const raw = file2.content.slice(lineStart(file2.content, instruction2.line), lineStart(file2.content, instruction2.endLine + 1));
         const text4 = clean(raw.replace(/^(\s*)RUN\b(?:\s+--[a-z-]+(?:=\S*)?)*/i, (match) => " ".repeat(match.length)));
-        for (const finding2 of findings(text4)) {
-          const line2 = instruction2.line + newlines(raw.slice(0, finding2.offset));
-          const url2 = finding2.url ?? "<url>";
+        for (const finding3 of findings(text4)) {
+          const line2 = instruction2.line + newlines(raw.slice(0, finding3.offset));
+          const url2 = finding3.url ?? "<url>";
           report({
             path: model.path,
             line: line2,
-            key: `${model.path}:curl-pipe-shell:${line2}:${finding2.offset}`,
-            message: `${describe4(finding2)} before execution: the build bakes whatever the server returns into the image unless the source independently enforces the payload's identity.`,
+            key: `${model.path}:curl-pipe-shell:${line2}:${finding3.offset}`,
+            message: `${describe4(finding3)} before execution: the build bakes whatever the server returns into the image unless the source independently enforces the payload's identity.`,
             suggestion: `Fetch the script with a trusted pinned checksum before running it. Preserve the original interpreter, arguments and environment; this is a structural example, not a drop-in replacement:
   ADD --checksum=sha256:<sha256> ${JSON.stringify([url2, "/opt/install.sh"])}
   RUN sh /opt/install.sh`,
@@ -55016,7 +55019,7 @@ var gha_cache_mode_min_default = defineRule({
           if (!final) continue;
           const uncached = intermediateStages(model, final).filter((stage) => runCount(stage) > 0);
           if (uncached.length === 0) continue;
-          const runs = uncached.reduce((sum, stage) => sum + runCount(stage), 0);
+          const runs = uncached.reduce((sum2, stage) => sum2 + runCount(stage), 0);
           const stages = uncached.map(stageName).join(", ");
           for (const [index, entry2] of minimal.entries()) {
             const replacement3 = withMaxMode(entry2);
@@ -55840,8 +55843,8 @@ var sleep_polling_health_check_default = defineRule({
           const loop = LOOP.test(step.run.value);
           for (const { command: command2, line: line2 } of commandsOf(step)) {
             if (BACKGROUND.some((pattern) => pattern.test(command2))) background = true;
-            const seconds2 = sleepSeconds(command2);
-            if (background || loop || seconds2 === void 0 || seconds2 < minSeconds) continue;
+            const seconds3 = sleepSeconds(command2);
+            if (background || loop || seconds3 === void 0 || seconds3 < minSeconds) continue;
             const names = unchecked.map(({ service }) => `\`${service.name}\` (\`${service.image.value}\`)`).join(", ");
             const snippets = unchecked.map(
               ({ service, options: existing }) => `  ${service.name}:
@@ -55857,7 +55860,7 @@ ${existing ? `      ${existing.trim().replace(/\s+/g, " ")}
               path: workflow.path,
               line: line2,
               key: `${step.key}:sleep-health:${line2}`,
-              message: `\`${command2.trim()}\` waits a fixed ${seconds2}s in job \`${job.id}\`, whose service container${unchecked.length > 1 ? "s" : ""} ${names} ${unchecked.length > 1 ? "have" : "has"} no explicit workflow \`--health-cmd\`. The image may already have HEALTHCHECK, and the sleep may await something else; verify its purpose before replacing it.`,
+              message: `\`${command2.trim()}\` waits a fixed ${seconds3}s in job \`${job.id}\`, whose service container${unchecked.length > 1 ? "s" : ""} ${names} ${unchecked.length > 1 ? "have" : "has"} no explicit workflow \`--health-cmd\`. The image may already have HEALTHCHECK, and the sleep may await something else; verify its purpose before replacing it.`,
               suggestion: `If the sleep only waits for service readiness, consider an equivalent probe. Preserve existing service environment, ports, credentials and options, and validate slow-start behavior before deleting \`${command2.trim()}\`. Example options to adapt:
 services:
 ${snippets}`,
@@ -58540,12 +58543,12 @@ var builtins_fetchurl_unverified_default = defineRule({
       for (const ident of calls) {
         const arg = callArgument(file2, ident);
         if (!arg) continue;
-        const finding2 = unverified(file2, arg);
-        if (!finding2) continue;
+        const finding3 = unverified(file2, arg);
+        if (!finding3) continue;
         count += 1;
-        const url2 = finding2.url && !finding2.url.interpolated ? finding2.url.value : "<url>";
+        const url2 = finding3.url && !finding3.url.interpolated ? finding3.url.value : "<url>";
         const imported = importer(file2, ident);
-        const label = `\`${ident.text} ${finding2.shown}\``;
+        const label = `\`${ident.text} ${finding3.shown}\``;
         report({
           path: file2.path,
           line: ident.line,
@@ -59347,14 +59350,14 @@ var fake_hash_committed_default = defineRule({
     for (const file2 of lintableNixFiles(project)) {
       if (ignored(file2.path, options.ignorePaths)) continue;
       let count = 0;
-      for (const finding2 of findings2(file2)) {
+      for (const finding3 of findings2(file2)) {
         count += 1;
-        const key = finding2.key ?? "hash";
-        const label = finding2.key ? `\`${finding2.key} = ${finding2.shown}\`` : `\`${finding2.shown}\``;
+        const key = finding3.key ?? "hash";
+        const label = finding3.key ? `\`${finding3.key} = ${finding3.shown}\`` : `\`${finding3.shown}\``;
         const vendor = /^vendor(?:Hash|Sha256)$/.test(key);
         report({
           path: file2.path,
-          line: finding2.line,
+          line: finding3.line,
           message: `${label} matches a well-known placeholder hash. If used as a fixed-output derivation's expected digest, it normally causes a hash mismatch when that derivation is built. Confirm it is not intentional test data and review the fetched content before replacing it.`,
           suggestion: [
             `Build once, independently verify the intended source, then record the reviewed \`got:\` digest from the hash-mismatch error:`,
@@ -59428,19 +59431,19 @@ var fetchgit_missing_rev_default = defineRule({
         if (ident.segments[0] === "builtins" && isShadowed(file2, "builtins")) continue;
         const arg = callArgument(file2, ident);
         if (!arg) continue;
-        const finding2 = unlocked(file2, arg);
-        if (!finding2) continue;
+        const finding3 = unlocked(file2, arg);
+        if (!finding3) continue;
         count += 1;
-        const target = finding2.ref ? `the current tip of \`${finding2.ref}\`, a mutable ref` : "whatever the remote's `HEAD` points to right now";
-        const branch = finding2.ref ?? "<branch>";
-        const url2 = finding2.url.includes("${") ? "<url>" : finding2.url;
+        const target = finding3.ref ? `the current tip of \`${finding3.ref}\`, a mutable ref` : "whatever the remote's `HEAD` points to right now";
+        const branch = finding3.ref ?? "<branch>";
+        const url2 = finding3.url.includes("${") ? "<url>" : finding3.url;
         report({
           path: file2.path,
           line: ident.line,
-          message: `\`${ident.text} ${finding2.shown}\` declares neither \`rev\` nor \`narHash\`, so it selects ${target}. The source can change when that reference moves; cache freshness also depends on \`tarball-ttl\` (1 hour by default). Pure evaluation rejects this unlocked call if demanded; no downstream build difference or cache miss is established.`,
+          message: `\`${ident.text} ${finding3.shown}\` declares neither \`rev\` nor \`narHash\`, so it selects ${target}. The source can change when that reference moves; cache freshness also depends on \`tarball-ttl\` (1 hour by default). Pure evaluation rejects this unlocked call if demanded; no downstream build difference or cache miss is established.`,
           suggestion: [
             `${ident.text} {`,
-            `  url = "${finding2.url}";`,
+            `  url = "${finding3.url}";`,
             `  ref = "${branch}";`,
             `  rev = "<40-character commit from: git ls-remote ${url2} ${branch.startsWith("refs/") ? branch : `refs/heads/${branch}`}>";`,
             "}",
@@ -59511,17 +59514,17 @@ var fetchtarball_no_hash_default = defineRule({
         if (ident.segments[0] === "builtins" && isShadowed(file2, "builtins")) continue;
         const arg = callArgument(file2, ident);
         if (!arg) continue;
-        const finding2 = unpinned(file2, arg);
-        if (!finding2) continue;
+        const finding3 = unpinned(file2, arg);
+        if (!finding3) continue;
         count += 1;
-        const url2 = finding2.url && !finding2.url.interpolated ? finding2.url.value : void 0;
+        const url2 = finding3.url && !finding3.url.interpolated ? finding3.url.value : void 0;
         const commit = url2 ? COMMIT.exec(url2)?.[0] : void 0;
         const problem = commit ? `pins commit ${commit.slice(0, 12)} but declares no expected \`sha256\` for the unpacked bytes` : url2 ? `fetches \`${url2}\` without an expected \`sha256\`; the URL may be immutable, but the expected unpacked bytes are not declared` : "declares no expected `sha256` for the unpacked bytes";
         const targetUrl = url2 ? pinnedUrl(url2) : "https://github.com/<owner>/<repo>/archive/<commit-sha>.tar.gz";
         report({
           path: file2.path,
           line: ident.line,
-          message: `\`${ident.text} ${finding2.shown}\` ${problem}. Cache freshness can depend on \`tarball-ttl\` (1 hour by default); pure evaluation rejects this unpinned call if demanded.`,
+          message: `\`${ident.text} ${finding3.shown}\` ${problem}. Cache freshness can depend on \`tarball-ttl\` (1 hour by default); pure evaluation rejects this unpinned call if demanded.`,
           suggestion: [
             `${ident.text} {`,
             `  url = "${targetUrl}";`,
@@ -61090,18 +61093,18 @@ var import_from_derivation_default = defineRule({
       const findings4 = [...consumerFindings(file2), ...helperFindings(file2)].sort((a, b) => a.offset - b.offset);
       const seen = /* @__PURE__ */ new Map();
       const reported = /* @__PURE__ */ new Set();
-      for (const finding2 of findings4) {
-        if (reported.has(finding2.offset) || allowed(file2.path, [finding2.name, finding2.name.split(".").at(-1) ?? ""], options.allow)) continue;
-        reported.add(finding2.offset);
-        const name = finding2.name.split(".").at(-1) ?? finding2.name;
+      for (const finding3 of findings4) {
+        if (reported.has(finding3.offset) || allowed(file2.path, [finding3.name, finding3.name.split(".").at(-1) ?? ""], options.allow)) continue;
+        reported.add(finding3.offset);
+        const name = finding3.name.split(".").at(-1) ?? finding3.name;
         const count = (seen.get(name) ?? 0) + 1;
         seen.set(name, count);
         report({
           path: file2.path,
-          line: finding2.line,
-          message: finding2.message,
-          suggestion: finding2.suggestion,
-          confidence: finding2.confidence,
+          line: finding3.line,
+          message: finding3.message,
+          suggestion: finding3.suggestion,
+          confidence: finding3.confidence,
           key: `ifd:${name}#${count}`
         });
       }
@@ -62407,20 +62410,20 @@ var overlay_overrides_foundational_package_default = defineRule({
         const open3 = overlayBody(file2.masked, match.index + match[0].length);
         if (open3 === void 0) continue;
         const findings4 = rebindings(file2, open3, watched).sort((a, b) => a.offset - b.offset);
-        for (const finding2 of findings4) {
-          if (reported.has(finding2.offset)) continue;
-          reported.add(finding2.offset);
-          const count = (seen.get(finding2.name) ?? 0) + 1;
-          seen.set(finding2.name, count);
+        for (const finding3 of findings4) {
+          if (reported.has(finding3.offset)) continue;
+          reported.add(finding3.offset);
+          const count = (seen.get(finding3.name) ?? 0) + 1;
+          seen.set(finding3.name, count);
           report({
             path: file2.path,
-            line: file2.lineOf(finding2.offset),
-            message: `Overlay rebinds \`${finding2.shown}\` for the whole package set: ${blastRadius(finding2.name)}. Compare resulting derivations and available substitutes; syntax alone does not establish changed store paths or cache misses.`,
-            suggestion: `${scopedSuggestion(finding2.name)}
+            line: file2.lineOf(finding3.offset),
+            message: `Overlay rebinds \`${finding3.shown}\` for the whole package set: ${blastRadius(finding3.name)}. Compare resulting derivations and available substitutes; syntax alone does not establish changed store paths or cache misses.`,
+            suggestion: `${scopedSuggestion(finding3.name)}
 
-If the global override is intended, push the rebuilt closure to a binary cache your CI and developers use (Cachix, Attic, or \`nix copy --to s3://...\`) and add \`${finding2.name}\` to this rule's \`allow\` option.`,
+If the global override is intended, push the rebuilt closure to a binary cache your CI and developers use (Cachix, Attic, or \`nix copy --to s3://...\`) and add \`${finding3.name}\` to this rule's \`allow\` option.`,
             confidence: "medium",
-            key: `overlay:${finding2.name}#${count}`
+            key: `overlay:${finding3.name}#${count}`
           });
         }
       }
@@ -63087,18 +63090,18 @@ function candidates(builder) {
   if (/Dotnet/.test(builder)) return ["src", "Directory.Build.props"];
   return ["src", "Makefile"];
 }
-function suggestion3(finding2) {
-  const base2 = finding2.literal.replace(/(?:\/\.)+$/, "");
-  const files = candidates(finding2.builder).map((name) => `${base2}/${name}`);
+function suggestion3(finding3) {
+  const base2 = finding3.literal.replace(/(?:\/\.)+$/, "");
+  const files = candidates(finding3.builder).map((name) => `${base2}/${name}`);
   return [
     "After auditing every build input (including generated files, build scripts, patches and fixtures), consider a fileset. These paths are illustrative, not a complete replacement for your build inputs:",
     "",
     `src = lib.fileset.toSource {`,
-    `  root = ${finding2.literal};`,
+    `  root = ${finding3.literal};`,
     `  fileset = lib.fileset.unions [ ${files.join(" ")} ]; # every path the build reads`,
     "};",
     "",
-    `On older nixpkgs, filter with \`lib.cleanSourceWith { src = ${finding2.literal}; filter = path: type: ...; }\`, \`lib.sourceByRegex ${finding2.literal} [ ... ]\` or \`builtins.path { path = ${finding2.literal}; filter = ...; }\`. \`lib.cleanSource ${finding2.literal}\` only drops version-control directories, backup files and some generated files, so it still rebuilds on documentation or CI changes.`
+    `On older nixpkgs, filter with \`lib.cleanSourceWith { src = ${finding3.literal}; filter = path: type: ...; }\`, \`lib.sourceByRegex ${finding3.literal} [ ... ]\` or \`builtins.path { path = ${finding3.literal}; filter = ...; }\`. \`lib.cleanSource ${finding3.literal}\` only drops version-control directories, backup files and some generated files, so it still rebuilds on documentation or CI changes.`
   ].join("\n");
 }
 function builderCalls(file2) {
@@ -63284,16 +63287,16 @@ var src_whole_repo_default = defineRule({
     for (const file2 of lintableNixFiles(project)) {
       if (allowed2.has(file2.path)) continue;
       const seen = /* @__PURE__ */ new Map();
-      for (const finding2 of findings3(project, file2)) {
-        const count = (seen.get(finding2.builder) ?? 0) + 1;
-        seen.set(finding2.builder, count);
+      for (const finding3 of findings3(project, file2)) {
+        const count = (seen.get(finding3.builder) ?? 0) + 1;
+        seen.set(finding3.builder, count);
         report({
           path: file2.path,
-          line: file2.lineOf(finding2.offset),
-          message: `\`${finding2.shown}\` in \`${finding2.builder}\` selects ${finding2.where} as source. Changes to included but unused files (possibly docs, CI workflows or flake.lock) can change the source hash and reduce cache reuse. Actual filtering and required inputs need review.`,
-          suggestion: suggestion3(finding2),
-          confidence: finding2.confidence,
-          key: `src:${finding2.builder}#${count}`
+          line: file2.lineOf(finding3.offset),
+          message: `\`${finding3.shown}\` in \`${finding3.builder}\` selects ${finding3.where} as source. Changes to included but unused files (possibly docs, CI workflows or flake.lock) can change the source hash and reduce cache reuse. Actual filtering and required inputs need review.`,
+          suggestion: suggestion3(finding3),
+          confidence: finding3.confidence,
+          key: `src:${finding3.builder}#${count}`
         });
       }
     }
@@ -63944,8 +63947,8 @@ var rebuild_per_job_default = defineRule({
   meta: {
     id: "redundancy/rebuild-per-job",
     ruleset: "redundancy",
-    description: "Several jobs in a workflow should not each rebuild the same project from scratch.",
-    rationale: "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.",
+    description: "Repeated builds across CI jobs and workflows should be assessed for verified artifact or layer reuse.",
+    rationale: "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. The same Dockerfile declared in different workflows is also only a reuse candidate: triggers, revisions, inputs, targets and platforms may differ. Where consumers can safely share a verified immutable artifact or cached layers, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["agentic", "strict"],
@@ -63996,6 +63999,32 @@ var rebuild_per_job_default = defineRule({
           related: others.map((entry2) => ({ path: workflow.path, line: entry2.line }))
         });
       }
+    }
+    const containerBuilds = /* @__PURE__ */ new Map();
+    for (const workflow of project.workflows) {
+      for (const job of workflow.jobs) {
+        for (const site of jobBuilds(workflow, job)) {
+          const dockerfile2 = siteDockerfile(project, site);
+          if (!dockerfile2) continue;
+          const sites = containerBuilds.get(dockerfile2.path) ?? /* @__PURE__ */ new Map();
+          if (!sites.has(workflow.path)) sites.set(workflow.path, site);
+          containerBuilds.set(dockerfile2.path, sites);
+        }
+      }
+    }
+    for (const [dockerfile2, sites] of containerBuilds) {
+      if (sites.size < 2) continue;
+      const [first, ...others] = [...sites.values()].sort((a, b) => a.workflow.path.localeCompare(b.workflow.path));
+      if (!first) continue;
+      report({
+        path: first.workflow.path,
+        line: first.command?.line ?? first.step.line,
+        key: `container-reuse.${dockerfile2}`,
+        message: `\`${dockerfile2}\` is declared as a build input in ${sites.size} workflows; review cross-workflow artifact or layer reuse.`,
+        suggestion: "Compare the commit, context, target, platform, build arguments, conditions, and side effects before reusing an immutable image by digest. When final images must differ, assess a shared remote layer cache with compatible inputs and trust boundaries. No savings have been measured; validate behavior and measure transfer costs before removing any build.",
+        confidence: "low",
+        related: others.map((site) => ({ path: site.workflow.path, line: site.command?.line ?? site.step.line }))
+      });
     }
   }
 });
@@ -65531,6 +65560,200 @@ var rules10 = [
   untrusted_checkout_default
 ];
 
+// src/lint/rules/ssdf/attestation-missing-permissions.ts
+var ATTEST_ACTIONS = /* @__PURE__ */ new Set(["actions/attest", "actions/attest-build-provenance", "actions/attest-sbom"]);
+function hasWritePermission(value, scope2) {
+  if (value === "write-all") return true;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const permission = value[scope2];
+  return typeof permission === "string" && permission.trim() === "write";
+}
+var attestation_missing_permissions_default = defineRule({
+  meta: {
+    id: "ssdf/attestation-missing-permissions",
+    ruleset: "ssdf",
+    description: "A GitHub attestation action lacks the explicit token permissions it requires.",
+    rationale: "GitHub artifact attestations require id-token: write and attestations: write. Explicitly declaring these job-level capabilities avoids relying on repository defaults and makes the action's authority reviewable.",
+    kind: "policy",
+    defaultSeverity: "error",
+    presets: ["ssdf"],
+    requires: ["repository"],
+    defaultOptions: {},
+    references: ["https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations"],
+    impact: "high",
+    example: {
+      bad: "steps:\n  - uses: actions/attest-build-provenance@<full-commit-sha>",
+      good: "permissions:\n  id-token: write\n  attestations: write\nsteps:\n  - uses: actions/attest-build-provenance@<full-commit-sha>"
+    }
+  },
+  check({ project, report }) {
+    for (const { workflow, job, step } of steps(project.workflows)) {
+      if (!ATTEST_ACTIONS.has(step.uses?.action?.name ?? "")) continue;
+      const permissions = effectivePermissions(workflow, job)?.value;
+      const missing = ["id-token", "attestations"].filter((scope2) => !hasWritePermission(permissions, scope2));
+      if (missing.length === 0) continue;
+      report({
+        path: workflow.path,
+        line: step.uses?.line ?? step.line,
+        key: `${workflow.path}:${job.id}:attestation-permissions`,
+        message: `Attestation step \`${step.uses?.action.name}\` in job \`${job.id}\` is missing explicit \`${missing.join(": write` and `")}: write\` permission${missing.length === 1 ? "" : "s"}.`,
+        suggestion: "Grant only the required permissions at the job level: `id-token: write` and `attestations: write`."
+      });
+    }
+  }
+});
+
+// src/lint/rules/ssdf/shared.ts
+var RELEASE_ACTIONS = /* @__PURE__ */ new Set(["softprops/action-gh-release", "ncipollo/release-action", "actions/upload-release-asset"]);
+function publishSteps(project) {
+  const found = [];
+  for (const { workflow, job, step } of steps(project.workflows)) {
+    const action = step.uses?.action?.name ?? "";
+    const command2 = commandsOf(step).map(({ command: value }) => value).join("\n");
+    const withInputs = new Map([...step.with].map(([key, value]) => [key.toLowerCase(), String(value.value ?? "")]));
+    let description;
+    if (action === "docker/build-push-action" && /^(?:true|yes|1)$/i.test(withInputs.get("push") ?? "")) description = "container image";
+    else if (RELEASE_ACTIONS.has(action)) description = "release artifact";
+    else if (/\bdocker\s+push\b|\bbuildah\s+push\b|\bpodman\s+push\b/i.test(command2)) description = "container image";
+    else if (/\b(?:npm|pnpm|yarn)\s+publish\b|\bnpm\s+publish\b|\btwine\s+upload\b|\bcargo\s+publish\b|\bgh\s+release\s+upload\b/i.test(command2)) description = "package or release";
+    if (description) found.push({ workflow, job, step, description });
+  }
+  return found;
+}
+function hasProvenanceEvidence(job) {
+  return job.steps.some((step) => {
+    const action = step.uses?.action?.name ?? "";
+    const command2 = commandsOf(step).map(({ command: value }) => value).join("\n");
+    const withInputs = new Map([...step.with].map(([key, value]) => [key.toLowerCase(), String(value.value ?? "")]));
+    return action === "actions/attest-build-provenance" || action === "actions/attest" || action === "slsa-framework/slsa-github-generator" || action === "docker/build-push-action" && /^(?:true|yes|1)$/i.test(withInputs.get("provenance") ?? "") || /\bcosign\s+(?:attest|sign)\b|\bnpm\s+publish\b.*--provenance\b/i.test(command2) || /^(?:true|1|yes)$/i.test(String(step.env.NPM_CONFIG_PROVENANCE ?? ""));
+  });
+}
+function hasSbomEvidence(job) {
+  return job.steps.some((step) => {
+    const action = step.uses?.action?.name ?? "";
+    const command2 = commandsOf(step).map(({ command: value }) => value).join("\n");
+    const withInputs = new Map([...step.with].map(([key, value]) => [key.toLowerCase(), String(value.value ?? "")]));
+    return action === "anchore/sbom-action" || action === "docker/build-push-action" && /^(?:true|yes|1)$/i.test(withInputs.get("sbom") ?? "") || /\b(?:syft|cyclonedx|npm\s+sbom)\b|\btrivy\b.*\b(?:cyclonedx|spdx)\b/i.test(command2);
+  });
+}
+function stepLocation(entry2) {
+  return { path: entry2.workflow.path, line: entry2.step.uses?.line ?? entry2.step.run?.line ?? entry2.step.line };
+}
+
+// src/lint/rules/ssdf/publish-without-provenance.ts
+var publish_without_provenance_default = defineRule({
+  meta: {
+    id: "ssdf/publish-without-provenance",
+    ruleset: "ssdf",
+    description: "Published artifacts have no repository-visible integrity or provenance evidence.",
+    rationale: "SSDF PS.2.1 and PS.3.1 call for integrity verification information and release supporting data. A workflow scan can observe common attestation steps, but cannot prove signature validity, artifact binding, retention, or evidence produced outside the workflow.",
+    kind: "policy",
+    defaultSeverity: "warn",
+    presets: ["ssdf"],
+    requires: ["repository"],
+    defaultOptions: {},
+    references: ["https://csrc.nist.gov/pubs/sp/800/218/final"],
+    impact: "high",
+    example: {
+      bad: "steps:\n  - run: docker push ghcr.io/example/app:latest",
+      good: "steps:\n  - uses: actions/attest-build-provenance@<full-commit-sha>\n    with:\n      subject-path: image.tar"
+    }
+  },
+  check({ project, report }) {
+    for (const entry2 of publishSteps(project)) {
+      if (hasProvenanceEvidence(entry2.job)) continue;
+      report({
+        ...stepLocation(entry2),
+        key: `${entry2.workflow.path}:${entry2.job.id}:provenance`,
+        message: `This job publishes a ${entry2.description} but contains no recognized provenance or integrity-evidence step. This is a repository-visible evidence gap, not proof that the artifact is unsigned.`,
+        suggestion: "Attach verifiable provenance to the published artifact and make the verification information available to consumers; confirm the attestation is bound to the exact artifact and retained with the release."
+      });
+    }
+  }
+});
+
+// src/lint/rules/ssdf/publish-without-sbom.ts
+var publish_without_sbom_default = defineRule({
+  meta: {
+    id: "ssdf/publish-without-sbom",
+    ruleset: "ssdf",
+    description: "Published artifacts have no repository-visible software bill of materials generation.",
+    rationale: "SSDF PS.3.2 recommends maintaining provenance data for release components, such as an SBOM. A repository scan cannot observe registry-side or external inventory generation, so this finding is limited to workflow-visible evidence.",
+    kind: "policy",
+    defaultSeverity: "info",
+    presets: ["ssdf"],
+    requires: ["repository"],
+    defaultOptions: {},
+    references: ["https://csrc.nist.gov/pubs/sp/800/218/final"],
+    impact: "medium",
+    example: {
+      bad: "steps:\n  - run: docker push ghcr.io/example/app:latest",
+      good: "steps:\n  - uses: anchore/sbom-action@<full-commit-sha>\n  - uses: actions/attest-sbom@<full-commit-sha>"
+    }
+  },
+  check({ project, report }) {
+    for (const entry2 of publishSteps(project)) {
+      if (hasSbomEvidence(entry2.job)) continue;
+      report({
+        ...stepLocation(entry2),
+        key: `${entry2.workflow.path}:${entry2.job.id}:sbom`,
+        message: `This job publishes a ${entry2.description} but contains no recognized SBOM generation step. Registry-side or external inventory may exist and is not visible to this rule.`,
+        suggestion: "Generate an SBOM for the exact artifact and retain or publish it alongside the release; consider attesting the SBOM."
+      });
+    }
+  }
+});
+
+// src/lint/rules/ssdf/static-cloud-credentials.ts
+var STATIC_CREDENTIALS = /* @__PURE__ */ new Map([
+  ["aws-actions/configure-aws-credentials", ["aws-access-key-id", "aws-secret-access-key"]],
+  ["azure/login", ["creds"]],
+  ["google-github-actions/auth", ["credentials_json"]]
+]);
+var static_cloud_credentials_default = defineRule({
+  meta: {
+    id: "ssdf/static-cloud-credentials",
+    ruleset: "ssdf",
+    description: "A cloud authentication action receives static credential inputs instead of using workload identity.",
+    rationale: "SSDF PO.5.1 calls for separating and protecting development environments. Static long-lived cloud credentials increase exposure risk; workload identity federation can issue short-lived credentials scoped to a workflow identity.",
+    kind: "policy",
+    defaultSeverity: "warn",
+    presets: ["ssdf"],
+    requires: ["repository"],
+    defaultOptions: {},
+    references: ["https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/about-security-hardening-with-openid-connect"],
+    impact: "high",
+    example: {
+      bad: "steps:\n  - uses: aws-actions/configure-aws-credentials@<full-commit-sha>\n    with:\n      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}",
+      good: "permissions:\n  id-token: write\nsteps:\n  - uses: aws-actions/configure-aws-credentials@<full-commit-sha>\n    with:\n      role-to-assume: arn:aws:iam::123456789012:role/deploy"
+    }
+  },
+  check({ project, report }) {
+    for (const { workflow, job, step } of steps(project.workflows)) {
+      const action = step.uses?.action?.name ?? "";
+      const inputs = STATIC_CREDENTIALS.get(action);
+      if (!inputs) continue;
+      const present = inputs.filter((key) => step.with.has(key));
+      if (present.length === 0) continue;
+      report({
+        path: workflow.path,
+        line: step.uses?.line ?? step.line,
+        key: `${workflow.path}:${job.id}:${action}:static-credentials`,
+        message: `\`${action}\` receives static credential input${present.length === 1 ? "" : "s"} (${present.map((key) => `\`${key}\``).join(", ")}).`,
+        suggestion: "Prefer the provider's GitHub Actions OIDC/workload-identity integration with narrowly scoped trust conditions."
+      });
+    }
+  }
+});
+
+// src/lint/rules/ssdf/index.ts
+var rules11 = [
+  attestation_missing_permissions_default,
+  publish_without_provenance_default,
+  publish_without_sbom_default,
+  static_cloud_credentials_default
+];
+
 // src/lint/rules/testing/shared.ts
 function stripRunner(words6) {
   let rest = words6;
@@ -66236,7 +66459,7 @@ var watch_mode_in_ci_default = defineRule({
 });
 
 // src/lint/rules/testing/index.ts
-var rules11 = [
+var rules12 = [
   playwright_browser_cache_default,
   tool_incremental_cache_default,
   watch_mode_in_ci_default,
@@ -67039,7 +67262,7 @@ var python_pip_no_hash_check_default = defineRule({
         if (files === void 0) continue;
         const raw = command2.command.trim();
         const names = files.map(({ path }) => `\`${path}\``).join(", ");
-        const total = files.reduce((sum, { count }) => sum + count, 0);
+        const total = files.reduce((sum2, { count }) => sum2 + count, 0);
         const first = files[0]?.path ?? "requirements.txt";
         const install2 = raw.replace(/\binstall\b/, "install --require-hashes");
         report({
@@ -67993,7 +68216,7 @@ An earlier check does not constrain later commands. On uv >= 0.4.25, \`UV_LOCKED
 });
 
 // src/lint/rules/toolchains/index.ts
-var rules12 = [
+var rules13 = [
   gradle_build_cache_disabled_default,
   gradle_configuration_cache_disabled_default,
   gradle_parallel_disabled_default,
@@ -68472,7 +68695,7 @@ var workflow_run_chain_default = defineRule({
 });
 
 // src/lint/rules/triggers/index.ts
-var rules13 = [
+var rules14 = [
   workflow_run_chain_default,
   serialized_matrix_default,
   draft_pr_gating_default,
@@ -69586,7 +69809,7 @@ var unnecessary_needs_serialization_default = defineRule({
 });
 
 // src/lint/rules/workflow/index.ts
-var rules14 = [
+var rules15 = [
   artifact_retention_default,
   concurrency_default,
   duplicate_push_pull_request_trigger_default,
@@ -69600,9 +69823,9 @@ var rules14 = [
 ];
 
 // src/lint/rules/index.ts
-var RULESETS = ["workflow", "checkout", "affected", "caching", "hermeticity", "containers", "packages", "registries", "security", "triggers", "redundancy", "testing", "nix", "toolchains"];
+var RULESETS = ["workflow", "checkout", "affected", "caching", "hermeticity", "containers", "packages", "registries", "security", "ssdf", "triggers", "redundancy", "testing", "nix", "toolchains"];
 var allRules = [
-  ...rules14,
+  ...rules15,
   ...rules3,
   ...rules,
   ...rules2,
@@ -69611,11 +69834,12 @@ var allRules = [
   ...rules7,
   ...rules9,
   ...rules10,
-  ...rules13,
-  ...rules8,
   ...rules11,
+  ...rules14,
+  ...rules8,
+  ...rules12,
   ...rules6,
-  ...rules12
+  ...rules13
 ];
 
 // src/github/git.ts
@@ -69905,9 +70129,9 @@ function planFixPullRequests(changes, existing, options) {
       } else actions.push({ type: "update", number: current.number, change });
       continue;
     }
-    const latest = newestFirst.find((pr) => pr.group === change.group);
-    if (latest && !latest.merged && latest.signature === change.signature && !options.recreate?.has(change.group)) {
-      skipped.push({ group: change.group, reason: "declined", number: latest.number });
+    const latest2 = newestFirst.find((pr) => pr.group === change.group);
+    if (latest2 && !latest2.merged && latest2.signature === change.signature && !options.recreate?.has(change.group)) {
+      skipped.push({ group: change.group, reason: "declined", number: latest2.number });
       continue;
     }
     if (open3 >= options.openPullRequestsLimit) {
@@ -70132,14 +70356,14 @@ async function listManagedPullRequests(client, repo, discovery) {
   return result;
 }
 function dismissalsFrom(prs) {
-  const rules15 = /* @__PURE__ */ new Set();
+  const rules16 = /* @__PURE__ */ new Set();
   const groups = /* @__PURE__ */ new Set();
   for (const pr of prs) {
     if (!pr.labels.includes(IGNORED_LABEL)) continue;
-    for (const rule of pr.ignoredRules) rules15.add(rule);
+    for (const rule of pr.ignoredRules) rules16.add(rule);
     if (pr.ignoredGroup) groups.add(pr.group);
   }
-  return { rules: rules15, groups };
+  return { rules: rules16, groups };
 }
 async function currentFix(client, repo, previous) {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number });
@@ -70225,10 +70449,10 @@ async function finishBranchCleanup(client, repo, previous) {
     if (!Array.isArray(open3.data)) throw new Error("GitHub did not return the open PRs required for branch cleanup.");
     status = open3.data.length > 0 ? "in-use" : await deleteBranch(client, repo, cleanup.branch, cleanup.headSha);
   }
-  const latest = await read();
-  if (latest.cleanup.status !== "pending") return { ...previous, body: latest.pull.body ?? "", cleanup: latest.cleanup };
+  const latest2 = await read();
+  if (latest2.cleanup.status !== "pending") return { ...previous, body: latest2.pull.body ?? "", cleanup: latest2.cleanup };
   const finished = { ...cleanup, status };
-  const body = cleanupBody(latest.pull.body ?? "", previous.group, finished);
+  const body = cleanupBody(latest2.pull.body ?? "", previous.group, finished);
   await client.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number, body });
   return { ...previous, body, cleanup: finished };
 }
@@ -70562,9 +70786,9 @@ function planIssueSync(existing, desired, options) {
       }
       continue;
     }
-    const latest = history[0];
-    if (latest?.stateReason === "not_planned") {
-      skipped.push({ fingerprint: issue2.fingerprint, reason: "dismissed", number: latest.number });
+    const latest2 = history[0];
+    if (latest2?.stateReason === "not_planned") {
+      skipped.push({ fingerprint: issue2.fingerprint, reason: "dismissed", number: latest2.number });
       continue;
     }
     pending.push(issue2);
@@ -70574,8 +70798,8 @@ function planIssueSync(existing, desired, options) {
       skipped.push({ fingerprint: issue2.fingerprint, reason: "limit" });
       continue;
     }
-    const latest = byFingerprint.get(issue2.fingerprint)?.[0];
-    actions.push(latest ? { type: "reopen", number: latest.number, desired: issue2 } : { type: "create", desired: issue2 });
+    const latest2 = byFingerprint.get(issue2.fingerprint)?.[0];
+    actions.push(latest2 ? { type: "reopen", number: latest2.number, desired: issue2 } : { type: "create", desired: issue2 });
     open3 += 1;
   }
   return { actions, skipped };
@@ -70654,9 +70878,9 @@ function suppress(entry2, diagnostic) {
   }
   return hit;
 }
-function unusedDirectives(suppressionsFor, paths2, skipped, rules15) {
+function unusedDirectives(suppressionsFor, paths2, skipped, rules16) {
   const skippedIds = new Set(skipped.map((skip) => skip.ruleId));
-  const skippedRulesets = new Set(rules15.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
+  const skippedRulesets = new Set(rules16.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
   const result = [];
   for (const path of paths2) {
     for (const directive of suppressionsFor(path)?.directives ?? []) {
@@ -70976,8 +71200,8 @@ function markdown(result, options = {}) {
   } else {
     lines.push("| Severity | Rule | Location | Finding |", "| --- | --- | --- | --- |");
     for (const d of result.diagnostics.slice(0, limit)) {
-      const finding2 = `${d.message}${d.suggestion ? `<br>**Fix:** ${d.suggestion}` : ""}`.replace(/\|/g, "\\|");
-      lines.push(`| ${d.severity} | [\`${d.ruleId}\`](${d.docsUrl}) | \`${d.path}:${d.line}\` | ${finding2} |`);
+      const finding3 = `${d.message}${d.suggestion ? `<br>**Fix:** ${d.suggestion}` : ""}`.replace(/\|/g, "\\|");
+      lines.push(`| ${d.severity} | [\`${d.ruleId}\`](${d.docsUrl}) | \`${d.path}:${d.line}\` | ${finding3} |`);
     }
     if (result.diagnostics.length > limit) lines.push("", `_${result.diagnostics.length - limit} more finding(s) omitted._`);
   }
@@ -70988,8 +71212,8 @@ function markdown(result, options = {}) {
   }
   return lines.join("\n");
 }
-function sarif(result, rules15, version2 = "0.0.0") {
-  const used = rules15.filter((rule) => result.diagnostics.some((d) => d.ruleId === rule.meta.id));
+function sarif(result, rules16, version2 = "0.0.0") {
+  const used = rules16.filter((rule) => result.diagnostics.some((d) => d.ruleId === rule.meta.id));
   const index = new Map(used.map((rule, position) => [rule.meta.id, position]));
   const level2 = { error: "error", warn: "warning", info: "note" };
   const securitySeverity = { high: "7.0", medium: "4.0", low: "2.0" };
@@ -71047,12 +71271,12 @@ ${rule.meta.references.map((ref) => `- ${ref}`).join("\n")}` },
     2
   );
 }
-function format(name, result, rules15, version2) {
+function format(name, result, rules16, version2) {
   switch (name) {
     case "json":
       return json3(result);
     case "sarif":
-      return sarif(result, rules15, version2);
+      return sarif(result, rules16, version2);
     case "markdown":
       return markdown(result);
     case "github":
@@ -71476,47 +71700,6 @@ function latestAttempts(snapshots) {
 
 // src/telemetry/context.ts
 import { createHash as createHash4 } from "node:crypto";
-function comparisonProblem(snapshot) {
-  if (snapshot.runAttempt !== 1) return "Reruns may execute only part of the workload or reuse warmed state.";
-  if (snapshot.conclusion !== "success") return "The workflow did not complete successfully.";
-  const provenance = snapshot.provenance;
-  if (provenance?.version !== 1 || provenance.collector !== "github-actions-rest") return "Collection provenance is unavailable or unsupported.";
-  if (!provenance.jobsComplete) return "Job collection is incomplete.";
-  if (!provenance.definitionKnown) return "The workflow job definitions are unavailable.";
-  if (snapshot.jobs.length === 0) return "No completed jobs were observed.";
-  if (snapshot.jobs.some((job) => job.conclusion !== "success")) return "Some observed jobs did not complete successfully.";
-  if (snapshot.jobs.some((job) => !job.labels?.length || job.labels.some((label) => !label.trim()))) return "Runner routing labels are unavailable.";
-  return void 0;
-}
-function jobComparisonContext(job) {
-  return JSON.stringify([
-    job.key,
-    job.name,
-    [...new Set(job.needs)].sort(),
-    [...new Set(job.labels)].sort(),
-    job.runnerGroupId ?? null
-  ]);
-}
-function comparisonKey(snapshot) {
-  if (comparisonProblem(snapshot)) return void 0;
-  const jobs = snapshot.jobs.map(jobComparisonContext).sort();
-  return createHash4("sha256").update(JSON.stringify([
-    "workload-comparison-v1",
-    snapshot.owner,
-    snapshot.repo,
-    snapshot.workflowId,
-    snapshot.branch,
-    snapshot.event,
-    jobs
-  ])).digest("hex");
-}
-function comparableHistory(history, reference) {
-  const key = comparisonKey(reference);
-  if (!key) return [];
-  return latestAttempts(history).filter(
-    (snapshot) => snapshot.runId !== reference.runId && byCompletion(snapshot, reference) < 0 && comparisonKey(snapshot) === key
-  );
-}
 
 // src/alerts/stats.ts
 function median(values) {
@@ -71570,7 +71753,7 @@ function exactUpperTail(m, n, u) {
     previous = current;
   }
   const distribution2 = previous[n];
-  const total = distribution2.reduce((sum, count) => sum + count, 0);
+  const total = distribution2.reduce((sum2, count) => sum2 + count, 0);
   let tail = 0;
   for (let k = Math.ceil(u); k <= maxU; k += 1) tail += distribution2[k] ?? 0;
   return tail / total;
@@ -71580,7 +71763,7 @@ function mannWhitneyGreater(sample, reference) {
   const n = reference.length;
   if (m === 0 || n === 0) return { u: 0, pValue: 1, method: "normal" };
   const { ranks: combined, tieTerm } = ranks([...sample, ...reference]);
-  const rankSum = combined.slice(0, m).reduce((sum, rank2) => sum + rank2, 0);
+  const rankSum = combined.slice(0, m).reduce((sum2, rank2) => sum2 + rank2, 0);
   const u = rankSum - m * (m + 1) / 2;
   if (tieTerm === 0 && m * n <= 2500) return { u, pValue: exactUpperTail(m, n, u), method: "exact" };
   const total = m + n;
@@ -71588,6 +71771,138 @@ function mannWhitneyGreater(sample, reference) {
   if (variance <= 0) return { u, pValue: 1, method: "normal" };
   const z2 = (u - m * n / 2 - 0.5) / Math.sqrt(variance);
   return { u, pValue: 1 - normalCdf(z2), method: "normal" };
+}
+
+// src/telemetry/context.ts
+var EXCLUSION_DESCRIPTIONS = {
+  rerun: "Reruns may execute only part of the workload or reuse warmed state.",
+  unsuccessful: "The workflow did not complete successfully.",
+  provenance: "Collection provenance is unavailable or unsupported.",
+  "incomplete-jobs": "Job collection is incomplete.",
+  "definition-unknown": "The workflow job definitions are unavailable.",
+  "no-jobs": "No completed jobs were observed.",
+  "job-failed": "Some observed jobs did not complete successfully.",
+  "labels-missing": "Runner routing labels are unavailable.",
+  "context-changed": "The run used a different repository, workflow, branch, or event.",
+  "job-set-changed": "The workflow's job set (names, needs, runner labels, or runner group) differs."
+};
+function comparisonExclusion(snapshot) {
+  if (snapshot.runAttempt !== 1) return "rerun";
+  if (snapshot.conclusion !== "success") return "unsuccessful";
+  const provenance = snapshot.provenance;
+  if (provenance?.version !== 1 || provenance.collector !== "github-actions-rest") return "provenance";
+  if (!provenance.jobsComplete) return "incomplete-jobs";
+  if (!provenance.definitionKnown) return "definition-unknown";
+  if (snapshot.jobs.length === 0) return "no-jobs";
+  if (snapshot.jobs.some((job) => job.conclusion !== "success")) return "job-failed";
+  if (snapshot.jobs.some((job) => !hasLabels(job))) return "labels-missing";
+  return void 0;
+}
+function comparisonProblem(snapshot) {
+  const code3 = comparisonExclusion(snapshot);
+  return code3 ? EXCLUSION_DESCRIPTIONS[code3] : void 0;
+}
+function hasLabels(job) {
+  return Boolean(job.labels?.length) && !job.labels.some((label) => !label.trim());
+}
+function sameContext(left, right) {
+  return left.owner === right.owner && left.repo === right.repo && left.workflowId === right.workflowId && left.branch === right.branch && left.event === right.event;
+}
+function jobComparisonContext(job) {
+  return JSON.stringify([
+    job.key,
+    job.name,
+    [...new Set(job.needs)].sort(),
+    [...new Set(job.labels)].sort(),
+    job.runnerGroupId ?? null
+  ]);
+}
+function comparisonKey(snapshot) {
+  if (comparisonProblem(snapshot)) return void 0;
+  const jobs = snapshot.jobs.map(jobComparisonContext).sort();
+  return createHash4("sha256").update(JSON.stringify([
+    "workload-comparison-v1",
+    snapshot.owner,
+    snapshot.repo,
+    snapshot.workflowId,
+    snapshot.branch,
+    snapshot.event,
+    jobs
+  ])).digest("hex");
+}
+function comparableHistory(history, reference) {
+  const key = comparisonKey(reference);
+  if (!key) return [];
+  return priorRuns(history, reference).filter((snapshot) => comparisonKey(snapshot) === key);
+}
+function priorRuns(history, reference) {
+  return latestAttempts(history).filter((snapshot) => snapshot.runId !== reference.runId && byCompletion(snapshot, reference) < 0);
+}
+function diagnoseBaseline(history, reference) {
+  const key = comparisonKey(reference);
+  const currentProblem = comparisonExclusion(reference);
+  const excluded = {};
+  const prior = priorRuns(history, reference);
+  let eligible2 = 0;
+  let comparable = 0;
+  for (const run2 of prior) {
+    const reason = comparisonExclusion(run2) ?? (sameContext(run2, reference) ? void 0 : "context-changed");
+    if (reason) {
+      excluded[reason] = (excluded[reason] ?? 0) + 1;
+      continue;
+    }
+    eligible2 += 1;
+    if (!key) continue;
+    if (comparisonKey(run2) === key) comparable += 1;
+    else excluded["job-set-changed"] = (excluded["job-set-changed"] ?? 0) + 1;
+  }
+  return { examined: prior.length, eligible: eligible2, comparable, excluded, ...currentProblem ? { currentProblem } : {} };
+}
+function jobBaselines(history, reference, limit = 20) {
+  return jobSamples(history, reference, limit).flatMap(({ job, values }) => values.length ? [{ key: job.key, name: job.name, sampleCount: values.length, medianDurationMs: median(values) }] : []);
+}
+function thinJobHistory(history, reference, minSamples) {
+  return jobSamples(history, reference, minSamples).some(({ values }) => values.length < minSamples);
+}
+function jobHistoryApplies(reference) {
+  return jobSamples([], reference, 0).length > 0;
+}
+var GAP_PHRASES = {
+  rerun: "were reruns",
+  unsuccessful: "did not succeed",
+  provenance: "lack supported collection provenance",
+  "incomplete-jobs": "have incomplete job evidence",
+  "definition-unknown": "have unknown job definitions",
+  "no-jobs": "have no completed jobs",
+  "job-failed": "had failed jobs",
+  "labels-missing": "lack runner labels",
+  "context-changed": "ran in a different context",
+  "job-set-changed": "had a different job set"
+};
+function summarizeBaselineGap(diagnostic) {
+  if (!diagnostic) return "no baseline yet";
+  if (diagnostic.currentProblem) return `no baseline: ${EXCLUSION_DESCRIPTIONS[diagnostic.currentProblem].replace(/\.$/, "").toLowerCase()}`;
+  if (diagnostic.examined === 0) return "no baseline yet: no earlier runs in history";
+  const [reason, count] = Object.entries(diagnostic.excluded).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] ?? [];
+  return reason && count ? `no baseline: ${count} of ${diagnostic.examined} earlier runs ${GAP_PHRASES[reason]}` : "no baseline yet";
+}
+function jobSamples(history, reference, limit) {
+  if (!trustedJobs(reference)) return [];
+  const prior = priorRuns(history, reference).filter((run2) => sameContext(run2, reference) && trustedJobs(run2)).sort(byCompletion);
+  const contexts = reference.jobs.map(jobComparisonContext);
+  return reference.jobs.flatMap((job, index) => {
+    const context2 = contexts[index];
+    if (job.conclusion !== "success" || !hasLabels(job) || contexts.indexOf(context2) !== contexts.lastIndexOf(context2)) return [];
+    const values = prior.flatMap((run2) => {
+      const matches = run2.jobs.filter((other) => jobComparisonContext(other) === context2);
+      return matches.length === 1 && matches[0].conclusion === "success" ? [matches[0].durationMs] : [];
+    }).slice(-limit);
+    return [{ job, values }];
+  });
+}
+function trustedJobs(snapshot) {
+  const provenance = snapshot.provenance;
+  return snapshot.runAttempt === 1 && provenance?.version === 1 && provenance.collector === "github-actions-rest" && provenance.definitionKnown;
 }
 
 // src/alerts/anomaly.ts
@@ -71647,27 +71962,27 @@ function madFloor(center) {
   return Math.max(center * 0.02, 1e3);
 }
 function detectSpike(series, settings) {
-  const latest = series.points.at(-1);
+  const latest2 = series.points.at(-1);
   const history = series.points.slice(0, -1).slice(-settings.window).map((point) => point.durationMs);
-  if (!latest || history.length < settings.minSamples) return void 0;
+  if (!latest2 || history.length < settings.minSamples) return void 0;
   const center = median(history);
   const deviation = mad(history, center);
-  const z2 = robustZ(latest.durationMs, center, deviation, madFloor(center));
-  const { increaseMs, increasePercent, material } = magnitude(latest.durationMs, center, settings);
+  const z2 = robustZ(latest2.durationMs, center, deviation, madFloor(center));
+  const { increaseMs, increasePercent, material } = magnitude(latest2.durationMs, center, settings);
   if (z2 <= settings.zThreshold || !material) return void 0;
   return {
     ...base(series, "spike"),
     // Severity follows magnitude: with the MAD floor, any material increase on a stable series has a large z.
     severity: increasePercent >= 100 ? "critical" : "warning",
-    runId: latest.runId,
-    observedMs: latest.durationMs,
+    runId: latest2.runId,
+    observedMs: latest2.durationMs,
     baselineMedianMs: center,
     baselineMadMs: deviation,
     increaseMs,
     increasePercent,
     zScore: z2,
     baselineSamples: history.length,
-    recentRunIds: [latest.runId]
+    recentRunIds: [latest2.runId]
   };
 }
 function detectRegression(series, settings) {
@@ -71682,11 +71997,11 @@ function detectRegression(series, settings) {
   if (!material) return void 0;
   const test = mannWhitneyGreater(recentValues, referenceValues);
   if (test.pValue >= settings.pValue) return void 0;
-  const latest = recent.at(-1);
+  const latest2 = recent.at(-1);
   return {
     ...base(series, "regression"),
     severity: increasePercent >= 50 ? "critical" : "warning",
-    runId: latest.runId,
+    runId: latest2.runId,
     observedMs: observed,
     baselineMedianMs: center,
     baselineMadMs: mad(referenceValues, center),
@@ -71716,11 +72031,11 @@ function formatDuration(ms) {
   const totalSeconds = Math.round(Math.abs(ms) / 1e3);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor(totalSeconds % 3600 / 60);
-  const seconds2 = totalSeconds % 60;
+  const seconds3 = totalSeconds % 60;
   const sign = ms < 0 ? "-" : "";
   if (hours > 0) return `${sign}${hours}h ${minutes}m`;
-  if (minutes > 0) return `${sign}${minutes}m ${seconds2}s`;
-  return `${sign}${seconds2}s`;
+  if (minutes > 0) return `${sign}${minutes}m ${seconds3}s`;
+  return `${sign}${seconds3}s`;
 }
 function seriesKey(alert) {
   return alert.jobKey ?? "*";
@@ -71956,12 +72271,1032 @@ function computeBaseline(history, snapshot, limit = 20) {
   };
 }
 
+// src/telemetry/logs.ts
+var MAX_JOB_LOG_BYTES = 4 * 1024 * 1024;
+var MAX_JOB_LOG_LINES = 5e4;
+var MAX_TEXT = 200;
+async function fetchJobLog(client, repo, jobId, limits = {}) {
+  let data;
+  try {
+    data = (await client.request("GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs", { ...repo, job_id: jobId })).data;
+  } catch (error62) {
+    const status = httpStatus(error62);
+    if (status === 404 || status === 410) return void 0;
+    throw error62;
+  }
+  return boundJobLog(data, limits.maxBytes ?? MAX_JOB_LOG_BYTES, limits.maxLines ?? MAX_JOB_LOG_LINES);
+}
+function boundJobLog(data, maxBytes = MAX_JOB_LOG_BYTES, maxLines = MAX_JOB_LOG_LINES) {
+  const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data instanceof Uint8Array ? data : data instanceof ArrayBuffer ? new Uint8Array(data) : void 0;
+  if (!bytes) throw new Error("GitHub returned a job log that is not text");
+  let view = bytes;
+  let truncated = false;
+  if (view.length > maxBytes) {
+    const cut = view.lastIndexOf(10, maxBytes);
+    view = view.subarray(0, cut > 0 ? cut : maxBytes);
+    truncated = true;
+  }
+  let text4 = new TextDecoder("utf-8").decode(view);
+  const lines = text4.split("\n", maxLines + 1);
+  if (lines.length > maxLines) {
+    text4 = lines.slice(0, maxLines).join("\n");
+    truncated = true;
+  }
+  return { text: text4, truncated, bytes: bytes.length };
+}
+var LINE = /^\uFEFF?(?:[^\t]*\t[^\t]*\t)?\uFEFF?(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z ?(.*)$/;
+var ANSI = /\u001b\[[0-9;?]*[A-Za-z]|\^\[\[[0-9;?]*[A-Za-z]/g;
+function normalizeLogLines(text4) {
+  const lines = [];
+  for (const raw of text4.split("\n")) {
+    const match = LINE.exec(raw.replace(/\r$/, ""));
+    if (!match) continue;
+    const fraction = (match[2] ?? "").padEnd(3, "0").slice(0, 3);
+    const ms = Date.parse(`${match[1]}.${fraction}Z`);
+    if (Number.isNaN(ms)) continue;
+    lines.push({ ms, text: (match[3] ?? "").replace(ANSI, "") });
+  }
+  return lines;
+}
+function clip(value) {
+  return value.length > MAX_TEXT ? `${value.slice(0, MAX_TEXT - 1)}\u2026` : value;
+}
+function seconds2(value, unit = "s") {
+  const amount = Number(value);
+  return Math.round(unit === "ms" ? amount : unit === "m" ? amount * 6e4 : amount * 1e3);
+}
+function vertexKind(name) {
+  if (/^importing cache manifest/i.test(name)) return "cache-import";
+  if (/^exporting (?:to GitHub Actions Cache|cache\b)/i.test(name)) return "cache-export";
+  if (/^exporting to (?:docker image format|image|oci image format)/i.test(name)) return "image-export";
+  if (/^importing to docker/i.test(name)) return "image-load";
+  if (/^pushing\b|^exporting to registry/i.test(name)) return "push";
+  if (/^\[[^\]]+\] RUN\b/.test(name)) return "run";
+  if (/^\[[^\]]+\] (?:COPY|ADD)\b/.test(name)) return "copy";
+  if (/^\[[^\]]+\] FROM\b|^docker-image:\/\//.test(name)) return "base-image";
+  if (/booting buildkit/i.test(name)) return "builder-boot";
+  if (/^\[(?:internal|auth)\]|^resolve image config/i.test(name)) return "internal";
+  return "other";
+}
+function parseCacheSpec(raw) {
+  const spec2 = { raw: clip(raw.trim()) };
+  for (const part of raw.split(",")) {
+    const [key, ...rest] = part.trim().split("=");
+    const value = rest.join("=");
+    if (key === "type") spec2.type = value;
+    else if (key === "mode") spec2.mode = value;
+    else if (key === "scope") spec2.scope = value;
+  }
+  return spec2;
+}
+function buildFromCommand(command2, ms) {
+  const tokens = command2.split(/\s+/);
+  const build2 = { startMs: ms, cacheFrom: [], cacheTo: [], load: false, push: false, vertices: [] };
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const [flag, inline] = token.includes("=") && token.startsWith("--") ? [token.slice(0, token.indexOf("=")), token.slice(token.indexOf("=") + 1)] : [token, void 0];
+    const value = () => (inline ?? tokens[++index] ?? "").replace(/^["']|["']$/g, "");
+    if (flag === "--cache-from") build2.cacheFrom.push(parseCacheSpec(value()));
+    else if (flag === "--cache-to") build2.cacheTo.push(parseCacheSpec(value()));
+    else if (flag === "--load") build2.load = true;
+    else if (flag === "--push") build2.push = true;
+    else if (flag === "--output" || flag === "-o") {
+      const output3 = value();
+      if (/type=docker\b/.test(output3)) build2.load = true;
+      if (/push=true|type=registry\b/.test(output3)) build2.push = true;
+    }
+  }
+  return build2;
+}
+function newStep(index, title, ms) {
+  return {
+    index,
+    title: clip(title),
+    kind: "action",
+    inputs: {},
+    envKeys: [],
+    startMs: ms,
+    endMs: ms,
+    durationMs: 0,
+    children: [],
+    subGroups: [],
+    builds: [],
+    tests: []
+  };
+}
+function finishStep(step, endMs) {
+  step.endMs = Math.max(step.startMs, endMs);
+  step.durationMs = step.endMs - step.startMs;
+  if (step.kind === "action") step.uses = clip(step.title.replace(/^Run /, ""));
+}
+function testLine(step, text4) {
+  let match;
+  const last = step.tests.at(-1);
+  if (match = /^\s*Test Files\s+.*\((\d+)\)\s*$/.exec(text4)) {
+    step.tests.push({ framework: "vitest", files: Number(match[1]), phases: {} });
+  } else if (last?.framework === "vitest" && (match = /^\s*Tests\s+.*\((\d+)\)\s*$/.exec(text4))) {
+    last.tests = Number(match[1]);
+  } else if (last?.framework === "vitest" && last.durationMs === void 0 && (match = /^\s*Duration\s+([\d.]+)(ms|s|m)\b(?:\s*\((.*)\))?/.exec(text4))) {
+    last.durationMs = seconds2(match[1], match[2]);
+    for (const phase of (match[3] ?? "").matchAll(/([a-z]+) ([\d.]+)%/g)) last.phases[phase[1]] = Number(phase[2]);
+  } else if (match = /^\s*Test Suites:.*?(\d+) total/.exec(text4)) {
+    step.tests.push({ framework: "jest", files: Number(match[1]), phases: {} });
+  } else if (last?.framework === "jest" && (match = /^\s*Tests:.*?(\d+) total/.exec(text4))) {
+    last.tests = Number(match[1]);
+  } else if (last?.framework === "jest" && last.durationMs === void 0 && (match = /^\s*Time:\s+([\d.]+) ?(ms|s|m)\b/.exec(text4))) {
+    last.durationMs = seconds2(match[1], match[2]);
+  } else if (match = /^[#ℹ] tests (\d+)$/.exec(text4)) {
+    step.tests.push({ framework: "node-test", tests: Number(match[1]), phases: {} });
+  } else if (last?.framework === "node-test" && last.durationMs === void 0 && (match = /^[#ℹ] duration_ms ([\d.]+)$/.exec(text4))) {
+    last.durationMs = Math.round(Number(match[1]));
+  } else if (match = /^=+ (.*\d+ (?:passed|failed).*) in ([\d.]+)s\b.*=+$/.exec(text4)) {
+    const tests = [...match[1].matchAll(/(\d+) (?:passed|failed|skipped|errors?|xfailed|xpassed)/g)].reduce((sum2, item) => sum2 + Number(item[1]), 0);
+    step.tests.push({ framework: "pytest", tests, durationMs: seconds2(match[2]), phases: {} });
+  }
+}
+var BUILD_START_VERTEX = /^\[internal\] load (?:build definition|\.dockerignore|local bake definitions|remote build context)\b/;
+var DOCKER_BUILD = /(?:^|[\s/;&|(])docker(?:\s+buildx)?\s+(?:build|bake)\b/;
+function activeBuild(step) {
+  for (let index = step.builds.length - 1; index >= 0; index -= 1) if (step.builds[index]?.vertices.length) return index;
+  return step.builds.length ? 0 : -1;
+}
+function vertexLine(step, id, text4, ms) {
+  const active = activeBuild(step);
+  let build2 = step.builds[active];
+  const restarted = id === 1 && BUILD_START_VERTEX.test(text4) && build2?.vertices.some((vertex2) => vertex2.id > 1) === true;
+  if (!build2 || build2.vertices.length > 0 && (id === 0 || restarted)) {
+    const declared = step.builds.slice(active + 1).find((candidate) => candidate.vertices.length === 0);
+    if (declared) build2 = declared;
+    else {
+      build2 = { startMs: ms, cacheFrom: [], cacheTo: [], load: false, push: false, vertices: [] };
+      step.builds.push(build2);
+    }
+  }
+  if (id === 0) {
+    const driver = /instance using ([\w-]+) driver/.exec(text4)?.[1];
+    if (driver) build2.driver = driver;
+    return;
+  }
+  let vertex = build2.vertices.find((candidate) => candidate.id === id);
+  if (!vertex) {
+    vertex = { id, name: clip(text4), kind: vertexKind(text4), firstMs: ms, lastMs: ms, cached: false, error: false, operations: [] };
+    build2.vertices.push(vertex);
+    return;
+  }
+  vertex.lastMs = ms;
+  let match;
+  if (match = /^DONE ([\d.]+)s$/.exec(text4)) vertex.durationMs = seconds2(match[1]);
+  else if (text4 === "CACHED") vertex.cached = true;
+  else if (/^(?:ERROR|CANCELED)\b/.test(text4)) vertex.error = true;
+  else if (!/^\d+\.\d+ /.test(text4) && (match = /^(.+?) ([\d.]+)s done$/.exec(text4)) && !/^(?:sha256:|extracting |loading layer |writing layer )/.test(match[1])) {
+    vertex.operations.push({ name: clip(match[1]), durationMs: seconds2(match[2]) });
+  }
+}
+function parseJobLog(text4, options = {}) {
+  const lines = normalizeLogLines(text4);
+  const evidence2 = {
+    ...lines.length ? { firstMs: lines[0].ms, lastMs: lines.at(-1).ms } : {},
+    setup: { durationMs: 0, services: [] },
+    steps: [],
+    post: { durationMs: 0, subGroups: [], cacheSaveFailures: [] },
+    repeatedCommands: [],
+    truncated: options.truncated ?? false,
+    lines: lines.length
+  };
+  let phase = "setup";
+  let top;
+  const actions = [];
+  let header;
+  const groups = [];
+  let service;
+  let pullStartMs;
+  const declaredOnly = /* @__PURE__ */ new Set();
+  let waitStartMs;
+  const innermost = () => {
+    for (let index = actions.length - 1; index >= 0; index -= 1) if (actions[index]?.step) return actions[index]?.step;
+    return top;
+  };
+  for (const { ms, text: line2 } of lines) {
+    if (line2.startsWith("##[start-action ")) {
+      const id = /;id=([^;\]]+)/.exec(line2)?.[1] ?? "";
+      const display4 = /display=(.*?);id=/.exec(line2)?.[1] ?? "";
+      actions.push({ id, parent: innermost(), display: display4, startMs: ms });
+      continue;
+    }
+    if (line2.startsWith("##[end-action ")) {
+      const id = /id=([^;\]]+)/.exec(line2)?.[1];
+      const index = actions.map((action2) => action2.id).lastIndexOf(id ?? "");
+      const action = index >= 0 ? actions.splice(index)[0] : void 0;
+      if (action) {
+        const reported = Number(/duration_ms=(\d+)/.exec(line2)?.[1]);
+        const durationMs = Number.isFinite(reported) ? reported : ms - action.startMs;
+        if (action.step) {
+          finishStep(action.step, ms);
+          action.step.durationMs = durationMs;
+        } else if (phase === "post") {
+          evidence2.post.subGroups.push({ title: clip(`Post ${action.display}`), startMs: action.startMs, endMs: ms, durationMs });
+        }
+      }
+      continue;
+    }
+    if (line2.startsWith("##[group]")) {
+      const title = line2.slice("##[group]".length);
+      if (phase !== "post" && title.startsWith("Run ")) {
+        const open3 = actions.at(-1);
+        let step2;
+        if (open3 && !open3.step) {
+          const parent = open3.parent;
+          step2 = newStep(parent?.children.length ?? 0, title, ms);
+          parent?.children.push(step2);
+          open3.step = step2;
+        } else {
+          if (top) finishStep(top, ms);
+          step2 = newStep(evidence2.steps.length, title, ms);
+          evidence2.steps.push(step2);
+          top = step2;
+          phase = "steps";
+        }
+        header = { step: step2, mode: "command", commands: [] };
+        groups.push({ title, startMs: ms, header: true, owner: step2 });
+        continue;
+      }
+      const owner = phase === "setup" ? "setup" : phase === "post" ? "post" : innermost() ?? "post";
+      groups.push({ title, startMs: ms, header: false, owner });
+      const starting = /^Starting (?:(.+) service container|(job) container)$/.exec(title);
+      if (phase === "setup" && starting) {
+        service = { name: clip(starting[1] ?? starting[2]), startMs: ms, endMs: ms, polls: 0 };
+        evidence2.setup.services.push(service);
+      }
+      if (phase === "setup" && title === "Waiting for all services to be ready") waitStartMs = ms;
+      continue;
+    }
+    if (line2.startsWith("##[endgroup]")) {
+      const group = groups.pop();
+      if (!group) continue;
+      if (group.header) {
+        if (header) {
+          if (header.commands.length) header.step.command = clip(header.commands.join("\n"));
+          if (header.step.kind === "action") {
+            header.step.uses = clip(header.step.title.replace(/^Run /, ""));
+          } else {
+            for (const logical of header.commands.join("\n").replace(/\\\n/g, " ").split("\n")) {
+              if (!DOCKER_BUILD.test(logical)) continue;
+              const build2 = buildFromCommand(logical.slice(logical.search(DOCKER_BUILD)), ms);
+              header.step.builds.push(build2);
+              declaredOnly.add(build2);
+            }
+          }
+        }
+        header = void 0;
+        continue;
+      }
+      const entry2 = { title: clip(group.title), startMs: group.startMs, endMs: ms, durationMs: ms - group.startMs };
+      if (group.owner === "post") evidence2.post.subGroups.push(entry2);
+      else if (group.owner !== "setup") group.owner.subGroups.push(entry2);
+      if (service && group.title.startsWith("Starting ")) {
+        service.endMs = ms;
+        service = void 0;
+      }
+      continue;
+    }
+    if (header) {
+      const step2 = header.step;
+      if (line2 === "with:") header.mode = "with";
+      else if (line2 === "env:") header.mode = "env";
+      else if (line2.startsWith("shell: ")) {
+        step2.kind = "script";
+        header.mode = "done";
+      } else if (header.mode === "with") {
+        const input3 = /^ {2}([A-Za-z0-9_.-]+): ?(.*)$/.exec(line2);
+        if (input3) {
+          header.lastInput = input3[1];
+          step2.inputs[header.lastInput] = clip(input3[2]);
+        } else if (header.lastInput) step2.inputs[header.lastInput] = clip(`${step2.inputs[header.lastInput]}
+${line2.trim()}`);
+      } else if (header.mode === "env") {
+        const key = /^ {2}([A-Za-z_][A-Za-z0-9_]*):/.exec(line2)?.[1];
+        if (key && !step2.envKeys.includes(key)) step2.envKeys.push(key);
+      } else if (header.mode === "command") header.commands.push(line2);
+      continue;
+    }
+    if (phase === "setup") {
+      let match;
+      if (service && (match = /^##\[command\]\S*docker pull (\S+)/.exec(line2))) {
+        service.image = clip(match[1]);
+        pullStartMs = ms;
+      } else if (service && pullStartMs !== void 0 && /^Status: (?:Downloaded newer image|Image is up to date) for /.test(line2)) {
+        service.pulled = line2.startsWith("Status: Downloaded");
+        service.pullMs = ms - pullStartMs;
+        pullStartMs = void 0;
+      } else if (match = /^(.+) service is starting, waiting \d+ seconds before checking again\.$/.exec(line2)) {
+        const name = match[1];
+        const target = evidence2.setup.services.find((candidate) => candidate.name === name);
+        if (target) target.polls += 1;
+      } else if (match = /^(.+) service is healthy\.$/.exec(line2)) {
+        const name = match[1];
+        const target = evidence2.setup.services.find((candidate) => candidate.name === name);
+        if (target && waitStartMs !== void 0) target.healthWaitMs = ms - waitStartMs;
+      }
+      continue;
+    }
+    if (phase === "steps" && line2 === "Post job cleanup.") {
+      for (const action of actions.splice(0)) if (action.step) finishStep(action.step, ms);
+      if (top) finishStep(top, ms);
+      top = void 0;
+      phase = "post";
+      evidence2.post.startMs = ms;
+      continue;
+    }
+    if (phase === "post") {
+      const failure2 = /^Failed to save: (.*)$/.exec(line2)?.[1];
+      if (failure2) evidence2.post.cacheSaveFailures.push(clip(failure2));
+      continue;
+    }
+    const step = innermost();
+    if (!step) continue;
+    const command2 = /^(?:##)?\[command\](.*)$/.exec(line2)?.[1];
+    if (command2 !== void 0) {
+      if (DOCKER_BUILD.test(command2)) step.builds.push(buildFromCommand(command2.slice(command2.search(DOCKER_BUILD)), ms));
+      continue;
+    }
+    const vertex = /^#(\d+) (.+)$/.exec(line2);
+    if (vertex) {
+      vertexLine(step, Number(vertex[1]), vertex[2], ms);
+      continue;
+    }
+    if (line2.startsWith("Found in cache @ ")) step.toolCache = "hit";
+    else if (/^(?:Attempting to download|Acquiring) \S/.test(line2)) step.toolCache ??= "download";
+    else if (/^Cache restored from key: |^Cache hit for: |^Cache restored successfully/.test(line2)) step.packageCache = "hit";
+    else if (/^(?:\S+ )?cache is not found$|^Cache not found for (?:input )?keys?:/i.test(line2)) step.packageCache = "miss";
+    else {
+      const added = /^added (\d+) packages?\b/.exec(line2);
+      if (added) step.installedPackages = Number(added[1]);
+      else testLine(step, line2);
+    }
+  }
+  const endMs = evidence2.post.startMs ?? evidence2.lastMs ?? 0;
+  const prune = (step) => {
+    step.builds = step.builds.filter((build2) => !declaredOnly.has(build2) || build2.vertices.length > 0);
+    step.children.forEach(prune);
+  };
+  evidence2.steps.forEach(prune);
+  if (top) finishStep(top, endMs);
+  for (const action of actions) if (action.step) finishStep(action.step, endMs);
+  const firstStep = evidence2.steps[0];
+  if (evidence2.firstMs !== void 0) evidence2.setup.durationMs = (firstStep?.startMs ?? endMs) - evidence2.firstMs;
+  if (evidence2.post.startMs !== void 0 && evidence2.lastMs !== void 0) evidence2.post.durationMs = evidence2.lastMs - evidence2.post.startMs;
+  evidence2.repeatedCommands = repeatedCommands(evidence2.steps);
+  return evidence2;
+}
+function repeatedCommands(steps2) {
+  const byCommand = /* @__PURE__ */ new Map();
+  for (const step of steps2) {
+    if (step.kind !== "script") continue;
+    const command2 = (step.command ?? step.title.replace(/^Run /, "")).replace(/\s+/g, " ").trim();
+    if (!command2) continue;
+    byCommand.set(command2, [...byCommand.get(command2) ?? [], step]);
+  }
+  return [...byCommand].filter(([, list2]) => list2.length > 1).map(([command2, list2]) => ({ command: clip(command2), steps: list2.map((step) => step.index), durationsMs: list2.map((step) => step.durationMs) }));
+}
+
+// src/telemetry/attribution.ts
+var MIN_FINDING_MS = 3e3;
+var MIN_TEST_RUNTIME_MS = 15e3;
+var UNEXPLAINED_MIN_MS = 1e4;
+var UNEXPLAINED_SHARE = 0.1;
+var REPEATED_SETUP_MIN_JOBS = 3;
+var REPEATED_SETUP_MIN_MS = 3e4;
+var STEP_MATCH_MS = 3e3;
+var DEFAULT_MAX_JOB_LOGS = 8;
+var DEFAULT_LOG_CONCURRENCY = 4;
+var MAX_LABEL = 80;
+var MAX_EVIDENCE = 200;
+var MAX_LISTED = 5;
+var INFRA_STEP = /^(?:set up job|complete job|initialize containers|stop containers|post\b)/i;
+var CHECKOUT_STEP = /\bactions\/checkout\b/i;
+var SETUP_STEP = /\b(?:set\s*up|setup|install|restore|cache|dependenc|deps|bootstrap|toolchain|prepare)/i;
+var INSTALL_COMMAND = /\b(?:npm\s+(?:ci|install|i)|pnpm\s+(?:install|i)|yarn\s+install|pip3?\s+install|poetry\s+install|bundle\s+install|composer\s+install|go\s+mod\s+download|dotnet\s+restore)\b/i;
+function isCoverageGap(value) {
+  return value !== void 0 && typeof value.kind === "string" && typeof value.detail === "string";
+}
+function formatMs(ms) {
+  const value = Math.max(0, ms);
+  if (value < 6e4) return `${(value / 1e3).toFixed(1)} s`;
+  const seconds3 = Math.round(value / 1e3);
+  return `${Math.floor(seconds3 / 60)} min ${seconds3 % 60} s`;
+}
+function measure(job) {
+  if (job.conclusion === "skipped") return void 0;
+  const start = Date.parse(job.startedAt);
+  const end = Date.parse(job.completedAt);
+  return Number.isFinite(start) && Number.isFinite(end) && end > start ? { job, start, end } : void 0;
+}
+function latest(items2) {
+  let best;
+  for (const item of items2) {
+    if (!best || item.end > best.end || item.end === best.end && item.job.id < best.job.id) best = item;
+  }
+  return best;
+}
+function analyzeRun(snapshot) {
+  const measured = snapshot.jobs.map(measure).filter((timed) => timed !== void 0);
+  const runStart = measured.reduce((min, timed) => Math.min(min, timed.start), Infinity);
+  const runEnd = measured.reduce((max, timed) => Math.max(max, timed.end), -Infinity);
+  const elapsedMs = measured.length > 0 ? runEnd - runStart : 0;
+  const byKey = /* @__PURE__ */ new Map();
+  for (const timed of measured) byKey.set(timed.job.key, [...byKey.get(timed.job.key) ?? [], timed]);
+  const gated = /* @__PURE__ */ new Map();
+  for (const timed of measured) {
+    const parent = latest(timed.job.needs.flatMap((key) => byKey.get(key) ?? []).filter((other) => other !== timed));
+    if (parent) gated.set(parent, [...gated.get(parent) ?? [], timed]);
+  }
+  const timing = /* @__PURE__ */ new Map();
+  for (const timed of measured) {
+    const chain = /* @__PURE__ */ new Set([timed]);
+    const queue = [timed];
+    for (let index = 0; index < queue.length; index += 1) {
+      for (const child2 of gated.get(queue[index]) ?? []) {
+        if (!chain.has(child2)) {
+          chain.add(child2);
+          queue.push(child2);
+        }
+      }
+    }
+    const slackMs = runEnd - (latest(chain)?.end ?? timed.end);
+    if (slackMs > 0) {
+      timing.set(timed.job.id, { slackMs, critical: false });
+      continue;
+    }
+    const limitedBy = latest(measured.filter((other) => !chain.has(other)));
+    timing.set(timed.job.id, {
+      slackMs,
+      critical: true,
+      headroomMs: limitedBy ? Math.max(0, runEnd - limitedBy.end) : elapsedMs,
+      ...limitedBy ? { limitedBy } : {}
+    });
+  }
+  const criticalNames = measured.filter((timed) => timing.get(timed.job.id)?.critical).sort((a, b) => b.end - a.end || a.job.id - b.job.id).map((timed) => timed.job.name);
+  return { elapsedMs, measured, timing, criticalNames };
+}
+function clip2(value, max) {
+  const text4 = value.replace(/\s+/g, " ").trim();
+  return text4.length > max ? `${text4.slice(0, max - 1)}\u2026` : text4;
+}
+function display3(title) {
+  return clip2(title.replace(/@([0-9a-f]{40})\b/gi, (_match, sha) => `@${sha.slice(0, 7)}`), MAX_LABEL);
+}
+function stepMs(step) {
+  const start = Date.parse(step.startedAt);
+  const end = Date.parse(step.completedAt);
+  return Number.isFinite(start) && Number.isFinite(end) && end >= start ? [start, end] : void 0;
+}
+function locateSteps(evidence2, apiSteps = []) {
+  const candidates2 = apiSteps.filter((step) => step.conclusion !== "skipped" && !INFRA_STEP.test(step.name)).flatMap((step) => {
+    const range2 = stepMs(step);
+    return range2 ? [{ step, start: range2[0] }] : [];
+  }).sort((a, b) => a.step.number - b.step.number);
+  const located = [];
+  let cursor = 0;
+  for (const step of evidence2.steps) {
+    let best;
+    let bestCost = Infinity;
+    for (let index = cursor; index < candidates2.length; index += 1) {
+      const diff = step.startMs - (candidates2[index]?.start ?? 0);
+      if (Math.abs(diff) > STEP_MATCH_MS) continue;
+      const cost = diff >= 0 && diff < 1e3 ? diff : Math.abs(diff) + 1e3;
+      if (cost < bestCost) {
+        best = index;
+        bestCost = cost;
+      }
+    }
+    if (best !== void 0) cursor = best + 1;
+    const label = display3(best !== void 0 ? candidates2[best]?.step.name ?? step.title : step.title);
+    addLocated(located, step, label, String(located.filter((entry2) => entry2.step === entry2.top).length), step, evidence2.steps);
+  }
+  return located;
+}
+function addLocated(out, step, label, path, top, siblings) {
+  out.push({ step, label, path, top, siblings });
+  step.children.forEach((child2, index) => {
+    addLocated(out, child2, clip2(`${label} \u203A ${display3(child2.title)}`, MAX_LABEL), `${path}.${index}`, top, step.children);
+  });
+}
+function boundSentence(shape, jobName, timing, elapsedMs, runnerMs) {
+  if (runnerMs === 0) return "No time saving is bounded from this observation on its own.";
+  if (timing.critical) {
+    const capped = elapsedMs < runnerMs ? `; the elapsed bound is capped by ${formatMs(timing.headroomMs ?? 0)} of headroom before ${timing.limitedBy?.job.name ?? "another job"} would set the run's end` : "";
+    return `Bound: removing this time could save up to ${formatMs(elapsedMs)} of elapsed time and up to ${formatMs(runnerMs)} of runner time${capped}.`;
+  }
+  const critical = shape.criticalNames.slice(0, 3).join(", ") || "another job";
+  return `Bound: up to ${formatMs(runnerMs)} of runner time and no elapsed time, because ${jobName} has ${formatMs(timing.slackMs)} of slack behind ${critical}.`;
+}
+function finding2(ctx, draft) {
+  const observedMs = Math.max(0, Math.round(draft.observedMs));
+  const runnerSavingsBoundMs = Math.max(0, Math.round(draft.removableMs ?? observedMs));
+  const elapsedSavingsBoundMs = ctx.timing.critical ? Math.min(runnerSavingsBoundMs, Math.round(ctx.timing.headroomMs ?? 0)) : 0;
+  for (const step of draft.covers ?? []) ctx.covered.add(step);
+  return {
+    id: `${draft.category}:${ctx.job.id}:${draft.detail}`,
+    category: draft.category,
+    jobKey: ctx.job.key,
+    jobName: ctx.job.name,
+    ...draft.step !== void 0 ? { step: draft.step } : {},
+    observedMs,
+    elapsedSavingsBoundMs,
+    runnerSavingsBoundMs,
+    onCriticalPath: ctx.timing.critical,
+    summary: `${draft.observation} ${boundSentence(ctx.shape, ctx.job.name, ctx.timing, elapsedSavingsBoundMs, runnerSavingsBoundMs)}`,
+    recommendation: draft.recommendation,
+    evidence: draft.evidence.map((line2) => clip2(line2, MAX_EVIDENCE))
+  };
+}
+function vertexMs(vertex) {
+  return vertex.durationMs ?? Math.max(0, vertex.lastMs - vertex.firstMs);
+}
+function sum(values) {
+  return values.reduce((total, value) => total + value, 0);
+}
+function unionMs(intervals, clamp) {
+  const sorted = intervals.map(([start, end]) => clamp ? [Math.max(start, clamp[0]), Math.min(end, clamp[1])] : [start, end]).filter(([start, end]) => end > start).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let total = 0;
+  let current;
+  for (const [start, end] of sorted) {
+    if (current && start <= current[1]) current[1] = Math.max(current[1], end);
+    else {
+      if (current) total += current[1] - current[0];
+      current = [start, end];
+    }
+  }
+  return current ? total + current[1] - current[0] : total;
+}
+function describeVertex(vertex) {
+  const operations = vertex.operations.length > 0 ? ` (${vertex.operations.map((operation2) => `${operation2.name} ${formatMs(operation2.durationMs)}`).join(", ")})` : "";
+  return `#${vertex.id} ${clip2(vertex.name, MAX_LABEL)}: ${formatMs(vertexMs(vertex))}${operations}`;
+}
+function buildFindings(ctx, entry2, build2, index) {
+  const findings4 = [];
+  const detail = `s${entry2.path}b${index}`;
+  const covers2 = [entry2.top];
+  const exports = build2.vertices.filter((vertex) => vertex.kind === "cache-export");
+  const exportMs = sum(exports.map(vertexMs));
+  if (exportMs >= MIN_FINDING_MS) {
+    const modeMax = build2.cacheTo.some((spec2) => spec2.mode === "max");
+    const target = build2.cacheTo.map((spec2) => spec2.raw).join("; ") || "the configured cache";
+    findings4.push(finding2(ctx, {
+      category: "cache-export",
+      detail,
+      step: entry2.label,
+      observedMs: exportMs,
+      observation: `${entry2.label}: BuildKit spent ${formatMs(exportMs)} exporting the build cache${modeMax ? " with mode=max, which exports the layers of every stage" : ""} (cache-to ${target}).`,
+      recommendation: modeMax ? "Export the cache only where later runs reuse it (for example on default-branch runs; caches written by a pull request are only restored by that pull request), consider mode=min as a trade-off (intermediate stages are no longer cached; see the containers/gha-cache-mode-min lint rule) or a type=registry cache, and compare export time and layer cache hits before and after." : "Export the cache only where later runs reuse it (for example on default-branch runs), or use a type=registry cache, and compare export time and layer cache hits before and after.",
+      evidence: [...exports.map(describeVertex), ...build2.cacheTo.map((spec2) => `cache-to: ${spec2.raw}`)],
+      covers: covers2
+    }));
+  }
+  if (build2.load) {
+    const loads = build2.vertices.filter((vertex) => vertex.kind === "image-export" || vertex.kind === "image-load");
+    const loadMs = sum(loads.map(vertexMs));
+    if (loadMs >= MIN_FINDING_MS) {
+      findings4.push(finding2(ctx, {
+        category: "image-load",
+        detail,
+        step: entry2.label,
+        observedMs: loadMs,
+        observation: `${entry2.label}: exporting the image and loading it into the runner's Docker engine (load: true) took ${formatMs(loadMs)}.`,
+        recommendation: "Keep load: true only when later steps run the image locally; otherwise drop it (or push instead). When local use is required, the docker driver builds straight into the engine but supports different cache backends, so measure both before switching.",
+        evidence: [...loads.map(describeVertex), "load: true"],
+        covers: covers2
+      }));
+    }
+  }
+  if (build2.cacheFrom.length > 0) {
+    const misses = build2.vertices.filter((vertex) => vertex.kind === "run" && !vertex.cached && !vertex.error);
+    const missMs = unionMs(misses.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs]));
+    if (missMs >= MIN_FINDING_MS) {
+      const restored = build2.vertices.filter((vertex) => (vertex.kind === "run" || vertex.kind === "copy") && vertex.cached).length;
+      const source = build2.cacheFrom.map((spec2) => spec2.raw).join("; ");
+      const cause = restored === 0 ? "No RUN or COPY layer was restored, which points to a cache scope that was evicted or never exported for these inputs rather than to changed inputs; the log alone cannot confirm which." : `${restored} other layer(s) were restored, so the cache was reachable; these layers' inputs (or an earlier layer) changed, or their entries were evicted.`;
+      findings4.push(finding2(ctx, {
+        category: "layer-cache-miss",
+        detail,
+        step: entry2.label,
+        observedMs: missMs,
+        observation: `${entry2.label}: ${misses.length} RUN layer(s) were rebuilt for ${formatMs(missMs)} although the build restores a cache (cache-from ${source}). ${cause}`,
+        recommendation: "Check that a default-branch run exports this cache scope, that the repository's Actions cache is not evicting it at the size limit, and compare layer cache hits across consecutive runs before restructuring the Dockerfile.",
+        evidence: [
+          ...[...misses].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
+          ...build2.vertices.filter((vertex) => vertex.kind === "cache-import").map(describeVertex),
+          ...build2.cacheFrom.map((spec2) => `cache-from: ${spec2.raw}`)
+        ],
+        covers: covers2
+      }));
+    }
+  }
+  return findings4;
+}
+function cacheSaveFailure(evidence2) {
+  const failures = evidence2.post.cacheSaveFailures;
+  if (failures.length === 0) return void 0;
+  const conflicts = failures.filter((failure2) => /^Unable to reserve cache with key\b/i.test(failure2));
+  return {
+    observation: [
+      "The post-job cache save failed.",
+      conflicts.length > 0 ? "The log reports a cache-key reservation conflict, indicating a possible cache-save race." : "The cause is not classified; inspect the logged error.",
+      ...conflicts.length > 0 && conflicts.length < failures.length ? ["Other save failures also occurred; their causes are not classified."] : []
+    ].join(" "),
+    recommendation: conflicts.length > 0 ? "Check for shared-key contention; if confirmed, have one job (or a default-branch run) save the cache and let parallel jobs only restore it. Investigate any other save errors separately." : "Investigate the cache service and the logged save error before changing cache keys or job structure.",
+    evidence: failures.map((failure2) => `post-job cache save: ${failure2}`)
+  };
+}
+function stepFindings(ctx, entry2) {
+  const { step, label } = entry2;
+  const findings4 = [];
+  step.builds.forEach((build2, index) => findings4.push(...buildFindings(ctx, entry2, build2, index)));
+  const pulling = step.subGroups.filter((group) => /^Pulling BuildKit image/i.test(group.title));
+  const booting = step.subGroups.filter((group) => /^Booting builder/i.test(group.title));
+  const parts = [...pulling, ...booting].map((group) => `${clip2(group.title, MAX_LABEL)}: ${formatMs(group.durationMs)}`);
+  let builderMs = sum([...pulling, ...booting].map((group) => group.durationMs));
+  if (parts.length === 0) {
+    const boots = step.builds.flatMap((build2) => build2.vertices.filter((vertex) => vertex.kind === "builder-boot"));
+    builderMs = sum(boots.map(vertexMs));
+    parts.push(...boots.map(describeVertex));
+  }
+  if (builderMs >= MIN_FINDING_MS) {
+    findings4.push(finding2(ctx, {
+      category: "builder-setup",
+      detail: `s${entry2.path}`,
+      step: label,
+      observedMs: builderMs,
+      observation: `${label}: setting up the BuildKit builder (pulling its image and booting it) took ${formatMs(builderMs)}.`,
+      recommendation: "This is a fixed cost of a docker-container builder on a fresh runner. It matters only when the build itself is short; the docker driver needs no builder container where its features suffice, and a persistent runner can reuse a builder.",
+      evidence: parts,
+      covers: [entry2.top]
+    }));
+  }
+  if (step.toolCache === "download" && step.durationMs >= MIN_FINDING_MS) {
+    findings4.push(finding2(ctx, {
+      category: "toolchain-download",
+      detail: `s${entry2.path}`,
+      step: label,
+      observedMs: step.durationMs,
+      observation: `${label} downloaded its toolchain instead of finding it in the runner's tool cache (${formatMs(step.durationMs)}).`,
+      recommendation: "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
+      evidence: [`${label}: tool cache miss, ${formatMs(step.durationMs)}`],
+      covers: [entry2.top]
+    }));
+  }
+  if (step.packageCache === "miss") {
+    const position = entry2.siblings.indexOf(step);
+    const install2 = entry2.siblings.slice(position + 1).find((sibling) => INSTALL_COMMAND.test(sibling.command ?? sibling.title));
+    const installed = install2?.installedPackages !== void 0 ? ` ${install2.installedPackages} packages` : "";
+    const firstMiss = ctx.located.find((other) => other.step.packageCache === "miss");
+    const failure2 = firstMiss === entry2 ? cacheSaveFailure(ctx.evidence) : void 0;
+    const save = failure2 ? ` ${failure2.observation}` : "";
+    findings4.push(finding2(ctx, {
+      category: "package-cache",
+      detail: `s${entry2.path}`,
+      step: label,
+      observedMs: install2?.durationMs ?? 0,
+      observation: install2 ? `${label}: the dependency cache missed, so ${clip2(install2.command ?? install2.title, MAX_LABEL)} installed${installed} from the network in ${formatMs(install2.durationMs)}.${save}` : `${label}: the dependency cache missed.${save}`,
+      recommendation: [
+        failure2?.recommendation ?? "Check whether a matching cache was saved and remains available; compare restore keys and cache scope across runs.",
+        "A warm cache only shortens the download part of an install, not the install itself."
+      ].join(" "),
+      evidence: [
+        `${label}: package cache miss (${formatMs(step.durationMs)})`,
+        ...install2 ? [`${clip2(install2.command ?? install2.title, MAX_LABEL)}: ${formatMs(install2.durationMs)}${installed ? `,${installed}` : ""}`] : [],
+        ...failure2?.evidence ?? []
+      ],
+      covers: [entry2.top]
+    }));
+  }
+  if (step.tests.length > 0 && step.durationMs >= MIN_TEST_RUNTIME_MS) {
+    const frameworks = step.tests.map((summary) => {
+      const counts = [
+        summary.tests !== void 0 ? `${summary.tests} tests` : void 0,
+        summary.files !== void 0 ? `${summary.files} files` : void 0,
+        summary.durationMs !== void 0 ? formatMs(summary.durationMs) : void 0
+      ].filter((part) => part !== void 0);
+      return `${summary.framework}${counts.length > 0 ? `: ${counts.join(", ")}` : ""}`;
+    });
+    const phaseLines = step.tests.filter((summary) => Object.keys(summary.phases).length > 0).map((summary) => `${summary.framework} phase shares: ${Object.entries(summary.phases).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([phase, share]) => `${phase} ${share}%`).join(", ")}`);
+    const importShare = Math.max(0, ...step.tests.map((summary) => summary.phases.import ?? 0));
+    findings4.push(finding2(ctx, {
+      category: "test-runtime",
+      detail: `s${entry2.path}`,
+      step: label,
+      observedMs: step.durationMs,
+      observation: `${label} ran tests for ${formatMs(step.durationMs)} (${frameworks.join("; ")}).`,
+      recommendation: [
+        "Split the suite across parallel jobs (for example vitest --shard=<i>/<n> or jest --shard=<i>/<n>); sharding trades extra runner time, including setup repeated per shard, for elapsed time.",
+        ...importShare >= 20 ? [`Imports take ${importShare}% of the test time, so trimming heavy imports from the module graph would cut work in every shard.`] : [],
+        ...!ctx.timing.critical ? ["This job is off the critical path, so it only shortens the run once the critical path is reduced."] : []
+      ].join(" "),
+      evidence: [...frameworks, ...phaseLines],
+      covers: [entry2.top]
+    }));
+  }
+  return findings4;
+}
+function jobFindings(ctx) {
+  const { evidence: evidence2, located } = ctx;
+  const findings4 = located.flatMap((entry2) => stepFindings(ctx, entry2));
+  const saveFailure = cacheSaveFailure(evidence2);
+  if (saveFailure && !located.some((entry2) => entry2.step.packageCache === "miss")) {
+    findings4.push(finding2(ctx, {
+      category: "package-cache",
+      detail: "save",
+      step: "Post-job steps",
+      observedMs: 0,
+      ...saveFailure
+    }));
+  }
+  const removing = evidence2.post.subGroups.filter((group) => /^Removing builder/i.test(group.title));
+  const records3 = evidence2.post.subGroups.filter((group) => /build (?:summary|record)/i.test(group.title));
+  const teardownMs = sum([...removing, ...records3].map((group) => group.durationMs));
+  if (teardownMs >= MIN_FINDING_MS) {
+    findings4.push(finding2(ctx, {
+      category: "builder-teardown",
+      detail: "post",
+      step: "Post-job steps",
+      observedMs: teardownMs,
+      observation: `Post-job steps spent ${formatMs(teardownMs)} removing the BuildKit builder and generating the build summary or record.`,
+      recommendation: [
+        ...removing.length > 0 ? ["On ephemeral hosted runners the builder disappears with the VM, so cleanup: false on docker/setup-buildx-action skips removing it."] : [],
+        ...records3.length > 0 ? ["If the build summary and record artifact are not used, set DOCKER_BUILD_SUMMARY: false and DOCKER_BUILD_RECORD_UPLOAD: false on the build step."] : []
+      ].join(" "),
+      evidence: [...removing, ...records3].map((group) => `${clip2(group.title, MAX_LABEL)}: ${formatMs(group.durationMs)}`)
+    }));
+  }
+  for (const repeated of evidence2.repeatedCommands) {
+    const entries3 = repeated.steps.map((index) => located.find((entry2) => entry2.step === evidence2.steps[index]));
+    const total = sum(repeated.durationsMs);
+    const removable = total - Math.max(0, ...repeated.durationsMs);
+    if (removable < MIN_FINDING_MS) continue;
+    const labels = entries3.map((entry2, position) => entry2?.label ?? `step ${(repeated.steps[position] ?? 0) + 1}`);
+    const envSets = entries3.map((entry2) => [...entry2?.step.envKeys ?? []].sort().join(","));
+    const differ = new Set(envSets).size > 1;
+    findings4.push(finding2(ctx, {
+      category: "repeated-command",
+      detail: repeated.steps.join("-"),
+      step: clip2(labels.join(" + "), MAX_LABEL),
+      observedMs: total,
+      removableMs: removable,
+      observation: `The same command (${clip2(repeated.command, MAX_LABEL)}) ran in ${repeated.steps.length} sequential steps for ${formatMs(total)} in total${differ ? "; the steps set different environment variables, so they likely exercise different configurations" : ""}. Running them side by side could save at most the time of all but the longest run (${formatMs(removable)}).`,
+      recommendation: "If the runs are independent, start them concurrently (for example in the background within one step, or as separate jobs), or cover every configuration in a single invocation.",
+      evidence: entries3.map((entry2, position) => {
+        const env = entry2 && entry2.step.envKeys.length > 0 ? ` (env: ${[...entry2.step.envKeys].sort().join(", ")})` : "";
+        return `${labels[position]}: ${formatMs(repeated.durationsMs[position] ?? 0)}${env}`;
+      }),
+      covers: entries3.flatMap((entry2) => entry2 ? [entry2.top] : [])
+    }));
+  }
+  for (const service of evidence2.setup.services) {
+    const startupMs = (service.pullMs ?? 0) + (service.healthWaitMs ?? 0);
+    if (startupMs < MIN_FINDING_MS) continue;
+    const parts = [
+      ...service.pullMs !== void 0 ? [`image pull ${formatMs(service.pullMs)}`] : [],
+      ...service.healthWaitMs !== void 0 ? [`health checks ${formatMs(service.healthWaitMs)} over ${service.polls} poll(s)`] : []
+    ];
+    findings4.push(finding2(ctx, {
+      category: "service-startup",
+      detail: clip2(service.name, 40).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      step: "Initialize containers",
+      observedMs: startupMs,
+      observation: `Starting service container ${clip2(service.name, MAX_LABEL)}${service.image ? ` (${clip2(service.image, MAX_LABEL)})` : ""} took ${formatMs(startupMs)} before the first step could run (${parts.join(", ")}).`,
+      recommendation: "Run the service only in jobs that use it, prefer a smaller image, and tune the health-check interval; or start it with docker run --detach early in the job so it boots while other steps run instead of blocking the first step.",
+      evidence: [`${clip2(service.name, MAX_LABEL)}${service.image ? ` ${clip2(service.image, MAX_LABEL)}` : ""}: ${parts.join(", ")}`]
+    }));
+  }
+  return findings4;
+}
+function normalizeSetup(name) {
+  return name.replace(/^Run\s+/i, "").replace(/@\S+/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+function setupSteps(timed, evidence2) {
+  const apiSteps = (timed.job.steps ?? []).filter((step) => step.conclusion !== "skipped");
+  const steps2 = apiSteps.length > 0 ? apiSteps.map((step) => ({ name: step.name, ms: step.durationMs })) : (evidence2?.steps ?? []).map((step) => ({ name: step.title, ms: step.durationMs }));
+  return steps2.filter((step) => !INFRA_STEP.test(step.name) && !CHECKOUT_STEP.test(step.name) && (SETUP_STEP.test(step.name) || INSTALL_COMMAND.test(step.name)));
+}
+function repeatedSetup(shape, evidenceById) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const timed of shape.measured) {
+    for (const step of setupSteps(timed, evidenceById.get(timed.job.id))) {
+      const key = normalizeSetup(step.name);
+      if (!key) continue;
+      const uses = groups.get(key) ?? /* @__PURE__ */ new Map();
+      const use = uses.get(timed) ?? { timed, ms: 0, label: display3(step.name) };
+      use.ms += Math.max(0, step.ms);
+      uses.set(timed, use);
+      groups.set(key, uses);
+    }
+  }
+  const findings4 = [];
+  for (const [key, uses] of groups) {
+    const list2 = [...uses.values()].sort((a, b) => b.ms - a.ms || a.timed.job.id - b.timed.job.id);
+    const total = sum(list2.map((use) => use.ms));
+    const longest = list2[0]?.ms ?? 0;
+    const removable = total - longest;
+    if (list2.length < REPEATED_SETUP_MIN_JOBS || total < REPEATED_SETUP_MIN_MS || removable < MIN_FINDING_MS) continue;
+    const critical = list2.filter((use) => shape.timing.get(use.timed.job.id)?.critical);
+    const elapsed2 = Math.round(Math.min(removable, Math.max(0, ...critical.map((use) => Math.min(use.ms, shape.timing.get(use.timed.job.id)?.headroomMs ?? 0)))));
+    const runner = Math.round(removable);
+    const names = list2.map((use) => use.timed.job.name);
+    const listed = names.length > MAX_LISTED ? `${names.slice(0, MAX_LISTED).join(", ")} and ${names.length - MAX_LISTED} more` : names.join(", ");
+    const label = list2[0]?.label ?? key;
+    const bound = critical.length > 0 ? `Bound: up to ${formatMs(elapsed2)} of elapsed time (removing it from the critical job) and up to ${formatMs(runner)} of runner time (every instance but the longest).` : `Bound: up to ${formatMs(runner)} of runner time (every instance but the longest) and no elapsed time, because none of these jobs is on the critical path.`;
+    findings4.push({
+      id: `repeated-setup:${key.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "step"}`,
+      category: "repeated-setup",
+      jobKey: clip2([...new Set(list2.map((use) => use.timed.job.key))].sort().join(", "), MAX_EVIDENCE),
+      jobName: clip2(listed, MAX_EVIDENCE),
+      step: label,
+      observedMs: Math.round(total),
+      elapsedSavingsBoundMs: elapsed2,
+      runnerSavingsBoundMs: runner,
+      onCriticalPath: critical.length > 0,
+      summary: `${list2.length} jobs each ran ${label} (${formatMs(total)} in total, longest ${formatMs(longest)}). ${bound}`,
+      recommendation: "Cache what this setup produces (dependencies, toolchains) so each repeat is shorter, or merge short jobs that share it; merging parallel jobs can lengthen the run, so only merge jobs that have slack.",
+      evidence: list2.slice(0, MAX_LISTED * 2).map((use) => `${clip2(use.timed.job.name, MAX_LABEL)}: ${formatMs(use.ms)}`)
+    });
+  }
+  return findings4;
+}
+function compareText(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+function attributeRun(snapshot, logs = /* @__PURE__ */ new Map()) {
+  const shape = analyzeRun(snapshot);
+  const bottlenecks = [];
+  const gaps = [];
+  const evidenceById = /* @__PURE__ */ new Map();
+  let jobsWithLogs = 0;
+  let explainedMs = 0;
+  let observedMs = 0;
+  for (const timed of shape.measured) {
+    const { job } = timed;
+    const durationMs = timed.end - timed.start;
+    const timing = shape.timing.get(job.id) ?? { slackMs: 0, critical: false };
+    const result = logs.get(job.id) ?? logs.get(job.key);
+    const apiSteps = (job.steps ?? []).filter((step) => step.conclusion !== "skipped");
+    let evidence2;
+    let logGap;
+    if (result === void 0) {
+      logGap = {
+        kind: "log-not-fetched",
+        jobKey: job.key,
+        jobName: job.name,
+        ms: durationMs,
+        detail: "The job log was not fetched, so log-based causes (build, cache, test and service evidence) were not examined."
+      };
+    } else if (isCoverageGap(result)) {
+      logGap = { ...result, jobKey: job.key, jobName: job.name, ms: result.ms ?? durationMs };
+    } else {
+      evidence2 = result;
+      jobsWithLogs += 1;
+      evidenceById.set(job.id, evidence2);
+      if (evidence2.truncated) {
+        gaps.push({
+          kind: "log-truncated",
+          jobKey: job.key,
+          jobName: job.name,
+          detail: `Only the first ${evidence2.lines} log lines fit the size budget, so causes in later steps may be missing.`
+        });
+      }
+    }
+    const located = evidence2 ? locateSteps(evidence2, apiSteps) : [];
+    const covered3 = /* @__PURE__ */ new Set();
+    if (evidence2) bottlenecks.push(...jobFindings({ job, timing, shape, evidence: evidence2, located, covered: covered3 }));
+    const intervals = apiSteps.flatMap((step) => {
+      const range2 = stepMs(step);
+      return range2 ? [range2] : [];
+    });
+    if (evidence2) {
+      if (evidence2.firstMs !== void 0) intervals.push([evidence2.firstMs, evidence2.firstMs + evidence2.setup.durationMs]);
+      for (const step of evidence2.steps) intervals.push([step.startMs, step.endMs]);
+      if (evidence2.post.startMs !== void 0) intervals.push([evidence2.post.startMs, evidence2.post.startMs + evidence2.post.durationMs]);
+    }
+    const explained = Math.min(durationMs, unionMs(intervals, [timed.start, timed.end]));
+    observedMs += durationMs;
+    explainedMs += explained;
+    const threshold = Math.max(UNEXPLAINED_MIN_MS, UNEXPLAINED_SHARE * durationMs);
+    const hasSteps = apiSteps.length > 0 || (evidence2?.steps.length ?? 0) > 0;
+    if (logGap) {
+      if (!hasSteps) logGap.detail += " The jobs API reported no steps either, so none of this job's time can be attributed.";
+      gaps.push(logGap);
+    }
+    if (!hasSteps) {
+      if (!logGap) {
+        gaps.push({
+          kind: "no-step-data",
+          jobKey: job.key,
+          jobName: job.name,
+          ms: durationMs,
+          detail: "Neither the jobs API nor the job log reported steps, so none of this job's time can be attributed."
+        });
+      }
+    } else if (durationMs - explained >= threshold) {
+      gaps.push({
+        kind: "unexplained-time",
+        jobKey: job.key,
+        jobName: job.name,
+        ms: Math.round(durationMs - explained),
+        detail: `${formatMs(durationMs - explained)} of the job's ${formatMs(durationMs)} is not covered by any step in the jobs API or the job log.`
+      });
+    }
+    if (evidence2 && timing.critical) {
+      for (const entry2 of located) {
+        if (entry2.step !== entry2.top || covered3.has(entry2.step) || entry2.step.durationMs < threshold) continue;
+        gaps.push({
+          kind: "unexplained-time",
+          jobKey: job.key,
+          jobName: job.name,
+          ms: entry2.step.durationMs,
+          detail: `${entry2.label} took ${formatMs(entry2.step.durationMs)} on the critical path and no recognised bottleneck pattern explains it.`
+        });
+      }
+    }
+  }
+  bottlenecks.push(...repeatedSetup(shape, evidenceById));
+  bottlenecks.sort((a, b) => b.elapsedSavingsBoundMs - a.elapsedSavingsBoundMs || b.runnerSavingsBoundMs - a.runnerSavingsBoundMs || compareText(a.id, b.id));
+  gaps.sort((a, b) => (b.ms ?? 0) - (a.ms ?? 0) || compareText(a.kind, b.kind) || compareText(a.jobKey, b.jobKey) || compareText(a.detail, b.detail));
+  const jobs = shape.measured.map((timed) => {
+    const timing = shape.timing.get(timed.job.id) ?? { slackMs: 0, critical: false };
+    return {
+      id: timed.job.id,
+      key: timed.job.key,
+      name: timed.job.name,
+      durationMs: timed.end - timed.start,
+      slackMs: timing.slackMs,
+      critical: timing.critical,
+      ...timing.headroomMs !== void 0 ? { headroomMs: timing.headroomMs } : {},
+      ...timing.limitedBy ? { limitedBy: timing.limitedBy.job.name } : {}
+    };
+  }).sort((a, b) => Number(b.critical) - Number(a.critical) || a.slackMs - b.slackMs || b.durationMs - a.durationMs || a.id - b.id);
+  return {
+    elapsedMs: shape.elapsedMs,
+    criticalSlackMs: 0,
+    jobs,
+    bottlenecks,
+    gaps,
+    coverage: {
+      jobs: shape.measured.length,
+      jobsWithLogs,
+      explainedMs: Math.round(explainedMs),
+      observedMs: Math.round(observedMs),
+      unexplainedMs: Math.round(observedMs - explainedMs)
+    }
+  };
+}
+function failureReason(error62) {
+  const status = httpStatus(error62);
+  if (status !== void 0) return `HTTP ${status}`;
+  return clip2(error62 instanceof Error ? error62.message : String(error62), 120) || "unknown error";
+}
+async function collectJobLogs(client, repo, snapshot, options = {}) {
+  const shape = analyzeRun(snapshot);
+  const budget = Math.max(0, Math.floor(options.maxJobLogs ?? DEFAULT_MAX_JOB_LOGS));
+  const ordered = [...shape.measured].sort((a, b) => Number(shape.timing.get(b.job.id)?.critical ?? false) - Number(shape.timing.get(a.job.id)?.critical ?? false) || b.end - b.start - (a.end - a.start) || a.job.id - b.job.id);
+  const selected = ordered.slice(0, budget);
+  const limits = {
+    ...options.maxBytes !== void 0 ? { maxBytes: options.maxBytes } : {},
+    ...options.maxLines !== void 0 ? { maxLines: options.maxLines } : {}
+  };
+  const fetched = await mapLimit(selected, Math.max(1, options.concurrency ?? DEFAULT_LOG_CONCURRENCY), async (timed) => {
+    const base2 = { jobKey: timed.job.key, jobName: timed.job.name };
+    try {
+      const log = await fetchJobLog(client, repo, timed.job.id, limits);
+      if (!log) {
+        return { ...base2, kind: "log-unavailable", detail: "GitHub returned no log for this job (HTTP 404 or 410); it may have expired or be inaccessible, so log-based causes were not examined." };
+      }
+      return parseJobLog(log.text, { truncated: log.truncated });
+    } catch (error62) {
+      return { ...base2, kind: "log-error", detail: `Fetching or parsing the job log failed (${failureReason(error62)}), so log-based causes were not examined.` };
+    }
+  });
+  const results = /* @__PURE__ */ new Map();
+  selected.forEach((timed, index) => {
+    const result = fetched[index];
+    if (result) results.set(timed.job.id, result);
+  });
+  for (const timed of ordered.slice(budget)) {
+    results.set(timed.job.id, {
+      kind: "log-not-fetched",
+      jobKey: timed.job.key,
+      jobName: timed.job.name,
+      detail: `Skipped to stay within the ${budget}-log budget (critical and longest jobs are fetched first), so log-based causes were not examined.`
+    });
+  }
+  return results;
+}
+
 // src/telemetry/report.ts
 var QUEUE_THRESHOLD_MS = 5e3;
-function createTelemetryReport(snapshot, baseline) {
+var JOB_REGRESSION_MIN_SAMPLES = 3;
+function createTelemetryReport(snapshot, baseline, extras = {}) {
   const criticalPath = calculateCriticalPath(snapshot.jobs);
   const slowest = [...snapshot.jobs].sort((a, b) => b.durationMs - a.durationMs).slice(0, 5);
-  const comparison = baseline ? compare2(snapshot.durationMs, baseline.medianDurationMs, baseline.sampleCount) : comparisonProblem(snapshot) ? `Performance comparison withheld: ${comparisonProblem(snapshot)}` : "No comparable historical baseline is available in the retained/backfilled evidence window.";
+  const comparison = baseline ? compare2(snapshot.durationMs, baseline.medianDurationMs, baseline.sampleCount) : comparisonProblem(snapshot) ? `Performance comparison withheld: ${comparisonProblem(snapshot)}` : describeMissingBaseline(extras.diagnostic);
   return [
     `## ${snapshot.workflowName} performance snapshot`,
     "",
@@ -71988,9 +73323,49 @@ function createTelemetryReport(snapshot, baseline) {
     ),
     "",
     ...slowestSteps(snapshot),
-    ...jobRegressions(snapshot, baseline),
+    ...jobHistory(snapshot, baseline, extras.jobBaselines),
+    ...jobRegressions(snapshot, baseline, extras.jobBaselines),
+    ...attributionReport(extras.attribution, extras.attributionUnavailable),
     ...recommendations(snapshot, criticalPath, baseline)
   ].join("\n");
+}
+function attributionReport(attribution, unavailable) {
+  if (!attribution) {
+    return unavailable ? ["### Bottleneck evidence", "", unavailable, ""] : [];
+  }
+  const findings4 = attribution.bottlenecks.slice(0, 10);
+  const gaps = attribution.gaps.slice(0, 10);
+  return [
+    "### Bottleneck evidence",
+    "",
+    `Observed ${formatDuration2(attribution.coverage.observedMs)} across ${attribution.coverage.jobs} timed job(s); logs were parsed for ${attribution.coverage.jobsWithLogs}. Step timing explains ${formatDuration2(attribution.coverage.explainedMs)}; ${formatDuration2(attribution.coverage.unexplainedMs)} remains unexplained or unobserved.`,
+    "",
+    "_Savings are evidence-based upper bounds, not predicted speedups. Findings can overlap; do not add their bounds together._",
+    "",
+    ...findings4.length > 0 ? [
+      "| Candidate and next check | Job(s) | Observed | Elapsed upper bound | Runner upper bound | Evidence",
+      "|---|---|---:|---:|---:|---|",
+      ...findings4.map(
+        (finding3) => `| ${escapeReportCell(`${finding3.summary} ${finding3.recommendation}`)} | ${escapeReportCell(finding3.jobName)} | ${formatDuration2(finding3.observedMs)} | ${formatDuration2(finding3.elapsedSavingsBoundMs)} | ${formatDuration2(finding3.runnerSavingsBoundMs)} | ${escapeReportCell(finding3.evidence.slice(0, 2).join("; "))} |`
+      ),
+      ...attribution.bottlenecks.length > findings4.length ? [`| ${attribution.bottlenecks.length - findings4.length} additional candidate(s) omitted | | | | | |`] : []
+    ] : ["No recognized bottleneck pattern was found in the examined evidence."],
+    ...gaps.length > 0 ? [
+      "",
+      "#### Evidence coverage gaps",
+      "",
+      "| Job | Gap | Time | Detail |",
+      "|---|---|---:|---|",
+      ...gaps.map(
+        (gap) => `| ${escapeReportCell(gap.jobName ?? gap.jobKey)} | ${escapeReportCell(gap.kind)} | ${gap.ms === void 0 ? "\u2014" : formatDuration2(gap.ms)} | ${escapeReportCell(gap.detail)} |`
+      ),
+      ...attribution.gaps.length > gaps.length ? [`| | ${attribution.gaps.length - gaps.length} additional gap(s) omitted | | |`] : []
+    ] : [],
+    ""
+  ];
+}
+function escapeReportCell(value) {
+  return value.replace(/\r?\n/g, " ").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/([`*_{}\x5B\x5D()<>])/g, "\\$1");
 }
 function calculateCriticalPath(jobs) {
   const byKey = new Map(jobs.map((job) => [job.key, job]));
@@ -72065,9 +73440,43 @@ function slowestSteps(snapshot, limit = 10) {
     ""
   ];
 }
-function jobRegressions(snapshot, baseline) {
-  if (!baseline?.jobs) return [];
-  const rows = snapshot.jobs.map((job) => ({ job, median: baseline.jobs?.[job.key] })).filter(
+function describeMissingBaseline(diagnostic) {
+  const fallback = "No comparable historical baseline is available in the retained/backfilled evidence window.";
+  if (!diagnostic) return fallback;
+  if (diagnostic.examined === 0) return `${fallback} No earlier runs of this workflow were found.`;
+  const reasons = Object.entries(diagnostic.excluded).filter(([, count]) => count > 0).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return [
+    `No run-level baseline: ${diagnostic.examined} earlier run(s) examined, ${diagnostic.comparable} comparable.`,
+    ...reasons.length ? [""] : [],
+    ...reasons.map(([reason, count]) => `- ${count} excluded \u2014 ${EXCLUSION_DESCRIPTIONS[reason]}`)
+  ].join("\n");
+}
+function jobHistory(snapshot, baseline, jobs) {
+  if (baseline || !jobs?.length) return [];
+  const byKey = new Map(snapshot.jobs.map((job) => [job.key, job]));
+  const rows = jobs.flatMap((entry2) => {
+    const job = byKey.get(entry2.key);
+    return job ? [{ job, entry: entry2 }] : [];
+  }).sort((a, b) => b.job.durationMs - a.job.durationMs);
+  if (rows.length === 0) return [];
+  return [
+    "### Per-job history",
+    "",
+    "_Each job is compared only with earlier successful first attempts of the identical job (same name, needs, runner labels and group)._",
+    "",
+    "| Job | This run | Median | Samples | Delta |",
+    "|---|---:|---:|---:|---:|",
+    ...rows.map(({ job, entry: entry2 }) => {
+      const delta = job.durationMs - entry2.medianDurationMs;
+      return `| ${escapeCell(job.name)} | ${formatDuration2(job.durationMs)} | ${formatDuration2(entry2.medianDurationMs)} | ${entry2.sampleCount} | ${delta >= 0 ? "+" : "\u2212"}${formatDuration2(Math.abs(delta))} |`;
+    }),
+    ""
+  ];
+}
+function jobRegressions(snapshot, baseline, jobs) {
+  const medians = baseline ? baseline.jobs : Object.fromEntries((jobs ?? []).filter((entry2) => entry2.sampleCount >= JOB_REGRESSION_MIN_SAMPLES).map((entry2) => [entry2.key, entry2.medianDurationMs]));
+  if (!medians) return [];
+  const rows = snapshot.jobs.map((job) => ({ job, median: medians[job.key] })).filter(
     (row) => row.median !== void 0 && row.job.durationMs - row.median >= 3e4 && row.job.durationMs > row.median * 1.25
   ).sort((a, b) => b.job.durationMs - b.median - (a.job.durationMs - a.median));
   if (rows.length === 0) return [];
@@ -72143,9 +73552,9 @@ function percentage(part, whole) {
   return whole > 0 ? `${(part / whole * 100).toFixed(0)}%` : "0%";
 }
 function formatDuration2(milliseconds) {
-  const seconds2 = Math.round(milliseconds / 1e3);
-  const minutes = Math.floor(seconds2 / 60);
-  const remainder = seconds2 % 60;
+  const seconds3 = Math.round(milliseconds / 1e3);
+  const minutes = Math.floor(seconds3 / 60);
+  const remainder = seconds3 % 60;
   return minutes > 0 ? `${minutes}m ${remainder}s` : `${remainder}s`;
 }
 function withoutMillis(value) {
@@ -72160,6 +73569,9 @@ function escapeCell(value) {
 
 // src/telemetry/snapshot.ts
 var import_yaml42 = __toESM(require_dist2(), 1);
+function isExternalCheckRun(job, key) {
+  return key === void 0 && !job.runner_id && !job.runner_name && !job.steps?.length && typeof job.html_url === "string" && !/\/actions\/runs\/\d+\/job\/\d+/.test(job.html_url);
+}
 function workflowPath(path) {
   return path.replace(/@.*$/, "");
 }
@@ -72216,7 +73628,9 @@ async function buildWorkflowSnapshot(client, repo, run2, options = {}) {
   return snapshotFromRun(repo, run2, jobs.jobs, definitions, jobs.complete);
 }
 function snapshotFromRun(repo, run2, apiJobs, definitions, jobsComplete = false) {
-  const mapped = apiJobs.filter((job) => job.started_at && job.completed_at).map((job) => ({ job, key: matchJobKey(job.name, definitions) }));
+  const classified = apiJobs.map((job) => ({ job, key: matchJobKey(job.name, definitions) }));
+  const external = classified.filter(({ job, key }) => isExternalCheckRun(job, key)).map(({ job }) => ({ id: job.id, name: job.name }));
+  const mapped = classified.filter(({ job, key }) => job.started_at && job.completed_at && !isExternalCheckRun(job, key));
   const jobs = mapped.map(({ job, key }) => jobSnapshot(job, definitions, key));
   const startedAt = run2.run_started_at ?? run2.created_at;
   const lastJob = jobs.map((job) => job.completedAt).sort().at(-1);
@@ -72245,7 +73659,8 @@ function snapshotFromRun(repo, run2, apiJobs, definitions, jobsComplete = false)
       collector: "github-actions-rest",
       collectedAt: (/* @__PURE__ */ new Date()).toISOString(),
       jobsComplete,
-      definitionKnown: definitions.size > 0 && mapped.every(({ key }) => key !== void 0)
+      definitionKnown: definitions.size > 0 && mapped.every(({ key }) => key !== void 0),
+      ...external.length > 0 ? { externalChecks: external } : {}
     }
   };
 }
@@ -72868,13 +74283,27 @@ async function processWorkflowRun(client, repo, run2, options = {}) {
   }
   const prior = (knowledgeComparison?.history ?? comparableHistory(history, snapshot)).sort(byCompletion).slice(-historyLimit(config2));
   const baseline = computeBaseline(prior, snapshot);
-  const report = createTelemetryReport(snapshot, baseline) + (knowledge ? describeRunKnowledge(knowledge) : "") + (knowledgeSkipped ? "\n\nProject declaration collection was skipped because the repository configuration is invalid." : "");
+  const diagnostic = knowledgeComparison ? void 0 : diagnoseBaseline(history, snapshot);
+  const jobs = knowledgeComparison ? [] : jobBaselines(history, snapshot, historyLimit(config2));
+  const attributionReady = snapshot.provenance?.jobsComplete === true && snapshot.provenance.definitionKnown;
+  const attributionUnavailable = attributionReady ? void 0 : "Bottleneck attribution was withheld because the Actions job inventory or workflow job definitions are incomplete.";
+  const attribution = attributionReady ? attributeRun(snapshot, await collectJobLogs(client, repo, snapshot)) : void 0;
+  const report = createTelemetryReport(snapshot, baseline, {
+    ...diagnostic ? { diagnostic } : {},
+    jobBaselines: jobs,
+    ...attribution ? { attribution } : {},
+    ...attributionUnavailable ? { attributionUnavailable } : {}
+  }) + (knowledge ? describeRunKnowledge(knowledge) : "") + (knowledgeSkipped ? "\n\nProject declaration collection was skipped because the repository configuration is invalid." : "");
   const result = {
     status: "processed",
     snapshot,
     samples: prior.length,
     report,
     ...baseline ? { baseline } : {},
+    ...diagnostic ? { baselineDiagnostic: diagnostic } : {},
+    ...jobs.length ? { jobBaselines: jobs } : {},
+    ...attribution ? { attribution } : {},
+    ...attributionUnavailable ? { attributionUnavailable } : {},
     ...knowledge ? { knowledge } : {},
     ...knowledgeSkipped ? { knowledgeSkipped } : {}
   };
@@ -72908,7 +74337,7 @@ async function processWorkflowRun(client, repo, run2, options = {}) {
       name: `${TELEMETRY_CHECK_PREFIX} (${snapshot.workflowName})`,
       headSha: snapshot.headSha,
       conclusion: "neutral",
-      title: headline(snapshot, baseline),
+      title: headline(snapshot, baseline, diagnostic),
       summary: report,
       ...snapshot.htmlUrl ? { detailsUrl: snapshot.htmlUrl } : {}
     });
@@ -72918,18 +74347,17 @@ async function processWorkflowRun(client, repo, run2, options = {}) {
 async function loadHistory(client, repo, run2, snapshot, { limit, minSamples }, options, immutableHistory = false) {
   const query = { owner: repo.owner, repo: repo.repo, workflowId: snapshot.workflowId, branch: snapshot.branch, limit: Math.max(200, limit + 1) };
   const backfill = () => loadRunHistory(client, repo, { workflowId: snapshot.workflowId, branch: snapshot.branch, limit, excludeRunId: run2.id });
+  const comparable = comparisonKey(snapshot) !== void 0 || jobHistoryApplies(snapshot);
+  const thin = (items2) => comparisonKey(snapshot) !== void 0 && comparableHistory(items2, snapshot).length < minSamples || thinJobHistory(items2, snapshot, minSamples);
   const store = options.store;
-  if (!store) return !immutableHistory && comparisonKey(snapshot) ? merge3(await backfill(), [snapshot], limit + 1) : [snapshot];
+  if (!store) return !immutableHistory && comparable ? merge3(await backfill(), [snapshot], limit + 1) : [snapshot];
   if (!options.dryRun) await store.save(snapshot);
-  if (!comparisonKey(snapshot)) {
-    return latestAttempts([...await store.history({ ...query, runId: snapshot.runId, limit: 1 }), snapshot]);
-  }
   const [current, stored] = await Promise.all([
     store.history({ ...query, runId: snapshot.runId, limit: 1 }),
     store.history(query)
   ]);
   let history = stored;
-  if (!immutableHistory && comparisonKey(snapshot) && comparableHistory(history, snapshot).length < minSamples) {
+  if (!immutableHistory && comparable && thin(history)) {
     const fetched = await backfill();
     if (!options.dryRun) for (const item of fetched) await store.save(item);
     history = merge3(history, fetched, query.limit);
@@ -72939,9 +74367,9 @@ async function loadHistory(client, repo, run2, snapshot, { limit, minSamples }, 
 function merge3(left, right, limit) {
   return latestAttempts([...left, ...right]).sort(byCompletion).slice(-limit);
 }
-function headline(snapshot, baseline) {
+function headline(snapshot, baseline, diagnostic) {
   const minutes = (snapshot.durationMs / 6e4).toFixed(1);
-  if (!baseline || baseline.medianDurationMs === 0) return `${minutes} min (no baseline yet)`;
+  if (!baseline || baseline.medianDurationMs === 0) return `${minutes} min (${summarizeBaselineGap(diagnostic)})`;
   const delta = (snapshot.durationMs - baseline.medianDurationMs) / baseline.medianDurationMs * 100;
   return `${minutes} min (${delta >= 0 ? "+" : ""}${delta.toFixed(0)}% vs ${baseline.sampleCount}-run median)`;
 }
@@ -74286,14 +75714,14 @@ var RULE_ASSURANCE = {
     },
     {
       "id": "redundancy/rebuild-per-job",
-      "metadataSha256": "067374fbe410f03afba66ddb3fea6c646a627e7d6785d5ce269b10ce80a9f781",
+      "metadataSha256": "661cb6f1f425cb771585976657d249df125290298ae0756da6adc595789e6584",
       "detector": {
         "assurance": "heuristic-not-formally-proved",
-        "claim": "Several jobs in a workflow should not each rebuild the same project from scratch."
+        "claim": "Repeated builds across CI jobs and workflows should be assessed for verified artifact or layer reuse."
       },
       "recommendation": {
         "assurance": "conditional-not-universally-proved",
-        "rationale": "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result."
+        "rationale": "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. The same Dockerfile declared in different workflows is also only a reuse candidate: triggers, revisions, inputs, targets and platforms may differ. Where consumers can safely share a verified immutable artifact or cached layers, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result."
       },
       "autofix": "not-provided",
       "engineContracts": [
@@ -74532,6 +75960,74 @@ var RULE_ASSURANCE = {
       "recommendation": {
         "assurance": "conditional-not-universally-proved",
         "rationale": "These triggers run in the base repository's context with its secrets and a token that can write. Checking out the contributor's head commit and then running a build, test, script, or local action executes attacker-authored code with those privileges (a \"pwn request\"). Run untrusted code in a `pull_request` workflow instead, and hand results to the privileged workflow as data."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "ssdf/attestation-missing-permissions",
+      "metadataSha256": "51a4352dc198c2ad5f71884505111106f08c6eef0c573aba01de40f05d912267",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A GitHub attestation action lacks the explicit token permissions it requires."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "GitHub artifact attestations require id-token: write and attestations: write. Explicitly declaring these job-level capabilities avoids relying on repository defaults and makes the action's authority reviewable."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "ssdf/publish-without-provenance",
+      "metadataSha256": "04de6989067255c024aa134408247f69b732ee2b88904d976bd0aa929ae227dd",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Published artifacts have no repository-visible integrity or provenance evidence."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "SSDF PS.2.1 and PS.3.1 call for integrity verification information and release supporting data. A workflow scan can observe common attestation steps, but cannot prove signature validity, artifact binding, retention, or evidence produced outside the workflow."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "ssdf/publish-without-sbom",
+      "metadataSha256": "a3ae9d72ed44e12a0b1c9cbf4915f0627dd3391a0ed0f25f8bb7da1347e2070a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Published artifacts have no repository-visible software bill of materials generation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "SSDF PS.3.2 recommends maintaining provenance data for release components, such as an SBOM. A repository scan cannot observe registry-side or external inventory generation, so this finding is limited to workflow-visible evidence."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "ssdf/static-cloud-credentials",
+      "metadataSha256": "7da08363734dbe1fb4aa0b81912970ed7386af5e9953ec583ac10d3373ff6b28",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A cloud authentication action receives static credential inputs instead of using workload identity."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "SSDF PO.5.1 calls for separating and protecting development environments. Static long-lived cloud credentials increase exposure risk; workload identity federation can issue short-lived credentials scoped to a workflow identity."
       },
       "autofix": "not-provided",
       "engineContracts": [
@@ -75160,16 +76656,16 @@ function withFile(input3, file2, limits, label = "--stdin content") {
   const truncated = input3.truncated.filter((path) => path !== file2.path);
   return { ...input3, files, truncated: oversized ? [...truncated, file2.path] : truncated };
 }
-function effectiveSeverities(config2, rules15, presets) {
-  const severities = new Map(rules15.map((rule) => [rule.meta.id, "off"]));
-  for (const { rule, severity: severity3 } of resolveRules(config2, [...rules15], presets)) severities.set(rule.meta.id, severity3);
+function effectiveSeverities(config2, rules16, presets) {
+  const severities = new Map(rules16.map((rule) => [rule.meta.id, "off"]));
+  for (const { rule, severity: severity3 } of resolveRules(config2, [...rules16], presets)) severities.set(rule.meta.id, severity3);
   return severities;
 }
-function unknownRuleMessage(label, id, rules15) {
-  return `${label}: unknown rule "${id}".${didYouMean(id, rules15.map((candidate) => candidate.meta.id))}`;
+function unknownRuleMessage(label, id, rules16) {
+  return `${label}: unknown rule "${id}".${didYouMean(id, rules16.map((candidate) => candidate.meta.id))}`;
 }
-function explainRuleText(id, rules15, severities) {
-  const rule = rules15.find((candidate) => candidate.meta.id === id);
+function explainRuleText(id, rules16, severities) {
+  const rule = rules16.find((candidate) => candidate.meta.id === id);
   if (!rule) return void 0;
   const { meta: meta3 } = rule;
   const indent = (text4) => text4.replace(/\n$/, "").split("\n").map((line2) => `    ${line2}`).join("\n");
@@ -76061,7 +77557,7 @@ async function remoteRunReport(access, request) {
   const snapshot = result.snapshot;
   if (!snapshot) return report;
   const jobsTotal = totalKnown && reportedTotal !== void 0 && reportedTotal >= fetchedJobs.size ? reportedTotal : null;
-  const jobsComplete = snapshot.provenance?.jobsComplete === true && validJobs && totalsConsistent && snapshot.jobs.length === fetchedJobs.size && (jobsTotal === null || jobsTotal === fetchedJobs.size);
+  const jobsComplete = snapshot.provenance?.jobsComplete === true && validJobs && totalsConsistent && snapshot.jobs.length + (snapshot.provenance.externalChecks?.length ?? 0) === fetchedJobs.size && (jobsTotal === null || jobsTotal === fetchedJobs.size);
   const definitionKnown = snapshot.provenance?.definitionKnown === true;
   const critical = jobsComplete && definitionKnown ? calculateCriticalPath(snapshot.jobs) : void 0;
   const onPath = new Set(critical?.jobKeys);
@@ -76072,6 +77568,34 @@ async function remoteRunReport(access, request) {
     ...!totalsConsistent ? ["The upstream job total changed or was invalid during collection; authoritative totals are unknown."] : [],
     ...!definitionKnown ? ["Workflow job definitions are incomplete or unresolved; no critical path is reported."] : []
   ];
+  const attribution = jobsComplete && definitionKnown ? result.attribution : void 0;
+  if (attribution) {
+    const text4 = (value) => sanitizeMarkdown(value, 1024).text;
+    report.attribution = {
+      criticalSlackMs: attribution.criticalSlackMs,
+      coverage: attribution.coverage,
+      bottlenecks: attribution.bottlenecks.slice(0, 10).map((finding3) => ({
+        category: finding3.category,
+        jobKey: text4(finding3.jobKey),
+        jobName: text4(finding3.jobName),
+        observedMs: finding3.observedMs,
+        elapsedSavingsBoundMs: finding3.elapsedSavingsBoundMs,
+        runnerSavingsBoundMs: finding3.runnerSavingsBoundMs,
+        summary: text4(finding3.summary),
+        recommendation: text4(finding3.recommendation),
+        evidence: finding3.evidence.slice(0, 3).map(text4)
+      })),
+      omittedBottlenecks: Math.max(0, attribution.bottlenecks.length - 10),
+      gaps: attribution.gaps.slice(0, 20).map((gap) => ({
+        kind: gap.kind,
+        jobKey: text4(gap.jobKey),
+        ...gap.jobName ? { jobName: text4(gap.jobName) } : {},
+        ...gap.ms !== void 0 ? { ms: gap.ms } : {},
+        detail: text4(gap.detail)
+      })),
+      omittedGaps: Math.max(0, attribution.gaps.length - 20)
+    };
+  }
   report.run = {
     id: snapshot.runId,
     attempt: snapshot.runAttempt,
@@ -76127,6 +77651,20 @@ async function remoteRunReport(access, request) {
       `Showing ${report.jobs.length} of ${report.jobsAnalyzed} analyzed job(s); ${report.omittedJobs} fetched job(s) omitted from this response.`,
       critical && report.criticalPath ? `Estimated critical path: ${critical.durationMs} ms \u2014 ${report.criticalPath.jobKeys.map(escapeMarkdown).join(" \u2192 ")}.` : "Critical path unavailable.",
       report.baseline ? `Baseline: ${report.baseline.medianDurationMs} ms (${report.baseline.sampleCount} comparable samples).` : "No comparable baseline reported.",
+      ...report.attribution ? [
+        "",
+        "### Bottleneck evidence",
+        `Parsed logs for ${report.attribution.coverage.jobsWithLogs}/${report.attribution.coverage.jobs} timed job(s); ${report.attribution.coverage.unexplainedMs} ms of runner time is unexplained or unobserved.`,
+        "Savings are observed upper bounds, not predictions; findings may overlap and must not be added.",
+        ...report.attribution.bottlenecks.map(
+          (finding3) => `- ${escapeMarkdown(finding3.summary)} Next: ${escapeMarkdown(finding3.recommendation)} Evidence: ${finding3.evidence.map(escapeMarkdown).join("; ")}`
+        ),
+        ...report.attribution.omittedBottlenecks ? [`${report.attribution.omittedBottlenecks} additional bottleneck candidate(s) omitted.`] : [],
+        ...report.attribution.gaps.length ? ["", "#### Evidence coverage gaps", ...report.attribution.gaps.map(
+          (gap) => `- ${escapeMarkdown(gap.jobName ?? gap.jobKey)} (${escapeMarkdown(gap.kind)}): ${escapeMarkdown(gap.detail)}`
+        )] : [],
+        ...report.attribution.omittedGaps ? [`${report.attribution.omittedGaps} additional coverage gap(s) omitted.`] : []
+      ] : [],
       "",
       "| Job | Duration (ms) | Conclusion |",
       "|---|---:|---|",
@@ -76158,10 +77696,10 @@ var ACP_COMMANDS = [
 ];
 var HOSTED_COMMANDS = [
   { name: "scan", description: "Read-only scan of an explicitly allowed GitHub repository", input: { hint: "<owner/repo> [ref]" } },
-  { name: "report", description: "Timeline and critical path of a completed workflow run", input: { hint: "<owner/repo> <run-id>" } },
+  { name: "report", description: "Timeline, critical path, and bounded log-backed bottleneck evidence for a completed workflow run", input: { hint: "<owner/repo> <run-id>" } },
   ...ACP_COMMANDS.filter((command2) => ["explain", "rules", "help"].includes(command2.name))
 ];
-var MAX_LISTED = 50;
+var MAX_LISTED2 = 50;
 var MAX_MESSAGE_CHARS = 3e4;
 function helpText(hosted = false) {
   const lines = (hosted ? HOSTED_COMMANDS : ACP_COMMANDS).map((command2) => `- \`/${command2.name}${command2.input ? ` ${command2.input.hint}` : ""}\` \u2014 ${command2.description}`);
@@ -76246,7 +77784,7 @@ async function lintCommand(turn) {
       ...paths2.length ? { paths: paths2 } : {},
       ...turn.content.length ? { content: turn.content } : {},
       ...min ? { minSeverity: min } : {},
-      limit: MAX_LISTED
+      limit: MAX_LISTED2
     });
   } catch (error62) {
     await send(turn.client, turn.sessionId, { sessionUpdate: "tool_call_update", toolCallId, status: "failed" });
@@ -76332,12 +77870,12 @@ async function explainCommand(turn) {
 }
 async function rulesCommand(turn) {
   const query = turn.args.join(" ").trim();
-  const rules15 = listRules(query ? { query } : {});
-  const lines = [`**${rules15.length} rule(s)**${query ? ` matching ${code2(query)}` : ""}:`, ""];
-  for (const rule of rules15.slice(0, MAX_LISTED * 2)) {
+  const rules16 = listRules(query ? { query } : {});
+  const lines = [`**${rules16.length} rule(s)**${query ? ` matching ${code2(query)}` : ""}:`, ""];
+  for (const rule of rules16.slice(0, MAX_LISTED2 * 2)) {
     lines.push(`- ${code2(rule.id)} (${rule.defaultSeverity}${rule.fixable ? ", fixable" : ""}) \u2014 ${rule.description}`);
   }
-  if (rules15.length > MAX_LISTED * 2) lines.push("", `_${rules15.length - MAX_LISTED * 2} rules omitted. Narrow the list with a search term, for example \`/rules cache\`._`);
+  if (rules16.length > MAX_LISTED2 * 2) lines.push("", `_${rules16.length - MAX_LISTED2 * 2} rules omitted. Narrow the list with a search term, for example \`/rules cache\`._`);
   await say(turn, lines.join("\n"));
 }
 async function configCommand(turn) {
@@ -76366,7 +77904,7 @@ var HANDLERS = {
   scan: async (turn) => {
     const [repo, ref] = turn.args;
     if (!turn.remote || !repo || turn.args.length > 2) throw new AgentError("Usage: /scan <owner/repo> [ref].");
-    const result = await remoteScan(operationAccess(turn.remote, turn.signal), { repo, ...ref ? { ref } : {}, limit: MAX_LISTED });
+    const result = await remoteScan(operationAccess(turn.remote, turn.signal), { repo, ...ref ? { ref } : {}, limit: MAX_LISTED2 });
     if (turn.signal.aborted) return;
     await send(turn.client, turn.sessionId, {
       sessionUpdate: "tool_call",
@@ -76380,8 +77918,8 @@ var HANDLERS = {
       escapeMarkdown(result.summary),
       ...(result.diagnostics ?? []).map((item) => `- ${code2(item.ruleId)} ${code2(`${item.path}:${item.line}`)} \u2014 ${escapeMarkdown(item.message)}`),
       ...result.omittedDiagnostics ? [`${result.omittedDiagnostics} diagnostics omitted.`] : [],
-      ...(result.parseProblems ?? []).slice(0, MAX_LISTED).map((problem) => `Could not parse ${code2(`${problem.path}:${problem.line}`)}: ${escapeMarkdown(problem.message)}`),
-      ...(result.parseProblemCount ?? 0) > MAX_LISTED ? [`${(result.parseProblemCount ?? 0) - MAX_LISTED} parse problems omitted from this text; analysis is incomplete.`] : []
+      ...(result.parseProblems ?? []).slice(0, MAX_LISTED2).map((problem) => `Could not parse ${code2(`${problem.path}:${problem.line}`)}: ${escapeMarkdown(problem.message)}`),
+      ...(result.parseProblemCount ?? 0) > MAX_LISTED2 ? [`${(result.parseProblemCount ?? 0) - MAX_LISTED2} parse problems omitted from this text; analysis is incomplete.`] : []
     ].join("\n"));
   },
   report: async (turn) => {
@@ -76836,8 +78374,8 @@ function createMcpServer(options) {
     }),
     annotations: { ...local }
   }, ({ limit = 50, ...args }, ctx) => guard(async () => {
-    const rules15 = listRules(strip(args));
-    return { total: rules15.length, omittedRules: Math.max(0, rules15.length - limit), rules: rules15.slice(0, limit) };
+    const rules16 = listRules(strip(args));
+    return { total: rules16.length, omittedRules: Math.max(0, rules16.length - limit), rules: rules16.slice(0, limit) };
   }, ctx.mcpReq.signal));
   server.registerTool(MCP_TOOLS.explainRule, {
     title: "Explain a lint rule",
@@ -76874,7 +78412,7 @@ function createMcpServer(options) {
     }, (args, ctx) => guard(async (signal) => ({ ...await remoteScan(access(signal), strip(args)) }), ctx.mcpReq.signal));
     server.registerTool(MCP_TOOLS.workflowRunReport, {
       title: "Analyze a workflow run",
-      description: `Timeline, critical path, slowest steps, queue time, and baseline comparison for one completed GitHub Actions run, as a dry run that writes nothing. Inspect analysisStatus and collection provenance: fetched jobs and response omissions are separate from upstream totals, and incomplete telemetry suppresses whole-run metrics. Set markdown to include an escaped agent report with a Gantt chart. ${allowed2}`,
+      description: `Timeline, critical path, slowest steps, queue time, baseline comparison, and bounded log-backed bottleneck evidence for one completed GitHub Actions run, as a dry run that writes nothing. Inspect analysisStatus and collection provenance: fetched jobs and response omissions are separate from upstream totals, and incomplete telemetry suppresses whole-run metrics. Set markdown to include an escaped agent report with a Gantt chart. ${allowed2}`,
       inputSchema: external_exports.object({
         repo: external_exports.string().max(140).describe("owner/repo"),
         runId: external_exports.number().int().positive().describe("Workflow run id (the number in .../actions/runs/<id>)."),
@@ -77264,9 +78802,9 @@ function extractUnusedFlag(args) {
   }
   return { args: rest, severity: severity3 === "off" ? void 0 : severity3 };
 }
-function ruleListText(rules15) {
-  const width = Math.max(...rules15.map((rule) => rule.meta.id.length));
-  return rules15.map((rule) => {
+function ruleListText(rules16) {
+  const width = Math.max(...rules16.map((rule) => rule.meta.id.length));
+  return rules16.map((rule) => {
     const builtin = allRules.some((candidate) => candidate.meta.id === rule.meta.id);
     if (builtin) ruleAssurance(rule.meta.id);
     return `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}  [${builtin ? "heuristic" : "local/unreviewed"}]`;
@@ -77291,10 +78829,10 @@ async function loadLintConfig(io, root2, explicit, options = {}) {
     if (!options.allowLocalRules) {
       throw new UsageError(`${path} lists localRules, which run JavaScript from the repository. Pass --allow-local-rules to load them (trusted repositories only).`);
     }
-    const rules15 = [...allRules, ...await loadLocalRules(root2, parsed.config.localRules, allRules)];
-    const strict = parseConfigText(text4, rules15, path);
+    const rules16 = [...allRules, ...await loadLocalRules(root2, parsed.config.localRules, allRules)];
+    const strict = parseConfigText(text4, rules16, path);
     if (strict.problems.length > 0) throw invalidConfig(path, strict.problems);
-    return { config: strict.config, path, rules: rules15 };
+    return { config: strict.config, path, rules: rules16 };
   }
   return { config: structuredClone(DEFAULT_CONFIG), rules: allRules };
 }
@@ -77331,9 +78869,9 @@ async function missReason(root2, selector, config2, inventoryComplete) {
   if (config2.ignorePaths.some((glob) => matchesGlob(selector, glob) || matchesGlob(selector, `${glob}/**`))) return "excluded by ignorePaths";
   return inventoryComplete ? "not analyzed (inside a directory the inventory skips, such as node_modules or .git)" : "not analyzed: the inventory hit limits.maxFiles or limits.maxFileBytes";
 }
-function explainRule2(id, rules15, severities) {
-  const text4 = explainRuleText(id, rules15, severities);
-  if (text4 === void 0) throw new UsageError(unknownRuleMessage("--explain", id, rules15));
+function explainRule2(id, rules16, severities) {
+  const text4 = explainRuleText(id, rules16, severities);
+  if (text4 === void 0) throw new UsageError(unknownRuleMessage("--explain", id, rules16));
   return text4;
 }
 async function initConfig(io, root2, explicit) {
@@ -77426,13 +78964,13 @@ async function lintCommand2(rawArgs, io) {
   const { root: root2, paths: paths2 } = await resolveTarget(io, values.root, positionals3);
   if (values.init) return await initConfig(io, root2, values.config);
   const loaded = await loadLintConfig(io, root2, values.config, { localRules: true, allowLocalRules: values["allow-local-rules"] });
-  const { config: config2, rules: rules15 } = loaded;
+  const { config: config2, rules: rules16 } = loaded;
   const presets = values.preset?.map((preset) => {
     if (!PRESETS.includes(preset)) throw new UsageError(`--preset ${preset}: unknown preset.${didYouMean(preset, PRESETS)}`);
     return preset;
   });
-  const ruleIds = rules15.map((rule) => rule.meta.id);
-  const rulesets = [...new Set(rules15.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules16.map((rule) => rule.meta.id);
+  const rulesets = [...new Set(rules16.map((rule) => rule.meta.ruleset))];
   for (const value of values.ruleset ?? []) {
     const [id, severity3] = parseOverride("ruleset", value, rulesets);
     config2.rulesets = { ...config2.rulesets, [id]: severity3 };
@@ -77446,13 +78984,13 @@ async function lintCommand2(rawArgs, io) {
     config2.failOn = values["fail-on"];
   }
   if (values["list-rules"]) {
-    await writeText(io, values.output, ruleListText(rules15));
+    await writeText(io, values.output, ruleListText(rules16));
     return 0;
   }
-  const severities = effectiveSeverities(config2, rules15, presets);
+  const severities = effectiveSeverities(config2, rules16, presets);
   if (values.explain !== void 0) {
     const withMeta = new Map(severities).set(UNUSED_DIRECTIVE_RULE_ID, unusedSeverity ?? "off");
-    await writeText(io, values.output, explainRule2(values.explain, [...rules15, UNUSED_DIRECTIVE_RULE], withMeta));
+    await writeText(io, values.output, explainRule2(values.explain, [...rules16, UNUSED_DIRECTIVE_RULE], withMeta));
     return 0;
   }
   if (values["print-config"]) {
@@ -77476,14 +79014,14 @@ async function lintCommand2(rawArgs, io) {
     try {
       change = await changedSince(root2, values.base);
       const baseInput = await loadGitRevision(root2, change.baseSha ?? values.base, config2);
-      baseFingerprints = new Set(lint(baseInput, { config: config2, rules: rules15, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
+      baseFingerprints = new Set(lint(baseInput, { config: config2, rules: rules16, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
     } catch (error62) {
       throw new UsageError(`--base ${values.base}: ${error62.message.split("\n")[0]}`);
     }
   }
   const options = {
     config: config2,
-    rules: rules15,
+    rules: rules16,
     ...presets ? { presets } : {},
     ...baseFingerprints ? { baseFingerprints } : {},
     reportUnusedDirectives: unusedSeverity !== void 0
@@ -77541,7 +79079,7 @@ async function lintCommand2(rawArgs, io) {
     ...unusedDirectives2 ? { unusedDirectives: unusedDirectives2 } : {}
   };
   if (!input3.inventoryComplete) io.stderr("Inventory is incomplete; rules requiring complete inventory were skipped.");
-  const reportRules = [...rules15, UNUSED_DIRECTIVE_RULE];
+  const reportRules = [...rules16, UNUSED_DIRECTIVE_RULE];
   await writeText(io, values.output, format(formatName, shown, reportRules, VERSION));
   if (values.sarif) await writeText(io, values.sarif, sarif(shown, reportRules, VERSION));
   const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "warn").length;

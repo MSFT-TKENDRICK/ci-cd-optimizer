@@ -1330,14 +1330,14 @@
     },
     {
       "id": "redundancy/rebuild-per-job",
-      "metadataSha256": "067374fbe410f03afba66ddb3fea6c646a627e7d6785d5ce269b10ce80a9f781",
+      "metadataSha256": "661cb6f1f425cb771585976657d249df125290298ae0756da6adc595789e6584",
       "detector": {
         "assurance": "heuristic-not-formally-proved",
-        "claim": "Several jobs in a workflow should not each rebuild the same project from scratch."
+        "claim": "Repeated builds across CI jobs and workflows should be assessed for verified artifact or layer reuse."
       },
       "recommendation": {
         "assurance": "conditional-not-universally-proved",
-        "rationale": "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result."
+        "rationale": "Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. The same Dockerfile declared in different workflows is also only a reuse candidate: triggers, revisions, inputs, targets and platforms may differ. Where consumers can safely share a verified immutable artifact or cached layers, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result."
       },
       "autofix": "not-provided",
       "engineContracts": [
@@ -1576,6 +1576,74 @@
       "recommendation": {
         "assurance": "conditional-not-universally-proved",
         "rationale": "These triggers run in the base repository's context with its secrets and a token that can write. Checking out the contributor's head commit and then running a build, test, script, or local action executes attacker-authored code with those privileges (a \"pwn request\"). Run untrusted code in a `pull_request` workflow instead, and hand results to the privileged workflow as data."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "ssdf/attestation-missing-permissions",
+      "metadataSha256": "51a4352dc198c2ad5f71884505111106f08c6eef0c573aba01de40f05d912267",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A GitHub attestation action lacks the explicit token permissions it requires."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "GitHub artifact attestations require id-token: write and attestations: write. Explicitly declaring these job-level capabilities avoids relying on repository defaults and makes the action's authority reviewable."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "ssdf/publish-without-provenance",
+      "metadataSha256": "04de6989067255c024aa134408247f69b732ee2b88904d976bd0aa929ae227dd",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Published artifacts have no repository-visible integrity or provenance evidence."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "SSDF PS.2.1 and PS.3.1 call for integrity verification information and release supporting data. A workflow scan can observe common attestation steps, but cannot prove signature validity, artifact binding, retention, or evidence produced outside the workflow."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "ssdf/publish-without-sbom",
+      "metadataSha256": "a3ae9d72ed44e12a0b1c9cbf4915f0627dd3391a0ed0f25f8bb7da1347e2070a",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Published artifacts have no repository-visible software bill of materials generation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "SSDF PS.3.2 recommends maintaining provenance data for release components, such as an SBOM. A repository scan cannot observe registry-side or external inventory generation, so this finding is limited to workflow-visible evidence."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "ssdf/static-cloud-credentials",
+      "metadataSha256": "7da08363734dbe1fb4aa0b81912970ed7386af5e9953ec583ac10d3373ff6b28",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "A cloud authentication action receives static credential inputs instead of using workload identity."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "SSDF PO.5.1 calls for separating and protecting development environments. Static long-lived cloud credentials increase exposure risk; workload identity federation can issue short-lived credentials scoped to a workflow identity."
       },
       "autofix": "not-provided",
       "engineContracts": [

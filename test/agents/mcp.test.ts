@@ -313,14 +313,20 @@ describe("MCP server GitHub tools", () => {
   it("report a workflow run's critical path without writing", async () => {
     const api = github();
     const client = await connect({ fallbackRoot: repo, remote: { createClient: () => api, allow: ["acme/widgets"] } });
-    const report = await data<{ status: string; criticalPath: { jobKeys: string[] }; jobs: unknown[]; markdown: string; dryRun: boolean }>(
+    const report = await data<RunReport>(
       client,
       MCP_TOOLS.workflowRunReport,
       { repo: "acme/widgets", runId: 2000, markdown: true },
     );
     expect(report).toMatchObject({ status: "processed", dryRun: true, criticalPath: { jobKeys: ["build", "test"] } });
+    expect(report.attribution).toMatchObject({
+      coverage: { jobs: 2, jobsWithLogs: 0 },
+      gaps: expect.arrayContaining([expect.objectContaining({ kind: "log-unavailable" })]),
+    });
     expect(report.jobs).toHaveLength(2);
     expect(report.markdown).toContain("gantt");
+    expect(report.markdown).toContain("### Bottleneck evidence");
+    expect(report.markdown).toContain("Evidence coverage gaps");
     expect(writes(api)).toEqual([]);
     expect(await failure(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 9 })).toMatch(/Workflow run 9 was not found/);
   });

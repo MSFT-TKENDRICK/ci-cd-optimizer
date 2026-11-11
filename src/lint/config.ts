@@ -4,7 +4,7 @@ import { durationPolicyProblems, type DurationsConfig } from "../knowledge/durat
 import type { ActiveSeverity, AnyRule, Impact, Preset, ResolvedRule, Severity } from "./types.js";
 
 export const CONFIG_PATHS = [".github/ci-cd-optimizer.yml", ".github/ci-cd-optimizer.yaml"];
-export const PRESETS: Preset[] = ["recommended", "strict", "agentic", "github", "insights", "all"];
+export const PRESETS: Preset[] = ["recommended", "strict", "agentic", "github", "insights", "ssdf", "all"];
 const SEVERITIES: Severity[] = ["off", "info", "warn", "error"];
 const IMPACTS: Impact[] = ["low", "medium", "high"];
 

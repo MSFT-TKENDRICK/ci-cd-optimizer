@@ -1,7 +1,21 @@
-import type { JobSnapshot, WorkflowBaseline, WorkflowSnapshot } from "./types.js";
-import { comparisonProblem } from "./context.js";
+import type { BaselineDiagnostic, BaselineExclusion, JobBaseline, JobSnapshot, WorkflowBaseline, WorkflowSnapshot } from "./types.js";
+import { comparisonProblem, EXCLUSION_DESCRIPTIONS } from "./context.js";
+import type { RunAttribution } from "./attribution.js";
 
 const QUEUE_THRESHOLD_MS = 5_000;
+/** Per-job medians need this many samples before a slowdown is reported as a regression. */
+const JOB_REGRESSION_MIN_SAMPLES = 3;
+
+export interface TelemetryReportExtras {
+  /** Why earlier runs could not form a run-level baseline. */
+  diagnostic?: BaselineDiagnostic;
+  /** Per-job medians that remain comparable when the run-level job set changed. */
+  jobBaselines?: JobBaseline[];
+  /** Observed log and step evidence for bottleneck candidates. */
+  attribution?: RunAttribution;
+  /** Why bottleneck attribution could not be computed for this run. */
+  attributionUnavailable?: string;
+}
 
 export interface CriticalPath {
   durationMs: number;
@@ -11,6 +25,7 @@ export interface CriticalPath {
 export function createTelemetryReport(
   snapshot: WorkflowSnapshot,
   baseline?: WorkflowBaseline,
+  extras: TelemetryReportExtras = {},
 ): string {
   const criticalPath = calculateCriticalPath(snapshot.jobs);
   const slowest = [...snapshot.jobs].sort((a, b) => b.durationMs - a.durationMs).slice(0, 5);
@@ -18,7 +33,7 @@ export function createTelemetryReport(
     ? compare(snapshot.durationMs, baseline.medianDurationMs, baseline.sampleCount)
     : comparisonProblem(snapshot)
       ? `Performance comparison withheld: ${comparisonProblem(snapshot)}`
-      : "No comparable historical baseline is available in the retained/backfilled evidence window.";
+      : describeMissingBaseline(extras.diagnostic);
 
   return [
     `## ${snapshot.workflowName} performance snapshot`,
@@ -47,9 +62,59 @@ export function createTelemetryReport(
     ),
     "",
     ...slowestSteps(snapshot),
-    ...jobRegressions(snapshot, baseline),
+    ...jobHistory(snapshot, baseline, extras.jobBaselines),
+    ...jobRegressions(snapshot, baseline, extras.jobBaselines),
+    ...attributionReport(extras.attribution, extras.attributionUnavailable),
     ...recommendations(snapshot, criticalPath, baseline),
   ].join("\n");
+}
+
+function attributionReport(attribution?: RunAttribution, unavailable?: string): string[] {
+  if (!attribution) {
+    return unavailable ? ["### Bottleneck evidence", "", unavailable, ""] : [];
+  }
+  const findings = attribution.bottlenecks.slice(0, 10);
+  const gaps = attribution.gaps.slice(0, 10);
+  return [
+    "### Bottleneck evidence",
+    "",
+    `Observed ${formatDuration(attribution.coverage.observedMs)} across ${attribution.coverage.jobs} timed job(s); logs were parsed for ${attribution.coverage.jobsWithLogs}. Step timing explains ${formatDuration(attribution.coverage.explainedMs)}; ${formatDuration(attribution.coverage.unexplainedMs)} remains unexplained or unobserved.`,
+    "",
+    "_Savings are evidence-based upper bounds, not predicted speedups. Findings can overlap; do not add their bounds together._",
+    "",
+    ...(findings.length > 0
+      ? [
+          "| Candidate and next check | Job(s) | Observed | Elapsed upper bound | Runner upper bound | Evidence",
+          "|---|---|---:|---:|---:|---|",
+          ...findings.map((finding) =>
+            `| ${escapeReportCell(`${finding.summary} ${finding.recommendation}`)} | ${escapeReportCell(finding.jobName)} | ${formatDuration(finding.observedMs)} | ${formatDuration(finding.elapsedSavingsBoundMs)} | ${formatDuration(finding.runnerSavingsBoundMs)} | ${escapeReportCell(finding.evidence.slice(0, 2).join("; "))} |`,
+          ),
+          ...(attribution.bottlenecks.length > findings.length
+            ? [`| ${attribution.bottlenecks.length - findings.length} additional candidate(s) omitted | | | | | |`]
+            : []),
+        ]
+      : ["No recognized bottleneck pattern was found in the examined evidence."]),
+    ...(gaps.length > 0
+      ? [
+          "",
+          "#### Evidence coverage gaps",
+          "",
+          "| Job | Gap | Time | Detail |",
+          "|---|---|---:|---|",
+          ...gaps.map((gap) =>
+            `| ${escapeReportCell(gap.jobName ?? gap.jobKey)} | ${escapeReportCell(gap.kind)} | ${gap.ms === undefined ? "—" : formatDuration(gap.ms)} | ${escapeReportCell(gap.detail)} |`,
+          ),
+          ...(attribution.gaps.length > gaps.length
+            ? [`| | ${attribution.gaps.length - gaps.length} additional gap(s) omitted | | |`]
+            : []),
+        ]
+      : []),
+    "",
+  ];
+}
+
+function escapeReportCell(value: string): string {
+  return value.replace(/\r?\n/g, " ").replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/([`*_{}\x5B\x5D()<>])/g, "\\$1");
 }
 
 export function calculateCriticalPath(jobs: JobSnapshot[]): CriticalPath {
@@ -142,10 +207,53 @@ function slowestSteps(snapshot: WorkflowSnapshot, limit = 10): string[] {
   ];
 }
 
-function jobRegressions(snapshot: WorkflowSnapshot, baseline?: WorkflowBaseline): string[] {
-  if (!baseline?.jobs) return [];
+function describeMissingBaseline(diagnostic?: BaselineDiagnostic): string {
+  const fallback = "No comparable historical baseline is available in the retained/backfilled evidence window.";
+  if (!diagnostic) return fallback;
+  if (diagnostic.examined === 0) return `${fallback} No earlier runs of this workflow were found.`;
+  const reasons = (Object.entries(diagnostic.excluded) as [BaselineExclusion, number][])
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return [
+    `No run-level baseline: ${diagnostic.examined} earlier run(s) examined, ${diagnostic.comparable} comparable.`,
+    ...(reasons.length ? [""] : []),
+    ...reasons.map(([reason, count]) => `- ${count} excluded — ${EXCLUSION_DESCRIPTIONS[reason]}`),
+  ].join("\n");
+}
+
+/** Per-job history, shown only without a run-level baseline, where it is the remaining timing evidence. */
+function jobHistory(snapshot: WorkflowSnapshot, baseline?: WorkflowBaseline, jobs?: JobBaseline[]): string[] {
+  if (baseline || !jobs?.length) return [];
+  const byKey = new Map(snapshot.jobs.map((job) => [job.key, job]));
+  const rows = jobs.flatMap((entry) => {
+    const job = byKey.get(entry.key);
+    return job ? [{ job, entry }] : [];
+  }).sort((a, b) => b.job.durationMs - a.job.durationMs);
+  if (rows.length === 0) return [];
+  return [
+    "### Per-job history",
+    "",
+    "_Each job is compared only with earlier successful first attempts of the identical job (same name, needs, runner labels and group)._",
+    "",
+    "| Job | This run | Median | Samples | Delta |",
+    "|---|---:|---:|---:|---:|",
+    ...rows.map(({ job, entry }) => {
+      const delta = job.durationMs - entry.medianDurationMs;
+      return `| ${escapeCell(job.name)} | ${formatDuration(job.durationMs)} | ${formatDuration(entry.medianDurationMs)} | ${entry.sampleCount} | ${delta >= 0 ? "+" : "−"}${formatDuration(Math.abs(delta))} |`;
+    }),
+    "",
+  ];
+}
+
+function jobRegressions(snapshot: WorkflowSnapshot, baseline?: WorkflowBaseline, jobs?: JobBaseline[]): string[] {
+  const medians: Record<string, number> | undefined = baseline
+    ? baseline.jobs
+    : Object.fromEntries((jobs ?? [])
+      .filter((entry) => entry.sampleCount >= JOB_REGRESSION_MIN_SAMPLES)
+      .map((entry) => [entry.key, entry.medianDurationMs]));
+  if (!medians) return [];
   const rows = snapshot.jobs
-    .map((job) => ({ job, median: baseline.jobs?.[job.key] }))
+    .map((job) => ({ job, median: medians[job.key] }))
     .filter(
       (row): row is { job: JobSnapshot; median: number } =>
         row.median !== undefined && row.job.durationMs - row.median >= 30_000 && row.job.durationMs > row.median * 1.25,

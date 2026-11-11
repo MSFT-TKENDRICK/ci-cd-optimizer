@@ -117,6 +117,7 @@ describe("decide", () => {
     );
     expect(decision.action).toBe("reject");
     expect(decision.reason).toMatch(/precision regressed/);
+    expect(renderDecision(sampleManifest(), decision)).toContain("Rejection does not establish that no optimization opportunities remain.");
   });
 
   it("skips experiments that are no longer running", () => {

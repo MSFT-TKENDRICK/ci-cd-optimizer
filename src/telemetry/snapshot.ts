@@ -38,10 +38,22 @@ export interface ApiJob {
   created_at?: string | null;
   started_at: string | null;
   completed_at: string | null;
+  runner_id?: number | null;
   runner_name?: string | null;
   runner_group_id?: number | null;
   labels?: string[];
   steps?: ApiStep[];
+  html_url?: string | null;
+}
+
+/**
+ * The jobs API also lists check runs that other integrations attach to the workflow's check suite (including this
+ * App's own telemetry check). They never ran on a runner, so they are not workload: counting them would mark the
+ * definition unknown and stretch the run to the check's publication time.
+ */
+export function isExternalCheckRun(job: ApiJob, key: string | undefined): boolean {
+  return key === undefined && !job.runner_id && !job.runner_name && !(job.steps?.length) &&
+    typeof job.html_url === "string" && !/\/actions\/runs\/\d+\/job\/\d+/.test(job.html_url);
 }
 
 export interface JobDefinition {
@@ -118,7 +130,9 @@ export async function buildWorkflowSnapshot(
 }
 
 export function snapshotFromRun(repo: RepoRef, run: WorkflowRunPayload, apiJobs: readonly ApiJob[], definitions: JobDefinitions, jobsComplete = false): WorkflowSnapshot {
-  const mapped = apiJobs.filter((job) => job.started_at && job.completed_at).map((job) => ({ job, key: matchJobKey(job.name, definitions) }));
+  const classified = apiJobs.map((job) => ({ job, key: matchJobKey(job.name, definitions) }));
+  const external = classified.filter(({ job, key }) => isExternalCheckRun(job, key)).map(({ job }) => ({ id: job.id, name: job.name }));
+  const mapped = classified.filter(({ job, key }) => job.started_at && job.completed_at && !isExternalCheckRun(job, key));
   const jobs = mapped.map(({ job, key }) => jobSnapshot(job, definitions, key));
   const startedAt = run.run_started_at ?? run.created_at;
   const lastJob = jobs.map((job) => job.completedAt).sort().at(-1);
@@ -148,6 +162,7 @@ export function snapshotFromRun(repo: RepoRef, run: WorkflowRunPayload, apiJobs:
       collectedAt: new Date().toISOString(),
       jobsComplete,
       definitionKnown: definitions.size > 0 && mapped.every(({ key }) => key !== undefined),
+      ...(external.length > 0 ? { externalChecks: external } : {}),
     },
   };
 }

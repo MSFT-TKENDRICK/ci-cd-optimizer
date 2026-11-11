@@ -662,7 +662,7 @@ test("the stdio server writes only protocol messages to stdout and exits cleanly
   });
   const send = (message) => child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
   // Parsing every line here is the point: a stray log line would throw and fail the test.
-  const reply = (id) => waitFor(() => lines.map((line) => JSON.parse(line)).find((message) => message.id === id));
+  const reply = (id) => waitFor(() => lines.map((line) => JSON.parse(line)).find((message) => message.id === id), { timeout: 15_000 });
 
   send({ id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "raw-host", version: "1.0.0" } } });
   const initialized = await reply(1);

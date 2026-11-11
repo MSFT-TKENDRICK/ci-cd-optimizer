@@ -14,6 +14,7 @@ import { maintenanceCommand, MAINTENANCE_HELP } from "./maintenance.js";
 import { executionCommand, EXECUTION_HELP } from "./execution.js";
 import { reviewCommand, REVIEW_HELP } from "./review.js";
 import { formalCommand, FORMAL_HELP } from "./formal.js";
+import { ssdfCommand, SSDF_HELP } from "./ssdf.js";
 
 export const HELP = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimizer for GitHub repositories
 
@@ -31,6 +32,7 @@ Commands:
   execution <cmd>       Opt-in task capture and authorized runtime report import/inspection
   review <cmd>          Project review program: validate, run, intake, scheduled (docs/review-program)
   formal <cmd>          Input-bound cache-key, finite-selection and CI model planning certificates (docs/formal-verification)
+  ssdf                 Report repository-visible evidence against NIST SP 800-218 SSDF v1.1
   help [command]        Show help
   version               Print the version
 
@@ -67,6 +69,7 @@ const COMMANDS: Record<string, { run: (args: string[], io: CliIO) => Promise<num
   execution: { run: executionCommand, help: EXECUTION_HELP },
   review: { run: reviewCommand, help: REVIEW_HELP },
   formal: { run: formalCommand, help: FORMAL_HELP },
+  ssdf: { run: ssdfCommand, help: SSDF_HELP },
 };
 
 /** Parses argv (without the node and script entries) and returns the exit code. Never calls process.exit. */

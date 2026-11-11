@@ -169,6 +169,26 @@ describe("snapshotFromRun", () => {
     expect(snapshot.jobs[1]).not.toHaveProperty("queueMs");
   });
 
+  it("excludes other integrations' check runs listed by the jobs API without hiding real unknown jobs", () => {
+    const phantom = job(90, "CI/CD Telemetry (CI)", "09:00", "09:00", {
+      runner_id: null, runner_name: null, labels: [], steps: [], conclusion: "neutral",
+      html_url: "https://github.com/acme/widgets/runs/123456",
+    });
+    const external = snapshotFromRun(repo, run(), [...jobs, phantom], parseJobDefinitions(workflow));
+    expect(external.jobs.map((item) => item.id)).toEqual([1, 2, 3, 4]);
+    expect(external.completedAt).toBe("2026-01-01T00:07:00Z");
+    expect(external.provenance).toMatchObject({ definitionKnown: true, externalChecks: [{ id: 90, name: "CI/CD Telemetry (CI)" }] });
+
+    const realUnknown = job(91, "renamed", "01:00", "02:00", { html_url: "https://github.com/acme/widgets/actions/runs/500/job/91" });
+    const onRunner = job(92, "self-hosted", "01:00", "02:00", { runner_id: 7, html_url: "https://github.com/acme/widgets/runs/92" });
+    for (const candidate of [realUnknown, onRunner]) {
+      const kept = snapshotFromRun(repo, run(), [...jobs, candidate], parseJobDefinitions(workflow));
+      expect(kept.jobs.map((item) => item.id)).toContain(candidate.id);
+      expect(kept.provenance?.definitionKnown).toBe(false);
+      expect(kept.provenance).not.toHaveProperty("externalChecks");
+    }
+  });
+
   it("falls back to updated_at and the path when jobs or a name are missing", () => {
     const empty = snapshotFromRun(repo, run({ name: null, run_started_at: null }), [], new Map());
     expect(empty.workflowName).toBe(".github/workflows/ci.yml");

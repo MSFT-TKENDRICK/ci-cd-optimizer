@@ -279,7 +279,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
 
     server.registerTool(MCP_TOOLS.workflowRunReport, {
       title: "Analyze a workflow run",
-      description: "Timeline, critical path, slowest steps, queue time, and baseline comparison for one completed GitHub Actions run, as a dry run that writes nothing. "
+      description: "Timeline, critical path, slowest steps, queue time, baseline comparison, and bounded log-backed bottleneck evidence for one completed GitHub Actions run, as a dry run that writes nothing. "
         + "Inspect analysisStatus and collection provenance: fetched jobs and response omissions are separate from upstream totals, and incomplete telemetry suppresses whole-run metrics. "
         + `Set markdown to include an escaped agent report with a Gantt chart. ${allowed}`,
       inputSchema: z.object({

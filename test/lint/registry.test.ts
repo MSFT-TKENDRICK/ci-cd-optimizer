@@ -28,7 +28,7 @@ describe("complete built-in rule registration", () => {
     expect(readme).toContain(`${allRules.length} rules in ${RULESETS.length} rulesets`);
   });
 
-  it.each(["recommended", "strict", "agentic", "github", "insights", "all"] satisfies Preset[])(
+  it.each(["recommended", "strict", "agentic", "github", "insights", "ssdf", "all"] satisfies Preset[])(
     "enables exactly the declared %s preset", (preset) => {
       const expected = allRules.filter((rule) => preset === "all" || rule.meta.presets.includes(preset)).map((rule) => rule.meta.id);
       expect(resolveRules({ ...DEFAULT_CONFIG, extends: [preset] }, allRules).map(({ rule }) => rule.meta.id)).toEqual(expected);

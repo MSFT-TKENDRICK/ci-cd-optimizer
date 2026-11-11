@@ -35,7 +35,7 @@ export const ACP_COMMANDS: AvailableCommand[] = [
 ];
 export const HOSTED_COMMANDS: AvailableCommand[] = [
   { name: "scan", description: "Read-only scan of an explicitly allowed GitHub repository", input: { hint: "<owner/repo> [ref]" } },
-  { name: "report", description: "Timeline and critical path of a completed workflow run", input: { hint: "<owner/repo> <run-id>" } },
+  { name: "report", description: "Timeline, critical path, and bounded log-backed bottleneck evidence for a completed workflow run", input: { hint: "<owner/repo> <run-id>" } },
   ...ACP_COMMANDS.filter((command) => ["explain", "rules", "help"].includes(command.name)),
 ];
 

@@ -1,0 +1,193 @@
+test	UNKNOWN STEP	﻿2026-11-10T16:38:30.1109482Z Current runner version: '2.338.2'
+test	UNKNOWN STEP	2026-11-10T16:38:30.1134370Z ##[group]Runner Image Provisioner
+test	UNKNOWN STEP	2026-11-10T16:38:30.1140439Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:30.1141896Z ##[group]Operating System
+test	UNKNOWN STEP	2026-11-10T16:38:30.1144294Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:30.1145109Z ##[group]Runner Image
+test	UNKNOWN STEP	2026-11-10T16:38:30.1150347Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:30.1151416Z ##[group]GITHUB_TOKEN Permissions
+test	UNKNOWN STEP	2026-11-10T16:38:30.1155005Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:30.1157080Z Secret source: Actions
+test	UNKNOWN STEP	2026-11-10T16:38:30.1158544Z Cache mode: write
+test	UNKNOWN STEP	2026-11-10T16:38:30.1159351Z Prepare workflow directory
+test	UNKNOWN STEP	2026-11-10T16:38:30.1505870Z Prepare all required actions
+test	UNKNOWN STEP	2026-11-10T16:38:30.1556367Z Getting action download info
+test	UNKNOWN STEP	2026-11-10T16:38:30.4909041Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+test	UNKNOWN STEP	2026-11-10T16:38:30.6891035Z Complete job name: test
+test	UNKNOWN STEP	2026-11-10T16:38:30.7856622Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+test	UNKNOWN STEP	2026-11-10T16:38:30.7857708Z with:
+test	UNKNOWN STEP	2026-11-10T16:38:30.7858216Z   repository: example-org/example-repo
+test	UNKNOWN STEP	2026-11-10T16:38:30.7861900Z   token: ***
+test	UNKNOWN STEP	2026-11-10T16:38:30.7862337Z   ssh-strict: true
+test	UNKNOWN STEP	2026-11-10T16:38:30.7862779Z   ssh-user: git
+test	UNKNOWN STEP	2026-11-10T16:38:30.7863232Z   persist-credentials: true
+test	UNKNOWN STEP	2026-11-10T16:38:30.7863716Z   clean: true
+test	UNKNOWN STEP	2026-11-10T16:38:30.7864159Z   sparse-checkout-cone-mode: true
+test	UNKNOWN STEP	2026-11-10T16:38:30.7864878Z   fetch-depth: 1
+test	UNKNOWN STEP	2026-11-10T16:38:30.7865328Z   fetch-tags: false
+test	UNKNOWN STEP	2026-11-10T16:38:30.7865776Z   show-progress: true
+test	UNKNOWN STEP	2026-11-10T16:38:30.7866227Z   lfs: false
+test	UNKNOWN STEP	2026-11-10T16:38:30.7866646Z   submodules: false
+test	UNKNOWN STEP	2026-11-10T16:38:30.7867096Z   set-safe-directory: true
+test	UNKNOWN STEP	2026-11-10T16:38:30.7867603Z   allow-unsafe-pr-checkout: false
+test	UNKNOWN STEP	2026-11-10T16:38:30.7868394Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:31.0990500Z Syncing repository: example-org/example-repo
+test	UNKNOWN STEP	2026-11-10T16:38:31.0992570Z ##[group]Getting Git version info
+test	UNKNOWN STEP	2026-11-10T16:38:31.1130116Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:31.1146538Z Adding repository directory to the temporary git global config as a safe directory
+test	UNKNOWN STEP	2026-11-10T16:38:31.1158051Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/example-repo/example-repo
+test	UNKNOWN STEP	2026-11-10T16:38:31.1232075Z Deleting the contents of '/home/runner/work/example-repo/example-repo'
+test	UNKNOWN STEP	2026-11-10T16:38:31.1236195Z ##[group]Determining repository object format
+test	UNKNOWN STEP	2026-11-10T16:38:31.1238428Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:31.1239981Z ##[group]Initializing the repository
+test	UNKNOWN STEP	2026-11-10T16:38:31.1461140Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:31.1462905Z ##[group]Disabling automatic garbage collection
+test	UNKNOWN STEP	2026-11-10T16:38:31.1503993Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:31.1506292Z ##[group]Setting up auth
+test	UNKNOWN STEP	2026-11-10T16:38:31.2892297Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:31.2893429Z ##[group]Fetching the repository
+test	UNKNOWN STEP	2026-11-10T16:38:32.5397358Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:32.5398064Z ##[group]Determining the checkout info
+test	UNKNOWN STEP	2026-11-10T16:38:32.5398877Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:32.5403390Z [command]/usr/bin/git sparse-checkout disable
+test	UNKNOWN STEP	2026-11-10T16:38:32.5469956Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+test	UNKNOWN STEP	2026-11-10T16:38:32.5512621Z ##[group]Checking out the ref
+test	UNKNOWN STEP	2026-11-10T16:38:32.6365751Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:32.6423921Z [command]/usr/bin/git log -1 --format=%H
+test	UNKNOWN STEP	2026-11-10T16:38:32.6462020Z f100000000000000000000000000000000000001
+test	UNKNOWN STEP	2026-11-10T16:38:32.6753889Z Prepare all required actions
+test	UNKNOWN STEP	2026-11-10T16:38:32.6755058Z Getting action download info
+test	UNKNOWN STEP	2026-11-10T16:38:32.8001636Z Download action repository 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1' (SHA:949feb2413d6458794dcd2491c4babbbce0c15c1)
+test	UNKNOWN STEP	2026-11-10T16:38:32.8952765Z ##[group]Run ./.github/actions/setup
+test	UNKNOWN STEP	2026-11-10T16:38:32.8953238Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:32.9011402Z ##[start-action display=Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1;id=__self.__actions_setup-node]
+test	UNKNOWN STEP	2026-11-10T16:38:32.9120781Z ##[group]Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+test	UNKNOWN STEP	2026-11-10T16:38:32.9121306Z with:
+test	UNKNOWN STEP	2026-11-10T16:38:32.9121650Z   node-version-file: .nvmrc
+test	UNKNOWN STEP	2026-11-10T16:38:32.9122034Z   cache: npm
+test	UNKNOWN STEP	2026-11-10T16:38:32.9122369Z   check-latest: false
+test	UNKNOWN STEP	2026-11-10T16:38:32.9124990Z   token: ***
+test	UNKNOWN STEP	2026-11-10T16:38:32.9125425Z   package-manager-cache: true
+test	UNKNOWN STEP	2026-11-10T16:38:32.9125823Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:33.0520031Z Node version file is not TOML file
+test	UNKNOWN STEP	2026-11-10T16:38:33.0522416Z Resolved .nvmrc as 22
+test	UNKNOWN STEP	2026-11-10T16:38:33.0610454Z Found in cache @ /opt/hostedtoolcache/node/22.23.4/x64
+test	UNKNOWN STEP	2026-11-10T16:38:33.9213689Z ##[group]Environment details
+test	UNKNOWN STEP	2026-11-10T16:38:35.4349748Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:35.4370474Z [command]/opt/hostedtoolcache/node/22.23.4/x64/bin/npm config get cache
+test	UNKNOWN STEP	2026-11-10T16:38:35.6964110Z /home/runner/.npm
+test	UNKNOWN STEP	2026-11-10T16:38:35.9572018Z npm cache is not found
+test	UNKNOWN STEP	2026-11-10T16:38:35.9680691Z ##[end-action id=__self.__actions_setup-node;outcome=success;conclusion=success;duration_ms=3066]
+test	UNKNOWN STEP	2026-11-10T16:38:35.9683764Z ##[start-action display=Run npm ci --no-audit --no-fund;id=__self.__run]
+test	UNKNOWN STEP	2026-11-10T16:38:35.9718066Z ##[group]Run npm ci --no-audit --no-fund
+test	UNKNOWN STEP	2026-11-10T16:38:35.9718445Z ^[[36;1mnpm ci --no-audit --no-fund^[[0m
+test	UNKNOWN STEP	2026-11-10T16:38:35.9785060Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+test	UNKNOWN STEP	2026-11-10T16:38:35.9785452Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:44.1865529Z 
+test	UNKNOWN STEP	2026-11-10T16:38:44.1872841Z added 418 packages in 8s
+test	UNKNOWN STEP	2026-11-10T16:38:44.2441610Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=8275]
+test	UNKNOWN STEP	2026-11-10T16:38:44.2483678Z ##[group]Run npm test
+test	UNKNOWN STEP	2026-11-10T16:38:44.2483952Z ^[[36;1mnpm test^[[0m
+test	UNKNOWN STEP	2026-11-10T16:38:44.2505558Z shell: /usr/bin/bash -e {0}
+test	UNKNOWN STEP	2026-11-10T16:38:44.2505821Z ##[endgroup]
+test	UNKNOWN STEP	2026-11-10T16:38:44.3616763Z 
+test	UNKNOWN STEP	2026-11-10T16:38:44.3617718Z > example-repo@0.2.0 test
+test	UNKNOWN STEP	2026-11-10T16:38:44.3618590Z > npm run test:setup && vitest run
+test	UNKNOWN STEP	2026-11-10T16:38:44.3619101Z 
+test	UNKNOWN STEP	2026-11-10T16:38:44.4645175Z 
+test	UNKNOWN STEP	2026-11-10T16:38:44.4675575Z > example-repo@0.2.0 test:setup
+test	UNKNOWN STEP	2026-11-10T16:38:44.4685178Z > node --test test/setup/*.node.mjs
+test	UNKNOWN STEP	2026-11-10T16:38:44.4705074Z 
+test	UNKNOWN STEP	2026-11-10T16:38:44.5219109Z TAP version 13
+test	UNKNOWN STEP	2026-11-10T16:38:45.0780319Z # Subtest: lists an open tool, a status tool and app-only panel tools, none of which can take a secret
+test	UNKNOWN STEP	2026-11-10T16:38:45.0795737Z ok 1 - lists an open tool, a status tool and app-only panel tools, none of which can take a secret
+test	UNKNOWN STEP	2026-11-10T16:38:45.0820881Z   ---
+test	UNKNOWN STEP	2026-11-10T16:38:45.0849874Z   duration_ms: 69.749571
+test	UNKNOWN STEP	2026-11-10T16:38:45.0875043Z   type: 'test'
+test	UNKNOWN STEP	2026-11-10T16:38:45.0885227Z   ...
+test	UNKNOWN STEP	2026-11-10T16:38:45.1409902Z # Subtest: tool names, resource URI, step ids and state keys match the panel's contract
+test	UNKNOWN STEP	2026-11-10T16:38:45.1435965Z ok 2 - tool names, resource URI, step ids and state keys match the panel's contract
+test	UNKNOWN STEP	2026-11-10T16:38:45.1465328Z   ---
+test	UNKNOWN STEP	2026-11-10T16:38:45.1472831Z   duration_ms: 73.124478
+test	UNKNOWN STEP	2026-11-10T16:38:45.1491691Z   type: 'test'
+test	UNKNOWN STEP	2026-11-10T16:38:45.1515163Z   ...
+test	UNKNOWN STEP	2026-11-10T16:38:48.8713056Z 1..85
+test	UNKNOWN STEP	2026-11-10T16:38:48.8713383Z # tests 85
+test	UNKNOWN STEP	2026-11-10T16:38:48.8713696Z # suites 0
+test	UNKNOWN STEP	2026-11-10T16:38:48.8714030Z # pass 85
+test	UNKNOWN STEP	2026-11-10T16:38:48.8714321Z # fail 0
+test	UNKNOWN STEP	2026-11-10T16:38:48.8714780Z # cancelled 0
+test	UNKNOWN STEP	2026-11-10T16:38:48.8715009Z # skipped 0
+test	UNKNOWN STEP	2026-11-10T16:38:48.8715207Z # todo 0
+test	UNKNOWN STEP	2026-11-10T16:38:48.8715413Z # duration_ms 4352.763511
+test	UNKNOWN STEP	2026-11-10T16:38:49.1639667Z 
+test	UNKNOWN STEP	2026-11-10T16:38:49.1646429Z ^[[1m^[[30m^[[46m RUN ^[[49m^[[39m^[[22m ^[[36mv5.0.5 ^[[39m^[[90m/home/runner/work/example-repo/example-repo^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:49.1651276Z 
+test	UNKNOWN STEP	2026-11-10T16:38:50.0122316Z  ^[[32m✓^[[39m ^[[30m^[[42m service ^[[49m^[[39m test/lint/rules/nix/shared.test.ts ^[[2m(^[[22m^[[2m55 tests^[[22m^[[2m)^[[22m^[[32m 137^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:50.1561244Z  ^[[32m✓^[[39m ^[[30m^[[42m service ^[[49m^[[39m test/experiments/github.test.ts ^[[2m(^[[22m^[[2m44 tests^[[22m^[[2m)^[[22m^[[32m 197^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:52.8089960Z  ^[[32m✓^[[39m ^[[30m^[[42m service ^[[49m^[[39m test/cli/linter.test.ts ^[[2m(^[[22m^[[2m51 tests^[[22m^[[2m)^[[22m^[[33m 1092^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:53.0593275Z  ^[[32m✓^[[39m ^[[30m^[[42m service ^[[49m^[[39m test/experiments/promotion.test.ts ^[[2m(^[[22m^[[2m73 tests^[[22m^[[2m)^[[22m^[[32m 56^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:53.5178762Z  ^[[32m✓^[[39m ^[[30m^[[42m service ^[[49m^[[39m test/review/intake.test.ts ^[[2m(^[[22m^[[2m79 tests^[[22m^[[2m)^[[22m^[[32m 143^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:53.7451154Z  ^[[32m✓^[[39m ^[[30m^[[42m service ^[[49m^[[39m test/fixes/github.test.ts ^[[2m(^[[22m^[[2m24 tests^[[22m^[[2m)^[[22m^[[32m 44^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:58.3965774Z    ^[[32m✓^[[39m signed GitHub App HTTP delivery ^[[2m(54)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:38:58.3967615Z      ^[[33m^[[2m✓^[[22m^[[39m fails rather than acknowledging a durable insert still pending at the HTTP deadline^[[33m 5007^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:59.1437854Z ^[[90mstderr^[[2m | test/agents/hosted.test.ts^[[2m > ^[[22m^[[2mhosted ACP roundtrips and resource limits^[[2m > ^[[22m^[[2mcloses a connection whose bounded output buffers stall without an SSE reader
+test	UNKNOWN STEP	2026-11-10T16:38:59.1447168Z ^[[22m^[[39mClosing ACP connection 00000000-0000-4000-8000-000000000001: Connection output stalled for maxOutputStallMs (100)
+test	UNKNOWN STEP	2026-11-10T16:38:59.1449094Z 
+test	UNKNOWN STEP	2026-11-10T16:38:59.1520072Z    ^[[32m✓^[[39m hosted ACP roundtrips and resource limits ^[[2m(17)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:38:59.1522074Z      ^[[33m^[[2m✓^[[22m^[[39m keeps the session and shared operation permit reserved after bounded cleanup times out^[[33m 1038^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:59.1524977Z      ^[[33m^[[2m✓^[[22m^[[39m bounds global/per-user connections and releases permits on DELETE and expiry^[[33m 616^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:59.1527443Z      ^[[33m^[[2m✓^[[22m^[[39m releases failed initialization reservations, caps sessions, and closes SSE during shutdown^[[33m 4018^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:59.1529804Z      ^[[33m^[[2m✓^[[22m^[[39m holds per-user HTTP permits while reading bodies and releases them on timeout^[[33m 307^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:38:59.1532042Z      ^[[33m^[[2m✓^[[22m^[[39m closes a connection whose bounded output buffers stall without an SSE reader^[[33m 443^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:03.1468928Z    ^[[32m✓^[[39m production modeled CI planning ^[[2m(9)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:03.1470367Z      ^[[33m^[[2m✓^[[22m^[[39m matches an independent exhaustive oracle with 1 modes per job^[[33m 1197^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:03.1472527Z      ^[[33m^[[2m✓^[[22m^[[39m matches an independent exhaustive oracle with 2 modes per job^[[33m 3584^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:11.4500950Z    ^[[32m✓^[[39m durable HTTP health routes ^[[2m(8)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:11.4510950Z      ^[[33m^[[2m✓^[[22m^[[39m withholds readiness but not liveness on database failure and recovers on a fresh probe^[[33m 1023^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:11.4513089Z      ^[[33m^[[2m✓^[[22m^[[39m bounds a stalled probe while HTTP liveness continues responding^[[33m 1009^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:11.4521372Z      ^[[33m^[[2m✓^[[22m^[[39m does not return ready when shutdown begins during an in-flight successful probe^[[33m 3007^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:11.4522515Z    ^[[32m✓^[[39m bounded durable HTTP ingress ^[[2m(14)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:11.4523557Z      ^[[33m^[[2m✓^[[22m^[[39m reports a late commit after deadline without sending a second response^[[33m 561^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:11.4525087Z      ^[[33m^[[2m✓^[[22m^[[39m reports a late failure after deadline without sending a second response^[[33m 564^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:11.4526930Z      ^[[33m^[[2m✓^[[22m^[[39m fails a stalled body before signature verification or persistence^[[33m 507^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:11.4528250Z      ^[[33m^[[2m✓^[[22m^[[39m refuses new deliveries while abandoned persistence work is at capacity^[[33m 561^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:17.0189210Z    ^[[32m✓^[[39m the setup pages ^[[2m(6)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:17.0198048Z      ^[[33m^[[2m✓^[[22m^[[39m dist-setup/mcp.html is one self-contained document^[[33m 343^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:17.0199721Z    ^[[32m✓^[[39m the built MCP view in a browser-like page ^[[2m(1)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:17.0201780Z      ^[[33m^[[2m✓^[[22m^[[39m starts without compiling code from a string^[[33m 476^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:17.0203392Z    ^[[32m✓^[[39m the built bundle in a browser-like page ^[[2m(3)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:17.0205496Z      ^[[33m^[[2m✓^[[22m^[[39m carries a resumed App from a click, through the real server, to the next step^[[33m 10102^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:25.9255379Z    ^[[32m✓^[[39m agent plugin ^[[2m(5)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:25.9257206Z      ^[[33m^[[2m✓^[[22m^[[39m runs the committed bundle without an install^[[33m 1048^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:35.4135757Z    ^[[32m✓^[[39m ConfirmAction ^[[2m(15)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:35.4137185Z      ^[[33m^[[2m✓^[[22m^[[39m asks before it acts and says what will happen^[[33m 339^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:36.0065639Z    ^[[32m✓^[[39m Stepper ^[[2m(14)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:36.0096104Z      ^[[33m^[[2m✓^[[22m^[[39m lists every step in order and says where the user is^[[33m 319^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:36.0352675Z    ^[[32m✓^[[39m register step ^[[2m(4)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:36.0376135Z      ^[[33m^[[2m✓^[[22m^[[39m posts the manifest straight to GitHub from the browser page^[[33m 316^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:40.1521389Z    ^[[32m✓^[[39m SetupApp before the first snapshot ^[[2m(5)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:40.1566624Z      ^[[33m^[[2m✓^[[22m^[[39m shows the title and a loading status until the snapshot arrives^[[33m 334^[[2mms^[[22m^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:40.9940357Z 
+test	UNKNOWN STEP	2026-11-10T16:39:40.9966504Z ^[[2m Test Files ^[[22m ^[[1m^[[32m234 passed^[[39m^[[22m^[[2m | ^[[22m^[[33m3 skipped^[[39m^[[90m (237)^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:40.9992872Z ^[[2m      Tests ^[[22m ^[[1m^[[32m3929 passed^[[39m^[[22m^[[2m | ^[[22m^[[33m65 skipped^[[39m^[[90m (3994)^[[39m
+test	UNKNOWN STEP	2026-11-10T16:39:41.0001568Z ^[[2m   Start at ^[[22m 16:38:49
+test	UNKNOWN STEP	2026-11-10T16:39:41.0003198Z ^[[2m   Duration ^[[22m 51.81s^[[2m (tests 59%, import 25%, environment 8%, transform 6%, setup 2%, worker 1%)^[[22m
+test	UNKNOWN STEP	2026-11-10T16:39:41.0023535Z 
+test	UNKNOWN STEP	2026-11-10T16:39:41.0609170Z Post job cleanup.
+test	UNKNOWN STEP	2026-11-10T16:39:41.0612957Z ##[start-action display=Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1;id=__00000000-0000-4000-8000-000000000002.__actions_setup-node]
+test	UNKNOWN STEP	2026-11-10T16:39:41.0686921Z Post job cleanup.
+test	UNKNOWN STEP	2026-11-10T16:39:41.2074897Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/example-repo/example-repo --files-from manifest.txt --use-compress-program zstdmt
+test	UNKNOWN STEP	2026-11-10T16:39:41.6015429Z Failed to save: Unable to reserve cache with key node-cache-Linux-x64-npm-8e7e8a538bd5b0b255b448235f648fad02af5002e54728e1c481ccf51907990d, another job may be creating this cache.
+test	UNKNOWN STEP	2026-11-10T16:39:41.6145275Z ##[end-action id=__00000000-0000-4000-8000-000000000002.__actions_setup-node;outcome=success;conclusion=success;duration_ms=553]
+test	UNKNOWN STEP	2026-11-10T16:39:41.6218814Z Post job cleanup.
+test	UNKNOWN STEP	2026-11-10T16:39:41.7089441Z [command]/usr/bin/git version
+test	UNKNOWN STEP	2026-11-10T16:39:41.7166972Z git version 2.56.0
+test	UNKNOWN STEP	2026-11-10T16:39:41.7205553Z Adding repository directory to the temporary git global config as a safe directory
+test	UNKNOWN STEP	2026-11-10T16:39:41.7209009Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/example-repo/example-repo
+test	UNKNOWN STEP	2026-11-10T16:39:41.7243875Z Removing SSH command configuration
+test	UNKNOWN STEP	2026-11-10T16:39:41.7251140Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+test	UNKNOWN STEP	2026-11-10T16:39:41.7297287Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+test	UNKNOWN STEP	2026-11-10T16:39:41.7563648Z Removing HTTP extra header
+test	UNKNOWN STEP	2026-11-10T16:39:41.8311993Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+test	UNKNOWN STEP	2026-11-10T16:39:41.8720037Z Cleaning up orphan processes
