@@ -9,7 +9,8 @@
 #
 # Security model (docs/review-program/threat-model.md): read-only token, no secrets, and the *base* commit is checked
 # out, so the code that runs is trusted main-line code unless a pull request edits this workflow itself. The
-# submitted project.yaml is fetched through the API at the exact head commit and treated purely as data.
+# submitted project.yaml is fetched through the API at the exact head commit and treated purely as data. Nothing is
+# installed: the base commit's committed bundle (dist-action/index.js, which CI keeps in sync with src/) runs directly.
 name: Review intake
 
 on:
@@ -41,14 +42,16 @@ jobs:
       - name: Base commit has the review program
         id: guard
         run: |
-          if [ -f src/review/intake.ts ]; then
+          if [ -f src/review/intake.ts ] && [ -f dist-action/index.js ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::The base commit predates the project review program; skipping intake."
           fi
 
       - if: steps.guard.outputs.enabled == 'true'
-        uses: ./.github/actions/setup
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
 
       - name: Review submission
         if: steps.guard.outputs.enabled == 'true'
@@ -58,7 +61,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           mkdir -p "$RUNNER_TEMP/review-intake"
-          npm run --silent cli -- review intake --pr "$PR_NUMBER" --head-sha "$HEAD_SHA" \
+          node dist-action/index.js review intake --pr "$PR_NUMBER" --head-sha "$HEAD_SHA" \
             --artifact "$RUNNER_TEMP/review-intake/intake.json" --output "$GITHUB_STEP_SUMMARY"
 
       # Only {"pr_number","head_sha"} crosses into the privileged comment workflow, which re-derives everything else.

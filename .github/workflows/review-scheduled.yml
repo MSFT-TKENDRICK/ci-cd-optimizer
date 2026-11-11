@@ -30,12 +30,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup
+      # Runs the committed bundle (kept in sync with src/ by CI), so nothing is installed.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
 
       - name: Re-review registered projects
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: npm run --silent cli -- review scheduled --dir projects --output "$GITHUB_STEP_SUMMARY" --json-dir reports
+        run: node dist-action/index.js review scheduled --dir projects --output "$GITHUB_STEP_SUMMARY" --json-dir reports
 
       # An invalid project fails the review step but still leaves reports for every other project, so sign those.
       - name: Check for reports
