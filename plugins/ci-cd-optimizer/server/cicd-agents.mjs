@@ -72981,6 +72981,26 @@ function stepFindings(ctx, entry2) {
       covers: [entry2.top]
     }));
   }
+  if (step.packageCache === "hit") {
+    const install2 = entry2.siblings[entry2.siblings.indexOf(step) + 1];
+    const rawCommand = install2?.kind === "script" ? install2.command : void 0;
+    if (install2 && rawCommand !== void 0 && INSTALL_COMMAND.exec(rawCommand.trim())?.index === 0 && !/[\r\n;&|`$<>\u2026]/.test(rawCommand) && install2.durationMs >= MIN_FINDING_MS) {
+      const command2 = clip2(rawCommand, MAX_LABEL);
+      findings4.push(finding2(ctx, {
+        category: "package-cache",
+        detail: `s${entry2.path}`,
+        step: label2,
+        observedMs: install2.durationMs,
+        observation: `${label2}: the dependency cache hit, but the following ${command2} still spent ${formatMs(install2.durationMs)} installing dependencies. The setup/cache step separately took ${formatMs(step.durationMs)}.`,
+        recommendation: "A download-cache hit does not eliminate installation and does not prove that no network access occurred. Profile restoration, extraction and lifecycle scripts separately before adding another cache. Compare prepared dependencies only with matching lockfile, toolchain and OS; preserve integrity checks, lifecycle scripts and isolation, and include transfer costs and total runner work.",
+        evidence: [
+          `${display3(step.title)}: setup/cache step ${formatMs(step.durationMs)}`,
+          `${command2}: installation ${formatMs(install2.durationMs)}`
+        ],
+        covers: [step, install2]
+      }));
+    }
+  }
   if (step.tests.length > 0 && step.durationMs >= MIN_TEST_RUNTIME_MS) {
     const frameworks = step.tests.map((summary) => {
       const counts = [
@@ -73273,12 +73293,15 @@ function attributeRun(snapshot, logs = /* @__PURE__ */ new Map()) {
     if (evidence2 && timing.critical) {
       for (const entry2 of located) {
         if (entry2.step !== entry2.top || covered3.has(entry2.step) || entry2.step.durationMs < threshold) continue;
+        const recognized = unionMs(located.filter((other) => other.top === entry2.top && covered3.has(other.step)).map(({ step }) => [step.startMs, step.endMs]), [entry2.step.startMs, entry2.step.endMs]);
+        const unknown3 = Math.max(0, entry2.step.durationMs - recognized);
+        if (unknown3 < threshold) continue;
         gaps.push({
           kind: "unexplained-time",
           jobKey: job.key,
           jobName: job.name,
-          ms: entry2.step.durationMs,
-          detail: `${entry2.label} took ${formatMs(entry2.step.durationMs)} on the critical path and no recognised bottleneck pattern explains it.`
+          ms: Math.round(unknown3),
+          detail: recognized > 0 ? `${formatMs(unknown3)} of ${entry2.label} (${formatMs(entry2.step.durationMs)} total) on the critical path is not explained by recognised bottleneck patterns.` : `${entry2.label} took ${formatMs(entry2.step.durationMs)} on the critical path and no recognised bottleneck pattern explains it.`
         });
       }
     }
