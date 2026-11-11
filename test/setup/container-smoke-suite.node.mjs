@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { test } from "node:test";
 import { runSmokeSuite } from "../service/container-smoke-suite.mjs";
@@ -51,4 +52,18 @@ test("missing durable configuration fails rather than silently testing direct mo
   delete options.env.SMOKE_DATABASE_CONTAINER;
   await assert.rejects(runSmokeSuite(options), /disposable/);
   assert.equal(children.length, 0);
+});
+
+test("the executable emits standard test telemetry and a nonzero exit on failure", () => {
+  const env = Object.fromEntries(Object.entries(process.env)
+    .filter(([key]) => !key.startsWith("SMOKE_DATABASE_") && key !== "NODE_TEST_CONTEXT"));
+  const result = spawnSync(process.execPath, ["test/service/container-smoke-suite.mjs"], {
+    env, encoding: "utf8", timeout: 15_000,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /not ok 1 - direct and durable production image/);
+  assert.match(result.stdout, /# tests 1/);
+  assert.match(result.stdout, /# fail 1/);
+  assert.match(result.stdout, /# duration_ms \d/);
 });

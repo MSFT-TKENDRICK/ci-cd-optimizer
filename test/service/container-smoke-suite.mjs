@@ -3,6 +3,7 @@ import console from "node:console";
 import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import process from "node:process";
+import { test } from "node:test";
 import { fileURLToPath, URL } from "node:url";
 
 const worker = fileURLToPath(new URL("./container-smoke.mjs", import.meta.url));
@@ -31,4 +32,6 @@ export async function runSmokeSuite({ env = process.env, launch = spawn, log = c
   if (failures.length) throw new AggregateError(failures, "Container smoke suite failed");
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await runSmokeSuite();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await test("direct and durable production image", () => runSmokeSuite());
+}
