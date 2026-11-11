@@ -42441,7 +42441,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "aebdfb2ef77eb3930c309c2c49cc35bb54318e255ad2b3759682cd5b631e7127",
+  "implementationSha256": "3e699f53fa97104bd93ab683e63f69cc21355dbe7990f6034263c6bc68778bc5",
   "generatorSha256": "3796e86ad20c33e0b41cc5ad4490c09338a37e5c6d2ea7c2b2f9095dbf298aed",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -67171,12 +67171,15 @@ function describeVertex(vertex) {
   const operations = vertex.operations.length > 0 ? ` (${vertex.operations.map((operation) => `${operation.name} ${formatMs(operation.durationMs)}`).join(", ")})` : "";
   return `#${vertex.id} ${clip2(vertex.name, MAX_LABEL)}: ${formatMs(vertexMs(vertex))}${operations}`;
 }
+function vertexUnionMs(vertices) {
+  return unionMs(vertices.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs]));
+}
 function buildFindings(ctx, entry2, build2, index) {
   const findings4 = [];
   const detail = `s${entry2.path}b${index}`;
   const covers2 = [entry2.top];
   const exports = build2.vertices.filter((vertex) => vertex.kind === "cache-export");
-  const exportMs = sum(exports.map(vertexMs));
+  const exportMs = vertexUnionMs(exports);
   if (exportMs >= MIN_FINDING_MS) {
     const modeMax = build2.cacheTo.some((spec2) => spec2.mode === "max");
     const target = build2.cacheTo.map((spec2) => spec2.raw).join("; ") || "the configured cache";
@@ -67193,7 +67196,7 @@ function buildFindings(ctx, entry2, build2, index) {
   }
   if (build2.load) {
     const loads = build2.vertices.filter((vertex) => vertex.kind === "image-export" || vertex.kind === "image-load");
-    const loadMs = sum(loads.map(vertexMs));
+    const loadMs = vertexUnionMs(loads);
     if (loadMs >= MIN_FINDING_MS) {
       findings4.push(finding2(ctx, {
         category: "image-load",
@@ -67209,7 +67212,7 @@ function buildFindings(ctx, entry2, build2, index) {
   }
   if (build2.cacheFrom.length > 0) {
     const misses = build2.vertices.filter((vertex) => vertex.kind === "run" && !vertex.cached && !vertex.error);
-    const missMs = unionMs(misses.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs]));
+    const missMs = vertexUnionMs(misses);
     if (missMs >= MIN_FINDING_MS) {
       const restored = build2.vertices.filter((vertex) => (vertex.kind === "run" || vertex.kind === "copy") && vertex.cached).length;
       const source = build2.cacheFrom.map((spec2) => spec2.raw).join("; ");
@@ -67253,10 +67256,10 @@ function stepFindings(ctx, entry2) {
   const pulling = step.subGroups.filter((group) => /^Pulling BuildKit image/i.test(group.title));
   const booting = step.subGroups.filter((group) => /^Booting builder/i.test(group.title));
   const parts2 = [...pulling, ...booting].map((group) => `${clip2(group.title, MAX_LABEL)}: ${formatMs(group.durationMs)}`);
-  let builderMs = sum([...pulling, ...booting].map((group) => group.durationMs));
+  let builderMs = unionMs([...pulling, ...booting].map((group) => [group.startMs, group.endMs]));
   if (parts2.length === 0) {
     const boots = step.builds.flatMap((build2) => build2.vertices.filter((vertex) => vertex.kind === "builder-boot"));
-    builderMs = sum(boots.map(vertexMs));
+    builderMs = vertexUnionMs(boots);
     parts2.push(...boots.map(describeVertex));
   }
   if (builderMs >= MIN_FINDING_MS) {

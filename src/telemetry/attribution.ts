@@ -354,13 +354,17 @@ function describeVertex(vertex: BuildVertex): string {
   return `#${vertex.id} ${clip(vertex.name, MAX_LABEL)}: ${formatMs(vertexMs(vertex))}${operations}`;
 }
 
+function vertexUnionMs(vertices: readonly BuildVertex[]): number {
+  return unionMs(vertices.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs] as const));
+}
+
 function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocation, index: number): Bottleneck[] {
   const findings: Bottleneck[] = [];
   const detail = `s${entry.path}b${index}`;
   const covers = [entry.top];
 
   const exports = build.vertices.filter((vertex) => vertex.kind === "cache-export");
-  const exportMs = sum(exports.map(vertexMs));
+  const exportMs = vertexUnionMs(exports);
   if (exportMs >= MIN_FINDING_MS) {
     const modeMax = build.cacheTo.some((spec) => spec.mode === "max");
     const target = build.cacheTo.map((spec) => spec.raw).join("; ") || "the configured cache";
@@ -380,7 +384,7 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
 
   if (build.load) {
     const loads = build.vertices.filter((vertex) => vertex.kind === "image-export" || vertex.kind === "image-load");
-    const loadMs = sum(loads.map(vertexMs));
+    const loadMs = vertexUnionMs(loads);
     if (loadMs >= MIN_FINDING_MS) {
       findings.push(finding(ctx, {
         category: "image-load",
@@ -397,7 +401,7 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
 
   if (build.cacheFrom.length > 0) {
     const misses = build.vertices.filter((vertex) => vertex.kind === "run" && !vertex.cached && !vertex.error);
-    const missMs = unionMs(misses.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs] as const));
+    const missMs = vertexUnionMs(misses);
     if (missMs >= MIN_FINDING_MS) {
       const restored = build.vertices.filter((vertex) => (vertex.kind === "run" || vertex.kind === "copy") && vertex.cached).length;
       const source = build.cacheFrom.map((spec) => spec.raw).join("; ");
@@ -450,10 +454,10 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
   const pulling = step.subGroups.filter((group) => /^Pulling BuildKit image/i.test(group.title));
   const booting = step.subGroups.filter((group) => /^Booting builder/i.test(group.title));
   const parts = [...pulling, ...booting].map((group) => `${clip(group.title, MAX_LABEL)}: ${formatMs(group.durationMs)}`);
-  let builderMs = sum([...pulling, ...booting].map((group) => group.durationMs));
+  let builderMs = unionMs([...pulling, ...booting].map((group) => [group.startMs, group.endMs] as const));
   if (parts.length === 0) {
     const boots = step.builds.flatMap((build) => build.vertices.filter((vertex) => vertex.kind === "builder-boot"));
-    builderMs = sum(boots.map(vertexMs));
+    builderMs = vertexUnionMs(boots);
     parts.push(...boots.map(describeVertex));
   }
   if (builderMs >= MIN_FINDING_MS) {

@@ -139,6 +139,9 @@ The telemetry report includes:
 Attribution requires a complete job inventory and resolved workflow definitions. Log retrieval is bounded to eight jobs
 per report; unavailable or skipped logs remain visible as coverage gaps. Savings are upper bounds from observed time,
 not predicted results or measured improvements, and overlapping findings must not be added together.
+Within a BuildKit finding, overlapping vertex durations are counted once using their interval union,
+anchoring BuildKit's reported durations at logged completion times. This prevents streamed image export
+and Docker import, or concurrent cache exports, from inflating observed runner time and savings bounds.
 
 For critical test workloads, reports identify independent jobs with observed slack as candidates for
 reusing already-prepared capacity before adding shards and repeating setup. This is not a compatibility

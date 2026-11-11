@@ -72841,12 +72841,15 @@ function describeVertex(vertex) {
   const operations = vertex.operations.length > 0 ? ` (${vertex.operations.map((operation2) => `${operation2.name} ${formatMs(operation2.durationMs)}`).join(", ")})` : "";
   return `#${vertex.id} ${clip2(vertex.name, MAX_LABEL)}: ${formatMs(vertexMs(vertex))}${operations}`;
 }
+function vertexUnionMs(vertices) {
+  return unionMs(vertices.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs]));
+}
 function buildFindings(ctx, entry2, build2, index) {
   const findings4 = [];
   const detail = `s${entry2.path}b${index}`;
   const covers2 = [entry2.top];
   const exports = build2.vertices.filter((vertex) => vertex.kind === "cache-export");
-  const exportMs = sum(exports.map(vertexMs));
+  const exportMs = vertexUnionMs(exports);
   if (exportMs >= MIN_FINDING_MS) {
     const modeMax = build2.cacheTo.some((spec2) => spec2.mode === "max");
     const target = build2.cacheTo.map((spec2) => spec2.raw).join("; ") || "the configured cache";
@@ -72863,7 +72866,7 @@ function buildFindings(ctx, entry2, build2, index) {
   }
   if (build2.load) {
     const loads = build2.vertices.filter((vertex) => vertex.kind === "image-export" || vertex.kind === "image-load");
-    const loadMs = sum(loads.map(vertexMs));
+    const loadMs = vertexUnionMs(loads);
     if (loadMs >= MIN_FINDING_MS) {
       findings4.push(finding2(ctx, {
         category: "image-load",
@@ -72879,7 +72882,7 @@ function buildFindings(ctx, entry2, build2, index) {
   }
   if (build2.cacheFrom.length > 0) {
     const misses = build2.vertices.filter((vertex) => vertex.kind === "run" && !vertex.cached && !vertex.error);
-    const missMs = unionMs(misses.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs]));
+    const missMs = vertexUnionMs(misses);
     if (missMs >= MIN_FINDING_MS) {
       const restored = build2.vertices.filter((vertex) => (vertex.kind === "run" || vertex.kind === "copy") && vertex.cached).length;
       const source = build2.cacheFrom.map((spec2) => spec2.raw).join("; ");
@@ -72923,10 +72926,10 @@ function stepFindings(ctx, entry2) {
   const pulling = step.subGroups.filter((group) => /^Pulling BuildKit image/i.test(group.title));
   const booting = step.subGroups.filter((group) => /^Booting builder/i.test(group.title));
   const parts = [...pulling, ...booting].map((group) => `${clip2(group.title, MAX_LABEL)}: ${formatMs(group.durationMs)}`);
-  let builderMs = sum([...pulling, ...booting].map((group) => group.durationMs));
+  let builderMs = unionMs([...pulling, ...booting].map((group) => [group.startMs, group.endMs]));
   if (parts.length === 0) {
     const boots = step.builds.flatMap((build2) => build2.vertices.filter((vertex) => vertex.kind === "builder-boot"));
-    builderMs = sum(boots.map(vertexMs));
+    builderMs = vertexUnionMs(boots);
     parts.push(...boots.map(describeVertex));
   }
   if (builderMs >= MIN_FINDING_MS) {

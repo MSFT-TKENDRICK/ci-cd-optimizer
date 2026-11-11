@@ -138,11 +138,38 @@ describe("attributeRun on run 42856555439", () => {
     expect(attribution.bottlenecks[0]?.id).toBe(found.id);
   });
 
-  it("reports the image export and load into the runner's Docker", () => {
+  it("counts the overlapping image export and Docker import only once", () => {
     const found = one(attribution, "image-load", "app");
-    expect(found).toMatchObject({ onCriticalPath: true, observedMs: 12_200 });
+    expect(found).toMatchObject({ onCriticalPath: true, observedMs: 7_500, runnerSavingsBoundMs: 7_500 });
     expect(found.elapsedSavingsBoundMs).toBeGreaterThan(0);
     expect(found.summary).toMatch(/load/);
+  });
+
+  it.each(["image-load", "cache-export"] as const)("uses non-overlapping elapsed intervals for %s findings and thresholds", (category) => {
+    for (const { spans, expectedMs } of [
+      { spans: [[0, 7500], [2800, 7500]], expectedMs: 7500 },
+      { spans: [[0, 7000], [5000, 9000]], expectedMs: 9000 },
+      { spans: [[0, 4000], [6000, 10000]], expectedMs: 8000 },
+      { spans: [[0, 2000], [500, 2500]], expectedMs: 2500 },
+    ] as const) {
+      const evidence = parseJobLog(APP_LOG);
+      const build = evidence.steps.flatMap((entry) => entry.builds).find((entry) => entry.load)!;
+      const template = build.vertices[0]!;
+      const start = Date.parse(at("39:00"));
+      build.vertices = spans.map(([from, to], index) => ({
+        ...template, id: index + 1,
+        kind: category === "cache-export" ? "cache-export" : index === 0 ? "image-export" : "image-load",
+        firstMs: start + from, lastMs: start + to, durationMs: to - from, cached: false, operations: [],
+      }));
+      const result = attributeRun(snapshot(), ciLogs([[APP, evidence]]));
+      if (expectedMs < 3000) {
+        expect(result.bottlenecks.filter((entry) => entry.category === category)).toEqual([]);
+      } else {
+        expect(one(result, category, "app")).toMatchObject({
+          observedMs: expectedMs, runnerSavingsBoundMs: expectedMs, elapsedSavingsBoundMs: expectedMs,
+        });
+      }
+    }
   });
 
   it("reports the npm cache miss and the post-job cache save race in the test job", () => {
