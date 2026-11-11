@@ -193,6 +193,35 @@ describe("parseCacheSpec and vertexKind", () => {
 });
 
 describe("parseJobLog builds", () => {
+  it("retains bounded action-reported cache access without treating missing or malformed output as denial", () => {
+    const entries: Array<[number, string]> = [
+      [0, "##[group]Run docker/build-push-action@v7"], [1, "##[endgroup]"],
+      [2, "refs/heads/outside: read/write"],
+      [3, "##[group]GitHub Actions runtime token ACs"],
+      [4, "refs/heads/feature: read/write"], [5, "refs/heads/main: read"],
+      [6, "refs/heads/feature: read/write"], [7, "refs/pull/42/merge: write"],
+      [8, "refs/heads/omitted: read"], [9, "refs/heads/main: read"],
+      [10, "refs/heads/invalid: admin"], [11, "authorization: Bearer do-not-retain"],
+      [12, `refs/heads/${"a".repeat(200)}: read`],
+      [13, "refs/heads/invisible\u0000: read"], [14, "##[endgroup]"],
+      [15, "refs/heads/outside: read/write"],
+      [16, "##[group]Run docker/build-push-action@v7"], [17, "##[endgroup]"],
+      [18, "##[group]GitHub Actions runtime token ACs"], [19, "unrecognized output"], [20, "##[endgroup]"],
+      [21, "##[group]Run another/action@v1"], [22, "##[endgroup]"],
+      [23, "##[group]GitHub Actions runtime token ACs"], [24, "refs/heads/wrong-action: read/write"], [25, "##[endgroup]"],
+    ];
+    const result = parseJobLog(log(entries));
+    expect(result.steps[0]?.cacheAccess).toEqual({
+      entries: [
+        { scope: "refs/heads/feature", permission: "read/write" },
+        { scope: "refs/heads/main", permission: "read" },
+        { scope: "refs/pull/42/merge", permission: "write" },
+      ], omittedEntries: 1,
+    });
+    expect(result.steps.slice(1).map((step) => step.cacheAccess)).toEqual([undefined, undefined]);
+    expect(JSON.stringify(result)).not.toContain("do-not-retain");
+  });
+
   const digest = `sha256:${"a".repeat(64)}`;
   const transfers = (entries: ReadonlyArray<readonly [number, string]>) => parseJobLog(log([
     [0, "##[group]Run docker buildx build --load ."], [0, "##[endgroup]"],

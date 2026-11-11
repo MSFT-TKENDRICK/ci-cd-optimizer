@@ -300,6 +300,39 @@ describe("attributeRun on run 42856555439", () => {
     expect(found.observedMs).toBeGreaterThan(0);
   });
 
+  it("broadcasts logged GHA branch access without inferring cache availability or altering savings", () => {
+    const log = APP_LOG.replace("##[group]GitHub Actions runtime token ACs", [
+      "##[group]GitHub Actions runtime token ACs",
+      `${at("38:51")} refs/heads/feature: read/write`,
+      `${at("38:51")} refs/heads/main: read`,
+      `${at("38:51")} refs/pull/42/merge: write`,
+      `${at("38:51")} refs/heads/omitted: read`,
+    ].join("\n"));
+    const evidence = parseJobLog(log);
+    const result = attributeRun(snapshot(), ciLogs([[APP, evidence]]));
+    const found = one(result, "layer-cache-miss", "app");
+    const before = one(attribution, "layer-cache-miss", "app");
+    expect(found).toMatchObject({
+      observedMs: before.observedMs, runnerSavingsBoundMs: before.runnerSavingsBoundMs,
+      elapsedSavingsBoundMs: before.elapsedSavingsBoundMs, summary: before.summary,
+    });
+    expect(found.evidence[0]).toBe("Action-reported runtime cache access: refs/heads/feature: read/write; refs/heads/main: read; refs/pull/42/merge: write; 1 additional recognized access line(s) not retained");
+    expect(found.recommendation).toContain("does not prove publication, a matching entry or successful restoration");
+    expect(found.recommendation).toContain("Missing or omitted entries do not prove denied access");
+    expect(found.recommendation).toContain("Do not broaden permissions merely because a layer missed");
+    const emitted = benchmarkRun(snapshot(), result, undefined, []).findings.find((entry) => entry.category === "layer-cache-miss")!;
+    expect(emitted.evidence).toEqual(found.evidence);
+    expect(emitted.recommendation).toBe(found.recommendation);
+    expect(emitted.omittedEvidence).toBe(0);
+    for (const build of evidence.steps.flatMap((step) => step.builds)) {
+      build.cacheFrom = [{ type: "registry", raw: "type=registry,ref=ghcr.io/acme/cache" }];
+    }
+    const registry = one(attributeRun(snapshot(), ciLogs([[APP, evidence]])), "layer-cache-miss", "app");
+    expect(registry.recommendation).not.toContain("logged runtime cache access");
+    expect(registry.evidence.join(" ")).not.toContain("refs/heads");
+    expect(before.recommendation).not.toContain("logged runtime cache access");
+  });
+
   it("describes savings only as bounds and never exceeds the observed time or the headroom", () => {
     expect(attribution.bottlenecks.length).toBeGreaterThan(0);
     for (const entry of attribution.bottlenecks) {
