@@ -513,14 +513,21 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
   }
 
   if (step.toolCache === "download" && step.durationMs >= MIN_FINDING_MS) {
+    const release = step.toolSource === "release";
     findings.push(finding(ctx, {
       category: "toolchain-download",
       detail: `s${entry.path}`,
       step: label,
       observedMs: step.durationMs,
-      observation: `${label} downloaded its toolchain instead of finding it in the runner's tool cache (${formatMs(step.durationMs)}).`,
-      recommendation: "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
-      evidence: [`${label}: tool cache miss, ${formatMs(step.durationMs)}`],
+      observation: release
+        ? `${label} downloaded and unpacked a pinned release archive with no reused install (${formatMs(step.durationMs)}).`
+        : `${label} downloaded its toolchain instead of finding it in the runner's tool cache (${formatMs(step.durationMs)}).`,
+      recommendation: release
+        ? "Cache the extracted toolchain directory keyed by its version pin or lock file plus runner OS and architecture, and keep integrity verification before reusing it; a cache restore also takes time, so measure before and after."
+        : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
+      evidence: [release
+        ? `${label}: release archive download with no reused install, ${formatMs(step.durationMs)}`
+        : `${label}: tool cache miss, ${formatMs(step.durationMs)}`],
       covers: [entry.top],
     }));
   }

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,7 +37,23 @@ export function checkToolchain() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  console.log(reuseVerifiedToolchain() ?? await installToolchain());
+}
+
+function reuseVerifiedToolchain() {
+  try {
+    const result = checkToolchain();
+    console.log(`Reusing verified toolchain at .proof-tools/${lock.dafny}`);
+    return result;
+  } catch {
+    return undefined;
+  }
+}
+
+async function installToolchain() {
+  await rm(resolve(home, "dafny"), { recursive: true, force: true });
   const url = `https://github.com/dafny-lang/dafny/releases/download/v${lock.dafny}/${platform.asset}`;
+  console.log(`Downloading ${url}`);
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Toolchain download failed: ${response.status}`);
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -51,5 +67,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   } else {
     execFileSync("unzip", ["-q", "-o", archive, "-d", home], { cwd: root, stdio: "inherit" });
   }
-  console.log(checkToolchain());
+  await rm(archive, { force: true });
+  return checkToolchain();
 }

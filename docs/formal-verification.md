@@ -274,7 +274,10 @@ npx vitest run test/formal test/experiments/formal-integration.test.ts
 ```
 
 [`toolchain.json`](../formal/toolchain.json) pins official **Dafny 4.11.0 / Z3 4.12.1** archives by SHA-256.
-Setup downloads to `.proof-tools` and validates the archive before extraction. Every verify/generate/check also
+Setup first reuses an existing `.proof-tools/<version>` install only when the full distribution hash and both tool
+versions match, printing `Reusing verified toolchain at ...`. Otherwise it removes any stale install, prints
+`Downloading <url>`, validates the archive before extraction and deletes it afterwards. CI telemetry uses these
+markers to report release downloads as uncached `toolchain-download` time. Every verify/generate/check also
 hashes the complete installed distribution: sort each relative path, then hash
 `path + NUL + SHA256(fileBytes) + LF` records. The aggregate pin covers all 290 distribution files, not just a
 version string or solver executable. Unexpected files, modifications, missing tools and unsupported hosts fail.
