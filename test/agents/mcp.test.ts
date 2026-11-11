@@ -384,6 +384,43 @@ describe("MCP server GitHub tools", () => {
     expect(await failure(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 9 })).toMatch(/Workflow run 9 was not found/);
   });
 
+  it.each([
+    { executed: false, jobOffset: 0 },
+    { executed: true, jobOffset: 0 },
+    { executed: true, jobOffset: 2 },
+  ])("keeps skipped jobs in inventory but out of the selected execution timeline ($executed, offset $jobOffset)", async ({ executed, jobOffset }) => {
+    const skipped = {
+      id: 130282569828, name: "publish", conclusion: "skipped",
+      started_at: at("10:06"), completed_at: at("10:05"), steps: [],
+    };
+    const api = fakeApi({
+      repositoryMetadata: REPOSITORY, config: TIMEOUT_ONLY,
+      refs: { abc: { [WORKFLOW]: `${CI}  publish:\n    if: false\n    runs-on: ubuntu-24.04\n    steps: [{ run: echo publish }]\n` } },
+      runAttempts: { "2000:1": { ...RUN, conclusion: executed ? "success" : "skipped" } },
+      jobs: { 2000: [...(executed ? JOBS : []), skipped] },
+    });
+    const client = await connect({ fallbackRoot: repo, remote: { createClient: () => api, allow: ["acme/widgets"] } });
+    const report = await data<RunReport>(client, MCP_TOOLS.workflowRunReport, {
+      repo: "acme/widgets", runId: 2000, runAttempt: 1, jobOffset, markdown: true,
+    });
+    expect(report.jobs?.at(-1)).toMatchObject({ name: "publish", conclusion: "skipped", durationMs: 0 });
+    expect(report.markdown).toContain("| publish | 0 | skipped |");
+    expect(report.markdown).toContain("1 skipped job(s) omitted from the execution timeline");
+    expect(report.markdown).not.toContain("publish :j");
+    expect(report.markdown).not.toContain("2026-11-01T00:10:06");
+    if (executed && jobOffset === 0) {
+      expect(report.markdown).toContain("build :j0, 2026-11-01T00:00:10, 2026-11-01T00:02:10");
+      expect(report.markdown).toContain("test :j1, 2026-11-01T00:02:15, 2026-11-01T00:10:05");
+    } else {
+      expect(report.markdown).toContain("No executed jobs to plot on this page");
+      expect(report.markdown).not.toContain("gantt");
+    }
+    expect(report.jobsFetched).toBe(executed ? 3 : 1);
+    expect(report.omittedJobs).toBe(jobOffset);
+    expect(report.criticalPath?.durationMs).toBe(executed ? 590_000 : 0);
+    expect(writes(api)).toEqual([]);
+  });
+
   it("escapes repository-derived report Markdown and restricts Gantt labels", async () => {
     const untrusted = "<script>alert(1)</script> [click](https://bad.example) | ```\n# injected";
     const api = fakeApi({

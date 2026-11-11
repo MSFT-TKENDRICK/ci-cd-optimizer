@@ -63,6 +63,31 @@ describe("workflow telemetry", () => {
     expect(report).toContain("build → test");
   });
 
+  it.each([false, true])("omits skipped-job timestamps from execution timelines (executed jobs: %s)", (executed) => {
+    const skipped = {
+      id: 130282569828, key: "publish", name: "publish", conclusion: "skipped",
+      startedAt: "2026-11-11T02:36:15Z", completedAt: "2026-11-11T02:36:14Z",
+      queuedAt: "2026-11-11T02:36:08Z", queueMs: 7_000, durationMs: 0, needs: [],
+    };
+    const run = { ...snapshot, jobs: [...(executed ? snapshot.jobs : []), skipped] };
+    const report = createTelemetryReport(run);
+    const timeline = report.split("### Timeline")[1]?.split("### Job dependencies")[0];
+    expect(timeline).toContain("1 skipped job(s) omitted from the execution timeline");
+    expect(timeline).not.toContain("publish");
+    expect(timeline).not.toContain("2026-11-11T02:36:");
+    expect(timeline).not.toContain("section Runner queue");
+    expect(report).toContain("| publish | 0s |");
+    if (executed) {
+      expect(timeline).toContain("Build :crit, done, j0, 2026-01-01T00:00:05, 2026-01-01T00:01:05");
+      expect(timeline).toContain("Test :crit, done, j1, 2026-01-01T00:01:05, 2026-01-01T00:02:05");
+    } else {
+      expect(timeline).toContain("No executed jobs to plot");
+      expect(timeline).not.toContain("gantt");
+      expect(calculateCriticalPath(run.jobs)).toEqual({ durationMs: 0, jobKeys: [] });
+    }
+    expect(run.jobs.at(-1)).toEqual(skipped);
+  });
+
   it("reports bounded bottleneck evidence and explicit coverage gaps", () => {
     const attribution = attributeRun(snapshot);
     const report = createTelemetryReport(snapshot, undefined, { attribution });

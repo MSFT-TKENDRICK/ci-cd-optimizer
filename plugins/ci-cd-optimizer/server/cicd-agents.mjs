@@ -73785,9 +73785,12 @@ function calculateCriticalPath(jobs) {
 }
 function createGantt(snapshot, criticalKeys) {
   const critical = new Set(criticalKeys);
-  const jobs = [...snapshot.jobs].sort(
+  const jobs = snapshot.jobs.filter((job) => job.conclusion !== "skipped").sort(
     (left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt)
   );
+  const skippedCount = snapshot.jobs.length - jobs.length;
+  const skippedNote = skippedCount > 0 ? [`_${skippedCount} skipped job(s) omitted from the execution timeline; job inventory is unchanged._`] : [];
+  if (jobs.length === 0) return ["No executed jobs to plot.", ...skippedNote].join("\n\n");
   const waits = jobs.filter((job) => job.queuedAt && (job.queueMs ?? 0) >= QUEUE_THRESHOLD_MS);
   const tags = (job) => [critical.has(job.key) ? "crit" : "", job.conclusion === "success" ? "done" : job.conclusion === "failure" ? "active" : ""].filter(Boolean).map((tag) => `${tag}, `).join("");
   return [
@@ -73808,7 +73811,8 @@ function createGantt(snapshot, criticalKeys) {
     ),
     "```",
     "",
-    "_Red bars are on the critical path; the runner queue lane shows time jobs spent waiting for a runner._"
+    "_Red bars are on the critical path; the runner queue lane shows time jobs spent waiting for a runner._",
+    ...skippedNote
   ].join("\n");
 }
 function slowestSteps(snapshot, limit = 10) {
@@ -78073,6 +78077,9 @@ async function remoteRunReport(access, request) {
   if (request.markdown) {
     const mermaidLabel = (value) => value.replace(/[^a-zA-Z0-9 _.-]/g, " ").slice(0, 80);
     const timestamp3 = (value) => new Date(value).toISOString().replace(/\.\d{3}Z$/, "");
+    const pageJobs = snapshot.jobs.slice(jobOffset, jobOffset + 100);
+    const timelineJobs = pageJobs.filter((job) => job.conclusion !== "skipped");
+    const skippedCount = pageJobs.length - timelineJobs.length;
     const markdown2 = sanitizeMarkdown([
       `## ${escapeMarkdown(snapshot.workflowName)} performance snapshot`,
       `Run ${snapshot.runId}, attempt ${snapshot.runAttempt}; duration ${jobsComplete ? `${snapshot.durationMs} ms` : "unavailable (incomplete job telemetry)"}; queue ${snapshot.queueMs ?? "unavailable"} ms.`,
@@ -78101,13 +78108,16 @@ async function remoteRunReport(access, request) {
       "|---|---:|---|",
       ...report.jobs.map((job) => `| ${escapeMarkdown(job.name)} | ${job.durationMs} | ${escapeMarkdown(job.conclusion ?? "unknown")} |`),
       "",
-      "```mermaid",
-      "gantt",
-      `    title ${mermaidLabel(snapshot.workflowName)}`,
-      "    dateFormat YYYY-MM-DDTHH:mm:ss",
-      "    section Jobs",
-      ...snapshot.jobs.slice(jobOffset, jobOffset + 100).map((job, index) => `    ${mermaidLabel(job.name)} :j${index}, ${timestamp3(job.startedAt)}, ${timestamp3(job.completedAt)}`),
-      "```"
+      ...timelineJobs.length > 0 ? [
+        "```mermaid",
+        "gantt",
+        `    title ${mermaidLabel(snapshot.workflowName)}`,
+        "    dateFormat YYYY-MM-DDTHH:mm:ss",
+        "    section Jobs",
+        ...timelineJobs.map((job, index) => `    ${mermaidLabel(job.name)} :j${index}, ${timestamp3(job.startedAt)}, ${timestamp3(job.completedAt)}`),
+        "```"
+      ] : ["No executed jobs to plot on this page."],
+      ...skippedCount > 0 ? [`${skippedCount} skipped job(s) omitted from the execution timeline on this page; job inventory is unchanged.`] : []
     ].join("\n"), MAX_REPORT_CHARS);
     report.markdown = markdown2.text;
     report.markdownTruncated = markdown2.truncated;

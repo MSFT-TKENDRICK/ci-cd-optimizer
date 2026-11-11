@@ -168,8 +168,10 @@ jobs, and one upstream job not fetched. It does not claim that output pagination
 When collected job telemetry is incomplete, `run.durationMs` is `null`, `criticalPath` and per-job
 `onCriticalPath` are absent, and baseline comparisons are withheld. Unknown workflow definitions also suppress
 critical-path metrics. Individual job/step timings remain measurements of the collected subset, not a complete
-ranking of the run. A Gantt chart likewise covers only returned jobs. Missing fields are unavailable evidence,
-not zero durations or proof that a job is off the critical path.
+ranking of the run. A Gantt chart likewise covers only returned, non-skipped jobs. Skipped jobs remain in the
+inventory and pagination counts, but their possibly synthetic or reversed timestamps are not execution intervals.
+Markdown reports their omitted timeline count; a page with no executed jobs shows a message instead of a chart.
+Missing fields are unavailable evidence, not zero durations or proof that a job is off the critical path.
 
 Use each `pages` entry's `nextOffset` to retrieve the remaining collected jobs, steps, findings and gaps.
 Evidence pages use `nextEvidenceOffset` per finding. Supply `runAttempt` to retrieve that exact attempt,
