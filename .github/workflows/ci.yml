@@ -76,9 +76,8 @@ jobs:
           tags: ci-cd-optimizer:smoke
           cache-from: type=gha,scope=ci-smoke
           cache-to: type=gha,mode=max,scope=ci-smoke
-      - run: node test/service/container-smoke.mjs
-      - name: Durable production image
-        run: node test/service/container-smoke.mjs
+      - name: Direct and durable production image
+        run: node test/service/container-smoke-suite.mjs
         env:
           SMOKE_DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
           SMOKE_DATABASE_CONTAINER: ${{ job.services.postgres.id }}
