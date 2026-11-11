@@ -211,8 +211,11 @@ Receipt storage is per workspace/session, bounded to 5,000 recent entries. This 
 a crash between accepting a message and persisting its receipt can replay the message.
 
 The watcher polls every 60 seconds per allowlisted repository (maximum five), replays at most seven days/1,000
-producer runs per repository, and holds 50 unacknowledged events without silently evicting them. Collection and replay
-gaps remain visible in status/error resources. Long-offline gaps cannot be reconstructed by this bounded feed.
+producer runs per repository, and holds 50 unacknowledged events without silently evicting them. Each poll fetches
+at most four eligible producers per repository, alternating newest and oldest so current results do not wait
+behind the entire replay history and older events still make progress. Alternation survives single-slot backpressure;
+delivery order is not chronological.
+Collection and replay gaps remain visible in status/error resources. Long-offline gaps cannot be reconstructed by this bounded feed.
 Keep the harness running to receive recommendations; a different session does not share its delivery receipts.
 Polling and reconnecting do not trigger CI. Every remediation still follows the user's existing authorization.
 

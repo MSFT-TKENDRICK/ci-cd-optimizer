@@ -115,6 +115,7 @@ export function attachFeedback(server: McpServer, remote: RemoteOptions, options
   const seen = new Map<string, number>();
   const retry = new Map<string, { at: number; created: number; message: string }>();
   const undelivered = new Map<string, number>();
+  const newestNext = new Map<string, boolean>();
   const lastInventory = new Map(remote.allow.map((repo) => [repo.toLowerCase(), sinceMs]));
   let timer: ReturnType<typeof setTimeout> | undefined;
   let status: Record<string, unknown> = { state: "starting", since: options.since, replayDays: 7, pending: 0 };
@@ -186,13 +187,18 @@ export function attachFeedback(server: McpServer, remote: RemoteOptions, options
           fail(`Known producer ${key} is absent from the complete inventory; delivery is incomplete.`);
           failed = true;
         }
-        let fetched = 0;
-        for (const producer of producers) {
-          if (producer.status !== "completed") continue;
+        const eligible = producers.filter((producer) => {
           const key = `${repoId}:${producer.id}:${producer.run_attempt}`;
-          if (seen.has(key) || (retry.get(key)?.at ?? 0) > now) continue;
-          if (outbox.size >= MAX_PENDING || fetched >= 4) break;
-          fetched++;
+          return producer.status === "completed" && !seen.has(key) && (retry.get(key)?.at ?? 0) <= now;
+        });
+        let oldest = 0;
+        let newest = eligible.length - 1;
+        // Share the bounded budget between current results and historical replay without starving either.
+        for (let fetched = 0; fetched < 4 && oldest <= newest && outbox.size < MAX_PENDING; fetched++) {
+          const takeNewest = newestNext.get(repo) ?? true;
+          const producer = eligible[takeNewest ? newest-- : oldest++]!;
+          newestNext.set(repo, !takeNewest);
+          const key = `${repoId}:${producer.id}:${producer.run_attempt}`;
           try {
             const event = await operation((signal) => readFeedback(access(signal), repo, producer), controller.signal, LIMITS.operationMs);
             const uri = `cicd://feedback/runs/${event.key}`;
