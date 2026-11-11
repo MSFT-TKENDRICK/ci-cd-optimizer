@@ -167,6 +167,15 @@ prove that matching entries for the rebuilt layers were published or accessible.
 inputs (not just commit SHAs), publication, import/export scopes, branch visibility and eviction before
 attributing persistent misses to the Dockerfile or cache backend.
 
+Failed, cancelled and timed-out jobs also report unfinished BuildKit digest transfers when repeated
+unchanged byte/total reports span at least ten seconds on both the log and transfer clocks. Progress,
+counter or timestamp resets start a fresh interval; explicit transfer or vertex completion clears it.
+A cached vertex can still need to materialize layers. The detector uses only retained observations,
+unions simultaneous intervals, stops at the last report and assigns zero savings: it neither diagnoses
+a backend cause nor assumes the stalled time is removable. Successful jobs are not classified as
+interrupted from missing completion lines. Incomplete image export/load output is likewise identified
+as an observed span, not a completed phase duration or a savings estimate.
+
 These opportunity reports are independent of experiment grading: rejection means none of the tested candidates
 qualified, not that no optimization opportunities remain. Static scans also flag the same resolved Dockerfile
 declared in multiple workflows as a low-confidence reuse candidate. They do not prove that the builds run together,

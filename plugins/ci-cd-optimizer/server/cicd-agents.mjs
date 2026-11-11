@@ -72438,10 +72438,38 @@ function testLine(step, text4, pending) {
 var BUILD_START_VERTEX = /^\[internal\] load (?:build definition|\.dockerignore|local bake definitions|remote build context)\b/;
 var DOCKER_BUILD = /(?:^|[\s/;&|(])docker(?:\s+buildx)?\s+(?:build|bake)\b/;
 function activeBuild(step) {
-  for (let index = step.builds.length - 1; index >= 0; index -= 1) if (step.builds[index]?.vertices.length) return index;
+  for (let index = step.builds.length - 1; index >= 0; index -= 1) {
+    if (step.builds[index]?.vertices.length || step.builds[index]?.driver) return index;
+  }
   return step.builds.length ? 0 : -1;
 }
-function vertexLine(step, id2, text4, ms) {
+function transferLine(vertex, text4, ms, pending) {
+  const digest = /^(sha256:[a-f0-9]{64})\b/.exec(text4)?.[1];
+  if (!digest) return;
+  const match = text4.length <= MAX_TEXT ? /^sha256:[a-f0-9]{64} (\d+(?:\.\d+)?)([kMGT]?B) \/ (\d+(?:\.\d+)?)([kMGT]?B) (\d+(?:\.\d+)?)s( done)?$/.exec(text4) : null;
+  const transfers = pending.get(vertex) ?? /* @__PURE__ */ new Map();
+  const bytes = (value, unit) => Number(value) * 1e3 ** ["B", "kB", "MB", "GB", "TB"].indexOf(unit);
+  const current = match ? bytes(match[1], match[2]) : NaN;
+  const total = match ? bytes(match[3], match[4]) : NaN;
+  const elapsedMs = match ? seconds2(match[5]) : NaN;
+  if (!match || !Number.isSafeInteger(elapsedMs) || !Number.isFinite(current) || !Number.isFinite(total) || current < 0 || total <= 0 || total > Number.MAX_SAFE_INTEGER || current >= total || match[6]) {
+    transfers.delete(digest);
+    return;
+  }
+  const progress = `${match[1]}${match[2]} / ${match[3]}${match[4]}`;
+  const previous = transfers.get(digest);
+  const restart = !previous || previous.progress !== progress || elapsedMs < previous.elapsedMs || ms < previous.lastMs;
+  transfers.set(digest, {
+    digest,
+    progress,
+    firstMs: restart ? ms : previous.firstMs,
+    lastMs: ms,
+    elapsedMs,
+    firstElapsedMs: restart ? elapsedMs : previous.firstElapsedMs
+  });
+  pending.set(vertex, transfers);
+}
+function vertexLine(step, id2, text4, ms, pending) {
   const active = activeBuild(step);
   let build2 = step.builds[active];
   const restarted = id2 === 1 && BUILD_START_VERTEX.test(text4) && build2?.vertices.some((vertex2) => vertex2.id > 1) === true;
@@ -72462,12 +72490,16 @@ function vertexLine(step, id2, text4, ms) {
   if (!vertex) {
     vertex = { id: id2, name: clip(text4), kind: vertexKind(text4), firstMs: ms, lastMs: ms, cached: false, error: false, operations: [] };
     build2.vertices.push(vertex);
+    transferLine(vertex, text4, ms, pending);
     return;
   }
   vertex.lastMs = ms;
+  transferLine(vertex, text4, ms, pending);
   let match;
-  if (match = /^DONE ([\d.]+)s$/.exec(text4)) vertex.durationMs = seconds2(match[1]);
-  else if (text4 === "CACHED") vertex.cached = true;
+  if (match = /^DONE ([\d.]+)s$/.exec(text4)) {
+    vertex.durationMs = seconds2(match[1]);
+    pending.delete(vertex);
+  } else if (text4 === "CACHED") vertex.cached = true;
   else if (/^(?:ERROR|CANCELED)\b/.test(text4)) vertex.error = true;
   else if (!/^\d+\.\d+ /.test(text4) && (match = /^(.+?) ([\d.]+)s done$/.exec(text4)) && !/^(?:sha256:|extracting |loading layer |writing layer )/.test(match[1])) {
     vertex.operations.push({ name: clip(match[1]), durationMs: seconds2(match[2]) });
@@ -72493,6 +72525,7 @@ function parseJobLog(text4, options = {}) {
   let pullStartMs;
   const declaredOnly = /* @__PURE__ */ new Set();
   const pendingTests = /* @__PURE__ */ new WeakMap();
+  const pendingTransfers = /* @__PURE__ */ new WeakMap();
   let waitStartMs;
   const innermost = () => {
     for (let index = actions.length - 1; index >= 0; index -= 1) if (actions[index]?.step) return actions[index]?.step;
@@ -72647,7 +72680,7 @@ ${line2.trim()}`);
     }
     const vertex = /^#(\d+) (.+)$/.exec(line2);
     if (vertex) {
-      vertexLine(step, Number(vertex[1]), vertex[2], ms);
+      vertexLine(step, Number(vertex[1]), vertex[2], ms, pendingTransfers);
       continue;
     }
     if (line2.startsWith("Found in cache @ ")) step.toolCache = "hit";
@@ -72663,6 +72696,13 @@ ${line2.trim()}`);
   const endMs = evidence2.post.startMs ?? evidence2.lastMs ?? 0;
   const prune = (step) => {
     step.builds = step.builds.filter((build2) => !declaredOnly.has(build2) || build2.vertices.length > 0);
+    for (const vertex of step.builds.flatMap((build2) => build2.vertices)) {
+      const transfers = pendingTransfers.get(vertex);
+      if (transfers?.size) vertex.transfers = [...transfers.values()].map(({ firstElapsedMs, ...transfer }) => ({
+        ...transfer,
+        unchangedMs: Math.min(transfer.lastMs - transfer.firstMs, transfer.elapsedMs - firstElapsedMs)
+      }));
+    }
     step.children.forEach(prune);
   };
   evidence2.steps.forEach(prune);
@@ -72866,6 +72906,25 @@ function buildFindings(ctx, entry2, build2, index) {
   const findings4 = [];
   const detail = `s${entry2.path}b${index}`;
   const covers2 = [entry2.top];
+  const stalled = ["failure", "cancelled", "timed_out"].includes(ctx.job.conclusion ?? "") ? build2.vertices.flatMap((vertex) => (vertex.transfers ?? []).filter((transfer) => transfer.unchangedMs >= UNEXPLAINED_MIN_MS).map((transfer) => ({ vertex, transfer }))) : [];
+  const stalledMs = unionMs(stalled.map(({ transfer }) => [transfer.lastMs - transfer.unchangedMs, transfer.lastMs]), [entry2.step.startMs, entry2.step.endMs]);
+  if (stalledMs >= UNEXPLAINED_MIN_MS) {
+    findings4.push(finding2(ctx, {
+      category: "interrupted-transfer",
+      detail,
+      step: entry2.label,
+      observedMs: stalledMs,
+      removableMs: 0,
+      observation: `${entry2.label}: the ${ctx.job.conclusion} job's retained BuildKit log contains ${stalled.length} layer transfer(s) without observed completion, with repeated unchanged reported progress over ${formatMs(stalledMs)} of non-overlapping observed time. A CACHED vertex does not imply its layers finished transferring. The log does not establish the backend cause or removable cost.`,
+      recommendation: "Investigate the exact digest and transfer interval, cache/registry availability, network and BuildKit worker diagnostics before changing the Dockerfile or cache policy. Compare the same immutable build inputs after diagnosis. Preserve deadlines, retry limits, permissions, cache integrity, cleanup and downstream image assertions; do not treat a successful rerun as an erased failure or the stalled interval as guaranteed savings.",
+      evidence: [
+        ...stalled.slice(0, MAX_LISTED).map(({ vertex, transfer }) => `#${vertex.id}${vertex.cached ? " CACHED" : ""} ${transfer.digest}: ${transfer.progress}; unchanged reports ${formatMs(transfer.unchangedMs)}; transfer counter ${(transfer.elapsedMs / 1e3).toFixed(1)} s; completion not observed`),
+        "Intervals stop at the last progress observation, not the job deadline; concurrent transfers are counted once.",
+        ...stalled.length > MAX_LISTED ? [`${stalled.length - MAX_LISTED} additional transfer details not listed; their intervals are included.`] : []
+      ],
+      covers: covers2
+    }));
+  }
   const exports = build2.vertices.filter((vertex) => vertex.kind === "cache-export");
   const exportMs = vertexUnionMs(exports);
   if (exportMs >= MIN_FINDING_MS) {
@@ -72885,13 +72944,15 @@ function buildFindings(ctx, entry2, build2, index) {
   if (build2.load) {
     const loads = build2.vertices.filter((vertex) => vertex.kind === "image-export" || vertex.kind === "image-load");
     const loadMs = vertexUnionMs(loads);
+    const incomplete = loads.some((vertex) => vertex.durationMs === void 0);
     if (loadMs >= MIN_FINDING_MS) {
       findings4.push(finding2(ctx, {
         category: "image-load",
         detail,
         step: entry2.label,
         observedMs: loadMs,
-        observation: `${entry2.label}: exporting the image and loading it into the runner's Docker engine (load: true) took ${formatMs(loadMs)}.`,
+        ...incomplete ? { removableMs: 0 } : {},
+        observation: incomplete ? `${entry2.label}: the retained log spans ${formatMs(loadMs)} of image export/load output (load: true), but completion was not observed for every vertex. This is not the completed phase duration.` : `${entry2.label}: exporting the image and loading it into the runner's Docker engine (load: true) took ${formatMs(loadMs)}.`,
         recommendation: "Keep load: true only when later steps run the image locally; otherwise drop it (or push instead). When local use is required, the docker driver builds straight into the engine but supports different cache backends, so measure both before switching.",
         evidence: [...loads.map(describeVertex), "load: true"],
         covers: covers2
@@ -73329,7 +73390,7 @@ function attributeRun(snapshot, logs = /* @__PURE__ */ new Map()) {
     }
   }
   bottlenecks.push(...repeatedSetup(shape, evidenceById), ...queueFindings(snapshot, shape));
-  const priority2 = (finding3) => finding3.category === "generated-artifact-drift" ? 2 : finding3.category === "queue-pressure" ? 1 : 0;
+  const priority2 = (finding3) => finding3.category === "interrupted-transfer" ? 3 : finding3.category === "generated-artifact-drift" ? 2 : finding3.category === "queue-pressure" ? 1 : 0;
   bottlenecks.sort((a, b) => priority2(b) - priority2(a) || b.elapsedSavingsBoundMs - a.elapsedSavingsBoundMs || b.runnerSavingsBoundMs - a.runnerSavingsBoundMs || compareText(a.id, b.id));
   gaps.sort((a, b) => (b.ms ?? 0) - (a.ms ?? 0) || compareText(a.kind, b.kind) || compareText(a.jobKey, b.jobKey) || compareText(a.detail, b.detail));
   const jobs = shape.measured.map((timed) => {
