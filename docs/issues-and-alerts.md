@@ -161,6 +161,9 @@ oversized and invalid lines are ignored, and incomplete invocations do not contr
 Repeated labels retain their largest reported duration, not a sum. File durations may overlap and never
 change step totals or savings bounds. Spare-job evidence is grouped so file hotspots fit alongside
 framework totals and phase shares in the bounded benchmark broadcast.
+Profiling guidance separates fixture setup, test bodies and teardown, including tracing idle connection
+waits before changing shutdown. File timing alone cannot diagnose the cause. Preserve active-request
+draining and intentional timeout/polling coverage rather than shortening deadlines to improve timings.
 
 Layer-cache misses remain findings even when other layers were restored. Partial restoration does not
 prove that matching entries for the rebuilt layers were published or accessible. Compare immutable build

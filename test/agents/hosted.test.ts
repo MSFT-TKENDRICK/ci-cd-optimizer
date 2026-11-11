@@ -1,4 +1,5 @@
 import { createServer, request as httpRequest } from "node:http";
+import type { Socket } from "node:net";
 import { client, methods, PROTOCOL_VERSION, type ActiveSession, type ClientContext } from "@agentclientprotocol/sdk";
 import { createHttpStream } from "@agentclientprotocol/sdk/experimental/http-client";
 import { afterEach, describe, expect, it } from "vitest";
@@ -46,13 +47,25 @@ function github() {
 async function serve(limits: HostedOptions["limits"] = {}, fetchOverride?: typeof fetch) {
   const api = github();
   const hosted = createHostedAcp({ auth: "github-user", repositories: new Map([["acme/widgets", 42]]), fetch: fetchOverride ?? api.fetcher, limits });
+  const sockets = new Set<Socket>();
   const server = createServer((request, response) => {
     void hosted.handle(request, response).then((handled) => { if (!handled) response.writeHead(404).end(); });
+  });
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("No TCP address");
-  cleanup.push(async () => { await hosted.close(); await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); });
+  cleanup.push(async () => {
+    await hosted.close();
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+      // Fetch may replace an aborted SSE socket without sending a request.
+      for (const socket of sockets) if (socket.bytesRead === 0) socket.destroy();
+    });
+  });
   return { ...api, hosted, url: `http://127.0.0.1:${address.port}/acp` };
 }
 
