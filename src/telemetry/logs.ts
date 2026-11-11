@@ -121,6 +121,11 @@ export interface LogStep {
     omittedEntries: number;
   };
   installedPackages?: number;
+  /**
+   * On top-level steps, the longest stretch between consecutive log lines while the step ran, including the tail up to
+   * the next step. A quiet step shows missing instrumentation, not what the time was spent on.
+   */
+  silence?: { startMs: number; endMs: number; durationMs: number };
   tests: TestSummary[];
 }
 
@@ -280,6 +285,32 @@ function finishStep(step: LogStep, endMs: number): void {
   step.endMs = Math.max(step.startMs, endMs);
   step.durationMs = step.endMs - step.startMs;
   if (step.kind === "action") step.uses = clip(step.title.replace(/^Run /, ""));
+}
+
+function firstAtLeast(sorted: readonly number[], target: number): number {
+  let low = 0;
+  let high = sorted.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if ((sorted[middle] as number) < target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+/** Finds each step's longest gap between log lines; the earliest gap wins a tie and a step without any gap has none. */
+function annotateSilence(steps: readonly LogStep[], lines: readonly Line[]): void {
+  const stamps = lines.map((line) => line.ms).sort((a, b) => a - b);
+  for (const step of steps) {
+    const inside = stamps.slice(firstAtLeast(stamps, step.startMs), firstAtLeast(stamps, step.endMs + 1));
+    let previous = step.startMs;
+    let silence: LogStep["silence"];
+    for (const ms of [...inside, step.endMs]) {
+      if (ms - previous > (silence?.durationMs ?? 0)) silence = { startMs: previous, endMs: ms, durationMs: ms - previous };
+      previous = ms;
+    }
+    if (silence) step.silence = silence;
+  }
 }
 
 function testLine(step: LogStep, text: string, pending: WeakMap<LogStep, TestFileTiming[]>): void {
@@ -632,6 +663,7 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
   evidence.steps.forEach(prune);
   if (top) finishStep(top, endMs);
   for (const action of actions) if (action.step) finishStep(action.step, endMs);
+  annotateSilence(evidence.steps, lines);
   const firstStep = evidence.steps[0];
   if (evidence.firstMs !== undefined) evidence.setup.durationMs = (firstStep?.startMs ?? endMs) - evidence.firstMs;
   if (evidence.post.startMs !== undefined && evidence.lastMs !== undefined) evidence.post.durationMs = evidence.lastMs - evidence.post.startMs;

@@ -161,6 +161,13 @@ is held rather than immediately closed again. Normal fix PRs can resume with an 
 Removing a management/configured label alone does not opt out:
 use the ignore controls below. See [partial-write recovery](github-app.md#durable-hosted-processing) for limits.
 
+Discovery lists the labeled history first, then looks up each group's deterministic head branch against the base so a
+pull request whose labeling failed is still found. Those per-group lookups are read-only and share a pool of at most
+eight requests in flight, the same fan-out the scan already uses for repository blobs; results are applied in group
+order, writes stay serial, and a failed lookup or a truncated one (1000 results) fails the scan closed instead of
+reconciling from partial history. GitHub's REST guidance prefers serial requests to avoid secondary rate limits and the
+client does not retry, so a rate-limit response ends the scan visibly rather than being absorbed.
+
 Comment on a fix pull request to control it:
 
 Commands require current repository **write**, **maintain**, or **admin** permission, checked through GitHub's API when

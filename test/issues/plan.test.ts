@@ -74,6 +74,30 @@ describe("planIssueSync", () => {
     expect(planIssueSync([existing(13, "a", { copilotPending: true })], [{ ...issue, signature: "new" }], options).actions.map((action) => action.type)).toEqual(["update"]);
   });
 
+  it("leaves queued issues untouched when no token can assign them and reports them as awaiting", () => {
+    const issue = desired("a", { assignCopilot: true });
+    const unassignable = { ...options, copilotAssignable: false };
+    const idle = planIssueSync([existing(13, "a", { copilotPending: true })], [issue], unassignable);
+    expect(idle.actions).toEqual([]);
+    expect(idle.awaitingCopilot).toEqual([13]);
+    // An agent assigned out of band leaves a stale queue label that one assignment pass clears.
+    expect(planIssueSync([existing(13, "a", { copilotPending: true, copilotAssigned: true })], [issue], unassignable).actions).toEqual([
+      { type: "assign", number: 13, desired: issue },
+    ]);
+    // A changed finding is rewritten with the label kept: replacing the label set would otherwise drop it.
+    expect(planIssueSync([existing(13, "a", { copilotPending: true })], [{ ...issue, signature: "new" }], unassignable).actions).toMatchObject([
+      { type: "update", number: 13, retryCopilot: true },
+    ]);
+    // Issues that never asked for an agent are not awaiting one.
+    expect(planIssueSync([existing(13, "a", { copilotPending: true })], [desired("a")], unassignable).awaitingCopilot).toBeUndefined();
+    // An unspecified or available token keeps retrying.
+    for (const copilotAssignable of [undefined, true]) {
+      const plan = planIssueSync([existing(13, "a", { copilotPending: true })], [issue], { ...options, ...(copilotAssignable === undefined ? {} : { copilotAssignable }) });
+      expect(plan.actions).toEqual([{ type: "assign", number: 13, desired: issue }]);
+      expect(plan.awaitingCopilot).toBeUndefined();
+    }
+  });
+
   it("closes resolved issues unless closeResolved is false", () => {
     expect(planIssueSync([existing(1, "a")], [], options).actions).toMatchObject([{ type: "close", number: 1, fingerprint: "a" }]);
     expect(planIssueSync([existing(1, "a")], [], { ...options, closeResolved: false }).actions).toEqual([]);

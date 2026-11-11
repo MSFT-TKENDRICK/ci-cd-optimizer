@@ -145,6 +145,24 @@ describe("planAlertSync", () => {
     expect(planAlertSync(input({ series: regressed, config, existing: [{ ...existing, copilotPending: false }] })).actions).toEqual([]);
   });
 
+  it("leaves queued alerts untouched when no token can assign them", () => {
+    const config = { ...DEFAULT_CONFIG.alerts, assignCopilot: true };
+    const first = planAlertSync(input({ series: regressed, config })).actions[0];
+    if (first?.type !== "create") throw new Error("expected create");
+    const existing = existingFrom(first.desired.body, { copilotPending: true });
+    const idle = planAlertSync(input({ series: regressed, config, existing: [existing], copilotAssignable: false }));
+    expect(idle.actions).toEqual([]);
+    expect(idle.awaitingCopilot).toEqual([41]);
+    expect(planAlertSync(input({ series: regressed, config, existing: [{ ...existing, copilotAssigned: true }], copilotAssignable: false })).actions).toMatchObject([
+      { type: "assign", number: 41 },
+    ]);
+    const next = regressed.map((series) => ({ ...series, points: [...series.points.slice(1), { ...series.points.at(-1)!, runId: 2000 }] }));
+    expect(planAlertSync(input({ series: next, config, existing: [existing], copilotAssignable: false })).actions).toMatchObject([{ type: "update", retryCopilot: true }]);
+    const available = planAlertSync(input({ series: regressed, config, existing: [existing], copilotAssignable: true }));
+    expect(available.actions).toMatchObject([{ type: "assign", number: 41 }]);
+    expect(available.awaitingCopilot).toBeUndefined();
+  });
+
   it("closes the issue only after recovery relative to the original baseline", () => {
     const first = planAlertSync(input({ series: regressed.slice(0, 1) })).actions[0];
     if (first?.type !== "create") throw new Error("expected create");

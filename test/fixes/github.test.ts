@@ -50,6 +50,34 @@ function managed(overrides: Partial<ManagedPullRequest> = {}): ManagedPullReques
   };
 }
 
+/** Branch lookups that settle later for earlier groups, so serial, unbounded and completion-ordered callers all differ. */
+function branchLookups(groups: readonly string[], failing?: string) {
+  const state = { inFlight: 0, peak: 0, started: [] as string[] };
+  const client: GitHubClient = {
+    async request(route, parameters = {}) {
+      if (route === "GET /repos/{owner}/{repo}/issues") return { status: 200, data: [] };
+      const index = groups.findIndex((group) => parameters.head === `acme:cicd-optimizer/${group}`);
+      const group = groups[index];
+      if (route !== "GET /repos/{owner}/{repo}/pulls" || !group) throw new Error(`Unexpected request: ${route}`);
+      state.started.push(group);
+      if (group === failing) throw httpError(403);
+      state.inFlight += 1;
+      state.peak = Math.max(state.peak, state.inFlight);
+      await new Promise((resolve) => setTimeout(resolve, (groups.length - index) * 3));
+      state.inFlight -= 1;
+      return {
+        status: 200,
+        data: [{
+          number: index + 1, title: group, state: "open", labels: [],
+          body: marker("fix", `group:${group}`, { signature: "s", commit: "c" }),
+          head: { ref: `cicd-optimizer/${group}`, sha: "c", repo: { full_name: "acme/widgets" } }, base: { ref: "main" },
+        }],
+      };
+    },
+  };
+  return { client, state };
+}
+
 describe("listManagedPullRequests", () => {
   it("recovers only matching same-repository PRs, including declined changes and custom prefixes", async () => {
     const base = {
@@ -82,6 +110,25 @@ describe("listManagedPullRequests", () => {
       throw httpError(403);
     });
     await expect(listManagedPullRequests(client, repo, { baseBranch: "main", branchPrefix: "ci/", groups: ["hermeticity"] })).rejects.toThrow("403");
+  });
+
+  describe("with many fix groups", () => {
+    const groups = Array.from({ length: 12 }, (_, index) => `g${String(index).padStart(2, "0")}`);
+    const discovery = { baseBranch: "main", branchPrefix: "cicd-optimizer/", groups };
+
+    it("looks up the groups' branches concurrently within a bound and keeps group order", async () => {
+      const { client, state } = branchLookups(groups);
+      const prs = await listManagedPullRequests(client, repo, discovery);
+      expect(prs.map((pr) => pr.group)).toEqual(groups);
+      expect(state.peak).toBeGreaterThan(1);
+      expect(state.peak).toBeLessThanOrEqual(8);
+    });
+
+    it("fails closed when one lookup fails and stops queuing the remaining lookups", async () => {
+      const { client, state } = branchLookups(groups, "g05");
+      await expect(listManagedPullRequests(client, repo, discovery)).rejects.toThrow("403");
+      expect(state.started.length).toBeLessThan(groups.length);
+    });
   });
 
   it.each(["open", "closed"])("does not adopt a labeled %s fork PR as repository history", async (state) => {

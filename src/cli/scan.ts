@@ -57,6 +57,7 @@ function summary(scan: ScanResult) {
             actions: scan.issues.actions.map(issueAction),
             skipped: scan.issues.skipped.length,
             applied: scan.issues.applied.map((item) => ({ type: item.action.type, number: item.number, ...(item.copilot ? { copilot: item.copilot } : {}) })),
+            ...(scan.issues.awaitingCopilot ? { awaitingCopilot: scan.issues.awaitingCopilot } : {}),
           },
         }
       : {}),

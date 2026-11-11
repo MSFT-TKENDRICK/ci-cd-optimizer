@@ -347,6 +347,16 @@ function unionMs(intervals: ReadonlyArray<readonly [number, number]>, clamp?: re
   return current ? total + current[1] - current[0] : total;
 }
 
+/** The part of a step's longest log-free stretch that no recognised bottleneck pattern already explains. */
+function unexplainedSilenceMs(step: LogStep, recognized: ReadonlyArray<readonly [number, number]>): number {
+  const { silence } = step;
+  return silence ? Math.max(0, silence.durationMs - unionMs(recognized, [silence.startMs, silence.endMs])) : 0;
+}
+
+function silenceNote(ms: number): string {
+  return ` ${formatMs(ms)} of that time had no log output at all, so the log cannot show where it went. Print ::group::/::endgroup:: phase markers or per-phase timing lines from the step so a later run can show it; this is an observability gap, not evidence of removable cost.`;
+}
+
 function describeVertex(vertex: BuildVertex): string {
   const operations = vertex.operations.length > 0
     ? ` (${vertex.operations.map((operation) => `${operation.name} ${formatMs(operation.durationMs)}`).join(", ")})`
@@ -910,15 +920,18 @@ export function attributeRun(snapshot: WorkflowSnapshot, logs: ReadonlyMap<numbe
     if (evidence && timing.critical) {
       for (const entry of located) {
         if (entry.step !== entry.top || covered.has(entry.step) || entry.step.durationMs < threshold) continue;
-        const recognized = unionMs(located.filter((other) => other.top === entry.top && covered.has(other.step))
-          .map(({ step }) => [step.startMs, step.endMs] as const), [entry.step.startMs, entry.step.endMs]);
+        const recognizedSpans = located.filter((other) => other.top === entry.top && covered.has(other.step))
+          .map(({ step }) => [step.startMs, step.endMs] as const);
+        const recognized = unionMs(recognizedSpans, [entry.step.startMs, entry.step.endMs]);
         const unknown = Math.max(0, entry.step.durationMs - recognized);
         if (unknown < threshold) continue;
+        const quiet = unexplainedSilenceMs(entry.step, recognizedSpans);
         gaps.push({
           kind: "unexplained-time", jobKey: job.key, jobName: job.name, ms: Math.round(unknown),
-          detail: recognized > 0
+          detail: (recognized > 0
             ? `${formatMs(unknown)} of ${entry.label} (${formatMs(entry.step.durationMs)} total) on the critical path is not explained by recognised bottleneck patterns.`
-            : `${entry.label} took ${formatMs(entry.step.durationMs)} on the critical path and no recognised bottleneck pattern explains it.`,
+            : `${entry.label} took ${formatMs(entry.step.durationMs)} on the critical path and no recognised bottleneck pattern explains it.`)
+            + (quiet >= threshold ? silenceNote(quiet) : ""),
         });
       }
     }

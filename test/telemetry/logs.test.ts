@@ -607,4 +607,44 @@ describe("parseJobLog structure", () => {
     expect(evidence.post).toEqual({ durationMs: 0, subGroups: [], cacheSaveFailures: [] });
     expect(parseJobLog("")).toMatchObject({ lines: 0, steps: [], setup: { durationMs: 0, services: [] } });
   });
+
+  it("measures a step that stays silent until it exits, as the scan action does", () => {
+    const evidence = parseJobLog(log([
+      [0, "##[group]Run ./"],
+      [0, "with:"],
+      [0, "  command: scan"],
+      [0, "  args: --upload-sarif"],
+      [0, "##[endgroup]"],
+      [16_878, "owner/repo@main: 0 error(s), 4 warning(s), 1 info · issues: 1 assign, 3 create"],
+      [16_899, "Post job cleanup."],
+    ]));
+    expect(evidence.steps).toHaveLength(1);
+    expect(evidence.steps[0]).toMatchObject({
+      durationMs: 16_899, silence: { startMs: BASE, endMs: BASE + 16_878, durationMs: 16_878 },
+    });
+  });
+
+  it("gives each top-level step its own longest stretch without log lines, including the tail before the next step", () => {
+    const step = (at: number, command: string) => [[at, `##[group]Run ${command}`], [at, command], [at, "##[endgroup]"]] as const;
+    const evidence = parseJobLog(log([
+      ...step(0, "npm ci"), [1000, "added 10 packages"], [2000, "added 20 packages"],
+      ...step(3000, "npm test"), [3500, "starting"], [4000, "first"], [12_000, "second"], [12_500, "done"],
+      ...step(22_500, "npm run build"), [22_600, "built"],
+      ...step(23_000, "echo ok"), [23_000, "ok"],
+      [23_000, "Post job cleanup."],
+    ]));
+    expect(evidence.steps.map((entry) => entry.silence)).toEqual([
+      { startMs: BASE, endMs: BASE + 1000, durationMs: 1000 },
+      { startMs: BASE + 12_500, endMs: BASE + 22_500, durationMs: 10_000 },
+      { startMs: BASE + 22_600, endMs: BASE + 23_000, durationMs: 400 },
+      undefined,
+    ]);
+    expect(evidence.steps[3]).not.toHaveProperty("silence");
+  });
+
+  it("counts the stretch before the end of a truncated log", () => {
+    const evidence = parseJobLog(log([[0, "##[group]Run ./"], [0, "##[endgroup]"], [1000, "started"], [9000, "still running"]]),
+      { truncated: true });
+    expect(evidence.steps[0]?.silence).toEqual({ startMs: BASE + 1000, endMs: BASE + 9000, durationMs: 8000 });
+  });
 });

@@ -40,6 +40,12 @@ so a transient assignment failure does not lose the work. Once authorization is 
 retries open pending findings even when their content has not changed. The same reconciliation applies to recipe
 adaptation issues and unchanged active duration alerts.
 
+While a scan holds no assignment token, assignment cannot succeed, so an unchanged pending issue is left alone: the scan
+reports it as awaiting assignment and makes no per-issue request, instead of re-reading it and re-adding a label it
+already carries on every run. An issue that already lists Copilot as an assignee (for example, assigned by hand) is still
+reconciled once, which clears its stale `copilot:ready` label. Creating or reopening an issue, or updating one that is
+still pending, still attempts the handoff once, and a configured token is always tried.
+
 An accepted response must actually list Copilot as an assignee. Reconciliation checks live assignees before assigning,
 so an already assigned issue is not started again; successful assignment removes `copilot:ready`. Label persistence
 and unexpected API errors fail visibly. Closed/dismissed issues are not queued. Removing `copilot:ready` from an open
@@ -133,7 +139,7 @@ The telemetry report includes:
 - Recommendations based on the critical path and queue time.
 - Jobs slower than their baseline.
 - Log-backed bottleneck candidates from a bounded set of critical/long jobs, with observed durations, next checks, and separate upper bounds for elapsed and runner time.
-- Coverage gaps for unavailable, truncated, or unfetched logs and time not explained by reported steps.
+- Coverage gaps for unavailable, truncated, or unfetched logs and time not explained by reported steps. When a critical-path step also logged nothing for a long stretch, the gap says its log cannot show where the time went and asks for `::group::` phase markers or per-phase timing lines. That is an observability gap, not evidence of removable cost.
 - Why comparison is withheld or why no comparable baseline was found in the bounded evidence window.
 
 Skipped jobs remain in the job inventory and dependency graph but have no execution or runner-queue bars.

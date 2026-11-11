@@ -1,6 +1,6 @@
 import type { AlertsConfig } from "../lint/config.js";
 import { marker, signatureOf } from "../issues/markers.js";
-import type { DesiredIssue, ExistingIssue, IssueAction, IssueSyncPlan } from "../issues/plan.js";
+import { planQueuedHandoff, type DesiredIssue, type ExistingIssue, type IssueAction, type IssueSyncPlan } from "../issues/plan.js";
 import { detectAnomalies, hasRecovered, seriesFingerprint, type DurationAlert, type DurationSeries } from "./anomaly.js";
 import { formatDuration, renderAlertIssue, seriesKey } from "./render.js";
 
@@ -26,6 +26,8 @@ export interface AlertSyncInput {
   activeContexts?: ReadonlySet<string>;
   config: AlertsConfig;
   now: Date;
+  /** False when no user token is available to start the coding agent. Defaults to true. */
+  copilotAssignable?: boolean;
 }
 
 export interface AlertSyncPlan extends IssueSyncPlan {
@@ -156,7 +158,9 @@ export function planAlertSync(input: AlertSyncInput): AlertSyncPlan {
     return plan;
   }
   if (open.signature === signature) {
-    if (desired.assignCopilot && open.copilotPending) actions.push({ type: "assign", number: open.number, desired });
+    const awaiting: number[] = [];
+    planQueuedHandoff(open, desired, input.copilotAssignable, actions, awaiting);
+    if (awaiting.length > 0) plan.awaitingCopilot = awaiting;
     return plan;
   }
   const changed = open.attributes.shape !== shape;
