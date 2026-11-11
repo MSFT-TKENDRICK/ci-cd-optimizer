@@ -82,6 +82,9 @@ export function isInventoryPath(path: string): boolean {
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
   if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
   if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;
+  if (/^(?:\.github\/|docs\/)?CODEOWNERS$/.test(path)) return true;
+  if (/^(?:SECURITY\.md|\.github\/SECURITY\.md|docs\/SECURITY\.md)$/.test(path)) return true;
+  if (/^\.github\/ISSUE_TEMPLATE\/[^/]+(?:\.ya?ml|\.md)$/i.test(path)) return true;
   if (/(^|\/)\.cargo\/config(\.toml)?$/.test(path) || /(^|\/)gradle\/wrapper\/gradle-wrapper\.properties$/.test(path)) return true;
   const name = path.slice(path.lastIndexOf("/") + 1);
   if (BASENAMES.has(name)) return true;

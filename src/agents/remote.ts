@@ -1,6 +1,7 @@
 import { httpStatus, type GitHubClient, type RepoRef } from "../github/client.js";
 import { describeScan, scanRepository } from "../service/scan.js";
 import { processWorkflowRun } from "../service/workflow-run.js";
+import type { RunAttribution } from "../telemetry/attribution.js";
 import { calculateCriticalPath } from "../telemetry/report.js";
 import type { WorkflowRunPayload } from "../telemetry/snapshot.js";
 import type { WorkflowBaseline, WorkflowSnapshot } from "../telemetry/types.js";
@@ -230,6 +231,14 @@ export interface RunReport {
   omittedJobs?: number;
   slowestSteps?: { job: string; step: string; durationMs: number }[];
   omittedSteps?: number;
+  attribution?: {
+    criticalSlackMs: number;
+    coverage: RunAttribution["coverage"];
+    bottlenecks: Pick<RunAttribution["bottlenecks"][number], "category" | "jobKey" | "jobName" | "observedMs" | "elapsedSavingsBoundMs" | "runnerSavingsBoundMs" | "summary" | "recommendation" | "evidence">[];
+    omittedBottlenecks: number;
+    gaps: Pick<RunAttribution["gaps"][number], "kind" | "jobKey" | "jobName" | "ms" | "detail">[];
+    omittedGaps: number;
+  };
   baseline?: WorkflowBaseline;
   samples?: number;
   /** Escaped agent-specific Markdown and Gantt chart; repository-derived content remains untrusted data. */
@@ -289,7 +298,8 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
   const snapshot = result.snapshot;
   if (!snapshot) return report;
   const jobsTotal = totalKnown && reportedTotal !== undefined && reportedTotal >= fetchedJobs.size ? reportedTotal : null;
-  const jobsComplete = snapshot.provenance?.jobsComplete === true && validJobs && totalsConsistent && snapshot.jobs.length === fetchedJobs.size &&
+  const jobsComplete = snapshot.provenance?.jobsComplete === true && validJobs && totalsConsistent &&
+    snapshot.jobs.length + (snapshot.provenance.externalChecks?.length ?? 0) === fetchedJobs.size &&
     (jobsTotal === null || jobsTotal === fetchedJobs.size);
   const definitionKnown = snapshot.provenance?.definitionKnown === true;
   const critical = jobsComplete && definitionKnown ? calculateCriticalPath(snapshot.jobs) : undefined;
@@ -301,6 +311,34 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
     ...(!totalsConsistent ? ["The upstream job total changed or was invalid during collection; authoritative totals are unknown."] : []),
     ...(!definitionKnown ? ["Workflow job definitions are incomplete or unresolved; no critical path is reported."] : []),
   ];
+  const attribution = jobsComplete && definitionKnown ? result.attribution : undefined;
+  if (attribution) {
+    const text = (value: string) => sanitizeMarkdown(value, 1024).text;
+    report.attribution = {
+      criticalSlackMs: attribution.criticalSlackMs,
+      coverage: attribution.coverage,
+      bottlenecks: attribution.bottlenecks.slice(0, 10).map((finding) => ({
+        category: finding.category,
+        jobKey: text(finding.jobKey),
+        jobName: text(finding.jobName),
+        observedMs: finding.observedMs,
+        elapsedSavingsBoundMs: finding.elapsedSavingsBoundMs,
+        runnerSavingsBoundMs: finding.runnerSavingsBoundMs,
+        summary: text(finding.summary),
+        recommendation: text(finding.recommendation),
+        evidence: finding.evidence.slice(0, 3).map(text),
+      })),
+      omittedBottlenecks: Math.max(0, attribution.bottlenecks.length - 10),
+      gaps: attribution.gaps.slice(0, 20).map((gap) => ({
+        kind: gap.kind,
+        jobKey: text(gap.jobKey),
+        ...(gap.jobName ? { jobName: text(gap.jobName) } : {}),
+        ...(gap.ms !== undefined ? { ms: gap.ms } : {}),
+        detail: text(gap.detail),
+      })),
+      omittedGaps: Math.max(0, attribution.gaps.length - 20),
+    };
+  }
   report.run = {
     id: snapshot.runId,
     attempt: snapshot.runAttempt,
@@ -361,6 +399,24 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
       `Showing ${report.jobs.length} of ${report.jobsAnalyzed} analyzed job(s); ${report.omittedJobs} fetched job(s) omitted from this response.`,
       critical && report.criticalPath ? `Estimated critical path: ${critical.durationMs} ms — ${report.criticalPath.jobKeys.map(escapeMarkdown).join(" → ")}.` : "Critical path unavailable.",
       report.baseline ? `Baseline: ${report.baseline.medianDurationMs} ms (${report.baseline.sampleCount} comparable samples).` : "No comparable baseline reported.",
+      ...(report.attribution
+        ? [
+            "",
+            "### Bottleneck evidence",
+            `Parsed logs for ${report.attribution.coverage.jobsWithLogs}/${report.attribution.coverage.jobs} timed job(s); ${report.attribution.coverage.unexplainedMs} ms of runner time is unexplained or unobserved.`,
+            "Savings are observed upper bounds, not predictions; findings may overlap and must not be added.",
+            ...report.attribution.bottlenecks.map((finding) =>
+              `- ${escapeMarkdown(finding.summary)} Next: ${escapeMarkdown(finding.recommendation)} Evidence: ${finding.evidence.map(escapeMarkdown).join("; ")}`,
+            ),
+            ...(report.attribution.omittedBottlenecks ? [`${report.attribution.omittedBottlenecks} additional bottleneck candidate(s) omitted.`] : []),
+            ...(report.attribution.gaps.length
+              ? ["", "#### Evidence coverage gaps", ...report.attribution.gaps.map((gap) =>
+                  `- ${escapeMarkdown(gap.jobName ?? gap.jobKey)} (${escapeMarkdown(gap.kind)}): ${escapeMarkdown(gap.detail)}`,
+                )]
+              : []),
+            ...(report.attribution.omittedGaps ? [`${report.attribution.omittedGaps} additional coverage gap(s) omitted.`] : []),
+          ]
+        : []),
       "", "| Job | Duration (ms) | Conclusion |", "|---|---:|---|",
       ...report.jobs.map((job) => `| ${escapeMarkdown(job.name)} | ${job.durationMs} | ${escapeMarkdown(job.conclusion ?? "unknown")} |`),
       "", "```mermaid", "gantt", `    title ${mermaidLabel(snapshot.workflowName)}`,

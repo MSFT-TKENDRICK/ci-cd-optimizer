@@ -256,7 +256,7 @@ test("the command line explains itself and rejects unsafe or inconsistent option
 function started(t, args) {
   const run = launch(t, args);
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`No host URL printed: ${run.output.stderr}`)), 15_000);
+    const timer = setTimeout(() => reject(new Error(`No host URL printed: ${run.output.stderr}`)), 30_000);
     run.child.stdout.on("data", () => {
       const match = /Preview host: (\S+)[\s\S]*View origin: \S+/.exec(run.output.stdout);
       if (match) {

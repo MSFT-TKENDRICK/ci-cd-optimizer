@@ -53,6 +53,8 @@ export interface WorkflowSnapshot {
     collectedAt: string;
     jobsComplete: boolean;
     definitionKnown: boolean;
+    /** Check runs listed by the jobs API that never ran on a runner (for example other integrations' checks); excluded from `jobs`. */
+    externalChecks?: { id: number; name: string }[];
   };
 }
 
@@ -62,4 +64,29 @@ export interface WorkflowBaseline {
   medianQueueMs: number | null;
   /** Median duration per job key over the same runs. */
   jobs?: Record<string, number>;
+}
+
+export type BaselineExclusion =
+  | "rerun" | "unsuccessful" | "provenance" | "incomplete-jobs" | "definition-unknown" | "no-jobs" | "job-failed"
+  | "labels-missing" | "context-changed" | "job-set-changed";
+
+/** Why the run-level baseline has the samples it has; reported instead of a silent "no baseline yet". */
+export interface BaselineDiagnostic {
+  /** Earlier latest-attempt runs that were available in history. */
+  examined: number;
+  /** Runs that passed every run-level eligibility rule before job-set matching. */
+  eligible: number;
+  /** Runs with the identical comparison key. */
+  comparable: number;
+  excluded: Partial<Record<BaselineExclusion, number>>;
+  /** Why the current run itself cannot anchor a run-level comparison. */
+  currentProblem?: BaselineExclusion;
+}
+
+/** Per-job history that survives unrelated job-set changes elsewhere in the workflow. */
+export interface JobBaseline {
+  key: string;
+  name: string;
+  sampleCount: number;
+  medianDurationMs: number;
 }

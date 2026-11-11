@@ -224,6 +224,7 @@ describe("telemetry command", () => {
     expect(await session.run("telemetry", "--run-id", "2000", "--store", storePath, "--dry-run", "--check", "-f", "json")).toBe(0);
     const output = session.json();
     expect(output).toMatchObject({ repo: "acme/widgets", status: "processed", samples: 12, snapshot: { runId: 2000 } });
+    expect(output.attribution).toMatchObject({ coverage: { jobs: 2, jobsWithLogs: 0 }, gaps: expect.arrayContaining([expect.objectContaining({ kind: "log-unavailable" })]) });
     expect(output.alerts.detected.length).toBeGreaterThan(0);
     expect(output.alerts.applied).toEqual([]);
     expect(writes(client)).toEqual([]);

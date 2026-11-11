@@ -167,6 +167,10 @@ describe("processWorkflowRun", () => {
     expect(check.output.title).toMatch(/^10\.0 min \(\+\d+% vs 12-run median\)$/);
     expect(store.snapshots.map((item) => item.runId)).toContain(2000);
     expect(routes(client)).not.toContain("GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs");
+    expect(result.attribution).toMatchObject({ coverage: { jobs: 2, jobsWithLogs: 0 } });
+    expect(result.report).toContain("### Bottleneck evidence");
+    expect(result.report).toContain("log-unavailable");
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs")).toHaveLength(2);
   });
 
   it("opens a duration alert issue for a statistically significant spike", async () => {
@@ -195,6 +199,27 @@ describe("processWorkflowRun", () => {
     expect(result.samples).toBe(2);
     expect(store.snapshots.map((item) => item.runId).sort()).toEqual([1998, 1999, 2000]);
     expect(callsTo(client, "GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs")[0]?.parameters).toMatchObject({ workflow_id: 7, branch: "main" });
+  });
+
+  it("explains a changed job set and still backfills per-job history", async () => {
+    const prior = (id: number, day: string) => run({ id, created_at: `2026-10-${day}T00:00:00Z`, run_started_at: `2026-10-${day}T00:00:00Z`, updated_at: `2026-10-${day}T00:05:00Z` });
+    const withLint = `${workflowFile}  lint:\n    runs-on: ubuntu-24.04\n    steps: [{ run: make lint }]\n`;
+    const lint = { id: 3, name: "lint", conclusion: "success", labels: ["ubuntu-24.04"], created_at: at("00:05"), started_at: at("00:10"), completed_at: at("00:40"), steps: [] };
+    const store = new MemoryTelemetryStore();
+    const client = fakeApi({
+      refs: { abc: { ".github/workflows/ci.yml": workflowFile }, def: { ".github/workflows/ci.yml": withLint } },
+      workflowRuns: [prior(1997, "29"), prior(1998, "30"), prior(1999, "31")],
+      jobs: { 1997: jobs, 1998: jobs, 1999: jobs, 2000: [...jobs, lint] },
+    });
+    const result = await processWorkflowRun(client, repo, run({ head_sha: "def" }), { store, alerts: false });
+    expect(result).toMatchObject({ status: "processed", samples: 0, baselineDiagnostic: { examined: 3, comparable: 0, excluded: { "job-set-changed": 3 } } });
+    expect(result.baseline).toBeUndefined();
+    expect(result.jobBaselines?.map((entry) => [entry.key, entry.sampleCount])).toEqual([["build", 3], ["test", 3]]);
+    expect(store.snapshots.map((item) => item.runId).sort()).toEqual([1997, 1998, 1999, 2000]);
+    expect(result.report).toContain("No run-level baseline: 3 earlier run(s) examined, 0 comparable.");
+    expect(result.report).toContain("### Per-job history");
+    const [check] = callsTo(client, "POST /repos/{owner}/{repo}/check-runs");
+    expect((check?.parameters as { output: { title: string } }).output.title).toMatch(/^10\.0 min \(no baseline: .*job set/);
   });
 
   it("rebuilds history from the API when there is no store", async () => {

@@ -25,7 +25,7 @@ reviews other projects' CI/CD from a pull request and publishes signed daily rep
 | actionlint, hadolint, zizmor | `cicd-lint`: path and stdin input, `--base` diffs, autofix, SARIF, inline suppressions, local rules |
 | OSS-Fuzz project onboarding | [Review program](#reviewing-other-projects-oss-fuzz-style): register a public repository by pull request; daily re-reviews with Sigstore-signed reports |
 | — | Duration alerts: robust z-score spikes and Mann-Whitney step regressions per workflow and job |
-| — | Telemetry reports: Gantt timeline, job dependency graph, critical path, slowest steps |
+| — | Telemetry reports: Gantt timeline, job dependency graph, critical path, slowest steps, and bounded log-backed bottleneck evidence with coverage gaps |
 
 - [Ways to use it](#ways-to-use-it)
 - [Scanning pull requests](#scanning-pull-requests)
@@ -54,7 +54,7 @@ reviews other projects' CI/CD from a pull request and publishes signed daily rep
 | **Reusable workflow** | A lint job that needs only `contents: read` and uploads SARIF as an artifact | `uses: MSFT-TKENDRICK/ci-cd-optimizer/.github/workflows/lint-reusable.yml@<SHA>` | [linter.md › CI](docs/linter.md#ci) |
 | **Git hooks** | `cicd-lint` before each commit with pre-commit, lefthook, or husky | the `cicd-lint` hook in [`.pre-commit-hooks.yaml`](.pre-commit-hooks.yaml) | [linter.md › Git hooks](docs/linter.md#git-hooks) |
 | **Scheduled scan** | The Dependabot-style pass with no hosting: SARIF, finding issues, fix pull requests | [cicd-optimizer-scan.yml](examples/workflows/cicd-optimizer-scan.yml) | [issues-and-alerts.md](docs/issues-and-alerts.md) |
-| **Run telemetry** | After each workflow run: a Gantt chart, critical path, and slowest steps, plus duration alerts | [cicd-optimizer-telemetry.yml](examples/workflows/cicd-optimizer-telemetry.yml) | [duration alerts](docs/issues-and-alerts.md#duration-alerts) |
+| **Run telemetry** | After each workflow run: a Gantt chart, critical path, slowest steps, bounded log-backed bottleneck evidence with coverage gaps, and duration alerts | [cicd-optimizer-telemetry.yml](examples/workflows/cicd-optimizer-telemetry.yml) | [duration alerts](docs/issues-and-alerts.md#duration-alerts) |
 | **GitHub App** | Self-hosted Probot service: pull request checks, scans, telemetry, and `@cicd-optimizer` commands, with no workflows in target repositories | the [Dockerfile](Dockerfile) image, or `npm start` | [github-app.md](docs/github-app.md) |
 | **Guided setup** | Registers and installs the App, stores its credentials, and authorizes Copilot coding agent handoff, in a browser or as an MCP App panel in chat | `npm run setup -- --repo OWNER/REPOSITORY` | [setup.md](docs/setup.md#3-github-app-owner) |
 | **Review program** | OSS-Fuzz-style registration of a public repository, an intake review on the pull request, and signed daily re-reviews | a pull request that adds `projects/<name>/project.yaml` | [review program](docs/review-program/README.md) |
@@ -91,7 +91,8 @@ tarball. Inside the clone, `npm run cli -- <command>` runs the TypeScript source
 | `lint [paths...]` | Lint workflows, Dockerfiles, Nix expressions/flakes, and package/toolchain configuration. The default command. | A checkout |
 | `rules` | List the rule catalog (`--format json\|markdown`) | — |
 | `scan` | Lint a repository's default branch through the API like the App, then upload SARIF (`--upload-sarif`), sync finding issues, and open fix pull requests. `--dry-run` previews. | `--repo`, a token |
-| `telemetry` | Report on a completed workflow run (`--run-id`) with a Gantt chart and critical path. Raises duration alerts; `--check` posts a check run. | A token with `actions: read` |
+| `ssdf` | Report repository-visible evidence against all 42 NIST SP 800-218 SSDF v1.1 tasks (`--format json` for machine-readable output; `--repo owner/name` reads a remote repository). Not a compliance determination. | A checkout, or a token for a remote repository |
+| `telemetry` | Report on a completed workflow run (`--run-id`) with a Gantt chart, critical path, and bounded log-backed bottleneck evidence. Raises duration alerts; `--check` posts a check run. | A token with `actions: read` |
 | `review <cmd>` | Review program: `validate`, `run`, `intake`, `intake-artifact`, `intake-status`, `scheduled` | A token for API reads |
 | `experiments <cmd>` | Hill climbing: `list`, `context`, `create`, `collect`, `evaluate`, `decide` | A token |
 | `experiments plan` | Exactly optimize an explicit bounded CI job/mode/resource model; no publication | A model JSON file; no token |
@@ -231,7 +232,7 @@ registers itself as the reference example in [projects/ci-cd-optimizer](projects
 
 ## What it finds
 
-126 rules in 14 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
+130 rules in 15 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
 suppressions.
 
 | Ruleset | Examples |

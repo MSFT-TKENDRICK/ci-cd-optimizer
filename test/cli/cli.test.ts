@@ -7,6 +7,7 @@ import { run } from "../../src/cli/index.js";
 import type { CliIO } from "../../src/cli/io.js";
 import { allRules } from "../../src/lint/rules/index.js";
 import type { LintResult } from "../../src/lint/types.js";
+import type { GitHubClient } from "../../src/github/client.js";
 import { VERSION } from "../../src/version.js";
 
 const WORKFLOW = ".github/workflows/ci.yml";
@@ -65,6 +66,48 @@ describe("cli", () => {
     const lintHelp = cli();
     expect(await lintHelp.run("help", "lint")).toBe(0);
     expect(lintHelp.stdout).toContain("Usage: ci-cd-optimizer lint");
+  });
+
+  it("reports SSDF repository evidence in text and JSON", async () => {
+    await write("SECURITY.md", "Report vulnerabilities here.");
+    await write(WORKFLOW, MISSING_TIMEOUT);
+    const text = cli();
+    expect(await text.run("ssdf")).toBe(0);
+    expect(text.stdout).toContain("NIST SP 800-218 SSDF v1.1 repository evidence");
+    expect(text.stdout).toContain("Tasks: **42**");
+    expect(text.stdout).toContain("not a compliance determination");
+
+    const json = cli();
+    expect(await json.run("ssdf", "--format", "json")).toBe(0);
+    expect((JSON.parse(json.stdout) as { tasks: unknown[] }).tasks).toHaveLength(42);
+  });
+
+  it("reports a remote repository snapshot with its immutable revision", async () => {
+    const files = new Map([
+      [".github/workflows/release.yml", "on: push\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - run: docker push ghcr.io/example/app:latest\n"],
+      ["SECURITY.md", "Report vulnerabilities here."],
+      [".github/ci-cd-optimizer.yml", "extends: [recommended]\n"],
+    ]);
+    const entries = [...files].map(([path], index) => ({ path, type: "blob", sha: `blob-${index}`, size: 100 }));
+    const blobs = new Map(entries.map((entry, index) => [entry.sha, [...files.values()][index] as string]));
+    const client: GitHubClient = {
+      request: async (route, parameters = {}) => {
+        if (route === "GET /repos/{owner}/{repo}") return { status: 200, data: { default_branch: "main" } };
+        if (route === "GET /repos/{owner}/{repo}/commits/{ref}") return { status: 200, data: { sha: "abc123", commit: { tree: { sha: "tree123" } } } };
+        if (route === "GET /repos/{owner}/{repo}/contents/{path}") {
+          return { status: 200, data: { content: Buffer.from("extends: [recommended]\n").toString("base64"), encoding: "base64" } };
+        }
+        if (route === "GET /repos/{owner}/{repo}/git/trees/{tree_sha}") return { status: 200, data: { tree: entries } };
+        if (route === "GET /repos/{owner}/{repo}/git/blobs/{file_sha}") {
+          return { status: 200, data: { content: Buffer.from(blobs.get(String(parameters.file_sha)) ?? "").toString("base64"), encoding: "base64" } };
+        }
+        throw Object.assign(new Error(`Unexpected route: ${route}`), { status: 404 });
+      },
+    };
+    const remote = cli({ github: () => client });
+
+    expect(await remote.run("ssdf", "--repo", "acme/service", "--format", "json")).toBe(0);
+    expect(JSON.parse(remote.stdout)).toMatchObject({ repository: "acme/service", ref: "main", sha: "abc123", inventoryComplete: true });
   });
 
   it("rejects unknown commands and flags with exit code 2", async () => {

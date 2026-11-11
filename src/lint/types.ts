@@ -12,7 +12,7 @@ export type Impact = "high" | "medium" | "low";
  */
 export type RuleKind = "practice" | "policy" | "insight";
 
-export type Preset = "recommended" | "strict" | "agentic" | "github" | "insights" | "all";
+export type Preset = "recommended" | "strict" | "agentic" | "github" | "insights" | "ssdf" | "all";
 
 /**
  * repository: the whole repository tree was supplied (not individual files).

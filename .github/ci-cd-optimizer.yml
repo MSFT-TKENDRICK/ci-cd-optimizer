@@ -1,7 +1,7 @@
 # CI/CD Optimizer configuration for this repository (dogfooding).
 # Schema: docs/configuration.md. Validate locally: npm run cli -- lint .
 schemaVersion: 1
-extends: [recommended, agentic, github]
+extends: [recommended, agentic, github, ssdf]
 ignorePaths:
   - node_modules/**
   - dist/**

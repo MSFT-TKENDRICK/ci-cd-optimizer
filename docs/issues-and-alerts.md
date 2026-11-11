@@ -132,7 +132,20 @@ The telemetry report includes:
 - The longest jobs and slowest steps.
 - Recommendations based on the critical path and queue time.
 - Jobs slower than their baseline.
+- Log-backed bottleneck candidates from a bounded set of critical/long jobs, with observed durations, next checks, and separate upper bounds for elapsed and runner time.
+- Coverage gaps for unavailable, truncated, or unfetched logs and time not explained by reported steps.
 - Why comparison is withheld or why no comparable baseline was found in the bounded evidence window.
+
+Attribution requires a complete job inventory and resolved workflow definitions. Log retrieval is bounded to eight jobs
+per report; unavailable or skipped logs remain visible as coverage gaps. Savings are upper bounds from observed time,
+not predicted results or measured improvements, and overlapping findings must not be added together.
+
+These opportunity reports are independent of experiment grading: rejection means none of the tested candidates
+qualified, not that no optimization opportunities remain. Static scans also flag the same resolved Dockerfile
+declared in multiple workflows as a low-confidence reuse candidate. They do not prove that the builds run together,
+produce identical images, or can safely be removed; compare inputs and measure before changing the pipeline.
+An intentionally excluded relevant file still makes the global inventory incomplete. Reports expose that scope
+and skipped rules rather than treating the selected files as evidence that nothing else exists.
 
 It's written to the step summary and, with `--check`, posted as a neutral check run on the commit. The App always
 posts the check.

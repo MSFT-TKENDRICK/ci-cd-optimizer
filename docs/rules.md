@@ -10,7 +10,7 @@ The production severity-precedence reducer is mechanically verified; that contra
 autofix, or performance claim. See [formal assurance](formal-verification.md) and the exhaustive
 [machine-readable claim catalogue](../formal/rule-assurance.json). Missing or stale entries fail CI.
 
-Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
+Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `ssdf`, `all`.
 
 | Rule | Kind | Default | Presets | Fixable | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -73,6 +73,10 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | [`security/privileged-cache-restore`](#security-privileged-cache-restore) | practice | warn | recommended, strict |  | Workflows triggered by `pull_request_target`, `workflow_run`, or `issue_comment` should not restore or save dependency caches. |
 | [`security/secrets-bulk-expose`](#security-secrets-bulk-expose) | practice | error | recommended, agentic, strict |  | Workflows must not serialize the whole `secrets` context with `toJSON(secrets)` or print secrets with `echo`/`printf`. |
 | [`security/untrusted-checkout`](#security-untrusted-checkout) | practice | error | recommended, agentic, strict |  | `pull_request_target` and `workflow_run` workflows must not check out the pull request's code and then execute it. |
+| [`ssdf/attestation-missing-permissions`](#ssdf-attestation-missing-permissions) | policy | error | ssdf |  | A GitHub attestation action lacks the explicit token permissions it requires. |
+| [`ssdf/publish-without-provenance`](#ssdf-publish-without-provenance) | policy | warn | ssdf |  | Published artifacts have no repository-visible integrity or provenance evidence. |
+| [`ssdf/publish-without-sbom`](#ssdf-publish-without-sbom) | policy | info | ssdf |  | Published artifacts have no repository-visible software bill of materials generation. |
+| [`ssdf/static-cloud-credentials`](#ssdf-static-cloud-credentials) | policy | warn | ssdf |  | A cloud authentication action receives static credential inputs instead of using workload identity. |
 | [`triggers/workflow-run-chain`](#triggers-workflow-run-chain) | practice | info | agentic, strict |  | Avoid chaining workflows with `workflow_run` when the downstream work could be a dependent job. |
 | [`triggers/serialized-matrix`](#triggers-serialized-matrix) | practice | warn | agentic, strict |  | Avoid throttling a matrix with a `max-parallel` far below its number of legs. |
 | [`triggers/draft-pr-gating`](#triggers-draft-pr-gating) | practice | info | agentic, strict |  | Skip expensive pull request jobs while the pull request is still a draft. |
@@ -82,7 +86,7 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `all`.
 | [`triggers/missing-job-condition-matrix`](#triggers-missing-job-condition-matrix) | practice | info | agentic, strict |  | Gate matrix jobs on the workflow's existing change-detection job. |
 | [`redundancy/duplicate-setup-step`](#redundancy-duplicate-setup-step) | practice | warn | recommended, agentic, strict |  | Review repeated toolchain setup declarations with matching visible inputs. |
 | [`redundancy/repeated-job-setup`](#redundancy-repeated-job-setup) | insight | info | insights |  | Jobs that repeat the same leading setup steps could share a composite action. |
-| [`redundancy/rebuild-per-job`](#redundancy-rebuild-per-job) | practice | warn | agentic, strict |  | Several jobs in a workflow should not each rebuild the same project from scratch. |
+| [`redundancy/rebuild-per-job`](#redundancy-rebuild-per-job) | practice | warn | agentic, strict |  | Repeated builds across CI jobs and workflows should be assessed for verified artifact or layer reuse. |
 | [`redundancy/duplicate-command`](#redundancy-duplicate-command) | practice | info | strict |  | Review repeated non-trivial shell commands for potentially redundant work. |
 | [`redundancy/shadowed-env`](#redundancy-shadowed-env) | practice | info | recommended, strict | yes | A job or step should not redefine an environment variable to the value it already inherits. |
 | [`redundancy/toolchain-version-drift`](#redundancy-toolchain-version-drift) | practice | warn | agentic, strict |  | Workflows should agree on the toolchain version they install with each setup action. |
@@ -2434,6 +2438,144 @@ References:
 - <https://docs.github.com/en/actions/reference/security/secure-use>
 - <https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/>
 
+## Ruleset: ssdf
+
+<a id="ssdf-attestation-missing-permissions"></a>
+
+### ssdf/attestation-missing-permissions
+
+A GitHub attestation action lacks the explicit token permissions it requires.
+
+**Why:** GitHub artifact attestations require id-token: write and attestations: write. Explicitly declaring these job-level capabilities avoids relying on repository defaults and makes the action's authority reviewable.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: policy; default severity: error; impact: high
+- Presets: `ssdf`
+- Requires: `repository`
+
+Before:
+
+```yaml
+steps:
+  - uses: actions/attest-build-provenance@<full-commit-sha>
+```
+
+After:
+
+```yaml
+permissions:
+  id-token: write
+  attestations: write
+steps:
+  - uses: actions/attest-build-provenance@<full-commit-sha>
+```
+
+References:
+
+- <https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations>
+
+<a id="ssdf-publish-without-provenance"></a>
+
+### ssdf/publish-without-provenance
+
+Published artifacts have no repository-visible integrity or provenance evidence.
+
+**Why:** SSDF PS.2.1 and PS.3.1 call for integrity verification information and release supporting data. A workflow scan can observe common attestation steps, but cannot prove signature validity, artifact binding, retention, or evidence produced outside the workflow.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: policy; default severity: warn; impact: high
+- Presets: `ssdf`
+- Requires: `repository`
+
+Before:
+
+```yaml
+steps:
+  - run: docker push ghcr.io/example/app:latest
+```
+
+After:
+
+```yaml
+steps:
+  - uses: actions/attest-build-provenance@<full-commit-sha>
+    with:
+      subject-path: image.tar
+```
+
+References:
+
+- <https://csrc.nist.gov/pubs/sp/800/218/final>
+
+<a id="ssdf-publish-without-sbom"></a>
+
+### ssdf/publish-without-sbom
+
+Published artifacts have no repository-visible software bill of materials generation.
+
+**Why:** SSDF PS.3.2 recommends maintaining provenance data for release components, such as an SBOM. A repository scan cannot observe registry-side or external inventory generation, so this finding is limited to workflow-visible evidence.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: policy; default severity: info; impact: medium
+- Presets: `ssdf`
+- Requires: `repository`
+
+Before:
+
+```yaml
+steps:
+  - run: docker push ghcr.io/example/app:latest
+```
+
+After:
+
+```yaml
+steps:
+  - uses: anchore/sbom-action@<full-commit-sha>
+  - uses: actions/attest-sbom@<full-commit-sha>
+```
+
+References:
+
+- <https://csrc.nist.gov/pubs/sp/800/218/final>
+
+<a id="ssdf-static-cloud-credentials"></a>
+
+### ssdf/static-cloud-credentials
+
+A cloud authentication action receives static credential inputs instead of using workload identity.
+
+**Why:** SSDF PO.5.1 calls for separating and protecting development environments. Static long-lived cloud credentials increase exposure risk; workload identity federation can issue short-lived credentials scoped to a workflow identity.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: policy; default severity: warn; impact: high
+- Presets: `ssdf`
+- Requires: `repository`
+
+Before:
+
+```yaml
+steps:
+  - uses: aws-actions/configure-aws-credentials@<full-commit-sha>
+    with:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+```
+
+After:
+
+```yaml
+permissions:
+  id-token: write
+steps:
+  - uses: aws-actions/configure-aws-credentials@<full-commit-sha>
+    with:
+      role-to-assume: arn:aws:iam::123456789012:role/deploy
+```
+
+References:
+
+- <https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/about-security-hardening-with-openid-connect>
+
 ## Ruleset: triggers
 
 <a id="triggers-workflow-run-chain"></a>
@@ -2794,9 +2936,9 @@ References:
 
 ### redundancy/rebuild-per-job
 
-Several jobs in a workflow should not each rebuild the same project from scratch.
+Repeated builds across CI jobs and workflows should be assessed for verified artifact or layer reuse.
 
-**Why:** Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. Where consumers can safely share a verified immutable artifact, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.
+**Why:** Repeated build commands may duplicate work, but matching visible commands and runner labels do not establish equivalent inputs or outputs. The same Dockerfile declared in different workflows is also only a reuse candidate: triggers, revisions, inputs, targets and platforms may differ. Where consumers can safely share a verified immutable artifact or cached layers, building once may reduce repeated work and align their inputs. Artifact transfer, serialization and changed critical paths can offset the saving; validate semantics and measure the result.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: medium

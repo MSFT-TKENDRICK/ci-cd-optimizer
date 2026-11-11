@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { buildSeries } from "../../src/alerts/anomaly.js";
 import { computeBaseline } from "../../src/telemetry/baseline.js";
-import { comparableHistory, comparisonKey, comparisonProblem } from "../../src/telemetry/context.js";
+import {
+  comparableHistory, comparisonExclusion, comparisonKey, comparisonProblem, diagnoseBaseline, jobBaselines, jobHistoryApplies,
+  summarizeBaselineGap, thinJobHistory,
+} from "../../src/telemetry/context.js";
 import { createTelemetryReport } from "../../src/telemetry/report.js";
 import type { WorkflowSnapshot } from "../../src/telemetry/types.js";
 import { snapshot } from "../alerts/fixtures.js";
@@ -82,5 +85,85 @@ describe("workload comparison contract", () => {
     expect(report).toContain("Performance comparison withheld: Reruns");
     expect(report).toContain("**Queue:** unavailable");
     expect(report).not.toContain("Runner queueing added");
+  });
+});
+
+describe("baseline diagnostics and per-job history", () => {
+  const history = [1001, 1002, 1003].map((id, index) => snapshot(id, 100, [["build", 40 + index], ["test", 50 + index]]));
+  const grown = snapshot(1010, 130, [["build", 41], ["test", 52], ["formal", 30]]);
+
+  it("classifies the first applicable exclusion in a stable order", () => {
+    const run = snapshot(1001, 100, [["build", 40]]);
+    expect(comparisonExclusion({ ...run, runAttempt: 2, conclusion: "failure" })).toBe("rerun");
+    expect(comparisonExclusion({ ...run, conclusion: "failure" })).toBe("unsuccessful");
+    expect(comparisonExclusion({ ...run, provenance: { ...run.provenance!, definitionKnown: false } })).toBe("definition-unknown");
+    expect(comparisonExclusion(run)).toBeUndefined();
+  });
+
+  it("explains that adding a job made every earlier run incomparable instead of reporting no history", () => {
+    expect(comparableHistory(history, grown)).toEqual([]);
+    expect(diagnoseBaseline(history, grown)).toEqual({ examined: 3, eligible: 3, comparable: 0, excluded: { "job-set-changed": 3 } });
+    expect(summarizeBaselineGap(diagnoseBaseline(history, grown))).toBe("no baseline: 3 of 3 earlier runs had a different job set");
+  });
+
+  it("counts each excluded run once, by its first reason, and ignores later or same-run evidence", () => {
+    const mixed = [
+      ...history,
+      { ...snapshot(1004, 100, [["build", 40]]), runAttempt: 2 },
+      snapshot(1005, 100, [["build", 40]], "failure"),
+      { ...snapshot(1006, 100, [["build", 40]]), event: "schedule" },
+      snapshot(1020, 100, [["build", 40]]),
+      { ...grown, runAttempt: 1 },
+    ];
+    const reference = snapshot(1010, 100, [["build", 41], ["test", 52]]);
+    expect(diagnoseBaseline(mixed, reference)).toEqual({
+      examined: 6, eligible: 3, comparable: 3, excluded: { rerun: 1, unsuccessful: 1, "context-changed": 1 },
+    });
+  });
+
+  it("reports the current run's own problem rather than blaming history", () => {
+    const diagnostic = diagnoseBaseline(history, { ...grown, runAttempt: 2 });
+    expect(diagnostic.currentProblem).toBe("rerun");
+    expect(diagnostic.comparable).toBe(0);
+    expect(summarizeBaselineGap(diagnostic)).toMatch(/^no baseline: reruns may execute/);
+    expect(summarizeBaselineGap(diagnoseBaseline([], grown))).toBe("no baseline yet: no earlier runs in history");
+    expect(summarizeBaselineGap(undefined)).toBe("no baseline yet");
+  });
+
+  it("keeps per-job medians across unrelated job-set changes and failures elsewhere in the run", () => {
+    const failedElsewhere = snapshot(1004, 100, [["build", 60], ["test", 10, "failure"]], "failure");
+    expect(jobBaselines([...history, failedElsewhere], grown)).toEqual([
+      { key: "build", name: "build", sampleCount: 4, medianDurationMs: 41_500 },
+      { key: "test", name: "test", sampleCount: 3, medianDurationMs: 51_000 },
+    ]);
+    expect(jobBaselines(history, grown, 2).map((entry) => entry.sampleCount)).toEqual([2, 2]);
+  });
+
+  it("does not compare jobs whose name, needs, runner or definition changed, or that are ambiguous", () => {
+    const relabeled = history.map((run) => ({ ...run, jobs: run.jobs.map((job) => ({ ...job, labels: ["self-hosted"] })) }));
+    expect(jobBaselines(relabeled, grown)).toEqual([]);
+    const unknown = history.map((run) => ({ ...run, provenance: { ...run.provenance!, definitionKnown: false } }));
+    expect(jobBaselines(unknown, grown)).toEqual([]);
+    const duplicated = { ...grown, jobs: [...grown.jobs, { ...grown.jobs[0]!, id: 99 }] };
+    expect(jobBaselines(history, duplicated).map((entry) => entry.key)).toEqual(["test"]);
+  });
+
+  it("asks for more history only while a comparable job is short of samples", () => {
+    expect(jobHistoryApplies(grown)).toBe(true);
+    expect(jobHistoryApplies({ ...grown, runAttempt: 2 })).toBe(false);
+    expect(thinJobHistory(history, snapshot(1010, 100, [["build", 41], ["test", 52]]), 3)).toBe(false);
+    expect(thinJobHistory(history, snapshot(1010, 100, [["build", 41], ["test", 52]]), 4)).toBe(true);
+    expect(thinJobHistory(history, grown, 3)).toBe(true);
+  });
+
+  it("renders exclusion reasons and per-job history when no run-level baseline exists", () => {
+    const report = createTelemetryReport(grown, undefined, { diagnostic: diagnoseBaseline(history, grown), jobBaselines: jobBaselines(history, grown) });
+    expect(report).toContain("No run-level baseline: 3 earlier run(s) examined, 0 comparable.");
+    expect(report).toContain("- 3 excluded — The workflow's job set");
+    expect(report).toContain("### Per-job history");
+    expect(report).toMatch(/\| test \| 52s \| 51s \| 3 \| \+1s \|/);
+    const perJob = report.slice(report.indexOf("### Per-job history"), report.indexOf("### Observations"));
+    expect(perJob).toContain("| build | 41s | 41s | 3 | +0s |");
+    expect(perJob).not.toContain("formal");
   });
 });

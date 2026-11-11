@@ -128,6 +128,6 @@ export function renderDecision(manifest: ExperimentManifest, decision: Decision)
   if (decision.action === "wait" && decision.dispatch.length > 0) {
     lines.push("", "Requested additional runs:", ...decision.dispatch.map((request) => `- \`${request.workflow}\` on \`${request.ref}\` × ${request.runs}`));
   }
-  lines.push("", "<sub>The verified reducer ranks only the declared manifest candidates using the quantized objective. It does not attest measurements, prove causal benefits, or find a global pipeline optimum. The judge cannot bypass hard eligibility gates.</sub>");
+  lines.push("", "<sub>The verified reducer ranks only the declared manifest candidates using the quantized objective. It does not attest measurements, prove causal benefits, or find a global pipeline optimum. Rejection does not establish that no optimization opportunities remain. Bottleneck candidates and coverage gaps are reported separately by telemetry and lint scans. The judge cannot bypass hard eligibility gates.</sub>");
   return lines.join("\n");
 }

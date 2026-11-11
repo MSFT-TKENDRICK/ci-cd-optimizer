@@ -12,8 +12,9 @@ export const TELEMETRY_HELP = `Usage: ci-cd-optimizer telemetry --run-id <id> [o
 
 Snapshots a completed workflow run (jobs, steps, runner queue time), compares it with prior runs of the same
 workflow and branch, renders the report (Gantt timeline, job dependency graph, critical path, slowest steps, jobs
-slower than baseline), and opens, updates, or resolves duration alert issues for statistically significant spikes
-and sustained regressions. Run it from a workflow triggered by \`workflow_run: types: [completed]\`.
+slower than baseline, log-backed bottleneck candidates, and evidence coverage gaps), and opens, updates, or resolves
+duration alert issues for statistically significant spikes and sustained regressions. Savings are upper bounds, not
+predictions, and findings may overlap. Run it from a workflow triggered by \`workflow_run: types: [completed]\`.
 
 Options:
       --repo <owner/name>   Repository (default: $GITHUB_REPOSITORY)
@@ -39,6 +40,20 @@ function runSummary(result: WorkflowRunResult, repo: string) {
     ...(result.snapshot ? { snapshot: result.snapshot } : {}),
     ...(result.baseline ? { baseline: result.baseline } : {}),
     ...(result.samples !== undefined ? { samples: result.samples } : {}),
+    ...(result.attribution
+      ? {
+          attribution: {
+            elapsedMs: result.attribution.elapsedMs,
+            criticalSlackMs: result.attribution.criticalSlackMs,
+            coverage: result.attribution.coverage,
+            bottlenecks: result.attribution.bottlenecks.slice(0, 10).map((finding) => ({ ...finding, evidence: finding.evidence.slice(0, 3) })),
+            omittedBottlenecks: Math.max(0, result.attribution.bottlenecks.length - 10),
+            gaps: result.attribution.gaps.slice(0, 20),
+            omittedGaps: Math.max(0, result.attribution.gaps.length - 20),
+          },
+        }
+      : {}),
+    ...(result.attributionUnavailable ? { attributionUnavailable: result.attributionUnavailable } : {}),
     ...(result.knowledge ? { knowledge: result.knowledge } : {}),
     ...(result.knowledgeSkipped ? { knowledgeSkipped: result.knowledgeSkipped } : {}),
     ...(result.alerts

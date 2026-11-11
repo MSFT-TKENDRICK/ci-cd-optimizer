@@ -31,6 +31,8 @@ export interface FakeApiState {
   pullFiles?: Array<{ filename: string; previous_filename?: string }>;
   /** Jobs per workflow run id. */
   jobs?: Record<number, unknown[]>;
+  /** Plain-text logs per job id; jobs without an entry answer 404 like an expired log. */
+  jobLogs?: Record<number, string>;
   workflowRuns?: unknown[];
   /** Workflow runs by id (GET /actions/runs/{run_id}). */
   runs?: Record<number, unknown>;
@@ -156,6 +158,11 @@ export function fakeApi(state: FakeApiState = {}) {
       case "GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs":
       case "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs":
         return { jobs: state.jobs?.[Number(parameters.run_id)] ?? [] };
+      case "GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs": {
+        const text = state.jobLogs?.[Number(parameters.job_id)];
+        if (text === undefined) throw httpError(404);
+        return text;
+      }
       case "GET /repos/{owner}/{repo}/actions/runs/{run_id}": {
         const found = state.runs?.[Number(parameters.run_id)];
         if (found === undefined) throw httpError(404);
