@@ -212,6 +212,23 @@ const github = (metadata: Record<string, unknown> = REPOSITORY) => fakeApi({
 });
 
 describe("MCP server GitHub tools", () => {
+  it.each([
+    { error: new DOMException("private URL and credential", "TimeoutError"), message: "Upstream read timed out." },
+    { error: new DOMException("private URL and credential", "AbortError"), message: "Operation failed or was cancelled." },
+    { error: Object.assign(new Error("private URL and credential"), { name: "TimeoutError" }), message: "Operation failed or was cancelled." },
+  ])("reports $error.name safely as $message", async ({ error, message }) => {
+    const client = await connect({ fallbackRoot: repo, remote: {
+      allow: ["acme/widgets"], createClient: (signal) => githubReader("test-token", {
+        signal, fetch: async () => { throw error; },
+      }),
+    } });
+    const result = await call(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 2000, runAttempt: 1 });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(text(result)).toContain(message);
+    expect(text(result)).not.toMatch(/private|credential|test-token/);
+  });
+
   it("are absent unless enabled", async () => {
     const client = await connect({ fallbackRoot: repo });
     const names = (await client.listTools()).tools.map((tool) => tool.name);

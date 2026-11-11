@@ -3,7 +3,7 @@ import type { McpServer, RegisteredResource } from "@modelcontextprotocol/server
 import { z } from "zod";
 import { decodeBenchmark, type RunBenchmark } from "../telemetry/benchmark.js";
 import { operationAccess, repositoryReader, resolveRepository, type RemoteAccess, type RemoteOptions } from "./remote.js";
-import { LIMITS, operation } from "./safety.js";
+import { agentErrorMessage, LIMITS, operation } from "./safety.js";
 import { AgentError } from "./workspace.js";
 
 export const FEEDBACK_WORKFLOW = ".github/workflows/cicd-optimizer-telemetry.yml";
@@ -212,7 +212,7 @@ export function attachFeedback(server: McpServer, remote: RemoteOptions, options
             undelivered.delete(key);
           } catch (error) {
             if (controller.signal.aborted) break;
-            const message = `Producer ${producer.id}/${producer.run_attempt}: ${error instanceof AgentError ? error.message : "Feedback collection failed; check access, transport and operation budgets."}`;
+            const message = `Producer ${producer.id}/${producer.run_attempt}: ${agentErrorMessage(error, "Feedback collection failed; check access, transport and operation budgets.")}`;
             retry.set(key, { at: now + 5 * 60_000, created: Date.parse(producer.created_at), message });
             fail(message);
             failed = true;
@@ -226,7 +226,7 @@ export function attachFeedback(server: McpServer, remote: RemoteOptions, options
         if (!retry.size) { errorResource?.remove(); errorResource = undefined; lastError = ""; }
       }
     } catch (error) {
-      if (!controller.signal.aborted) fail(error instanceof AgentError ? error.message : "Feedback inventory failed; check access, transport and operation budgets.");
+      if (!controller.signal.aborted) fail(agentErrorMessage(error, "Feedback inventory failed; check access, transport and operation budgets."));
     } finally {
       if (!controller.signal.aborted) {
         timer = setTimeout(() => { void tick(); }, (options.pollMs ?? 60_000) * remote.allow.length);

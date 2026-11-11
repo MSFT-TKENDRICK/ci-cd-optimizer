@@ -2,6 +2,14 @@ export class AgentError extends Error {
   override name = "AgentError";
 }
 
+export function agentErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof AgentError) return error.message;
+  if (error instanceof DOMException && error.name === "TimeoutError") {
+    return "Upstream read timed out. Analysis or feedback delivery is incomplete; retry within the existing access and operation limits.";
+  }
+  return fallback;
+}
+
 export const LIMITS = {
   requestBytes: 256 * 1024,
   outputBytes: 128 * 1024,
