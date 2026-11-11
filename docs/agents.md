@@ -200,16 +200,41 @@ repository numeric identity and exact source attempt/SHA before exposing it as
 `cicd://feedback/runs/<repository-id>:<producer-run>:<producer-attempt>`.
 Integrity framing alone is not authentication. Legacy producer runs without frames are coverage errors.
 
-Benchmarking stays **per run; optimization broadcasts are actionable-only**. The watcher publishes a run resource
-only when analysis is available and at least one identified bottleneck has a nonblank summary, remediation
+Benchmarking stays **per run; optimization broadcasts are actionable-only and success-gated**. The watcher publishes a run resource
+only for a successful source attempt, when analysis is available and at least one identified bottleneck has a nonblank summary, remediation
 recommendation and supporting evidence. Clean/skipped reports without findings, gap-only or unavailable analysis,
 omission counts alone, and findings without remediation or evidence do not enqueue agent instructions.
 They remain in the producer's benchmark log and on-demand reports. Successfully filtered producers are marked
 processed within the replay scope without occupying an outbox slot or requiring an acknowledgement; the status
 resource's process-lifetime `filtered` count records these decisions. No broadcast does **not** mean no opportunities.
 Savings need not be positive: generated-artifact drift and cache-save failures can warrant fixes without proven
-removable work. A partial report with an actionable finding still broadcasts its full bounded payload, including
+removable work. A qualifying partial report still broadcasts its full bounded payload, including
 gaps and omissions; the receiver must verify applicability and retrieve exact-run evidence before remediation.
+
+Each repository/workflow/source-branch/trigger series starts broadcasting at its first actionable success **within
+the replay scope**, not the workflow's lifetime. Failures, cancellations, skipped attempts and unavailable analyses
+are held until the next qualifying success. Its `rollup` contains up to 20 exact run/attempt summaries,
+explicit omitted-run and conclusion counts, non-success runner work (rework exposure, never removable cost),
+and the number of quiet successes. Full evidence remains in producer logs and exact-run reports.
+Duplicate producers for the same source attempt do not inflate rollups. A quiet success does not flush a rollup.
+
+Later successes broadcast only for a new evidenced finding, a changed complete job set, newly available whole-run
+metrics, or a substantial duration change relative to the **last broadcast**, allowing gradual drift to accumulate.
+Run-specific numeric job ids are removed from finding identities; different finding details remain distinct.
+Novel actionable evidence can therefore notify even with unchanged timings. Execution elapsed, queue-inclusive
+latency, total runner work and per-job durations are compared separately, never added.
+Metric comparisons require complete whole-run metrics, no omitted jobs, and identical job keys/names (including
+matrix multiplicity). Trigger type is separated, but equal job sets do not prove identical dispatch inputs,
+runner resources or workloads; this is a notification filter, not an experiment or causal improvement claim.
+
+The fixed duration heuristic rejects absolute changes below 1 second and compares `ln(ms + 10,000)`.
+The base threshold is `ln(1.1)`. With at least three earlier comparable successes, the threshold becomes
+`min(ln(2), ln(1.1) + 2 * 1.4826 * MAD(log durations))`, using at most ten samples and excluding the current
+observation. These are product noise-filter choices, **not** validated human-perception constants, p-values
+or statistical significance. The cap applies to offset durations, not raw doubling. Thus 75 vs 73 minutes
+is quiet, 60 vs 10 minutes and 40 vs 120 minutes notify, and 40 vs 120 microseconds is quiet.
+Incomplete metrics and older delayed successes do not contaminate recent variability or replace the reference.
+No broadcast does not establish stability when evidence is missing.
 
 ```powershell
 node scripts/agent-startup.mjs --repo MSFT-TKENDRICK/ci-cd-optimizer --auth github-cli
@@ -235,9 +260,18 @@ a crash between accepting a message and persisting its receipt can replay the me
 
 The watcher polls every 60 seconds per allowlisted repository (maximum five), replays at most seven days/1,000
 producer runs per repository, and holds 50 unacknowledged events without silently evicting them. Each poll fetches
-at most four eligible producers per repository, alternating newest and oldest so current results do not wait
-behind the entire replay history and older events still make progress. Alternation survives single-slot backpressure;
-delivery order is not chronological.
+at most four eligible producers per repository, alternating newest and oldest within a frozen inventory snapshot.
+It buffers verified benchmarks until every member (including in-progress or retried producers) has been collected,
+then decides in authenticated source-attempt `updated_at` order, with run/attempt tie-breakers. This prevents
+a newest-first fetch from broadcasting success without failures elsewhere in that snapshot. New arrivals belong
+to the next snapshot, so they cannot perpetually extend the current one. Buffered events respect the same inventory
+bound; a full outbox pauses draining without dropping them. `buffered` and `catching-up` distinguish collection
+from delivery. An unresolved member blocks its snapshot and remains visible as an error or backlog, not a clean result.
+Late arrivals cannot retroactively amend an accepted broadcast; held failures join the next qualifying success.
+GitHub's attempt update timestamp is the ordering proxy, not a separately measured end-to-end duration.
+Comparison state is process-local and reconstructed from the bounded replay on reconnect; existing receipts prevent
+redelivery of the same accepted producer. It is not a permanent lifetime baseline and older replay boundaries or
+changed evidence can change decisions. Aged-out unresolved rollups are reported as replay gaps.
 Collection and replay gaps remain visible in status/error resources. Long-offline gaps cannot be reconstructed by this bounded feed.
 An upstream read timeout is reported explicitly without exposing download URLs, credentials or raw exception messages.
 It is incomplete analysis or delivery, not an empty result; existing deadlines, cancellation and retry backoff still apply.
