@@ -53,6 +53,8 @@ export interface BuildVertex {
   /** BuildKit's own `DONE n.ns`, the authoritative vertex duration. */
   durationMs?: number;
   cached: boolean;
+  /** Timed RUN command output was observed; absence does not prove that the command did not execute. */
+  executionOutput?: true;
   error: boolean;
   operations: BuildOperation[];
   /** Incomplete transfers at the end of the retained log; not proof of their backend cause. */
@@ -395,6 +397,7 @@ function vertexLine(step: LogStep, id: number, text: string, ms: number, pending
     pending.delete(vertex);
   } else if (text === "CACHED") vertex.cached = true;
   else if (/^(?:ERROR|CANCELED)\b/.test(text)) vertex.error = true;
+  else if (vertex.kind === "run" && /^\d+\.\d+ /.test(text)) vertex.executionOutput = true;
   else if (!/^\d+\.\d+ /.test(text) && (match = /^(.+?) ([\d.]+)s done$/.exec(text))
     && !/^(?:sha256:|extracting |loading layer |writing layer )/.test(match[1] as string)) {
     vertex.operations.push({ name: clip(match[1] as string), durationMs: seconds(match[2] as string) });

@@ -291,13 +291,55 @@ describe("attributeRun on run 42856555439", () => {
     const log = restored ? APP_LOG.replace("#14 DONE 1.6s", "#14 CACHED") : APP_LOG;
     const found = one(attributeRun(snapshot(), ciLogs([[APP, parseJobLog(log)]])), "layer-cache-miss", "app");
 
-    expect(found.summary).toContain(restored ? "1 other layer(s) were restored" : "No RUN or COPY layer was restored");
+    expect(found.summary).toContain(restored ? "1 other RUN or COPY vertex/vertices were marked CACHED" : "No RUN or COPY vertex was marked CACHED");
     expect(found.summary).toContain("The log alone does not establish the cause");
     expect(found.summary).not.toMatch(/rather than to changed inputs|these layers' inputs .* changed|cache was reachable/);
     expect(found.recommendation).toContain("resolved base-image digests");
     expect(found.recommendation).toContain("branch visibility");
     expect(found.recommendation).toContain("backend behavior");
     expect(found.observedMs).toBeGreaterThan(0);
+  });
+
+  it("separates executed RUN vertices from missing cache markers and broadcasts unknown status with zero savings", () => {
+    const digest = `sha256:${"a".repeat(64)}`;
+    const evidence = parseJobLog([
+      ["38:59", "##[group]Run docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "shell: /usr/bin/bash -e {0}"], ["38:59", "##[endgroup]"],
+      ["39:00", "#18 [build 7/7] RUN npm run build"], ["39:01", "#18 0.288 > tsc -p tsconfig.json"],
+      ["39:00", "#19 [dependencies 4/4] RUN npm ci --omit=dev"],
+      ["39:01", `#19 ${digest} 0B / 15.67MB 0.2s`],
+      ["39:10", "#18 DONE 10.0s"],
+      ["39:15", "#20 [build 1/1] RUN true"],
+      ["39:19", `#19 ${digest} 15.67MB / 15.67MB 19.0s done`],
+      ["39:20", `#19 extracting ${digest} 1.0s done`], ["39:20", "#19 DONE 20.0s"],
+      ["39:25", "#20 DONE 10.0s"],
+    ].map(([time, text]) => `${at(time!)} ${text}`).join("\n"));
+    const source = snapshot([job(1, "app", "38:59", "39:26")]);
+    const result = attributeRun(source, new Map([[1, evidence]]));
+    const executed = result.bottlenecks.find((item) => item.category === "layer-cache-miss")!;
+    expect(executed).toMatchObject({ observedMs: 10000, runnerSavingsBoundMs: 10000 });
+    expect(executed.summary).toContain("1 RUN vertex/vertices produced timed command output");
+    expect(executed.evidence.join(" ")).not.toMatch(/#19|#20/);
+    const unknown = result.bottlenecks.find((item) => item.summary.includes("without a CACHED marker or timed command output"))!;
+    expect(unknown).toMatchObject({
+      category: "layer-cache-unknown", observedMs: 25000, runnerSavingsBoundMs: 0, elapsedSavingsBoundMs: 0,
+    });
+    expect(unknown.summary).not.toContain("were rebuilt");
+    expect(unknown.recommendation).toContain("build record");
+    expect(unknown.recommendation).toContain("Missing output is not proof");
+    expect(unknown.evidence.join(" ")).toContain("#19");
+    expect(unknown.evidence.join(" ")).toContain("#20");
+    expect(benchmarkRun(source, result, undefined, []).findings).toContainEqual(expect.objectContaining({
+      category: "layer-cache-unknown", observedMs: 25000, runnerSavingsBoundMs: 0,
+      recommendation: unknown.recommendation,
+    }));
+    evidence.steps[0]!.builds[0]!.vertices.find((item) => item.id === 18)!.cached = true;
+    const cached = attributeRun(source, new Map([[1, evidence]]));
+    expect(cached.bottlenecks.some((item) => item.category === "layer-cache-miss")).toBe(false);
+    expect(cached.bottlenecks).toContainEqual(expect.objectContaining({
+      category: "layer-cache-unknown", observedMs: 25000, runnerSavingsBoundMs: 0,
+    }));
   });
 
   it("broadcasts logged GHA branch access without inferring cache availability or altering savings", () => {

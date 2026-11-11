@@ -42441,7 +42441,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "8abf53c23d47f78cc010c8919dad8129bf83040180273ac08b5806152de5c487",
+  "implementationSha256": "941e0accd1d9dcf868bf89499757caf7c6425959232dd5f9ae10184918016d1e",
   "generatorSha256": "3796e86ad20c33e0b41cc5ad4490c09338a37e5c6d2ea7c2b2f9095dbf298aed",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -66831,6 +66831,7 @@ function vertexLine(step, id2, text7, ms, pending) {
     pending.delete(vertex);
   } else if (text7 === "CACHED") vertex.cached = true;
   else if (/^(?:ERROR|CANCELED)\b/.test(text7)) vertex.error = true;
+  else if (vertex.kind === "run" && /^\d+\.\d+ /.test(text7)) vertex.executionOutput = true;
   else if (!/^\d+\.\d+ /.test(text7) && (match2 = /^(.+?) ([\d.]+)s done$/.exec(text7)) && !/^(?:sha256:|extracting |loading layer |writing layer )/.test(match2[1])) {
     vertex.operations.push({ name: clip(match2[1]), durationMs: seconds2(match2[2]) });
   }
@@ -67303,21 +67304,23 @@ function buildFindings(ctx, entry2, build2, index) {
       }));
     }
   }
-  if (build2.cacheFrom.length > 0) {
-    const misses = build2.vertices.filter((vertex) => vertex.kind === "run" && !vertex.cached && !vertex.error);
-    const missMs = vertexUnionMs(misses);
-    if (missMs >= MIN_FINDING_MS) {
+  for (const executionOutput of [true, false]) {
+    const vertices = build2.vertices.filter((vertex) => vertex.kind === "run" && !vertex.cached && !vertex.error && vertex.executionOutput === true === executionOutput);
+    const observedMs = vertexUnionMs(vertices);
+    if (build2.cacheFrom.length > 0 && observedMs >= MIN_FINDING_MS) {
       const restored = build2.vertices.filter((vertex) => (vertex.kind === "run" || vertex.kind === "copy") && vertex.cached).length;
       const source = build2.cacheFrom.map((spec2) => spec2.raw).join("; ");
       const access = build2.cacheFrom.some((spec2) => spec2.type === "gha") ? entry2.step.cacheAccess : void 0;
-      const cause = restored === 0 ? "No RUN or COPY layer was restored; this alone does not distinguish changed inputs from missing or inaccessible cache entries." : `${restored} other layer(s) were restored, but that does not prove that matching entries for the rebuilt layers were published or accessible.`;
+      const cause = restored === 0 ? "No RUN or COPY vertex was marked CACHED; this alone does not distinguish changed inputs from missing or inaccessible cache entries." : `${restored} other RUN or COPY vertex/vertices were marked CACHED, but that does not prove that matching entries for these vertices were published or accessible.`;
       findings4.push(finding2(ctx, {
-        category: "layer-cache-miss",
+        category: executionOutput ? "layer-cache-miss" : "layer-cache-unknown",
         detail,
         step: entry2.label,
-        observedMs: missMs,
-        observation: `${entry2.label}: ${misses.length} RUN layer(s) were rebuilt for ${formatMs(missMs)} although the build is configured to restore a cache (cache-from ${source}). ${cause} The log alone does not establish the cause.`,
+        observedMs,
+        ...!executionOutput ? { removableMs: 0 } : {},
+        observation: executionOutput ? `${entry2.label}: ${vertices.length} RUN vertex/vertices produced timed command output without a CACHED marker, spanning ${formatMs(observedMs)} of vertex time despite cache-from ${source}. Vertex time can include materialization, not just command execution. ${cause} The log alone does not establish the cause.` : `${entry2.label}: ${vertices.length} RUN vertex/vertices span ${formatMs(observedMs)} without a CACHED marker or timed command output (cache-from ${source}). They may be materializing cached layers or executing silently; the retained log does not establish a rebuild or removable cost. ${cause}`,
         recommendation: [
+          ...!executionOutput ? ["Inspect the build record's cache status and execution trace before treating these vertices as misses. Missing output is not proof of either a cache hit or a rebuild, and layer-transfer output alone is not command execution. Do not expose credentials or signed URLs from build records."] : [],
           "Compare consecutive runs with identical build inputs, including resolved base-image digests, build arguments and context contents, not just the same commit. Check successful cache publication, matching import/export scopes, branch visibility and eviction.",
           ...access?.entries.length ? ["Use the action's logged runtime cache access as branch-permission evidence only: it does not prove publication, a matching entry or successful restoration. Missing or omitted entries do not prove denied access. Do not broaden permissions merely because a layer missed."] : [],
           "If misses persist, investigate cache lookup and backend behavior before restructuring the Dockerfile or changing permissions."
@@ -67326,7 +67329,7 @@ function buildFindings(ctx, entry2, build2, index) {
           ...access?.entries.length ? [
             `Action-reported runtime cache access: ${access.entries.map((entry3) => `${entry3.scope}: ${entry3.permission}`).join("; ")}${access.omittedEntries ? `; ${access.omittedEntries} additional recognized access line(s) not retained` : ""}`
           ] : [],
-          ...[...misses].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
+          ...[...vertices].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
           ...build2.vertices.filter((vertex) => vertex.kind === "cache-import").map(describeVertex),
           ...build2.cacheFrom.map((spec2) => `cache-from: ${spec2.raw}`)
         ],

@@ -193,6 +193,31 @@ describe("parseCacheSpec and vertexKind", () => {
 });
 
 describe("parseJobLog builds", () => {
+  it("distinguishes timed RUN output from unmarked layer materialization without retaining output contents", () => {
+    const digest = `sha256:${"a".repeat(64)}`;
+    const evidence = parseJobLog(log([
+      [0, "##[group]Run docker build ."], [0, "##[endgroup]"],
+      [1000, "#18 [build 7/7] RUN npm run build"],
+      [1100, "#18 0.288 do-not-retain-command-output"],
+      [11600, "#18 DONE 10.6s"],
+      [12000, "#19 [dependencies 4/4] RUN npm ci --omit=dev"],
+      [12200, `#19 ${digest} 0B / 15.67MB 0.2s`],
+      [14000, `#19 ${digest} 15.67MB / 15.67MB 2.0s done`],
+      [14500, `#19 extracting ${digest} 0.5s done`], [14500, "#19 DONE 2.5s"],
+      [15000, "#20 [build 1/1] RUN true"], [16000, "#20 DONE 1.0s"],
+      [17000, "#21 [build 1/1] COPY src ./src"], [17100, "#21 0.1 not-run-output"],
+      [18000, "#0 building with default instance using docker driver"],
+      [19000, "#18 [build 1/1] RUN true"], [20000, "#18 DONE 1.0s"],
+    ]));
+    const [build, next] = evidence.steps[0]!.builds;
+    expect(vertex(build, 18)).toMatchObject({ cached: false, executionOutput: true, durationMs: 10600 });
+    expect(vertex(build, 19)).toMatchObject({ cached: false, durationMs: 2500, operations: [] });
+    for (const item of [vertex(build, 19), vertex(build, 20), vertex(build, 21), vertex(next, 18)]) {
+      expect(item).not.toHaveProperty("executionOutput");
+    }
+    expect(JSON.stringify(evidence)).not.toContain("do-not-retain-command-output");
+  });
+
   it("retains bounded action-reported cache access without treating missing or malformed output as denial", () => {
     const entries: Array<[number, string]> = [
       [0, "##[group]Run docker/build-push-action@v7"], [1, "##[endgroup]"],
