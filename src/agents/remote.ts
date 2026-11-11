@@ -42,7 +42,10 @@ export function operationAccess(options: RemoteOptions, signal: AbortSignal): Re
       request: (route, parameters) => ownWork(signal, (readSignal) => {
         client ??= options.createClient(readSignal);
         return client.request(route, parameters);
-      }, (error) => !(route === "GET /repos/{owner}/{repo}/contents/{path}" && httpStatus(error) === 404)),
+      }, (error) => !(
+        (route === "GET /repos/{owner}/{repo}/contents/{path}" && httpStatus(error) === 404) ||
+        (route === "GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs" && [404, 410].includes(httpStatus(error) ?? 0))
+      )),
     },
   };
 }
@@ -189,6 +192,7 @@ export interface RunJob {
   name: string;
   conclusion: string | null;
   durationMs: number;
+  runnerSharePct?: number;
   queueMs?: number;
   needs: string[];
   omittedNeeds: number;
@@ -231,10 +235,11 @@ export interface RunReport {
   omittedJobs?: number;
   slowestSteps?: { job: string; step: string; durationMs: number }[];
   omittedSteps?: number;
+  pages?: Record<string, { offset: number; total: number; nextOffset: number | null }>;
   attribution?: {
     criticalSlackMs: number;
     coverage: RunAttribution["coverage"];
-    bottlenecks: Pick<RunAttribution["bottlenecks"][number], "category" | "jobKey" | "jobName" | "observedMs" | "elapsedSavingsBoundMs" | "runnerSavingsBoundMs" | "summary" | "recommendation" | "evidence">[];
+    bottlenecks: (Pick<RunAttribution["bottlenecks"][number], "id" | "category" | "jobKey" | "jobName" | "observedMs" | "elapsedSavingsBoundMs" | "runnerSavingsBoundMs" | "summary" | "recommendation" | "evidence"> & { evidenceTotal: number; nextEvidenceOffset: number | null })[];
     omittedBottlenecks: number;
     gaps: Pick<RunAttribution["gaps"][number], "kind" | "jobKey" | "jobName" | "ms" | "detail">[];
     omittedGaps: number;
@@ -250,18 +255,35 @@ export interface RunReport {
 }
 
 /** Builds the timeline, critical path, and baseline comparison for one completed workflow run, without writing. */
-export async function remoteRunReport(access: RemoteAccess, request: { repo: string; runId: number; markdown?: boolean }): Promise<RunReport> {
+export async function remoteRunReport(access: RemoteAccess, request: {
+  repo: string; runId: number; runAttempt?: number; markdown?: boolean;
+  jobOffset?: number; stepOffset?: number; findingOffset?: number; gapOffset?: number; evidenceOffset?: number;
+}): Promise<RunReport> {
   if (!Number.isSafeInteger(request.runId) || request.runId <= 0) throw new AgentError("runId must be a positive integer.");
+  if (request.runAttempt !== undefined && (!Number.isSafeInteger(request.runAttempt) || request.runAttempt <= 0)) throw new AgentError("runAttempt must be a positive integer.");
   const target = await resolveRepository(access, request.repo);
   const reader = repositoryReader(access, target);
   let run: WorkflowRunPayload;
   try {
-    run = (await reader.request("GET /repos/{owner}/{repo}/actions/runs/{run_id}", { ...target.repo, run_id: request.runId })).data as WorkflowRunPayload;
+    run = (await reader.request(request.runAttempt === undefined
+      ? "GET /repos/{owner}/{repo}/actions/runs/{run_id}"
+      : "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}", {
+      ...target.repo, run_id: request.runId, ...(request.runAttempt === undefined ? {} : { attempt_number: request.runAttempt }),
+    })).data as WorkflowRunPayload;
   } catch (error) {
     if (httpStatus(error) === 404) throw new AgentError(`Workflow run ${request.runId} was not found in ${target.fullName}.`);
     throw error;
   }
   if (run.id !== request.runId) throw new AgentError("Workflow run identity does not match the request.");
+  if (request.runAttempt !== undefined && request.runAttempt !== (run.run_attempt ?? 1)) throw new AgentError("Workflow attempt identity does not match the request.");
+  const offsets = [request.jobOffset, request.stepOffset, request.findingOffset, request.gapOffset, request.evidenceOffset];
+  if (offsets.some((value) => value !== undefined && (!Number.isSafeInteger(value) || value < 0 || value > 100_000))) throw new AgentError("Report offsets must be nonnegative integers no larger than 100000.");
+  const jobOffset = request.jobOffset ?? 0;
+  const stepOffset = request.stepOffset ?? 0;
+  const findingOffset = request.findingOffset ?? 0;
+  const gapOffset = request.gapOffset ?? 0;
+  const evidenceOffset = request.evidenceOffset ?? 0;
+  const page = (offset: number, size: number, total: number) => ({ offset, total, nextOffset: offset + size < total ? offset + size : null });
   const runRepo = (run as WorkflowRunPayload & { repository?: { id?: unknown } }).repository;
   if (runRepo && runRepo.id !== target.id) throw new AgentError("Workflow run repository identity does not match.");
   const fetchedJobs = new Set<number>();
@@ -312,12 +334,20 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
     ...(!definitionKnown ? ["Workflow job definitions are incomplete or unresolved; no critical path is reported."] : []),
   ];
   const attribution = jobsComplete && definitionKnown ? result.attribution : undefined;
+  if (!attribution || attribution.gaps.length) {
+    report.analysisStatus = "partial";
+    report.warnings.push("Log attribution has evidence gaps or is unavailable; this is not a complete optimization assessment.");
+  }
+  report.pages = { jobs: page(jobOffset, 100, snapshot.jobs.length) };
   if (attribution) {
+    report.pages.bottlenecks = page(findingOffset, 10, attribution.bottlenecks.length);
+    report.pages.gaps = page(gapOffset, 20, attribution.gaps.length);
     const text = (value: string) => sanitizeMarkdown(value, 1024).text;
     report.attribution = {
       criticalSlackMs: attribution.criticalSlackMs,
       coverage: attribution.coverage,
-      bottlenecks: attribution.bottlenecks.slice(0, 10).map((finding) => ({
+      bottlenecks: attribution.bottlenecks.slice(findingOffset, findingOffset + 10).map((finding) => ({
+        id: finding.id,
         category: finding.category,
         jobKey: text(finding.jobKey),
         jobName: text(finding.jobName),
@@ -326,17 +356,19 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
         runnerSavingsBoundMs: finding.runnerSavingsBoundMs,
         summary: text(finding.summary),
         recommendation: text(finding.recommendation),
-        evidence: finding.evidence.slice(0, 3).map(text),
+        evidence: finding.evidence.slice(evidenceOffset, evidenceOffset + 3).map(text),
+        evidenceTotal: finding.evidence.length,
+        nextEvidenceOffset: evidenceOffset + 3 < finding.evidence.length ? evidenceOffset + 3 : null,
       })),
-      omittedBottlenecks: Math.max(0, attribution.bottlenecks.length - 10),
-      gaps: attribution.gaps.slice(0, 20).map((gap) => ({
+      omittedBottlenecks: attribution.bottlenecks.length - attribution.bottlenecks.slice(findingOffset, findingOffset + 10).length,
+      gaps: attribution.gaps.slice(gapOffset, gapOffset + 20).map((gap) => ({
         kind: gap.kind,
         jobKey: text(gap.jobKey),
         ...(gap.jobName ? { jobName: text(gap.jobName) } : {}),
         ...(gap.ms !== undefined ? { ms: gap.ms } : {}),
         detail: text(gap.detail),
       })),
-      omittedGaps: Math.max(0, attribution.gaps.length - 20),
+      omittedGaps: attribution.gaps.length - attribution.gaps.slice(gapOffset, gapOffset + 20).length,
     };
   }
   report.run = {
@@ -358,14 +390,16 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
   report.jobsAnalyzed = snapshot.jobs.length;
   report.jobsNotFetched = jobsTotal === null ? null : jobsTotal - fetchedJobs.size;
   report.jobPagesFetched = pages;
-  report.omittedJobs = Math.max(0, snapshot.jobs.length - 100);
-  report.jobs = snapshot.jobs.slice(0, 100).map((job) => {
+  report.omittedJobs = snapshot.jobs.length - snapshot.jobs.slice(jobOffset, jobOffset + 100).length;
+  const runnerTotal = snapshot.jobs.reduce((total, job) => total + job.durationMs, 0);
+  report.jobs = snapshot.jobs.slice(jobOffset, jobOffset + 100).map((job) => {
     const baselineMs = jobsComplete ? result.baseline?.jobs?.[job.key] : undefined;
     return {
       key: job.key,
       name: job.name,
       conclusion: job.conclusion,
       durationMs: job.durationMs,
+      runnerSharePct: runnerTotal ? Math.round(job.durationMs / runnerTotal * 10_000) / 100 : 0,
       ...(job.queueMs !== undefined ? { queueMs: job.queueMs } : {}),
       needs: job.needs.slice(0, 100),
       omittedNeeds: Math.max(0, job.needs.length - 100),
@@ -374,10 +408,11 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
     };
   });
   const steps = snapshot.jobs.flatMap((job) => (job.steps ?? []).map((step) => ({ job: job.key, step: step.name, durationMs: step.durationMs })));
-  report.omittedSteps = Math.max(0, steps.length - MAX_STEPS);
+  report.omittedSteps = steps.length - steps.slice(stepOffset, stepOffset + MAX_STEPS).length;
+  report.pages.steps = page(stepOffset, MAX_STEPS, steps.length);
   report.slowestSteps = steps
     .sort((left, right) => right.durationMs - left.durationMs)
-    .slice(0, MAX_STEPS);
+    .slice(stepOffset, stepOffset + MAX_STEPS);
   if (jobsComplete && result.baseline) {
     const jobs = Object.entries(result.baseline.jobs ?? {});
     report.baseline = { ...result.baseline, jobs: Object.fromEntries(jobs.slice(0, 100)) };
@@ -421,7 +456,7 @@ export async function remoteRunReport(access: RemoteAccess, request: { repo: str
       ...report.jobs.map((job) => `| ${escapeMarkdown(job.name)} | ${job.durationMs} | ${escapeMarkdown(job.conclusion ?? "unknown")} |`),
       "", "```mermaid", "gantt", `    title ${mermaidLabel(snapshot.workflowName)}`,
       "    dateFormat YYYY-MM-DDTHH:mm:ss", "    section Jobs",
-      ...snapshot.jobs.slice(0, 100).map((job, index) => `    ${mermaidLabel(job.name)} :j${index}, ${timestamp(job.startedAt)}, ${timestamp(job.completedAt)}`),
+      ...snapshot.jobs.slice(jobOffset, jobOffset + 100).map((job, index) => `    ${mermaidLabel(job.name)} :j${index}, ${timestamp(job.startedAt)}, ${timestamp(job.completedAt)}`),
       "```",
     ].join("\n"), MAX_REPORT_CHARS);
     report.markdown = markdown.text;

@@ -1,14 +1,18 @@
 import { parseArgs } from "node:util";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { GitHubClient } from "../github/client.js";
 import { githubReader } from "./github.js";
 import { normalizeRepository, type RemoteOptions } from "./remote.js";
 import { AgentError, resolveRoot } from "./workspace.js";
+import { FEEDBACK_REPLAY_MS, type FeedbackOptions } from "./feedback.js";
 
 export interface AgentIO {
   cwd: string;
   env: Record<string, string | undefined>;
   /** Injected in tests; defaults to a REST client authenticated with GITHUB_TOKEN / GH_TOKEN. */
   github?: (token: string) => GitHubClient;
+  githubCliToken?: () => Promise<string>;
 }
 
 export interface AgentServerOptions {
@@ -19,6 +23,7 @@ export interface AgentServerOptions {
   /** Where the agent plugin is installed (CICD_OPTIMIZER_PLUGIN_ROOT / PLUGIN_ROOT); never analyzed as the workspace. */
   pluginRoot?: string;
   remote?: RemoteOptions;
+  feedback?: FeedbackOptions;
   /** Human-readable startup notes for stderr (never stdout, which carries the protocol). */
   notices: string[];
 }
@@ -36,6 +41,11 @@ Options:
                       Needs GITHUB_TOKEN or GH_TOKEN.
   --repo <owner/repo> Explicit repository allowlist (required with --enable-remote;
                       repeatable). Other repositories are refused.
+  --github-cli-auth  Explicitly use the existing gh login for github.com instead
+                      of environment tokens. Never used as an automatic fallback.
+  --watch            Broadcast completed CI benchmarks as MCP resource-list changes.
+                      Requires remote access; client acknowledges accepted delivery.
+  --since <ISO time> Replay starting here (required with --watch; last seven days).
   -h, --help          Show this help
   -v, --version       Show the version
 
@@ -68,7 +78,10 @@ export async function mcpCommand(argv: string[], io: AgentIO): Promise<AgentComm
     options: {
       root: { type: "string" },
       "enable-remote": { type: "boolean" },
+      "github-cli-auth": { type: "boolean" },
       repo: { type: "string", multiple: true },
+      watch: { type: "boolean" },
+      since: { type: "string" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
@@ -79,12 +92,29 @@ export async function mcpCommand(argv: string[], io: AgentIO): Promise<AgentComm
   const pluginRoot = io.env.CICD_OPTIMIZER_PLUGIN_ROOT || io.env.PLUGIN_ROOT || undefined;
   const notices: string[] = [];
   const base: AgentServerOptions = { ...(root ? { root } : {}), fallbackRoot: io.cwd, ...(pluginRoot ? { pluginRoot } : {}), notices };
+  if (values.watch || values.since) {
+    const since = Date.parse(values.since ?? "");
+    if (!values.watch || !values["enable-remote"] || !Number.isFinite(since) || since > Date.now() || Date.now() - since > FEEDBACK_REPLAY_MS) {
+      throw new AgentError("--watch requires --enable-remote and --since <ISO timestamp> within the last seven days.");
+    }
+    base.feedback = { since: new Date(since).toISOString() };
+  }
   if (values.repo?.length && !values["enable-remote"]) throw new AgentError("--repo only applies with --enable-remote.");
+  if (values["github-cli-auth"] && !values["enable-remote"]) throw new AgentError("--github-cli-auth requires --enable-remote.");
   if (!values["enable-remote"]) return { kind: "serve", ...base };
 
   const allow = [...new Set((values.repo ?? []).map(normalizeRepository))];
   if (!allow.length || allow.length > 100) throw new AgentError("--enable-remote requires 1–100 explicit --repo owner/repo entries.");
-  const token = io.env.GITHUB_TOKEN || io.env.GH_TOKEN;
+  let token = io.env.GITHUB_TOKEN || io.env.GH_TOKEN;
+  if (values["github-cli-auth"]) {
+    if (io.env.GITHUB_API_URL && io.env.GITHUB_API_URL !== "https://api.github.com") throw new AgentError("--github-cli-auth supports github.com only; use an explicit environment token for other hosts.");
+    try {
+      token = io.githubCliToken ? await io.githubCliToken() : (await promisify(execFile)("gh", ["auth", "token", "--hostname", "github.com"], {
+        timeout: 10_000, maxBuffer: 16_384, windowsHide: true,
+        env: { ...process.env, GITHUB_TOKEN: undefined, GH_TOKEN: undefined },
+      })).stdout.trim();
+    } catch { throw new AgentError("GitHub CLI authentication failed. Run gh auth login for github.com; no alternate credential source was used."); }
+  }
   if (!token) throw new AgentError("--enable-remote requires GITHUB_TOKEN or GH_TOKEN in the server environment.");
   notices.push(`GitHub tools enabled (read-only, dry run) for: ${allow.join(", ")}.`);
   return {

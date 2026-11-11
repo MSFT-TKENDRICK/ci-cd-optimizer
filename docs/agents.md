@@ -99,7 +99,7 @@ The protocol is newline-delimited JSON on stdout; startup/errors go to stderr.
 | `effective_config` | `root?`, `config?`, `presets?`, `rules?`, `rulesets?` |
 | `validate_review_project` | `root?`, root-relative `path` to `project.yaml` |
 | `scan_repository` (opt-in) | `repo`, `ref?`, `minSeverity?`, `limit?` |
-| `workflow_run_report` (opt-in) | `repo`, positive numeric `runId`, `markdown?` |
+| `workflow_run_report` (opt-in) | `repo`, positive numeric `runId`, `runAttempt?`, `jobOffset?`, `stepOffset?`, `findingOffset?`, `evidenceOffset?`, `gapOffset?`, `markdown?` |
 
 Results include structured JSON and equivalent text. `cicd://config` and `cicd://rules/<rule-id>` are JSON resources;
 `optimize-pipeline` and `triage-findings` are prompt templates. Rule resources use built-in defaults when no usable
@@ -118,7 +118,8 @@ Remote tools are absent by default, even when `GITHUB_TOKEN` or `GH_TOKEN` exist
 1. Process-start flag `--enable-remote`.
 2. One or more explicit `--repo owner/repo` entries, up to 100. Git remotes never establish authorization.
 3. `GITHUB_TOKEN` (preferred) or `GH_TOKEN`, provisioned in the server process environment by the operator/client's
-   secret settings. Never put the value in chat, committed configuration, command arguments, or logs.
+   secret settings; alternatively, explicitly select `--github-cli-auth` for an existing github.com `gh` login.
+   These modes never fall back to each other. Never put a token in chat, committed configuration, command arguments, or logs.
 
 Start the server after provisioning that environment:
 
@@ -131,7 +132,8 @@ node C:\src\ci-cd-optimizer\plugins\ci-cd-optimizer\server\cicd-agents.mjs mcp -
 Use a narrowly scoped user token with repository metadata, contents, and Actions read access. Local MCP can use an
 operator-configured HTTPS `GITHUB_API_URL` for an enterprise API; repository content cannot change that origin.
 Every repository read rechecks access, canonical name, and numeric identity. Local MCP pins the repository ID on
-first use until restart; hosted ACP requires IDs pinned in deployment configuration. Redirects are disabled.
+first use until restart; hosted ACP requires IDs pinned in deployment configuration. JSON redirects are disabled.
+The exact Actions job-log endpoint may follow one validated HTTPS signed-storage redirect without forwarding credentials.
 
 Remote operations are dry runs: they do not publish checks/SARIF, synchronize issues, run experiments, write
 telemetry to a database, or open fix PRs. Run reports fetch recent comparison data through the same bounded reader;
@@ -168,6 +170,68 @@ When collected job telemetry is incomplete, `run.durationMs` is `null`, `critica
 critical-path metrics. Individual job/step timings remain measurements of the collected subset, not a complete
 ranking of the run. A Gantt chart likewise covers only returned jobs. Missing fields are unavailable evidence,
 not zero durations or proof that a job is off the critical path.
+
+Use each `pages` entry's `nextOffset` to retrieve the remaining collected jobs, steps, findings and gaps.
+Evidence pages use `nextEvidenceOffset` per finding. Supply `runAttempt` to retrieve that exact attempt,
+including historical attempts, and keep it fixed across pages. Text is bounded and sanitized. Pagination covers
+collected evidence only, not missing logs or upstream inventory. Runner-work percentages use observed job durations,
+not billed cost or elapsed wall-clock shares.
+
+## Per-run feedback and harness startup
+
+The trusted default-branch telemetry workflow benchmarks every independently triggered workflow except itself,
+including failed, cancelled and rerun attempts. It pins `--run-attempt` from the completion event so a newer retry
+cannot replace the triggering attempt. Tests keep its explicit trigger list complete without recursive
+telemetry runs; reusable-only workflows are included through their callers. `telemetry --broadcast` writes a bounded,
+SHA-256-integrity-framed benchmark into its job log. The MCP watcher verifies the producer workflow, default branch,
+repository numeric identity and exact source attempt/SHA before exposing it as
+`cicd://feedback/runs/<repository-id>:<producer-run>:<producer-attempt>`.
+Integrity framing alone is not authentication. Legacy producer runs without frames are coverage errors.
+
+```powershell
+node scripts/agent-startup.mjs --repo MSFT-TKENDRICK/ci-cd-optimizer --auth github-cli
+```
+
+Use `--auth environment` instead when the host provisions `GITHUB_TOKEN` or `GH_TOKEN`; the native extension
+requests those exact environment grants. Denial does not authorize another credential route.
+The startup script saves nonsecret, explicit repository authorization in ignored `.agent-artifacts/ci-feedback.json`.
+It does not infer authorization from a remote or start an orphan daemon. The project's Copilot extension owns the
+stdio MCP process through the live harness and subscribes to native resource-list-change events.
+Devcontainer startup and Copilot setup steps prepare this configuration. A host supporting Copilot SDK extensions
+must load `.github/extensions/ci-feedback`; setup completion alone does not prove a cloud host supports this bridge.
+Verify `ci_feedback_connection_status` in the actual session. Reload extensions after configuration changes.
+The distroless production App image is not the development container and does not run this editor harness.
+
+The bridge queues fixed remediation guidance plus explicitly untrusted benchmark evidence into its own conversation.
+It persists an accepted-message receipt before invoking the native `feedback_ack` tool. Acknowledgement changes only
+the MCP process outbox; it never writes to GitHub. Native denial stops delivery retries, not the permission boundary.
+Receipt storage is per workspace/session, bounded to 5,000 recent entries. This is **at-least-once**, not exactly-once:
+a crash between accepting a message and persisting its receipt can replay the message.
+
+The watcher polls every 60 seconds per allowlisted repository (maximum five), replays at most seven days/1,000
+producer runs per repository, and holds 50 unacknowledged events without silently evicting them. Collection and replay
+gaps remain visible in status/error resources. Long-offline gaps cannot be reconstructed by this bounded feed.
+Keep the harness running to receive recommendations; a different session does not share its delivery receipts.
+Polling and reconnecting do not trigger CI. Every remediation still follows the user's existing authorization.
+
+Benchmarks distinguish execution, queue-inclusive latency, observed runner work and failed-run rework exposure.
+Their previous-run deltas are descriptive, not causal. History is the bounded available snapshot window, not a census
+of all earlier attempts. Savings bounds overlap and are not measured improvements. Partial evidence, omitted results,
+conditional hypotheses and unmeasured resource costs never establish convergence or universal optimality.
+
+### Prevent generated-artifact rework
+
+Run `npm run ci:prepare` after source changes, review its generated diffs, then run `npm run ci:check-generated`
+before pushing. Preparation regenerates rule assurance, proof provenance, both shipped bundles and setup UI output.
+The check is read-only and preserves the existing CI parity gates. To opt in to the repository pre-push check:
+
+```powershell
+git config --local core.hooksPath .githooks
+```
+
+Fresh development/cloud bootstrap installs this hook with `--install-hooks`, refusing to replace an existing hook.
+Review an existing hooks configuration before replacing it. Hooks are a local early warning, not a substitute for
+CI enforcement or proof verification. A reported artifact failure measures observed rework exposure, not promised savings.
 
 ## Local ACP
 

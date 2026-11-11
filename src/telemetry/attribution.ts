@@ -32,7 +32,8 @@ const INSTALL_COMMAND =
 
 export type BottleneckCategory =
   | "cache-export" | "image-load" | "layer-cache-miss" | "builder-setup" | "builder-teardown" | "package-cache"
-  | "toolchain-download" | "repeated-command" | "service-startup" | "test-runtime" | "repeated-setup";
+  | "toolchain-download" | "repeated-command" | "service-startup" | "test-runtime" | "repeated-setup"
+  | "generated-artifact-drift" | "queue-pressure";
 
 export interface Bottleneck {
   id: string;
@@ -545,6 +546,17 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
 function jobFindings(ctx: JobContext): Bottleneck[] {
   const { evidence, located } = ctx;
   const findings = located.flatMap((entry) => stepFindings(ctx, entry));
+  if (ctx.job.conclusion === "failure" && evidence.generatedArtifactFailures?.length) {
+    findings.push(finding(ctx, {
+      category: "generated-artifact-drift",
+      detail: "parity",
+      observedMs: ctx.job.durationMs,
+      removableMs: 0,
+      observation: `Generated output parity failed (${evidence.generatedArtifactFailures.map((failure) => failure.artifact).join(", ")}). This job consumed ${formatMs(ctx.job.durationMs)} in a failed attempt; that is rework exposure, not proven removable work.`,
+      recommendation: "Run deterministic generated-output preparation and parity checks before pushing, in dependency order (proof provenance before bundles). Keep the CI parity gates; commit the generated outputs together with their sources rather than weakening verification.",
+      evidence: evidence.generatedArtifactFailures.map((failure) => failure.evidence),
+    }));
+  }
 
   const saveFailure = cacheSaveFailure(evidence);
   if (saveFailure && !located.some((entry) => entry.step.packageCache === "miss")) {
@@ -665,6 +677,11 @@ function repeatedSetup(shape: RunShape, evidenceById: Map<number, JobLogEvidence
     const names = list.map((use) => use.timed.job.name);
     const listed = names.length > MAX_LISTED ? `${names.slice(0, MAX_LISTED).join(", ")} and ${names.length - MAX_LISTED} more` : names.join(", ");
     const label = list[0]?.label ?? key;
+    const cacheHits = list.filter((use) => {
+      const log = evidenceById.get(use.timed.job.id);
+      const hit = (step: LogStep): boolean => step.packageCache === "hit" || step.children.some(hit);
+      return log?.steps.some(hit);
+    }).length;
     const bound = critical.length > 0
       ? `Bound: up to ${formatMs(elapsed)} of elapsed time (removing it from the critical job) and up to ${formatMs(runner)} of runner time (every instance but the longest).`
       : `Bound: up to ${formatMs(runner)} of runner time (every instance but the longest) and no elapsed time, because none of these jobs is on the critical path.`;
@@ -679,7 +696,9 @@ function repeatedSetup(shape: RunShape, evidenceById: Map<number, JobLogEvidence
       runnerSavingsBoundMs: runner,
       onCriticalPath: critical.length > 0,
       summary: `${list.length} jobs each ran ${label} (${formatMs(total)} in total, longest ${formatMs(longest)}). ${bound}`,
-      recommendation: "Cache what this setup produces (dependencies, toolchains) so each repeat is shorter, or merge short jobs that share it; merging parallel jobs can lengthen the run, so only merge jobs that have slack.",
+      recommendation: cacheHits > 0
+        ? `${cacheHits}/${list.length} jobs already show a dependency cache hit. Measure download-cache restoration separately from dependency installation, extraction and lifecycle scripts before adding another cache. Compare a lockfile/toolchain/OS-keyed prepared dependency image or shared preparation artifact including its upload/download cost; merge jobs only when slack and isolation permit.`
+        : "Cache what this setup produces (dependencies, toolchains) so each repeat is shorter, or merge short jobs that share it; merging parallel jobs can lengthen the run, so only merge jobs that have slack.",
       evidence: list.slice(0, MAX_LISTED * 2).map((use) => `${clip(use.timed.job.name, MAX_LABEL)}: ${formatMs(use.ms)}`),
     });
   }
@@ -688,6 +707,35 @@ function repeatedSetup(shape: RunShape, evidenceById: Map<number, JobLogEvidence
 
 function compareText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Job creation can precede `needs`; do not label dependency waiting as runner contention. */
+export function readyQueueMs(job: JobSnapshot, jobs: readonly JobSnapshot[]): number | undefined {
+  const start = Date.parse(job.startedAt);
+  const queued = job.queuedAt ? Date.parse(job.queuedAt) : start - (job.queueMs ?? NaN);
+  if (!Number.isFinite(start) || !Number.isFinite(queued) || queued > start) return undefined;
+  const parents = job.needs.flatMap((key) => jobs.filter((candidate) => candidate.key === key));
+  if (job.needs.some((key) => !parents.some((parent) => parent.key === key))) return undefined;
+  const ends = parents.map((parent) => Date.parse(parent.completedAt));
+  if (ends.some((end) => !Number.isFinite(end) || end > start)) return undefined;
+  return Math.max(0, start - Math.max(queued, ...ends));
+}
+
+function queueFindings(snapshot: WorkflowSnapshot, shape: RunShape): Bottleneck[] {
+  return shape.measured.flatMap(({ job }) => {
+    const wait = readyQueueMs(job, snapshot.jobs);
+    if (wait === undefined || wait < 10_000 || wait < 0.2 * (wait + job.durationMs)) return [];
+    return [{
+      id: `queue-pressure:${job.id}`,
+      category: "queue-pressure" as const,
+      jobKey: job.key, jobName: job.name, observedMs: wait,
+      elapsedSavingsBoundMs: 0, runnerSavingsBoundMs: 0,
+      onCriticalPath: shape.timing.get(job.id)?.critical ?? false,
+      summary: `${job.name} waited ${formatMs(wait)} after its recorded queue entry and dependencies completed, then executed for ${formatMs(job.durationMs)}. This wait is not runner work or a measured code speedup.`,
+      recommendation: "Report queue-inclusive latency and job execution separately. Use interleaved, matched control/arm trials with the same runner context; do not rank a code change from a queue-heavy cohort or discard slow samples after seeing the outcome. Investigate capacity and concurrency independently.",
+      evidence: [`Ready-to-start wait: ${formatMs(wait)}; job execution: ${formatMs(job.durationMs)}.`],
+    }];
+  });
 }
 
 /** Attributes a run's time to bottlenecks; pure and deterministic for the same snapshot and logs. */
@@ -774,8 +822,9 @@ export function attributeRun(snapshot: WorkflowSnapshot, logs: ReadonlyMap<numbe
     }
   }
 
-  bottlenecks.push(...repeatedSetup(shape, evidenceById));
-  bottlenecks.sort((a, b) => b.elapsedSavingsBoundMs - a.elapsedSavingsBoundMs
+  bottlenecks.push(...repeatedSetup(shape, evidenceById), ...queueFindings(snapshot, shape));
+  const priority = (finding: Bottleneck) => finding.category === "generated-artifact-drift" ? 2 : finding.category === "queue-pressure" ? 1 : 0;
+  bottlenecks.sort((a, b) => priority(b) - priority(a) || b.elapsedSavingsBoundMs - a.elapsedSavingsBoundMs
     || b.runnerSavingsBoundMs - a.runnerSavingsBoundMs || compareText(a.id, b.id));
   gaps.sort((a, b) => (b.ms ?? 0) - (a.ms ?? 0) || compareText(a.kind, b.kind) || compareText(a.jobKey, b.jobKey)
     || compareText(a.detail, b.detail));
@@ -817,7 +866,7 @@ function failureReason(error: unknown): string {
 }
 
 /**
- * Fetches and parses a bounded number of job logs, critical and longest jobs first. A failure for one job becomes a
+ * Fetches and parses a bounded number of job logs, failed jobs then critical and longest jobs first. A failure for one job becomes a
  * coverage gap for that job; it never aborts the others.
  */
 export async function collectJobLogs(
@@ -826,7 +875,8 @@ export async function collectJobLogs(
   const shape = analyzeRun(snapshot);
   const budget = Math.max(0, Math.floor(options.maxJobLogs ?? DEFAULT_MAX_JOB_LOGS));
   const ordered = [...shape.measured].sort((a, b) =>
-    Number(shape.timing.get(b.job.id)?.critical ?? false) - Number(shape.timing.get(a.job.id)?.critical ?? false)
+    Number(b.job.conclusion === "failure") - Number(a.job.conclusion === "failure")
+    || Number(shape.timing.get(b.job.id)?.critical ?? false) - Number(shape.timing.get(a.job.id)?.critical ?? false)
     || (b.end - b.start) - (a.end - a.start) || a.job.id - b.job.id);
   const selected = ordered.slice(0, budget);
   const limits = {
@@ -853,7 +903,7 @@ export async function collectJobLogs(
   for (const timed of ordered.slice(budget)) {
     results.set(timed.job.id, {
       kind: "log-not-fetched", jobKey: timed.job.key, jobName: timed.job.name,
-      detail: `Skipped to stay within the ${budget}-log budget (critical and longest jobs are fetched first), so log-based causes were not examined.`,
+      detail: `Skipped to stay within the ${budget}-log budget (failed, critical and longest jobs are fetched first), so log-based causes were not examined.`,
     });
   }
   return results;

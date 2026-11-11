@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { run } from "../../src/cli/index.js";
 import type { CliIO } from "../../src/cli/io.js";
 import { FileTelemetryStore } from "../../src/telemetry/store.js";
+import { decodeBenchmark } from "../../src/telemetry/benchmark.js";
 import { snapshot, stable } from "../alerts/fixtures.js";
 import { callsTo, CLEAN, fakeApi, MISSING_TIMEOUT, TIMEOUT_ONLY, WORKFLOW, writes, type FakeApi } from "../service/api.js";
 
@@ -151,6 +152,54 @@ async function seededStore(): Promise<string> {
 const lines = async (path: string) => (await readFile(path, "utf8")).split("\n").filter(Boolean);
 
 describe("telemetry command", () => {
+  it("benchmarks the completion event's historical attempt when a newer retry has started", async () => {
+    const sha = "a".repeat(40);
+    const historical = { ...workflowRun, head_sha: sha };
+    const client = telemetryApi({
+      repositoryMetadata: { id: 42, full_name: "acme/widgets", owner: { login: "acme" }, name: "widgets" },
+      refs: { [sha]: { ".github/workflows/ci.yml": workflowFile } },
+      runs: { 2000: { ...historical, run_attempt: 2, status: "in_progress", conclusion: null } },
+      runAttempts: { "2000:1": historical },
+    });
+    const session = cli(client);
+    expect(await session.run("telemetry", "--run-id", "2000", "--run-attempt", "1", "--broadcast", "--dry-run")).toBe(0);
+    const benchmark = decodeBenchmark(session.stdout.split("\n").map((line) => `${at("11:00")} ${line}`).join("\n"));
+    expect(benchmark).toMatchObject({ runId: 2000, runAttempt: 1, conclusion: "success" });
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/actions/runs/{run_id}")).toEqual([]);
+    expect(callsTo(client, "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs")[0]?.parameters.attempt_number).toBe(1);
+    expect(writes(client)).toEqual([]);
+  });
+
+  it("rejects invalid attempt selectors and mismatched metadata before writing", async () => {
+    const client = telemetryApi({ runAttempts: { "2000:1": { ...workflowRun, run_attempt: 2 } } });
+    const session = cli(client);
+    for (const attempt of ["0", "-1", "1.5", "bad", "1"]) {
+      expect(await session.run("telemetry", "--run-id", "2000", "--run-attempt", attempt)).toBe(2);
+    }
+    expect(session.stderr).toContain("identity does not match");
+    expect(writes(client)).toEqual([]);
+  });
+
+  it("broadcasts a verified benchmark without GitHub writes, including cancelled empty runs", async () => {
+    const sha = "a".repeat(40);
+    for (const empty of [false, true]) {
+      const client = telemetryApi({
+        repositoryMetadata: { id: 42, full_name: "acme/widgets", owner: { login: "acme" }, name: "widgets" },
+        refs: { [sha]: { ".github/workflows/ci.yml": workflowFile } },
+        jobs: { 2000: empty ? [] : jobs },
+        runs: { 2000: { ...workflowRun, head_sha: sha, conclusion: empty ? "cancelled" : "success" } },
+      });
+      const session = cli(client);
+      expect(await session.run("telemetry", "--run-id", "2000", "--broadcast", "--dry-run")).toBe(0);
+      const benchmark = decodeBenchmark(session.stdout.split("\n").map((line) => `${at("11:00")} ${line}`).join("\n"));
+      expect(benchmark).toMatchObject({ repositoryId: 42, runId: 2000, headSha: sha });
+      expect(benchmark.analysisStatus).not.toBe("complete");
+      if (empty) expect(benchmark.gaps.length).toBeGreaterThan(0);
+      else expect(benchmark.metrics?.observedRunnerMs).toBeGreaterThan(0);
+      expect(writes(client)).toEqual([]);
+    }
+  });
+
   it("prints requested source context even when a cancelled run has no completed jobs", async () => {
     const sha = "a".repeat(40);
     const client = telemetryApi({

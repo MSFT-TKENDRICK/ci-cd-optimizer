@@ -8,10 +8,10 @@ export default tseslint.config(
     ignores: ["dist/**", "dist-action/**", "dist-setup/**", "plugins/*/server/**", "coverage/**", "corpus/**", ".agent-artifacts/**", ".agent-test-workspaces/**", ".proof-tools/**", ".proof-build/**", "src/formal/generated/**"],
   },
   {
-    files: ["scripts/*.mjs", "mcp/*.mjs", "test/setup/*.mjs"],
+    files: ["scripts/*.mjs", "mcp/*.mjs", "test/setup/*.mjs", ".github/extensions/**/*.mjs"],
     languageOptions: {
       globals: Object.fromEntries([
-        "AbortSignal", "Buffer", "Headers", "URL", "URLSearchParams", "clearTimeout", "console", "fetch", "process", "setTimeout",
+        "AbortSignal", "Buffer", "Headers", "URL", "URLSearchParams", "clearTimeout", "clearInterval", "console", "fetch", "process", "setTimeout", "setInterval",
       ].map((name) => [name, "readonly"])),
     },
   },

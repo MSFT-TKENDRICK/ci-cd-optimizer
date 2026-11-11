@@ -119,6 +119,7 @@ export interface JobLogEvidence {
   steps: LogStep[];
   post: { startMs?: number; durationMs: number; subGroups: LogSubGroup[]; cacheSaveFailures: string[] };
   repeatedCommands: RepeatedCommand[];
+  generatedArtifactFailures?: { artifact: string; evidence: string }[];
   truncated: boolean;
   lines: number;
 }
@@ -450,6 +451,13 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
         if (key && !step.envKeys.includes(key)) step.envKeys.push(key);
       } else if (header.mode === "command") header.commands.push(line);
       continue;
+    }
+    const artifact = /^##\[error\]dist-action is stale\b/.test(line) ? "action-bundle"
+      : /^##\[error\]Agent bundle is stale\b/.test(line) ? "agent-bundle"
+        : /^(?:Error: )?Stale generated proof artifact: [\w./-]+\. Run npm run formal:generate\.$/.test(line) ? "proof-artifact"
+          : /^(?:##\[error\])?dist-setup is out of date\b/.test(line) ? "setup-ui" : undefined;
+    if (artifact && !(evidence.generatedArtifactFailures ?? []).some((failure) => failure.artifact === artifact)) {
+      (evidence.generatedArtifactFailures ??= []).push({ artifact, evidence: clip(line) });
     }
     if (phase === "setup") {
       let match: RegExpExecArray | null;

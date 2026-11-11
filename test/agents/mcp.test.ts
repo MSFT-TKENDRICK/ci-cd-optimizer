@@ -7,7 +7,7 @@ import { createMcpServer, MCP_TOOLS, type McpServerOptions } from "../../src/age
 import type { LintSummary } from "../../src/agents/workspace.js";
 import type { WorkflowRunPayload } from "../../src/telemetry/snapshot.js";
 import { PROJECT_YAML } from "../review/fixtures.js";
-import { fakeApi, TIMEOUT_ONLY, writes } from "../service/api.js";
+import { callsTo, fakeApi, TIMEOUT_ONLY, writes } from "../service/api.js";
 import { forbiddenLocalRule, MISSING_TIMEOUT, tempDirs, WORKFLOW, write } from "./helpers.js";
 import { LIMITS } from "../../src/agents/safety.js";
 import { githubReader } from "../../src/agents/github.js";
@@ -308,6 +308,42 @@ describe("MCP server GitHub tools", () => {
     expect(report).toMatchObject({ jobsTotal: null, jobsNotFetched: null, jobsFetched: 200, omittedJobs: 100 });
     expect(report.markdown).toContain("upstream total: unknown");
     if (mode === "inconsistent") expect(report).toMatchObject({ analysisStatus: "partial", run: { durationMs: null } });
+  });
+
+  it("retrieves a historical attempt instead of silently substituting the latest retry", async () => {
+    const api = fakeApi({
+      repositoryMetadata: REPOSITORY, config: TIMEOUT_ONLY,
+      refs: { main: { [WORKFLOW]: MISSING_TIMEOUT }, abc: { [WORKFLOW]: CI } },
+      runs: { 2000: { ...RUN, run_attempt: 2 } }, runAttempts: { "2000:1": RUN }, jobs: { 2000: JOBS },
+    });
+    const client = await connect({ fallbackRoot: repo, remote: { allow: ["acme/widgets"], createClient: () => api } });
+    const report = await data<RunReport>(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 2000, runAttempt: 1 });
+    expect(report.run?.attempt).toBe(1);
+    expect(callsTo(api, "GET /repos/{owner}/{repo}/actions/runs/{run_id}")).toEqual([]);
+    expect(callsTo(api, "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs")[0]?.parameters.attempt_number).toBe(1);
+    expect(writes(api)).toEqual([]);
+  });
+
+  it.each([{ ...RUN, run_attempt: 2 }, { ...RUN, id: 2001 }])("rejects historical attempt metadata that does not match the requested identity", async (run) => {
+    const api = fakeApi({ repositoryMetadata: REPOSITORY, runAttempts: { "2000:1": run } });
+    const client = await connect({ fallbackRoot: repo, remote: { allow: ["acme/widgets"], createClient: () => api } });
+    expect(await failure(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 2000, runAttempt: 1 })).toContain("identity does not match");
+    expect(writes(api)).toEqual([]);
+  });
+
+  it("reports final-page omissions and renders the selected job page rather than repeating page zero", async () => {
+    const api = remoteFixture({ jobs: cappedJobs().slice(0, 205) });
+    const client = await connect({ fallbackRoot: repo, remote: {
+      allow: ["acme/widgets"], createClient: (signal) => githubReader("test-token", { signal, fetch: api.fetcher }),
+    } });
+    const report = await data<RunReport>(client, MCP_TOOLS.workflowRunReport, { repo: "acme/widgets", runId: 2000, jobOffset: 200, markdown: true });
+    expect(report).toMatchObject({ jobsFetched: 205, omittedJobs: 200, pages: { jobs: { offset: 200, total: 205, nextOffset: null } } });
+    expect(report.jobs).toHaveLength(5);
+    expect(report.jobs?.[0]?.name).toBe("test (200)");
+    expect(report.markdown).toContain("| test \\(200\\) |");
+    const gantt = report.markdown?.split("```mermaid")[1];
+    expect(gantt).toMatch(/test\s+200\s+:j0/);
+    expect(gantt).not.toMatch(/test\s+0\s+:/);
   });
 
   it("report a workflow run's critical path without writing", async () => {

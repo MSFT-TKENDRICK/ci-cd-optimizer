@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  attributeRun, collectJobLogs, formatMs, isCoverageGap, type Bottleneck, type JobLogResult, type RunAttribution,
+  attributeRun, collectJobLogs, formatMs, isCoverageGap, readyQueueMs, type Bottleneck, type JobLogResult, type RunAttribution,
 } from "../../src/telemetry/attribution.js";
 import { parseJobLog } from "../../src/telemetry/logs.js";
 import type { JobSnapshot, StepSnapshot, WorkflowSnapshot } from "../../src/telemetry/types.js";
@@ -99,6 +99,27 @@ const one = (attribution: RunAttribution, category: Bottleneck["category"], jobK
 
 describe("attributeRun on run 42856555439", () => {
   const attribution = attributeRun(snapshot(), ciLogs());
+
+  it("reports generated-artifact rework without claiming the failed job's time is removable", () => {
+    const failed = job(1, "build", "38:28", "39:06", { conclusion: "failure" });
+    const log = parseJobLog(`${at("38:50")} ##[error]dist-action is stale; run npm run bundle and commit it.`);
+    const found = one(attributeRun(snapshot([failed]), new Map([[1, log]])), "generated-artifact-drift", "build");
+    expect(found).toMatchObject({ observedMs: 38_000, runnerSavingsBoundMs: 0, elapsedSavingsBoundMs: 0 });
+    expect(found.recommendation).toContain("before pushing");
+    expect(attributeRun(snapshot([{ ...failed, conclusion: "success" }]), new Map([[1, log]])).bottlenecks).toEqual([]);
+  });
+
+  it("identifies queue-contaminated trials without treating dependency waiting as runner work", () => {
+    const queued = job(1, "app", "38:29", "39:44", { queuedAt: at("36:06"), queueMs: 143_000 });
+    const found = one(attributeRun(snapshot([queued])), "queue-pressure", "app");
+    expect(found).toMatchObject({ observedMs: 143_000, runnerSavingsBoundMs: 0, elapsedSavingsBoundMs: 0 });
+    expect(found.recommendation).toContain("interleaved");
+    const parent = job(2, "build", "36:06", "38:28");
+    const dependent = { ...queued, needs: ["build"] };
+    expect(readyQueueMs(dependent, [parent, dependent])).toBe(1000);
+    expect(attributeRun(snapshot([parent, dependent])).bottlenecks).toEqual([]);
+    expect(readyQueueMs(dependent, [dependent])).toBeUndefined();
+  });
 
   it("puts the app job on the critical path with 48 s of headroom over the test job", () => {
     expect(attribution.elapsedMs).toBe(125_000);
@@ -337,6 +358,21 @@ describe("attributeRun repeated setup", () => {
     const two = [setupJob(1, "lint", "00:40"), setupJob(2, "types", "00:40")];
     expect(attributeRun(snapshot(two)).bottlenecks.filter((entry) => entry.category === "repeated-setup")).toEqual([]);
   });
+
+  it("distinguishes existing nested download-cache hits from repeated installation work", () => {
+    const jobs = [setupJob(1, "lint", "00:28"), setupJob(2, "types", "00:30"), setupJob(3, "unit", "00:32")];
+    const evidence = parseJobLog(TEST_LOG);
+    const pending = [...evidence.steps];
+    for (const step of pending) {
+      if (step.packageCache) step.packageCache = "hit";
+      pending.push(...step.children);
+    }
+    const logs = new Map(jobs.map((job) => [job.id, evidence]));
+    const found = one(attributeRun(snapshot(jobs), logs), "repeated-setup", "lint, types, unit");
+    expect(found.recommendation).toContain("3/3 jobs already show a dependency cache hit");
+    expect(found.recommendation).toContain("installation, extraction and lifecycle scripts");
+    expect(found.recommendation).toContain("including its upload/download cost");
+  });
 });
 
 describe("collectJobLogs", () => {
@@ -369,6 +405,15 @@ describe("collectJobLogs", () => {
     expect(isCoverageGap(logs.get(TEST))).toBe(false);
     expect(logs.get(BUILD)).toMatchObject({ kind: "log-not-fetched", jobKey: "build" });
     expect((logs.get(BUILD) as { detail: string }).detail).toMatch(/2-log budget/);
+  });
+
+  it("fetches a short failed parity job before long successful critical-path work", async () => {
+    const jobs = ciJobs().map((entry) => entry.id === BUILD ? { ...entry, conclusion: "failure" } : entry);
+    const client = fakeApi({ jobLogs: { [BUILD]: `${at("38:50")} ##[error]dist-action is stale; run npm run bundle and commit it.` } });
+    const logs = await collectJobLogs(client, repo, snapshot(jobs), { maxJobLogs: 1 });
+    expect(callsTo(client, LOGS_ROUTE).map((call) => call.parameters.job_id)).toEqual([BUILD]);
+    expect(logs.get(BUILD)).toMatchObject({ generatedArtifactFailures: [{ artifact: "action-bundle" }] });
+    expect(logs.get(APP)).toMatchObject({ kind: "log-not-fetched" });
   });
 
   it("marks logs cut at the size limit as truncated", async () => {

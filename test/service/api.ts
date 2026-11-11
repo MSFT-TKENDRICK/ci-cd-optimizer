@@ -36,6 +36,7 @@ export interface FakeApiState {
   workflowRuns?: unknown[];
   /** Workflow runs by id (GET /actions/runs/{run_id}). */
   runs?: Record<number, unknown>;
+  runAttempts?: Record<string, unknown>;
   sarifStatus?: number;
   collaboratorPermission?: string;
   failOn?: (route: string) => boolean;
@@ -165,6 +166,11 @@ export function fakeApi(state: FakeApiState = {}) {
       }
       case "GET /repos/{owner}/{repo}/actions/runs/{run_id}": {
         const found = state.runs?.[Number(parameters.run_id)];
+        if (found === undefined) throw httpError(404);
+        return found;
+      }
+      case "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}": {
+        const found = state.runAttempts?.[`${parameters.run_id}:${parameters.attempt_number}`];
         if (found === undefined) throw httpError(404);
         return found;
       }
