@@ -73116,7 +73116,7 @@ function jobFindings(ctx) {
       step: "Initialize containers",
       observedMs: startupMs,
       observation: `Starting service container ${clip2(service.name, MAX_LABEL)}${service.image ? ` (${clip2(service.image, MAX_LABEL)})` : ""} took ${formatMs(startupMs)} before the first step could run (${parts.join(", ")}).`,
-      recommendation: "Run the service only in jobs that use it, prefer a smaller image, and tune the health-check interval; or start it with docker run --detach early in the job so it boots while other steps run instead of blocking the first step.",
+      recommendation: "Use the service only in jobs that need it. Measure a compatible smaller image or overlap the entire pull/create/start command with independent work using a bounded background worker: docker run --detach still waits for the image pull. Preserve the health policy and gate every consumer on readiness. Join startup before cleanup; always attempt container and anonymous-volume removal, including failed startups, and propagate startup and cleanup errors. Compare whole-run latency and total runner work before accepting a change.",
       evidence: [`${clip2(service.name, MAX_LABEL)}${service.image ? ` ${clip2(service.image, MAX_LABEL)}` : ""}: ${parts.join(", ")}`]
     }));
   }

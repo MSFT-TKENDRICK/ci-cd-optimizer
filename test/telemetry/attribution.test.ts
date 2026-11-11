@@ -239,6 +239,16 @@ describe("attributeRun on run 42856555439", () => {
     expect(one(attribution, "builder-setup", "app").observedMs).toBeGreaterThan(0);
   });
 
+  it("distinguishes detached containers from overlapping pulls and retains lifecycle safeguards", () => {
+    const found = one(attribution, "service-startup", "app");
+    expect(found.recommendation).toContain("entire pull/create/start command");
+    expect(found.recommendation).toContain("docker run --detach still waits for the image pull");
+    expect(found.recommendation).toContain("gate every consumer on readiness");
+    expect(found.recommendation).toContain("including failed startups");
+    expect(found.recommendation).toContain("propagate startup and cleanup errors");
+    expect(found.recommendation).toContain("whole-run latency and total runner work");
+  });
+
   it.each([true, false])("does not invent a cache-miss cause from partial restoration (restored: %s)", (restored) => {
     const log = restored ? APP_LOG.replace("#14 DONE 1.6s", "#14 CACHED") : APP_LOG;
     const found = one(attributeRun(snapshot(), ciLogs([[APP, parseJobLog(log)]])), "layer-cache-miss", "app");

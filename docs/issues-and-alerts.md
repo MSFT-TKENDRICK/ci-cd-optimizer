@@ -143,6 +143,12 @@ Within a BuildKit finding, overlapping vertex durations are counted once using t
 anchoring BuildKit's reported durations at logged completion times. This prevents streamed image export
 and Docker import, or concurrent cache exports, from inflating observed runner time and savings bounds.
 
+Service-startup advice distinguishes detaching a container from overlapping its image pull: `docker run --detach`
+still waits for the pull. Overlap requires a bounded worker for the entire pull/create/start command, equivalent
+health checks, a readiness gate before every consumer, and cleanup that joins startup and attempts container and
+anonymous-volume removal even after failure. Startup and cleanup errors must remain failures. Judge the change
+by whole-run latency and total runner work, not only the removed initialization step.
+
 For critical test workloads, reports identify independent jobs with observed slack as candidates for
 reusing already-prepared capacity before adding shards and repeating setup. This is not a compatibility
 proof: validate runtimes, dependencies, isolation, acyclic scheduling, and unchanged coverage on every
