@@ -525,6 +525,14 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .map(([phase, share]) => `${phase} ${share}%`).join(", ")}`);
     const importShare = Math.max(0, ...step.tests.map((summary) => summary.phases.import ?? 0));
+    const spareJobs = ctx.timing.critical && ctx.job.needs.length === 0
+      ? ctx.shape.measured.filter(({ job }) => job.id !== ctx.job.id && job.needs.length === 0
+        && (ctx.shape.timing.get(job.id)?.slackMs ?? 0) >= MIN_TEST_RUNTIME_MS)
+        .sort((a, b) => (ctx.shape.timing.get(b.job.id)?.slackMs ?? 0) - (ctx.shape.timing.get(a.job.id)?.slackMs ?? 0))
+        .slice(0, MAX_LISTED)
+      : [];
+    const spareEvidence = spareJobs.map(({ job }) =>
+      `${clip(job.name, MAX_LABEL)}: ${formatMs(ctx.shape.timing.get(job.id)?.slackMs ?? 0)} of observed slack; workload compatibility is unverified`);
     findings.push(finding(ctx, {
       category: "test-runtime",
       detail: `s${entry.path}`,
@@ -532,11 +540,19 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
       observedMs: step.durationMs,
       observation: `${label} ran tests for ${formatMs(step.durationMs)} (${frameworks.join("; ")}).`,
       recommendation: [
-        "Split the suite across parallel jobs (for example vitest --shard=<i>/<n> or jest --shard=<i>/<n>); sharding trades extra runner time, including setup repeated per shard, for elapsed time.",
+        ...(ctx.timing.critical ? [
+          ...(spareJobs.length > 0 ? [
+            `Before adding runners, measure moving an independent test partition into an already-prepared compatible job with slack (${spareJobs.map(({ job }) => clip(job.name, MAX_LABEL)).join(", ")}). Verify matching runtime/dependencies, isolation, acyclic dependencies and identical coverage on every trigger, including drafts and failure paths; the observed slack does not prove compatibility or future capacity.`,
+          ] : []),
+          "If existing capacity cannot be reused, measure test sharding; include repeated setup and total runner work, not only the test job's duration.",
+          ...((ctx.timing.headroomMs ?? 0) === 0 ? ["Another job currently finishes at the same time; shortening this job alone has no elapsed-time bound, so evaluate both critical workloads together."] : []),
+        ] : [
+          "Do not add shards solely to shorten this off-critical job: that can increase runner work without reducing elapsed time. Profile slow tests and setup while preserving assertions and isolation.",
+        ]),
         ...(importShare >= 20 ? [`Imports take ${importShare}% of the test time, so trimming heavy imports from the module graph would cut work in every shard.`] : []),
         ...(!ctx.timing.critical ? ["This job is off the critical path, so it only shortens the run once the critical path is reduced."] : []),
       ].join(" "),
-      evidence: [...frameworks, ...phaseLines],
+      evidence: [...frameworks, ...phaseLines, ...spareEvidence],
       covers: [entry.top],
     }));
   }

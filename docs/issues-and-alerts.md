@@ -140,6 +140,12 @@ Attribution requires a complete job inventory and resolved workflow definitions.
 per report; unavailable or skipped logs remain visible as coverage gaps. Savings are upper bounds from observed time,
 not predicted results or measured improvements, and overlapping findings must not be added together.
 
+For critical test workloads, reports identify independent jobs with observed slack as candidates for
+reusing already-prepared capacity before adding shards and repeating setup. This is not a compatibility
+proof: validate runtimes, dependencies, isolation, acyclic scheduling, and unchanged coverage on every
+trigger and failure path. Tied critical jobs need joint evaluation. Off-critical tests do not receive
+unconditional sharding advice, since extra runners can increase work without shortening the run.
+
 These opportunity reports are independent of experiment grading: rejection means none of the tested candidates
 qualified, not that no optimization opportunities remain. Static scans also flag the same resolved Dockerfile
 declared in multiple workflows as a low-confidence reuse candidate. They do not prove that the builds run together,

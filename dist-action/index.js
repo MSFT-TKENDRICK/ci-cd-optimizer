@@ -42441,7 +42441,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "b3eabe6c0ae1aa8d66283c01e67e777b853a4e3c56a30007d121b1b865d26ae5",
+  "implementationSha256": "84b7bf48946a5dc064fe62462cc9fef661367a220fc1ca9aef718f44b44a83bf",
   "generatorSha256": "3796e86ad20c33e0b41cc5ad4490c09338a37e5c6d2ea7c2b2f9095dbf298aed",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -67319,6 +67319,8 @@ function stepFindings(ctx, entry2) {
     });
     const phaseLines = step.tests.filter((summary3) => Object.keys(summary3.phases).length > 0).map((summary3) => `${summary3.framework} phase shares: ${Object.entries(summary3.phases).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([phase, share]) => `${phase} ${share}%`).join(", ")}`);
     const importShare = Math.max(0, ...step.tests.map((summary3) => summary3.phases.import ?? 0));
+    const spareJobs = ctx.timing.critical && ctx.job.needs.length === 0 ? ctx.shape.measured.filter(({ job }) => job.id !== ctx.job.id && job.needs.length === 0 && (ctx.shape.timing.get(job.id)?.slackMs ?? 0) >= MIN_TEST_RUNTIME_MS).sort((a, b) => (ctx.shape.timing.get(b.job.id)?.slackMs ?? 0) - (ctx.shape.timing.get(a.job.id)?.slackMs ?? 0)).slice(0, MAX_LISTED) : [];
+    const spareEvidence = spareJobs.map(({ job }) => `${clip2(job.name, MAX_LABEL)}: ${formatMs(ctx.shape.timing.get(job.id)?.slackMs ?? 0)} of observed slack; workload compatibility is unverified`);
     findings4.push(finding2(ctx, {
       category: "test-runtime",
       detail: `s${entry2.path}`,
@@ -67326,11 +67328,19 @@ function stepFindings(ctx, entry2) {
       observedMs: step.durationMs,
       observation: `${label2} ran tests for ${formatMs(step.durationMs)} (${frameworks.join("; ")}).`,
       recommendation: [
-        "Split the suite across parallel jobs (for example vitest --shard=<i>/<n> or jest --shard=<i>/<n>); sharding trades extra runner time, including setup repeated per shard, for elapsed time.",
+        ...ctx.timing.critical ? [
+          ...spareJobs.length > 0 ? [
+            `Before adding runners, measure moving an independent test partition into an already-prepared compatible job with slack (${spareJobs.map(({ job }) => clip2(job.name, MAX_LABEL)).join(", ")}). Verify matching runtime/dependencies, isolation, acyclic dependencies and identical coverage on every trigger, including drafts and failure paths; the observed slack does not prove compatibility or future capacity.`
+          ] : [],
+          "If existing capacity cannot be reused, measure test sharding; include repeated setup and total runner work, not only the test job's duration.",
+          ...(ctx.timing.headroomMs ?? 0) === 0 ? ["Another job currently finishes at the same time; shortening this job alone has no elapsed-time bound, so evaluate both critical workloads together."] : []
+        ] : [
+          "Do not add shards solely to shorten this off-critical job: that can increase runner work without reducing elapsed time. Profile slow tests and setup while preserving assertions and isolation."
+        ],
         ...importShare >= 20 ? [`Imports take ${importShare}% of the test time, so trimming heavy imports from the module graph would cut work in every shard.`] : [],
         ...!ctx.timing.critical ? ["This job is off the critical path, so it only shortens the run once the critical path is reduced."] : []
       ].join(" "),
-      evidence: [...frameworks, ...phaseLines],
+      evidence: [...frameworks, ...phaseLines, ...spareEvidence],
       covers: [entry2.top]
     }));
   }
