@@ -42441,7 +42441,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "8e9d8214963e559780a9e14439312924737b70e7c7b222f5232ab503ac9536bb",
+  "implementationSha256": "95fb469c6aa183ffe3584b2ed36f8fffd720ba718ff0b4ba5fb98361bf99f91f",
   "generatorSha256": "3796e86ad20c33e0b41cc5ad4490c09338a37e5c6d2ea7c2b2f9095dbf298aed",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -67311,6 +67311,26 @@ function stepFindings(ctx, entry2) {
       covers: [entry2.top]
     }));
   }
+  if (step.packageCache === "hit") {
+    const install2 = entry2.siblings[entry2.siblings.indexOf(step) + 1];
+    const rawCommand = install2?.kind === "script" ? install2.command : void 0;
+    if (install2 && rawCommand !== void 0 && INSTALL_COMMAND.exec(rawCommand.trim())?.index === 0 && !/[\r\n;&|`$<>\u2026]/.test(rawCommand) && install2.durationMs >= MIN_FINDING_MS) {
+      const command = clip2(rawCommand, MAX_LABEL);
+      findings4.push(finding2(ctx, {
+        category: "package-cache",
+        detail: `s${entry2.path}`,
+        step: label2,
+        observedMs: install2.durationMs,
+        observation: `${label2}: the dependency cache hit, but the following ${command} still spent ${formatMs(install2.durationMs)} installing dependencies. The setup/cache step separately took ${formatMs(step.durationMs)}.`,
+        recommendation: "A download-cache hit does not eliminate installation and does not prove that no network access occurred. Profile restoration, extraction and lifecycle scripts separately before adding another cache. Compare prepared dependencies only with matching lockfile, toolchain and OS; preserve integrity checks, lifecycle scripts and isolation, and include transfer costs and total runner work.",
+        evidence: [
+          `${display3(step.title)}: setup/cache step ${formatMs(step.durationMs)}`,
+          `${command}: installation ${formatMs(install2.durationMs)}`
+        ],
+        covers: [step, install2]
+      }));
+    }
+  }
   if (step.tests.length > 0 && step.durationMs >= MIN_TEST_RUNTIME_MS) {
     const frameworks = step.tests.map((summary3) => {
       const counts = [
@@ -67603,12 +67623,15 @@ function attributeRun(snapshot, logs = /* @__PURE__ */ new Map()) {
     if (evidence2 && timing.critical) {
       for (const entry2 of located2) {
         if (entry2.step !== entry2.top || covered3.has(entry2.step) || entry2.step.durationMs < threshold) continue;
+        const recognized = unionMs(located2.filter((other) => other.top === entry2.top && covered3.has(other.step)).map(({ step }) => [step.startMs, step.endMs]), [entry2.step.startMs, entry2.step.endMs]);
+        const unknown4 = Math.max(0, entry2.step.durationMs - recognized);
+        if (unknown4 < threshold) continue;
         gaps.push({
           kind: "unexplained-time",
           jobKey: job.key,
           jobName: job.name,
-          ms: entry2.step.durationMs,
-          detail: `${entry2.label} took ${formatMs(entry2.step.durationMs)} on the critical path and no recognised bottleneck pattern explains it.`
+          ms: Math.round(unknown4),
+          detail: recognized > 0 ? `${formatMs(unknown4)} of ${entry2.label} (${formatMs(entry2.step.durationMs)} total) on the critical path is not explained by recognised bottleneck patterns.` : `${entry2.label} took ${formatMs(entry2.step.durationMs)} on the critical path and no recognised bottleneck pattern explains it.`
         });
       }
     }

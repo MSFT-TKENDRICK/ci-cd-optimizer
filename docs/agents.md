@@ -177,6 +177,12 @@ including historical attempts, and keep it fixed across pages. Text is bounded a
 collected evidence only, not missing logs or upstream inventory. Runner-work percentages use observed job durations,
 not billed cost or elapsed wall-clock shares.
 
+A dependency download-cache hit can still leave measurable installation work. The report separates the
+setup/cache action from its immediately following install, including inside composite actions; a hit does not
+prove that no network access occurred. Nested measured intervals explain only their own time, so significant
+unclassified time elsewhere in a composite remains a coverage gap. These bounds overlap repeated-setup
+findings and must not be added together.
+
 ## Per-run feedback and harness startup
 
 The trusted default-branch telemetry workflow benchmarks every independently triggered workflow except itself,

@@ -393,6 +393,60 @@ describe("attributeRun critical path", () => {
 });
 
 describe("attributeRun repeated setup", () => {
+  const warmSetupLog = (end = "00:12") => [
+    `${at("00:00")} ##[group]Run ./.github/actions/setup`,
+    `${at("00:00")} ##[endgroup]`,
+    `${at("00:00")} ##[start-action display=Run actions/setup-node@v7;id=setup]`,
+    `${at("00:00")} ##[group]Run actions/setup-node@v7`,
+    `${at("00:00")} ##[endgroup]`,
+    `${at("00:03")} Cache restored from key: node-cache-Linux-x64-npm-example`,
+    `${at("00:04")} ##[end-action id=setup;outcome=success;conclusion=success;duration_ms=4000]`,
+    `${at("00:04")} ##[start-action display=Run npm ci;id=install]`,
+    `${at("00:04")} ##[group]Run npm ci`,
+    `${at("00:04")} npm ci`,
+    `${at("00:04")} shell: /usr/bin/bash -e {0}`,
+    `${at("00:04")} ##[endgroup]`,
+    `${at("00:12")} added 250 packages in 8s`,
+    `${at("00:12")} ##[end-action id=install;outcome=success;conclusion=success;duration_ms=8000]`,
+    `${at(end)} Post job cleanup.`,
+  ].join("\n");
+
+  it("explains measured installation after a nested cache hit without treating the whole setup as removable", () => {
+    const jobs = [job(1, "unit", "00:00", "00:12"), job(2, "lint", "00:00", "00:07")];
+    const result = attributeRun(snapshot(jobs), new Map([[1, parseJobLog(warmSetupLog())]]));
+    const found = one(result, "package-cache", "unit");
+    expect(found).toMatchObject({ observedMs: 8_000, runnerSavingsBoundMs: 8_000, elapsedSavingsBoundMs: 5_000 });
+    expect(found.summary).toContain("cache hit");
+    expect(found.evidence).toContain("Run actions/setup-node@v7: setup/cache step 4.0 s");
+    expect(found.evidence).toContain("npm ci: installation 8.0 s");
+    expect(found.recommendation).toContain("does not prove that no network access occurred");
+    expect(result.gaps.filter((gap) => gap.jobKey === "unit")).toEqual([]);
+  });
+
+  it.each([0, 2_000])("retains unexplained composite time with %i ms of overlapping measured intervals", (overlap) => {
+    const evidence = parseJobLog(warmSetupLog("00:32"));
+    const install = evidence.steps[0]!.children[1]!;
+    install.startMs -= overlap;
+    install.durationMs += overlap;
+    const result = attributeRun(snapshot([job(1, "unit", "00:00", "00:32")]),
+      new Map([[1, evidence]]));
+    expect(one(result, "package-cache", "unit").observedMs).toBe(8_000 + overlap);
+    expect(result.gaps).toContainEqual(expect.objectContaining({ kind: "unexplained-time", jobKey: "unit", ms: 20_000 }));
+    expect(result.gaps[0]?.detail).toContain("20.0 s of");
+  });
+
+  it.each([
+    ["unknown cache state", (log: string) => log.replace("Cache restored from key:", "Unknown cache result:")],
+    ["unrelated following command", (log: string) => log.replaceAll("npm ci", "echo done")],
+    ["quoted command", (log: string) => log.replaceAll("npm ci", 'echo "npm ci"')],
+    ["mixed workload", (log: string) => log.replaceAll("npm ci", "npm ci && npm run build")],
+  ])("does not invent warm-install evidence for %s", (_name, change) => {
+    const result = attributeRun(snapshot([job(1, "unit", "00:00", "00:12")]),
+      new Map([[1, parseJobLog(change(warmSetupLog()))]]));
+    expect(result.bottlenecks.filter((entry) => entry.category === "package-cache")).toEqual([]);
+    expect(result.gaps).toContainEqual(expect.objectContaining({ kind: "unexplained-time", ms: 12_000 }));
+  });
+
   const setupJob = (id: number, key: string, setupEnd: string) => job(id, key, "00:00", "01:00", {
     steps: [
       step(1, "Set up job", "00:00", "00:01"),
