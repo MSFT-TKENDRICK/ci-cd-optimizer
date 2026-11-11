@@ -199,6 +199,8 @@ describe("attributeRun on run 42856555439", () => {
     expect(found).toMatchObject({ onCriticalPath: false, elapsedSavingsBoundMs: 0, observedMs: 56_812, runnerSavingsBoundMs: 56_812 });
     expect(found.summary).toContain("48.0 s of slack behind app");
     expect(found.summary).not.toContain("becomes critical after");
+    expect(found.recommendation).toContain("Do not add shards solely");
+    expect(found.recommendation).not.toContain("Before adding runners");
   });
 
   it("reports the other build, service and builder costs it can see in the logs", () => {
@@ -208,6 +210,19 @@ describe("attributeRun on run 42856555439", () => {
     expect(one(attribution, "builder-teardown", "app").recommendation).toMatch(/cleanup: false/);
     expect(one(attribution, "builder-teardown", "app").recommendation).toMatch(/DOCKER_BUILD_SUMMARY: false/);
     expect(one(attribution, "builder-setup", "app").observedMs).toBeGreaterThan(0);
+  });
+
+  it.each([true, false])("does not invent a cache-miss cause from partial restoration (restored: %s)", (restored) => {
+    const log = restored ? APP_LOG.replace("#14 DONE 1.6s", "#14 CACHED") : APP_LOG;
+    const found = one(attributeRun(snapshot(), ciLogs([[APP, parseJobLog(log)]])), "layer-cache-miss", "app");
+
+    expect(found.summary).toContain(restored ? "1 other layer(s) were restored" : "No RUN or COPY layer was restored");
+    expect(found.summary).toContain("The log alone does not establish the cause");
+    expect(found.summary).not.toMatch(/rather than to changed inputs|these layers' inputs .* changed|cache was reachable/);
+    expect(found.recommendation).toContain("resolved base-image digests");
+    expect(found.recommendation).toContain("branch visibility");
+    expect(found.recommendation).toContain("backend behavior");
+    expect(found.observedMs).toBeGreaterThan(0);
   });
 
   it("describes savings only as bounds and never exceeds the observed time or the headroom", () => {
@@ -298,6 +313,22 @@ describe("attributeRun coverage gaps", () => {
 });
 
 describe("attributeRun critical path", () => {
+  it("uses existing independent job slack before recommending additional test runners", () => {
+    const jobs = [
+      job(TEST, "test", "38:29", "39:45", { steps: TEST_STEPS }),
+      job(1, "lint", "38:29", "38:55"),
+      job(2, "dependent", "38:55", "39:10", { needs: ["lint"] }),
+      job(3, "app", "38:29", "39:45"),
+    ];
+    const found = one(attributeRun(snapshot(jobs), ciLogs()), "test-runtime", "test");
+    expect(found.recommendation).toContain("already-prepared compatible job with slack (lint)");
+    expect(found.recommendation).toContain("drafts and failure paths");
+    expect(found.recommendation).toContain("same time");
+    expect(found.evidence).toContain("lint: 35.0 s of observed slack; workload compatibility is unverified");
+    expect(found.evidence.some((line) => line.startsWith("dependent:"))).toBe(false);
+    expect(found.elapsedSavingsBoundMs).toBe(0);
+  });
+
   it("does not treat a near-critical job with positive slack as a source of elapsed-time savings", () => {
     const jobs = [
       job(1, "app", "38:29", "40:33"),

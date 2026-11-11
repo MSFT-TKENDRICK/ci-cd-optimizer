@@ -402,15 +402,15 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
       const restored = build.vertices.filter((vertex) => (vertex.kind === "run" || vertex.kind === "copy") && vertex.cached).length;
       const source = build.cacheFrom.map((spec) => spec.raw).join("; ");
       const cause = restored === 0
-        ? "No RUN or COPY layer was restored, which points to a cache scope that was evicted or never exported for these inputs rather than to changed inputs; the log alone cannot confirm which."
-        : `${restored} other layer(s) were restored, so the cache was reachable; these layers' inputs (or an earlier layer) changed, or their entries were evicted.`;
+        ? "No RUN or COPY layer was restored; this alone does not distinguish changed inputs from missing or inaccessible cache entries."
+        : `${restored} other layer(s) were restored, but that does not prove that matching entries for the rebuilt layers were published or accessible.`;
       findings.push(finding(ctx, {
         category: "layer-cache-miss",
         detail,
         step: entry.label,
         observedMs: missMs,
-        observation: `${entry.label}: ${misses.length} RUN layer(s) were rebuilt for ${formatMs(missMs)} although the build restores a cache (cache-from ${source}). ${cause}`,
-        recommendation: "Check that a default-branch run exports this cache scope, that the repository's Actions cache is not evicting it at the size limit, and compare layer cache hits across consecutive runs before restructuring the Dockerfile.",
+        observation: `${entry.label}: ${misses.length} RUN layer(s) were rebuilt for ${formatMs(missMs)} although the build is configured to restore a cache (cache-from ${source}). ${cause} The log alone does not establish the cause.`,
+        recommendation: "Compare consecutive runs with identical build inputs, including resolved base-image digests, build arguments and context contents, not just the same commit. Check successful cache publication, matching import/export scopes, branch visibility and eviction. If misses persist, investigate cache lookup and backend behavior before restructuring the Dockerfile or changing permissions.",
         evidence: [
           ...[...misses].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
           ...build.vertices.filter((vertex) => vertex.kind === "cache-import").map(describeVertex),
@@ -525,6 +525,14 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .map(([phase, share]) => `${phase} ${share}%`).join(", ")}`);
     const importShare = Math.max(0, ...step.tests.map((summary) => summary.phases.import ?? 0));
+    const spareJobs = ctx.timing.critical && ctx.job.needs.length === 0
+      ? ctx.shape.measured.filter(({ job }) => job.id !== ctx.job.id && job.needs.length === 0
+        && (ctx.shape.timing.get(job.id)?.slackMs ?? 0) >= MIN_TEST_RUNTIME_MS)
+        .sort((a, b) => (ctx.shape.timing.get(b.job.id)?.slackMs ?? 0) - (ctx.shape.timing.get(a.job.id)?.slackMs ?? 0))
+        .slice(0, MAX_LISTED)
+      : [];
+    const spareEvidence = spareJobs.map(({ job }) =>
+      `${clip(job.name, MAX_LABEL)}: ${formatMs(ctx.shape.timing.get(job.id)?.slackMs ?? 0)} of observed slack; workload compatibility is unverified`);
     findings.push(finding(ctx, {
       category: "test-runtime",
       detail: `s${entry.path}`,
@@ -532,11 +540,19 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
       observedMs: step.durationMs,
       observation: `${label} ran tests for ${formatMs(step.durationMs)} (${frameworks.join("; ")}).`,
       recommendation: [
-        "Split the suite across parallel jobs (for example vitest --shard=<i>/<n> or jest --shard=<i>/<n>); sharding trades extra runner time, including setup repeated per shard, for elapsed time.",
+        ...(ctx.timing.critical ? [
+          ...(spareJobs.length > 0 ? [
+            `Before adding runners, measure moving an independent test partition into an already-prepared compatible job with slack (${spareJobs.map(({ job }) => clip(job.name, MAX_LABEL)).join(", ")}). Verify matching runtime/dependencies, isolation, acyclic dependencies and identical coverage on every trigger, including drafts and failure paths; the observed slack does not prove compatibility or future capacity.`,
+          ] : []),
+          "If existing capacity cannot be reused, measure test sharding; include repeated setup and total runner work, not only the test job's duration.",
+          ...((ctx.timing.headroomMs ?? 0) === 0 ? ["Another job currently finishes at the same time; shortening this job alone has no elapsed-time bound, so evaluate both critical workloads together."] : []),
+        ] : [
+          "Do not add shards solely to shorten this off-critical job: that can increase runner work without reducing elapsed time. Profile slow tests and setup while preserving assertions and isolation.",
+        ]),
         ...(importShare >= 20 ? [`Imports take ${importShare}% of the test time, so trimming heavy imports from the module graph would cut work in every shard.`] : []),
         ...(!ctx.timing.critical ? ["This job is off the critical path, so it only shortens the run once the critical path is reduced."] : []),
       ].join(" "),
-      evidence: [...frameworks, ...phaseLines],
+      evidence: [...frameworks, ...phaseLines, ...spareEvidence],
       covers: [entry.top],
     }));
   }
