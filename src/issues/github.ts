@@ -6,6 +6,15 @@ import type { ExistingIssue, IssueAction } from "./plan.js";
 export const COPILOT_LOGIN = "copilot-swe-agent[bot]";
 export const COPILOT_READY_LABEL = "copilot:ready";
 
+const COPILOT_LOGINS = ["copilot", "copilot-swe-agent", COPILOT_LOGIN];
+
+const isReadyLabel = (label: unknown): boolean =>
+  label === COPILOT_READY_LABEL || (label !== null && typeof label === "object" && "name" in label && label.name === COPILOT_READY_LABEL);
+
+const includesCopilot = (assignees: unknown): boolean =>
+  Array.isArray(assignees) && assignees.some((actor: unknown) => actor !== null && typeof actor === "object" && "login" in actor &&
+    typeof actor.login === "string" && COPILOT_LOGINS.includes(actor.login.toLowerCase()));
+
 interface RawIssue {
   number: number;
   title: string;
@@ -15,6 +24,7 @@ interface RawIssue {
   closed_at?: string | null;
   pull_request?: unknown;
   labels?: Array<string | { name?: string }>;
+  assignees?: Array<{ login?: string } | null>;
 }
 
 export interface ManagedIssue extends ExistingIssue {
@@ -37,7 +47,8 @@ export async function listManagedIssues(client: GitHubClient, repo: RepoRef, kin
       closedAt: issue.closed_at ?? null,
       fingerprint: parsed.fingerprint,
       attributes: parsed.attributes,
-      ...(issue.labels ? { copilotPending: issue.labels.some((label) => (typeof label === "string" ? label : label.name) === COPILOT_READY_LABEL) } : {}),
+      ...(issue.labels ? { copilotPending: issue.labels.some(isReadyLabel) } : {}),
+      ...(issue.assignees ? { copilotAssigned: includesCopilot(issue.assignees) } : {}),
       ...(parsed.attributes.signature !== undefined ? { signature: parsed.attributes.signature } : {}),
     });
   }
@@ -47,9 +58,11 @@ export async function listManagedIssues(client: GitHubClient, repo: RepoRef, kin
 export type CopilotAssignmentResult = "assigned" | "labeled" | "failed";
 
 function hasCopilot(data: unknown): data is { assignees: unknown[]; state?: unknown } {
-  if (!data || typeof data !== "object" || !("assignees" in data) || !Array.isArray(data.assignees)) return false;
-  return data.assignees.some((actor: unknown) => actor !== null && typeof actor === "object" && "login" in actor &&
-    typeof actor.login === "string" && ["copilot", "copilot-swe-agent", COPILOT_LOGIN].includes(actor.login.toLowerCase()));
+  return data !== null && typeof data === "object" && "assignees" in data && includesCopilot(data.assignees);
+}
+
+function hasReadyLabel(data: unknown): boolean {
+  return data !== null && typeof data === "object" && "labels" in data && Array.isArray(data.labels) && data.labels.some(isReadyLabel);
 }
 
 async function clearPending(client: GitHubClient, repo: RepoRef, number: number): Promise<void> {
@@ -105,11 +118,14 @@ export async function assignCopilot(
       return "assigned";
     }
   }
-  await issueClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", {
-    ...repo,
-    issue_number: issueNumber,
-    labels: [COPILOT_READY_LABEL],
-  });
+  // Creation, a rewrite and an earlier unassignable run already put the queue label on the issue; adding it again changes nothing.
+  if (!hasReadyLabel(current.data)) {
+    await issueClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", {
+      ...repo,
+      issue_number: issueNumber,
+      labels: [COPILOT_READY_LABEL],
+    });
+  }
   return "labeled";
 }
 

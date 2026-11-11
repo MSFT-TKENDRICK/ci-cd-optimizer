@@ -2,7 +2,7 @@ import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { marker, parseMarker } from "../../src/issues/markers.js";
 import { describeScan, scanRepository } from "../../src/service/scan.js";
-import { repo } from "../experiments/fixtures.js";
+import { fakeClient, repo } from "../experiments/fixtures.js";
 import { callsTo, CLEAN, fakeApi, MISSING_TIMEOUT, TIMEOUT_ONLY, WORKFLOW, writes, type FakeApiState } from "./api.js";
 
 const enabled = `${TIMEOUT_ONLY}issues:\n  enabled: true\nfixes:\n  enabled: true\n`;
@@ -81,7 +81,7 @@ describe("scanRepository", () => {
     expect(writes(client)).toHaveLength(0);
   });
 
-  it("reports blocked agent handoff and retries unchanged pending findings", async () => {
+  it("reports blocked agent handoff without rewriting unchanged pending findings on every scan", async () => {
     const config = `${TIMEOUT_ONLY}issues:\n  enabled: true\n  assignCopilot: true\n`;
     const first = await scanRepository(fakeApi({ config, refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } } }), repo);
     expect(describeScan(first)).toContain("awaiting assignment");
@@ -90,10 +90,29 @@ describe("scanRepository", () => {
     const pending = { number: 13, state: "open", title: action.desired.title, body: action.desired.body, labels: ["cicd-optimizer", "copilot:ready"] };
     const client = fakeApi({ config, refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } }, issues: [pending] });
     const next = await scanRepository(client, repo);
+    expect(next.issues?.actions).toEqual([]);
+    expect(next.issues?.awaitingCopilot).toEqual([13]);
+    expect(writes(client)).toEqual([]);
+    expect(describeScan(next)).toContain("1 issue(s) awaiting assignment");
+    expect(describeScan(next)).toContain("COPILOT_ASSIGN_TOKEN");
+    expect(describeScan(next)).toContain("no changes");
+  });
+
+  it("still requests assignment of pending findings when an assignment token is configured", async () => {
+    const config = `${TIMEOUT_ONLY}issues:\n  enabled: true\n  assignCopilot: true\n`;
+    const first = await scanRepository(fakeApi({ config, refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } } }), repo);
+    const action = first.issues?.actions[0];
+    if (action?.type !== "create") throw new Error("Expected finding creation");
+    const pending = { number: 13, state: "open", title: action.desired.title, body: action.desired.body, labels: ["cicd-optimizer", "copilot:ready"] };
+    const client = fakeApi({ config, refs: { main: { [WORKFLOW]: MISSING_TIMEOUT } }, issues: [pending] });
+    const user = fakeClient(() => ({ assignees: [{ login: "Copilot" }] }));
+    const next = await scanRepository(client, repo, { copilotClient: user });
     expect(next.issues?.actions).toMatchObject([{ type: "assign", number: 13 }]);
+    expect(next.issues?.awaitingCopilot).toBeUndefined();
+    expect(next.issues?.applied).toMatchObject([{ copilot: "assigned" }]);
     expect(callsTo(client, "PATCH /repos/{owner}/{repo}/issues/{issue_number}")).toEqual([]);
     expect(callsTo(client, "POST /repos/{owner}/{repo}/issues")).toEqual([]);
-    expect(describeScan(next)).toContain("COPILOT_ASSIGN_TOKEN");
+    expect(describeScan(next)).not.toContain("COPILOT_ASSIGN_TOKEN");
   });
 
   it("reports metadata repair in dry-run mode without performing it", async () => {

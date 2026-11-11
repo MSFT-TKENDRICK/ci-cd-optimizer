@@ -70281,12 +70281,13 @@ function ownedBranch(ref, group, baseRef, discovery) {
   if (!ref || !slug || ref === baseRef) return void 0;
   return ref === slug || ref.endsWith(`/${slug}`) || discovery !== void 0 && ref === branchFor(group, discovery) ? ref : void 0;
 }
+var DISCOVERY_CONCURRENCY = 8;
 async function listManagedPullRequests(client, repo, discovery) {
   const raw = await paginate(client, "GET /repos/{owner}/{repo}/issues", { ...repo, state: "all", labels: "cicd-optimizer" });
   const details = /* @__PURE__ */ new Map();
   if (discovery) {
     const known2 = new Set(raw.map((issue2) => issue2.number));
-    for (const group of new Set(discovery.groups)) {
+    const lookups = await mapLimit([...new Set(discovery.groups)], DISCOVERY_CONCURRENCY, async (group) => {
       const branch = branchFor(group, discovery);
       const pulls = await paginate(client, "GET /repos/{owner}/{repo}/pulls", {
         ...repo,
@@ -70296,6 +70297,9 @@ async function listManagedPullRequests(client, repo, discovery) {
         sort: "created",
         direction: "desc"
       });
+      return { group, branch, pulls };
+    });
+    for (const { group, branch, pulls } of lookups) {
       if (pulls.length === 1e3) throw new Error(`Fix PR discovery reached its 1000-result limit for ${branch}; refusing an incomplete reconciliation.`);
       for (const pull of pulls) {
         if (known2.has(pull.number)) {
@@ -70611,6 +70615,9 @@ async function applyFixActions(client, repo, actions, options) {
 // src/issues/github.ts
 var COPILOT_LOGIN = "copilot-swe-agent[bot]";
 var COPILOT_READY_LABEL = "copilot:ready";
+var COPILOT_LOGINS = ["copilot", "copilot-swe-agent", COPILOT_LOGIN];
+var isReadyLabel = (label2) => label2 === COPILOT_READY_LABEL || label2 !== null && typeof label2 === "object" && "name" in label2 && label2.name === COPILOT_READY_LABEL;
+var includesCopilot = (assignees) => Array.isArray(assignees) && assignees.some((actor) => actor !== null && typeof actor === "object" && "login" in actor && typeof actor.login === "string" && COPILOT_LOGINS.includes(actor.login.toLowerCase()));
 async function listManagedIssues(client, repo, kind) {
   const raw = await paginate(client, "GET /repos/{owner}/{repo}/issues", { ...repo, state: "all", labels: "cicd-optimizer" });
   const result = [];
@@ -70626,15 +70633,18 @@ async function listManagedIssues(client, repo, kind) {
       closedAt: issue2.closed_at ?? null,
       fingerprint: parsed.fingerprint,
       attributes: parsed.attributes,
-      ...issue2.labels ? { copilotPending: issue2.labels.some((label2) => (typeof label2 === "string" ? label2 : label2.name) === COPILOT_READY_LABEL) } : {},
+      ...issue2.labels ? { copilotPending: issue2.labels.some(isReadyLabel) } : {},
+      ...issue2.assignees ? { copilotAssigned: includesCopilot(issue2.assignees) } : {},
       ...parsed.attributes.signature !== void 0 ? { signature: parsed.attributes.signature } : {}
     });
   }
   return result;
 }
 function hasCopilot(data) {
-  if (!data || typeof data !== "object" || !("assignees" in data) || !Array.isArray(data.assignees)) return false;
-  return data.assignees.some((actor) => actor !== null && typeof actor === "object" && "login" in actor && typeof actor.login === "string" && ["copilot", "copilot-swe-agent", COPILOT_LOGIN].includes(actor.login.toLowerCase()));
+  return data !== null && typeof data === "object" && "assignees" in data && includesCopilot(data.assignees);
+}
+function hasReadyLabel(data) {
+  return data !== null && typeof data === "object" && "labels" in data && Array.isArray(data.labels) && data.labels.some(isReadyLabel);
 }
 async function clearPending(client, repo, number4) {
   try {
@@ -70677,11 +70687,13 @@ async function assignCopilot(issueClient, userClient, repo, issueNumber, assignm
       return "assigned";
     }
   }
-  await issueClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", {
-    ...repo,
-    issue_number: issueNumber,
-    labels: [COPILOT_READY_LABEL]
-  });
+  if (!hasReadyLabel(current.data)) {
+    await issueClient.request("POST /repos/{owner}/{repo}/issues/{issue_number}/labels", {
+      ...repo,
+      issue_number: issueNumber,
+      labels: [COPILOT_READY_LABEL]
+    });
+  }
   return "labeled";
 }
 async function applyIssueActions(client, repo, actions, options = {}) {
@@ -70753,9 +70765,15 @@ async function applyIssueActions(client, repo, actions, options = {}) {
 }
 
 // src/issues/plan.ts
+function planQueuedHandoff(current, desired, assignable, actions, awaiting) {
+  if (!desired.assignCopilot || !current.copilotPending) return;
+  if (assignable === false && current.copilotAssigned !== true) awaiting.push(current.number);
+  else actions.push({ type: "assign", number: current.number, desired });
+}
 function planIssueSync(existing, desired, options) {
   const actions = [];
   const skipped = [];
+  const awaiting = [];
   const byFingerprint = /* @__PURE__ */ new Map();
   for (const issue2 of [...existing].sort((a, b) => b.number - a.number)) {
     byFingerprint.set(issue2.fingerprint, [...byFingerprint.get(issue2.fingerprint) ?? [], issue2]);
@@ -70781,8 +70799,8 @@ function planIssueSync(existing, desired, options) {
     if (current) {
       if (current.signature !== issue2.signature || current.title !== issue2.title) {
         actions.push({ type: "update", number: current.number, desired: issue2, ...current.copilotPending ? { retryCopilot: true } : {} });
-      } else if (issue2.assignCopilot && current.copilotPending) {
-        actions.push({ type: "assign", number: current.number, desired: issue2 });
+      } else {
+        planQueuedHandoff(current, issue2, options.copilotAssignable, actions, awaiting);
       }
       continue;
     }
@@ -70802,7 +70820,7 @@ function planIssueSync(existing, desired, options) {
     actions.push(latest2 ? { type: "reopen", number: latest2.number, desired: issue2 } : { type: "create", desired: issue2 });
     open3 += 1;
   }
-  return { actions, skipped };
+  return { actions, skipped, ...awaiting.length > 0 ? { awaitingCopilot: awaiting } : {} };
 }
 
 // src/lint/engine.ts
@@ -71626,7 +71644,11 @@ async function scanRepository(client, repo, options = {}) {
   if (onDefaultBranch && options.issues !== false && config2.issues.enabled) {
     const existing = await listManagedIssues(client, repo, "finding");
     const desired = desiredIssues(result.diagnostics, config2.issues, { owner: repo.owner, repo: repo.repo, sha: snapshot.sha, rules: allRules });
-    const plan = planIssueSync(existing, desired, { maxOpen: config2.issues.maxOpen, closeResolved: config2.issues.closeResolved && input3.inventoryComplete });
+    const plan = planIssueSync(existing, desired, {
+      maxOpen: config2.issues.maxOpen,
+      closeResolved: config2.issues.closeResolved && input3.inventoryComplete,
+      copilotAssignable: Boolean(options.copilotClient)
+    });
     const applied = options.dryRun ? [] : await applyIssueActions(client, repo, plan.actions, { ...options.copilotClient ? { copilotClient: options.copilotClient } : {}, copilot: config2.issues.copilot });
     scan2.issues = { ...plan, applied };
   }
@@ -71668,7 +71690,7 @@ function describeScan(scan2) {
   if (scan2.sarif) parts.push(`SARIF ${scan2.sarif.status}`);
   if (scan2.knowledge) parts.push(`knowledge: ${scan2.knowledge.snapshot.projects.length} projects, ${scan2.knowledge.snapshot.technologies.length} declarations (${scan2.knowledge.persistence})`);
   if (scan2.issues) parts.push(`issues: ${tally(scan2.issues.actions)}${scan2.issues.skipped.length ? `, ${scan2.issues.skipped.length} skipped` : ""}`);
-  const awaitingAgent = scan2.issues?.applied.filter((item) => item.copilot === "labeled").length ?? 0;
+  const awaitingAgent = (scan2.issues?.applied.filter((item) => item.copilot === "labeled").length ?? 0) + (scan2.issues?.awaitingCopilot?.length ?? 0);
   if (awaitingAgent) parts.push(`Copilot: ${awaitingAgent} issue(s) awaiting assignment; configure a licensed user's COPILOT_ASSIGN_TOKEN (copilot:ready is not a running agent)`);
   if (scan2.fixes) parts.push(`fix PRs: ${tally(scan2.fixes.actions)}${scan2.fixes.skipped.length ? `, ${scan2.fixes.skipped.length} skipped` : ""}`);
   if (scan2.inventoryComplete === false) parts.push(`inventory truncated (${scan2.truncated?.length ?? 0} file(s))`);
@@ -72237,7 +72259,9 @@ ${rendered.body}`,
     return plan;
   }
   if (open3.signature === signature) {
-    if (desired.assignCopilot && open3.copilotPending) actions.push({ type: "assign", number: open3.number, desired });
+    const awaiting = [];
+    planQueuedHandoff(open3, desired, input3.copilotAssignable, actions, awaiting);
+    if (awaiting.length > 0) plan.awaitingCopilot = awaiting;
     return plan;
   }
   const changed = open3.attributes.shape !== shape;
@@ -72392,6 +72416,29 @@ function finishStep(step, endMs) {
   step.endMs = Math.max(step.startMs, endMs);
   step.durationMs = step.endMs - step.startMs;
   if (step.kind === "action") step.uses = clip(step.title.replace(/^Run /, ""));
+}
+function firstAtLeast(sorted, target) {
+  let low = 0;
+  let high = sorted.length;
+  while (low < high) {
+    const middle = low + high >>> 1;
+    if (sorted[middle] < target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+function annotateSilence(steps2, lines) {
+  const stamps = lines.map((line2) => line2.ms).sort((a, b) => a - b);
+  for (const step of steps2) {
+    const inside = stamps.slice(firstAtLeast(stamps, step.startMs), firstAtLeast(stamps, step.endMs + 1));
+    let previous = step.startMs;
+    let silence;
+    for (const ms of [...inside, step.endMs]) {
+      if (ms - previous > (silence?.durationMs ?? 0)) silence = { startMs: previous, endMs: ms, durationMs: ms - previous };
+      previous = ms;
+    }
+    if (silence) step.silence = silence;
+  }
 }
 function testLine(step, text4, pending) {
   let match;
@@ -72726,6 +72773,7 @@ ${line2.trim()}`);
   evidence2.steps.forEach(prune);
   if (top) finishStep(top, endMs);
   for (const action of actions) if (action.step) finishStep(action.step, endMs);
+  annotateSilence(evidence2.steps, lines);
   const firstStep = evidence2.steps[0];
   if (evidence2.firstMs !== void 0) evidence2.setup.durationMs = (firstStep?.startMs ?? endMs) - evidence2.firstMs;
   if (evidence2.post.startMs !== void 0 && evidence2.lastMs !== void 0) evidence2.post.durationMs = evidence2.lastMs - evidence2.post.startMs;
@@ -72912,6 +72960,13 @@ function unionMs(intervals, clamp) {
     }
   }
   return current ? total + current[1] - current[0] : total;
+}
+function unexplainedSilenceMs(step, recognized) {
+  const { silence } = step;
+  return silence ? Math.max(0, silence.durationMs - unionMs(recognized, [silence.startMs, silence.endMs])) : 0;
+}
+function silenceNote(ms) {
+  return ` ${formatMs(ms)} of that time had no log output at all, so the log cannot show where it went. Print ::group::/::endgroup:: phase markers or per-phase timing lines from the step so a later run can show it; this is an observability gap, not evidence of removable cost.`;
 }
 function describeVertex(vertex) {
   const operations = vertex.operations.length > 0 ? ` (${vertex.operations.map((operation2) => `${operation2.name} ${formatMs(operation2.durationMs)}`).join(", ")})` : "";
@@ -73405,15 +73460,17 @@ function attributeRun(snapshot, logs = /* @__PURE__ */ new Map()) {
     if (evidence2 && timing.critical) {
       for (const entry2 of located) {
         if (entry2.step !== entry2.top || covered3.has(entry2.step) || entry2.step.durationMs < threshold) continue;
-        const recognized = unionMs(located.filter((other) => other.top === entry2.top && covered3.has(other.step)).map(({ step }) => [step.startMs, step.endMs]), [entry2.step.startMs, entry2.step.endMs]);
+        const recognizedSpans = located.filter((other) => other.top === entry2.top && covered3.has(other.step)).map(({ step }) => [step.startMs, step.endMs]);
+        const recognized = unionMs(recognizedSpans, [entry2.step.startMs, entry2.step.endMs]);
         const unknown3 = Math.max(0, entry2.step.durationMs - recognized);
         if (unknown3 < threshold) continue;
+        const quiet = unexplainedSilenceMs(entry2.step, recognizedSpans);
         gaps.push({
           kind: "unexplained-time",
           jobKey: job.key,
           jobName: job.name,
           ms: Math.round(unknown3),
-          detail: recognized > 0 ? `${formatMs(unknown3)} of ${entry2.label} (${formatMs(entry2.step.durationMs)} total) on the critical path is not explained by recognised bottleneck patterns.` : `${entry2.label} took ${formatMs(entry2.step.durationMs)} on the critical path and no recognised bottleneck pattern explains it.`
+          detail: (recognized > 0 ? `${formatMs(unknown3)} of ${entry2.label} (${formatMs(entry2.step.durationMs)} total) on the critical path is not explained by recognised bottleneck patterns.` : `${entry2.label} took ${formatMs(entry2.step.durationMs)} on the critical path and no recognised bottleneck pattern explains it.`) + (quiet >= threshold ? silenceNote(quiet) : "")
         });
       }
     }
@@ -74728,7 +74785,8 @@ async function processWorkflowRun(client, repo, run2, options = {}) {
       series,
       existing,
       config: config2.alerts,
-      now: options.now ?? /* @__PURE__ */ new Date()
+      now: options.now ?? /* @__PURE__ */ new Date(),
+      copilotAssignable: Boolean(options.copilotClient)
     });
     const applied = options.dryRun ? [] : await applyIssueActions(client, repo, plan.actions, { ...options.copilotClient ? { copilotClient: options.copilotClient } : {}, copilot: config2.issues.copilot });
     result.alerts = { detected: plan.alerts, actions: plan.actions, skipped: plan.skipped, applied };

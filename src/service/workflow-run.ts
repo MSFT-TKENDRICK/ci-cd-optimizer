@@ -164,6 +164,7 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
       existing,
       config: config.alerts,
       now: options.now ?? new Date(),
+      copilotAssignable: Boolean(options.copilotClient),
     });
     const applied = options.dryRun
       ? []

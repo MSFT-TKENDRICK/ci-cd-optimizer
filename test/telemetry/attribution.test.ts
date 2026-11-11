@@ -750,6 +750,63 @@ describe("attributeRun release toolchain installs", () => {
   });
 });
 
+describe("attributeRun silent steps", () => {
+  const ORIGINAL = "Run ./ took 17.0 s on the critical path and no recognised bottleneck pattern explains it.";
+  const seconds = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, index) => `00:${String(from + index).padStart(2, "0")}`);
+  const stepLog = (output: readonly string[], end: string) => [
+    `${at("00:00")} ##[group]Run ./`,
+    `${at("00:00")} with:`,
+    `${at("00:00")}   command: scan`,
+    `${at("00:00")} ##[endgroup]`,
+    ...output.map((time) => `${at(time)} scan output`),
+    `${at(end)} Post job cleanup.`,
+  ].join("\n");
+  const attribute = (log: string, end = "00:24") =>
+    attributeRun(snapshot([job(1, "unit", "00:00", end)]), new Map([[1, parseJobLog(log)]]));
+
+  it("asks for instrumentation when a critical-path step wrote nothing for most of its runtime", () => {
+    const { gaps } = attribute(stepLog(["00:17"], "00:17"));
+    expect(gaps).toHaveLength(1);
+    const detail = gaps[0]!.detail;
+    expect(gaps[0]).toMatchObject({ kind: "unexplained-time", jobKey: "unit", ms: 17_000 });
+    expect(detail.startsWith(ORIGINAL)).toBe(true);
+    expect(detail).toContain("17.0 s of that time had no log output at all");
+    expect(detail).toContain("::group::");
+    expect(detail).toContain("not evidence of removable cost");
+    expect(detail.length).toBeLessThan(400);
+  });
+
+  it("keeps the original message for a step that logs steadily", () => {
+    expect(attribute(stepLog(seconds(1, 17), "00:17")).gaps.map((gap) => gap.detail)).toEqual([ORIGINAL]);
+  });
+
+  it("does not blame missing instrumentation for quiet time that a recognised install covers", () => {
+    const log = [
+      `${at("00:00")} ##[group]Run ./.github/actions/setup`,
+      `${at("00:00")} ##[endgroup]`,
+      `${at("00:00")} ##[start-action display=Run actions/setup-node@v7;id=setup]`,
+      `${at("00:00")} ##[group]Run actions/setup-node@v7`,
+      `${at("00:00")} ##[endgroup]`,
+      `${at("00:03")} Cache restored from key: node-cache-Linux-x64-npm-example`,
+      `${at("00:04")} ##[end-action id=setup;outcome=success;conclusion=success;duration_ms=4000]`,
+      `${at("00:04")} ##[start-action display=Run npm ci;id=install]`,
+      `${at("00:04")} ##[group]Run npm ci`,
+      `${at("00:04")} npm ci`,
+      `${at("00:04")} shell: /usr/bin/bash -e {0}`,
+      `${at("00:04")} ##[endgroup]`,
+      `${at("00:34")} added 250 packages in 30s`,
+      `${at("00:34")} ##[end-action id=install;outcome=success;conclusion=success;duration_ms=30000]`,
+      ...seconds(35, 46).map((time) => `${at(time)} tick`),
+      `${at("00:46")} Post job cleanup.`,
+    ].join("\n");
+    const result = attribute(log, "00:46");
+    expect(one(result, "package-cache", "unit").observedMs).toBe(30_000);
+    expect(result.gaps.map((gap) => gap.detail)).toEqual([
+      "12.0 s of Run ./.github/actions/setup (46.0 s total) on the critical path is not explained by recognised bottleneck patterns.",
+    ]);
+  });
+});
+
 describe("formatMs", () => {
   it("formats seconds and minutes", () => {
     expect(formatMs(22_500)).toBe("22.5 s");

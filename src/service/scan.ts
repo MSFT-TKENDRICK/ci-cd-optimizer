@@ -48,7 +48,7 @@ export interface ScanResult {
   truncated?: string[];
   knowledge?: { snapshot: KnowledgeSnapshot; persistence: "saved" | "not-requested" | "dry-run" };
   sarif?: SarifUploadResult | { status: "skipped" };
-  issues?: { actions: IssueAction[]; skipped: SkippedIssue[]; applied: AppliedIssueAction[] };
+  issues?: { actions: IssueAction[]; skipped: SkippedIssue[]; applied: AppliedIssueAction[]; awaitingCopilot?: number[] };
   fixes?: { actions: FixAction[]; skipped: SkippedFix[]; applied: AppliedFixAction[] };
 }
 
@@ -57,7 +57,8 @@ const isRecipeGroup = (group: string) => group.startsWith("recipe-");
 /**
  * The repository scan, Dependabot/code-scanning style: lints the default branch, uploads SARIF to code scanning,
  * reconciles finding issues (for triage and coding-agent assignment), and reconciles autofix pull requests.
- * Idempotent: re-running with unchanged findings makes no writes.
+ * Idempotent: re-running with unchanged findings makes no writes. Issues still queued for the coding agent are only
+ * re-requested when a user token can assign them; without one they are reported as awaiting, not rewritten per scan.
  */
 export async function scanRepository(client: GitHubClient, repo: RepoRef, options: ScanOptions = {}): Promise<ScanResult> {
   const name = `${repo.owner}/${repo.repo}`;
@@ -105,7 +106,11 @@ export async function scanRepository(client: GitHubClient, repo: RepoRef, option
     const existing = await listManagedIssues(client, repo, "finding");
     const desired = desiredIssues(result.diagnostics, config.issues, { owner: repo.owner, repo: repo.repo, sha: snapshot.sha, rules: allRules });
     // Absence-check rules are skipped on a truncated inventory, so their issues must not be closed as resolved.
-    const plan = planIssueSync(existing, desired, { maxOpen: config.issues.maxOpen, closeResolved: config.issues.closeResolved && input.inventoryComplete });
+    const plan = planIssueSync(existing, desired, {
+      maxOpen: config.issues.maxOpen,
+      closeResolved: config.issues.closeResolved && input.inventoryComplete,
+      copilotAssignable: Boolean(options.copilotClient),
+    });
     const applied = options.dryRun
       ? []
       : await applyIssueActions(client, repo, plan.actions, { ...(options.copilotClient ? { copilotClient: options.copilotClient } : {}), copilot: config.issues.copilot });
@@ -155,7 +160,7 @@ export function describeScan(scan: ScanResult): string {
   if (scan.sarif) parts.push(`SARIF ${scan.sarif.status}`);
   if (scan.knowledge) parts.push(`knowledge: ${scan.knowledge.snapshot.projects.length} projects, ${scan.knowledge.snapshot.technologies.length} declarations (${scan.knowledge.persistence})`);
   if (scan.issues) parts.push(`issues: ${tally(scan.issues.actions)}${scan.issues.skipped.length ? `, ${scan.issues.skipped.length} skipped` : ""}`);
-  const awaitingAgent = scan.issues?.applied.filter((item) => item.copilot === "labeled").length ?? 0;
+  const awaitingAgent = (scan.issues?.applied.filter((item) => item.copilot === "labeled").length ?? 0) + (scan.issues?.awaitingCopilot?.length ?? 0);
   if (awaitingAgent) parts.push(`Copilot: ${awaitingAgent} issue(s) awaiting assignment; configure a licensed user's COPILOT_ASSIGN_TOKEN (copilot:ready is not a running agent)`);
   if (scan.fixes) parts.push(`fix PRs: ${tally(scan.fixes.actions)}${scan.fixes.skipped.length ? `, ${scan.fixes.skipped.length} skipped` : ""}`);
   if (scan.inventoryComplete === false) parts.push(`inventory truncated (${scan.truncated?.length ?? 0} file(s))`);

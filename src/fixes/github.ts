@@ -3,6 +3,7 @@ import type { AnyRule } from "../lint/types.js";
 import { ensureLabels, httpStatus, paginate, type GitHubClient, type RepoRef } from "../github/client.js";
 import { branchSha, commitFiles, deleteBranch, pushBranch, updateBranch } from "../github/git.js";
 import { parseMarker, updateMarker, type Marker } from "../issues/markers.js";
+import { mapLimit } from "../utils.js";
 import { COMMAND_HELP, type FixCommand } from "./commands.js";
 import { branchFor, type BranchCleanup, type CleanupStatus, type Dismissals, type ExistingFixPullRequest, type FixAction, type FixChange, type PendingFixUpdate } from "./plan.js";
 import { commitMessage, fixBody, fixTitle } from "./render.js";
@@ -108,17 +109,29 @@ function ownedBranch(ref: string | undefined, group: string, baseRef: string | u
   return ref === slug || ref.endsWith(`/${slug}`) || (discovery !== undefined && ref === branchFor(group, discovery)) ? ref : undefined;
 }
 
+/**
+ * Discovery only reads, so its per-group lookups share a bounded pool instead of costing one serial round trip per group.
+ * Eight in flight matches the repository blob fan-out and stays far below GitHub's 100-concurrent-request secondary limit.
+ * GitHub's guidance still prefers serial requests, so writes stay serial, a failed lookup stops the queued ones and the
+ * scan fails closed (nothing retries).
+ */
+const DISCOVERY_CONCURRENCY = 8;
+
 /** Labels retain historical PRs; deterministic head/base lookups recover PRs whose initial labeling failed. */
 export async function listManagedPullRequests(client: GitHubClient, repo: RepoRef, discovery?: FixDiscovery): Promise<ManagedPullRequest[]> {
   const raw = await paginate<RawIssue>(client, "GET /repos/{owner}/{repo}/issues", { ...repo, state: "all", labels: "cicd-optimizer" });
   const details = new Map<number, RawPull>();
   if (discovery) {
     const known = new Set(raw.map((issue) => issue.number));
-    for (const group of new Set(discovery.groups)) {
+    const lookups = await mapLimit([...new Set(discovery.groups)], DISCOVERY_CONCURRENCY, async (group) => {
       const branch = branchFor(group, discovery);
       const pulls = await paginate<RawPull>(client, "GET /repos/{owner}/{repo}/pulls", {
         ...repo, state: "all", head: `${repo.owner}:${branch}`, base: discovery.baseBranch, sort: "created", direction: "desc",
       });
+      return { group, branch, pulls };
+    });
+    // Results keep group order, so adoption is identical to the serial walk this replaces.
+    for (const { group, branch, pulls } of lookups) {
       if (pulls.length === 1000) throw new Error(`Fix PR discovery reached its 1000-result limit for ${branch}; refusing an incomplete reconciliation.`);
       for (const pull of pulls) {
         if (known.has(pull.number)) {

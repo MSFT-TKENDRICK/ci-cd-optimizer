@@ -185,6 +185,10 @@ prove that no network access occurred. Nested measured intervals explain only th
 unclassified time elsewhere in a composite remains a coverage gap. These bounds overlap repeated-setup
 findings and must not be added together.
 
+When a critical-path step's unexplained time includes a long stretch with no log output, the coverage gap says the log
+cannot show where that time went and asks for phase markers. It is an observability gap, not a bottleneck or removable
+cost; a step that printed progress, or whose quiet time a recognized pattern already explains, keeps its original wording.
+
 ## Per-run feedback and harness startup
 
 The trusted default-branch telemetry workflow benchmarks every independently triggered workflow except itself,

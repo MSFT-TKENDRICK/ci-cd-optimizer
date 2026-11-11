@@ -58,6 +58,20 @@ describe("listManagedIssues", () => {
     expect(alerts.map((issue) => [issue.number, issue.stateReason, issue.closedAt])).toEqual([[2, "not_planned", "2026-01-01T00:00:00Z"]]);
     expect(client.calls[0]?.parameters).toMatchObject({ state: "all", labels: "cicd-optimizer", per_page: 100, page: 1 });
   });
+
+  it("reports the queued handoff and a Copilot assignee only when the listing includes them", async () => {
+    const client = fakeClient(() => [
+      { number: 1, title: "a", state: "open", body: marker("finding", "rule:a"), labels: [{ name: "copilot:ready" }], assignees: [{ login: "copilot-swe-agent[bot]" }] },
+      { number: 2, title: "b", state: "open", body: marker("finding", "rule:b"), labels: ["cicd-optimizer"], assignees: [{ login: "octocat" }] },
+      { number: 3, title: "c", state: "open", body: marker("finding", "rule:c"), labels: [{ name: "cicd-optimizer" }], assignees: [] },
+    ]);
+    const issues = await listManagedIssues(client, repo, "finding");
+    expect(issues.map((issue) => [issue.number, issue.copilotPending, issue.copilotAssigned])).toEqual([
+      [1, true, true],
+      [2, false, false],
+      [3, false, false],
+    ]);
+  });
 });
 
 describe("ensureLabels", () => {
@@ -108,6 +122,29 @@ describe("assignCopilot", () => {
     expect(issueClient.calls.filter((call) => call.route.startsWith("POST")).map((call) => [call.route, call.parameters.issue_number, call.parameters.labels])).toEqual([
       ["POST /repos/{owner}/{repo}/issues/{issue_number}/labels", 5, ["copilot:ready"]],
       ["POST /repos/{owner}/{repo}/issues/{issue_number}/labels", 6, ["copilot:ready"]],
+    ]);
+  });
+
+  it("does not repeat the queue label an issue already carries", async () => {
+    for (const labels of [[{ name: "copilot:ready" }], ["cicd-optimizer", "copilot:ready"]]) {
+      const client = fakeClient(() => ({ labels }));
+      expect(await assignCopilot(client, undefined, repo, 5, {})).toBe("labeled");
+      expect(client.calls.map((call) => call.route)).toEqual(["GET /repos/{owner}/{repo}/issues/{issue_number}"]);
+    }
+    const queued = fakeClient(() => ({ labels: [{ name: "copilot:ready" }] }));
+    const refusing = fakeClient(() => {
+      throw httpError(403);
+    });
+    expect(await assignCopilot(queued, refusing, repo, 6, {})).toBe("labeled");
+    expect(queued.calls.map((call) => call.route)).toEqual(["GET /repos/{owner}/{repo}/issues/{issue_number}"]);
+  });
+
+  it("still queues an issue that carries other labels but not copilot:ready", async () => {
+    const client = fakeClient(() => ({ labels: [{ name: "cicd-optimizer" }, "severity:error"] }));
+    expect(await assignCopilot(client, undefined, repo, 5, {})).toBe("labeled");
+    expect(client.calls.map((call) => call.route)).toEqual([
+      "GET /repos/{owner}/{repo}/issues/{issue_number}",
+      "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
     ]);
   });
 
@@ -173,6 +210,23 @@ describe("applyIssueActions", () => {
     expect(client.calls.find((call) => call.route === "POST /repos/{owner}/{repo}/issues")?.parameters.assignees).toEqual(["octocat"]);
     const createdLabels = client.calls.filter((call) => call.route === "POST /repos/{owner}/{repo}/labels").map((call) => call.parameters.name);
     expect(createdLabels).toEqual(["cicd-optimizer", "severity:error", "copilot:ready"]);
+  });
+
+  it("does not repeat the queue label that creation or the rewrite already carried", async () => {
+    const present = ["cicd-optimizer", "severity:error", "copilot:ready"].map((name) => ({ name }));
+    let next = 100;
+    const client = fakeClient((route) => {
+      if (route === "GET /repos/{owner}/{repo}/labels") return present;
+      if (route === "GET /repos/{owner}/{repo}/issues/{issue_number}") return { labels: present };
+      if (route === "POST /repos/{owner}/{repo}/issues") return { number: next++ };
+      return {};
+    });
+    const applied = await applyIssueActions(client, repo, [
+      { type: "create", desired: desired({ assignCopilot: true }) },
+      { type: "update", number: 7, desired: desired({ assignCopilot: true }), retryCopilot: true },
+    ]);
+    expect(applied.map((entry) => [entry.number, entry.copilot])).toEqual([[100, "labeled"], [7, "labeled"]]);
+    expect(client.calls.filter((call) => call.route.startsWith("POST") && call.route.endsWith("/labels"))).toEqual([]);
   });
 
   it("reconciles an unchanged pending issue without rewriting its body", async () => {

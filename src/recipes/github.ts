@@ -131,6 +131,7 @@ export async function applyRecipe(client: GitHubClient, target: RepoRef, recipe:
     maxOpen: 1,
     closeResolved: true,
     resolvedComment: "This recipe no longer applies here (it was applied, the findings are gone, or the repository opted out).",
+    copilotAssignable: Boolean(options.copilotClient),
   });
   const appliedIssues = await applyIssueActions(client, target, issuePlan.actions, {
     ...(options.copilotClient ? { copilotClient: options.copilotClient } : {}),
@@ -142,7 +143,11 @@ export async function applyRecipe(client: GitHubClient, target: RepoRef, recipe:
     if (issue.copilot) result.copilot = issue.copilot;
   } else if (wantsIssue) {
     const open = existingIssues.find((candidate) => candidate.state === "open");
-    if (open) result.issue = open.number;
+    if (open) {
+      result.issue = open.number;
+      // A queued handoff no token can assign is left untouched, but its status is unchanged.
+      if (issuePlan.awaitingCopilot?.includes(open.number)) result.copilot = "labeled";
+    }
   }
   result.attempted = result.pullRequest !== undefined || result.issue !== undefined;
   if (knowledge) result.knowledge = {

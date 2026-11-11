@@ -19,7 +19,10 @@ export interface ExistingIssue {
   stateReason?: string | null;
   closedAt?: string | null;
   title: string;
+  /** Queued for the coding agent with the `copilot:ready` label. */
   copilotPending?: boolean;
+  /** The coding agent is already an assignee. Only known when the listing included assignees. */
+  copilotAssigned?: boolean;
 }
 
 export type IssueAction =
@@ -38,17 +41,38 @@ export interface SkippedIssue {
 export interface IssueSyncPlan {
   actions: IssueAction[];
   skipped: SkippedIssue[];
+  /** Unchanged issues still queued for the coding agent that were left untouched because no token can assign them. */
+  awaitingCopilot?: number[];
 }
 
 export interface IssueSyncOptions {
   maxOpen: number;
   closeResolved: boolean;
   resolvedComment?: string;
+  /** False when no user token is available to start the coding agent. Defaults to true. */
+  copilotAssignable?: boolean;
+}
+
+/**
+ * Plans the handoff of an unchanged open issue that is queued for the coding agent. Without a token that can assign
+ * it, a request only repeats the writes that queued it on every run, so the issue is reported as awaiting instead.
+ * An agent that was assigned out of band still gets one request, which clears the stale queue label.
+ */
+export function planQueuedHandoff(
+  current: ExistingIssue,
+  desired: DesiredIssue,
+  assignable: boolean | undefined,
+  actions: IssueAction[],
+  awaiting: number[],
+): void {
+  if (!desired.assignCopilot || !current.copilotPending) return;
+  if (assignable === false && current.copilotAssigned !== true) awaiting.push(current.number);
+  else actions.push({ type: "assign", number: current.number, desired });
 }
 
 /**
  * Pure reconciliation of managed issues against the current findings (Dependabot-alert semantics):
- * - open + still present: update only when the signature changed;
+ * - open + still present: update only when the signature changed; a queued handoff is only re-requested when a token can assign it;
  * - closed as "not planned": treated as a dismissal and never reopened automatically;
  * - closed as completed but the finding is back: reopened;
  * - open but no longer present: closed as resolved;
@@ -57,6 +81,7 @@ export interface IssueSyncOptions {
 export function planIssueSync(existing: readonly ExistingIssue[], desired: readonly DesiredIssue[], options: IssueSyncOptions): IssueSyncPlan {
   const actions: IssueAction[] = [];
   const skipped: SkippedIssue[] = [];
+  const awaiting: number[] = [];
   const byFingerprint = new Map<string, ExistingIssue[]>();
   for (const issue of [...existing].sort((a, b) => b.number - a.number)) {
     byFingerprint.set(issue.fingerprint, [...(byFingerprint.get(issue.fingerprint) ?? []), issue]);
@@ -84,8 +109,8 @@ export function planIssueSync(existing: readonly ExistingIssue[], desired: reado
     if (current) {
       if (current.signature !== issue.signature || current.title !== issue.title) {
         actions.push({ type: "update", number: current.number, desired: issue, ...(current.copilotPending ? { retryCopilot: true } : {}) });
-      } else if (issue.assignCopilot && current.copilotPending) {
-        actions.push({ type: "assign", number: current.number, desired: issue });
+      } else {
+        planQueuedHandoff(current, issue, options.copilotAssignable, actions, awaiting);
       }
       continue;
     }
@@ -106,5 +131,5 @@ export function planIssueSync(existing: readonly ExistingIssue[], desired: reado
     actions.push(latest ? { type: "reopen", number: latest.number, desired: issue } : { type: "create", desired: issue });
     open += 1;
   }
-  return { actions, skipped };
+  return { actions, skipped, ...(awaiting.length > 0 ? { awaitingCopilot: awaiting } : {}) };
 }
