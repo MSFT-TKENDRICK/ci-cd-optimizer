@@ -64,6 +64,12 @@ export interface BuildInvocation {
   vertices: BuildVertex[];
 }
 
+export interface TestFileTiming {
+  /** Reported file label, including the project name when present. */
+  label: string;
+  durationMs: number;
+}
+
 export interface TestSummary {
   framework: "vitest" | "jest" | "node-test" | "pytest";
   files?: number;
@@ -71,6 +77,8 @@ export interface TestSummary {
   durationMs?: number;
   /** Phase shares in percent (Vitest prints e.g. `import 25%`), keyed by phase name. */
   phases: Record<string, number>;
+  /** Up to three longest reported file durations; concurrent files are not additive. */
+  slowFiles?: TestFileTiming[];
 }
 
 export interface LogStep {
@@ -253,27 +261,44 @@ function finishStep(step: LogStep, endMs: number): void {
   if (step.kind === "action") step.uses = clip(step.title.replace(/^Run /, ""));
 }
 
-function testLine(step: LogStep, text: string): void {
+function testLine(step: LogStep, text: string, pending: WeakMap<LogStep, TestFileTiming[]>): void {
   let match: RegExpExecArray | null;
   const last = step.tests.at(-1);
-  if ((match = /^\s*Test Files\s+.*\((\d+)\)\s*$/.exec(text))) {
-    step.tests.push({ framework: "vitest", files: Number(match[1]), phases: {} });
+  if (/^\s*RUN\s+v\d+\.\d+\.\d+(?:[-+][\w.-]+)?(?:\s|$)/.test(text)) {
+    pending.set(step, []);
+  } else if (pending.has(step) && (match = /^\s*[✓✔×❯]\s+(.{1,200}?\.[cm]?[jt]sx?)\s+\(\d+ tests?(?: \| \d+ (?:failed|skipped|todo))*\)\s+(\d+(?:\.\d+)?)\s*(ms|s)\s*$/.exec(text))) {
+    const label = (match[1] as string).trim();
+    const durationMs = seconds(match[2] as string, match[3]);
+    if (label.length > MAX_TEXT || !Number.isSafeInteger(durationMs) || durationMs <= 0) return;
+    const files = pending.get(step)!;
+    const existing = files.find((file) => file.label === label);
+    if (existing) existing.durationMs = Math.max(existing.durationMs, durationMs);
+    else files.push({ label, durationMs });
+    files.sort((a, b) => b.durationMs - a.durationMs || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+    files.splice(3);
+  } else if ((match = /^\s*Test Files\s+.*\((\d+)\)\s*$/.exec(text))) {
+    const slowFiles = pending.get(step);
+    step.tests.push({ framework: "vitest", files: Number(match[1]), phases: {}, ...(slowFiles?.length ? { slowFiles } : {}) });
+    pending.delete(step);
   } else if (last?.framework === "vitest" && (match = /^\s*Tests\s+.*\((\d+)\)\s*$/.exec(text))) {
     last.tests = Number(match[1]);
   } else if (last?.framework === "vitest" && last.durationMs === undefined && (match = /^\s*Duration\s+([\d.]+)(ms|s|m)\b(?:\s*\((.*)\))?/.exec(text))) {
     last.durationMs = seconds(match[1] as string, match[2]);
     for (const phase of (match[3] ?? "").matchAll(/([a-z]+) ([\d.]+)%/g)) last.phases[phase[1] as string] = Number(phase[2]);
   } else if ((match = /^\s*Test Suites:.*?(\d+) total/.exec(text))) {
+    pending.delete(step);
     step.tests.push({ framework: "jest", files: Number(match[1]), phases: {} });
   } else if (last?.framework === "jest" && (match = /^\s*Tests:.*?(\d+) total/.exec(text))) {
     last.tests = Number(match[1]);
   } else if (last?.framework === "jest" && last.durationMs === undefined && (match = /^\s*Time:\s+([\d.]+) ?(ms|s|m)\b/.exec(text))) {
     last.durationMs = seconds(match[1] as string, match[2]);
   } else if ((match = /^[#ℹ] tests (\d+)$/.exec(text))) {
+    pending.delete(step);
     step.tests.push({ framework: "node-test", tests: Number(match[1]), phases: {} });
   } else if (last?.framework === "node-test" && last.durationMs === undefined && (match = /^[#ℹ] duration_ms ([\d.]+)$/.exec(text))) {
     last.durationMs = Math.round(Number(match[1]));
   } else if ((match = /^=+ (.*\d+ (?:passed|failed).*) in ([\d.]+)s\b.*=+$/.exec(text))) {
+    pending.delete(step);
     const tests = [...(match[1] as string).matchAll(/(\d+) (?:passed|failed|skipped|errors?|xfailed|xpassed)/g)].reduce((sum, item) => sum + Number(item[1]), 0);
     step.tests.push({ framework: "pytest", tests, durationMs: seconds(match[2] as string), phases: {} });
   }
@@ -342,6 +367,7 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
   let service: ServiceStartup | undefined;
   let pullStartMs: number | undefined;
   const declaredOnly = new Set<BuildInvocation>();
+  const pendingTests = new WeakMap<LogStep, TestFileTiming[]>();
   let waitStartMs: number | undefined;
 
   const innermost = (): LogStep | undefined => {
@@ -511,7 +537,7 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
     else {
       const added = /^added (\d+) packages?\b/.exec(line);
       if (added) step.installedPackages = Number(added[1]);
-      else testLine(step, line);
+      else testLine(step, line, pendingTests);
     }
   }
 

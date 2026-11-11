@@ -155,6 +155,13 @@ proof: validate runtimes, dependencies, isolation, acyclic scheduling, and uncha
 trigger and failure path. Tied critical jobs need joint evaluation. Off-critical tests do not receive
 unconditional sharding advice, since extra runners can increase work without shortening the run.
 
+Vitest reports include up to three longest recognized file timings per completed invocation, retaining
+the reported project/file labels. These are profiling leads, not a complete file inventory: unmatched,
+oversized and invalid lines are ignored, and incomplete invocations do not contribute file evidence.
+Repeated labels retain their largest reported duration, not a sum. File durations may overlap and never
+change step totals or savings bounds. Spare-job evidence is grouped so file hotspots fit alongside
+framework totals and phase shares in the bounded benchmark broadcast.
+
 Layer-cache misses remain findings even when other layers were restored. Partial restoration does not
 prove that matching entries for the rebuilt layers were published or accessible. Compare immutable build
 inputs (not just commit SHAs), publication, import/export scopes, branch visibility and eviction before

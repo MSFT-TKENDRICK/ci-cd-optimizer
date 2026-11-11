@@ -4,6 +4,7 @@ import {
   attributeRun, collectJobLogs, formatMs, isCoverageGap, readyQueueMs, type Bottleneck, type JobLogResult, type RunAttribution,
 } from "../../src/telemetry/attribution.js";
 import { parseJobLog } from "../../src/telemetry/logs.js";
+import { benchmarkRun } from "../../src/telemetry/benchmark.js";
 import type { JobSnapshot, StepSnapshot, WorkflowSnapshot } from "../../src/telemetry/types.js";
 import { fakeClient, httpError, repo } from "../experiments/fixtures.js";
 import { callsTo, fakeApi } from "../service/api.js";
@@ -361,9 +362,59 @@ describe("attributeRun critical path", () => {
     expect(found.recommendation).toContain("already-prepared compatible job with slack (lint)");
     expect(found.recommendation).toContain("drafts and failure paths");
     expect(found.recommendation).toContain("same time");
-    expect(found.evidence).toContain("lint: 35.0 s of observed slack; workload compatibility is unverified");
-    expect(found.evidence.some((line) => line.startsWith("dependent:"))).toBe(false);
+    expect(found.evidence).toContain("Observed spare-job slack (workload compatibility is unverified): lint: 35.0 s");
+    expect(found.evidence.join("\n")).not.toContain("dependent:");
     expect(found.elapsedSavingsBoundMs).toBe(0);
+  });
+
+  it("broadcasts file hotspots and every spare-job candidate without inflating totals or omitting evidence", () => {
+    const jobs = ciJobs().map((entry) => entry.id === APP
+      ? job(APP, "app", "38:29", "39:20") : entry);
+    const run = snapshot(jobs);
+    run.provenance = { version: 1, collector: "github-actions-rest", collectedAt: at("39:45"), jobsComplete: true, definitionKnown: true };
+    const logs = new Map<number | string, JobLogResult>(jobs.map((entry) => [entry.id, parseJobLog("")]));
+    const evidence = parseJobLog(TEST_LOG);
+    logs.set(TEST, evidence);
+    const result = attributeRun(run, logs);
+    const found = one(result, "test-runtime", "test");
+    expect(found.recommendation).toContain("Profile the reported file hotspots");
+    expect(found.recommendation).toContain("not additive savings");
+    expect(found.evidence.join("\n")).toContain("service test/cli/linter.test.ts: 1.1 s");
+    for (const key of ["lint-reusable / lint", "lint", "formal", "postgres", "build"]) {
+      expect(found.evidence.join("\n")).toContain(`${key}:`);
+    }
+    const broadcast = benchmarkRun(run, result, undefined, []);
+    const emitted = broadcast.findings.find((entry) => entry.category === "test-runtime")!;
+    expect(emitted.evidence).toEqual(found.evidence);
+    expect(emitted.omittedEvidence).toBe(0);
+    for (const summary of evidence.steps[2]!.tests) delete summary.slowFiles;
+    const baseline = one(attributeRun(run, logs), "test-runtime", "test");
+    expect(found).toMatchObject({
+      observedMs: baseline.observedMs, runnerSavingsBoundMs: baseline.runnerSavingsBoundMs,
+      elapsedSavingsBoundMs: baseline.elapsedSavingsBoundMs,
+    });
+  });
+
+  it("preserves maximum-length hotspot and spare-job labels within the existing broadcast limits", () => {
+    const jobs = ciJobs().map((entry) => entry.id === APP
+      ? job(APP, "app", "38:29", "39:20") : entry.id === TEST
+        ? entry : { ...entry, name: entry.name.padEnd(80, "x") });
+    const run = snapshot(jobs);
+    const logs = new Map<number | string, JobLogResult>(jobs.map((entry) => [entry.id, parseJobLog("")]));
+    const evidence = parseJobLog(TEST_LOG);
+    const labels = ["first", "second", "third"].map((name) => `${name.padEnd(192, "x")}.test.ts`);
+    evidence.steps[2]!.tests.find((summary) => summary.framework === "vitest")!.slowFiles =
+      labels.map((label, index) => ({ label, durationMs: 9000 - index * 1000 }));
+    logs.set(TEST, evidence);
+    const emitted = benchmarkRun(run, attributeRun(run, logs), undefined, [])
+      .findings.find((entry) => entry.category === "test-runtime")!;
+    for (const label of labels) expect(emitted.evidence.join("\n")).toContain(label);
+    for (const entry of jobs.filter((candidate) => candidate.id !== APP && candidate.id !== TEST)) {
+      expect(emitted.evidence.join("\n")).toContain(`${entry.name}:`);
+    }
+    expect(emitted.omittedEvidence).toBe(0);
+    expect(emitted.evidence.length).toBeLessThanOrEqual(8);
+    expect(emitted.evidence.every((line) => line.length <= 1200)).toBe(true);
   });
 
   it("does not treat a near-critical job with positive slack as a source of elapsed-time savings", () => {
