@@ -277,7 +277,18 @@ npx vitest run test/formal test/experiments/formal-integration.test.ts
 Setup first reuses an existing `.proof-tools/<version>` install only when the full distribution hash and both tool
 versions match, printing `Reusing verified toolchain at ...`. Otherwise it removes any stale install, prints
 `Downloading <url>`, validates the archive before extraction and deletes it afterwards. CI telemetry uses these
-markers to report release downloads as uncached `toolchain-download` time. Every verify/generate/check also
+markers to report release downloads as uncached `toolchain-download` time.
+
+An Actions cache for `.proof-tools` was **rejected** after a predeclared, interleaved experiment on the Copilot
+setup workflow (one warm-up per arm, then five control/candidate pairs, runs 43023797256 through 43024458742).
+All ten runs succeeded with identical pinned identities, every candidate printed `Reusing` and every control
+`Downloading`. The median download-or-restore segment fell only from 2.024 s to 1.996 s (lower in 3 of 5 pairs),
+because restoring the ~63 MB cache took a median 1.516 s. Median job duration and observed runner work rose from
+15 s to 16 s. This failed the required 1 s median reduction, 4-of-5 pairs, and no job/runner-work increase criteria.
+Five pairs do not establish savings or their absence beyond that sample. Do not repeat it unchanged; reconsider only
+with new evidence such as a larger archive, slower downloads or a cheaper restore mechanism.
+
+Every verify/generate/check also
 hashes the complete installed distribution: sort each relative path, then hash
 `path + NUL + SHA256(fileBytes) + LF` records. The aggregate pin covers all 290 distribution files, not just a
 version string or solver executable. Unexpected files, modifications, missing tools and unsupported hosts fail.

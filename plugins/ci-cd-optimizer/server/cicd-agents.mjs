@@ -72698,9 +72698,12 @@ ${line2.trim()}`);
       vertexLine(step, Number(vertex[1]), vertex[2], ms, pendingTransfers);
       continue;
     }
-    if (line2.startsWith("Found in cache @ ")) step.toolCache = "hit";
+    if (line2.startsWith("Found in cache @ ") || /^Reusing verified (?:[\w-]+ )?toolchain at \S/.test(line2)) step.toolCache = "hit";
     else if (/^(?:Attempting to download|Acquiring) \S/.test(line2)) step.toolCache ??= "download";
-    else if (/^Cache restored from key: |^Cache hit for: |^Cache restored successfully/.test(line2)) step.packageCache = "hit";
+    else if (/^Downloading https:\/\/\S+\/releases\/download\/\S+\.(?:zip|tar\.gz|tgz|tar\.xz)$/.test(line2)) {
+      step.toolCache ??= "download";
+      if (step.toolCache === "download") step.toolSource = "release";
+    } else if (/^Cache restored from key: |^Cache hit for: |^Cache restored successfully/.test(line2)) step.packageCache = "hit";
     else if (/^(?:\S+ )?cache is not found$|^Cache not found for (?:input )?keys?:/i.test(line2)) step.packageCache = "miss";
     else {
       const added = /^added (\d+) packages?\b/.exec(line2);
@@ -73049,14 +73052,15 @@ function stepFindings(ctx, entry2) {
     }));
   }
   if (step.toolCache === "download" && step.durationMs >= MIN_FINDING_MS) {
+    const release2 = step.toolSource === "release";
     findings4.push(finding2(ctx, {
       category: "toolchain-download",
       detail: `s${entry2.path}`,
       step: label2,
       observedMs: step.durationMs,
-      observation: `${label2} downloaded its toolchain instead of finding it in the runner's tool cache (${formatMs(step.durationMs)}).`,
-      recommendation: "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
-      evidence: [`${label2}: tool cache miss, ${formatMs(step.durationMs)}`],
+      observation: release2 ? `${label2} downloaded and unpacked a pinned release archive with no reused install (${formatMs(step.durationMs)}).` : `${label2} downloaded its toolchain instead of finding it in the runner's tool cache (${formatMs(step.durationMs)}).`,
+      recommendation: release2 ? "Cache the extracted toolchain directory keyed by its version pin or lock file plus runner OS and architecture, and keep integrity verification before reusing it; a cache restore also takes time, so measure before and after." : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
+      evidence: [release2 ? `${label2}: release archive download with no reused install, ${formatMs(step.durationMs)}` : `${label2}: tool cache miss, ${formatMs(step.durationMs)}`],
       covers: [entry2.top]
     }));
   }
