@@ -780,6 +780,8 @@ describe("attributeRun tool-cache misses", () => {
     expect(found).toMatchObject({ step: "Run actions/setup-node@949feb2", observedMs: 19_000 });
     expect(found.recommendation).toContain("ubuntu-slim image has no hosted tool cache");
     expect(found.recommendation).toContain("cannot produce a hit");
+    expect(found.recommendation).toContain("gives up that pin");
+    expect(found.recommendation).toContain("Where the job must stay pinned");
     expect(found.recommendation).not.toContain(ORIGINAL);
     expect(found.evidence).toEqual([MISS, PHASES]);
   });

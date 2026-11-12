@@ -548,7 +548,7 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
       recommendation: release
         ? "Cache the extracted toolchain directory keyed by its version pin or lock file plus runner OS and architecture, and keep integrity verification before reusing it; a cache restore also takes time, so measure before and after."
         : slim
-          ? "The ubuntu-slim image has no hosted tool cache, so every run downloads, extracts and copies the toolchain, and choosing another version cannot produce a hit. Where the job's code supports a runtime the image preinstalls (see the image's software list), probe it with a version check and run the setup action only when the check fails; otherwise measure a standard hosted runner (including its startup and queue time) or a toolchain cache (a restore also writes to disk) before and after."
+          ? "The ubuntu-slim image has no hosted tool cache, so every run downloads, extracts and copies the toolchain, and choosing another version cannot produce a hit. Where the job's code supports a runtime the image preinstalls (see the image's software list), a version check can skip the setup action when it passes; a check looser than the setup action's version spec gives up that pin, so the runtime then changes with image updates. Where the job must stay pinned, measure a standard hosted runner (including its startup and queue time) or a toolchain cache (a restore also writes to disk) before and after."
           : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
       evidence: [
         release
