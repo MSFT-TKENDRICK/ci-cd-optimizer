@@ -43,7 +43,7 @@ Options:
                       repeatable). Other repositories are refused.
   --github-cli-auth  Explicitly use the existing gh login for github.com instead
                       of environment tokens. Never used as an automatic fallback.
-  --watch            Broadcast completed CI benchmarks as MCP resource-list changes.
+  --watch            Broadcast actionable, materially changed successful CI benchmarks.
                       Requires remote access; client acknowledges accepted delivery.
   --since <ISO time> Replay starting here (required with --watch; last seven days).
   -h, --help          Show this help

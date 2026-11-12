@@ -74045,7 +74045,7 @@ function jobRegressions(snapshot, baseline, jobs) {
     "| Job | This run | Median | Delta |",
     "|---|---:|---:|---:|",
     ...rows.map(
-      ({ job, median: median2 }) => `| ${escapeCell(job.name)} | ${formatDuration2(job.durationMs)} | ${formatDuration2(median2)} | +${formatDuration2(job.durationMs - median2)} |`
+      ({ job, median: median3 }) => `| ${escapeCell(job.name)} | ${formatDuration2(job.durationMs)} | ${formatDuration2(median3)} | +${formatDuration2(job.durationMs - median3)} |`
     ),
     ""
   ];
@@ -74101,11 +74101,11 @@ function recommendations(snapshot, criticalPath, baseline) {
   }
   return messages;
 }
-function compare2(current, median2, samples) {
-  if (median2 === 0) return `Compared with ${samples} prior successful runs.`;
-  const delta = (current - median2) / median2 * 100;
+function compare2(current, median3, samples) {
+  if (median3 === 0) return `Compared with ${samples} prior successful runs.`;
+  const delta = (current - median3) / median3 * 100;
   const direction = delta > 0 ? "slower" : "faster";
-  return `Compared with the median of ${samples} prior successful runs, this run is **${Math.abs(delta).toFixed(1)}% ${direction}** (${formatDuration2(median2)} baseline).`;
+  return `Compared with the median of ${samples} prior successful runs, this run is **${Math.abs(delta).toFixed(1)}% ${direction}** (${formatDuration2(median3)} baseline).`;
 }
 function percentage(part, whole) {
   return whole > 0 ? `${(part / whole * 100).toFixed(0)}%` : "0%";
@@ -78794,6 +78794,71 @@ var producerSchema = external_exports.object({
   created_at: external_exports.iso.datetime(),
   path: external_exports.string()
 });
+var PERCEPTION_FLOOR_MS = 1e3;
+var DURATION_SCALE_MS = 1e4;
+var NOTICEABLE_LOG_CHANGE = Math.log(1.1);
+var ALWAYS_NOTICEABLE_LOG_CHANGE = Math.log(2);
+var MAD_TO_SIGMA = 1.4826;
+var MIN_VARIABILITY_SAMPLES = 3;
+var MAX_SAMPLES = 10;
+var MAX_ROLLUP_RUNS = 20;
+var MAX_TRIGGERS = 10;
+var logDuration = (ms) => Math.log(ms + DURATION_SCALE_MS);
+var isDuration = (ms) => typeof ms === "number" && Number.isFinite(ms) && ms >= 0;
+function median2(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+function significantDurationChange(previousMs, currentMs, recentMs = []) {
+  if (!isDuration(previousMs) || !isDuration(currentMs) || Math.abs(currentMs - previousMs) < PERCEPTION_FLOOR_MS) return false;
+  const samples = recentMs.filter(isDuration).slice(-MAX_SAMPLES).map(logDuration);
+  let threshold = NOTICEABLE_LOG_CHANGE;
+  if (samples.length >= MIN_VARIABILITY_SAMPLES) {
+    const center = median2(samples);
+    const spread = MAD_TO_SIGMA * median2(samples.map((value) => Math.abs(value - center)));
+    threshold = Math.min(ALWAYS_NOTICEABLE_LOG_CHANGE, NOTICEABLE_LOG_CHANGE + 2 * spread);
+  }
+  return Math.abs(logDuration(currentMs) - logDuration(previousMs)) > threshold;
+}
+function findingSignature(finding3) {
+  const parts = finding3.id.split(":");
+  if (parts.length > 1 && /^\d+$/.test(parts[1])) parts.splice(1, 1);
+  return JSON.stringify([finding3.category, finding3.jobKey, parts.join(":")]);
+}
+function actionableFindings(benchmark) {
+  if (benchmark.analysisStatus === "unavailable") return [];
+  return benchmark.findings.filter((finding3) => finding3.id.trim().length > 0 && finding3.category.trim().length > 0 && finding3.summary.trim().length > 0 && finding3.recommendation.trim().length > 0 && finding3.evidence.some((line2) => line2.trim().length > 0));
+}
+function durationMetrics(benchmark) {
+  const metrics = /* @__PURE__ */ new Map();
+  const add = (name, ms) => {
+    if (isDuration(ms)) metrics.set(name, (metrics.get(name) ?? 0) + ms);
+  };
+  add("elapsed", benchmark.metrics?.elapsedMs);
+  add("queue-inclusive", benchmark.metrics?.queueInclusiveMs);
+  add("runner", benchmark.metrics?.runnerMs);
+  for (const job of benchmark.jobs) add(`job ${job.key}`, job.durationMs);
+  return metrics;
+}
+var orderOf = (event) => ({
+  runId: event.benchmark.runId,
+  runAttempt: event.benchmark.runAttempt,
+  updatedAt: event.sourceUpdatedAt
+});
+var compareRuns = (a, b) => Date.parse(a.updatedAt) - Date.parse(b.updatedAt) || a.runId - b.runId || a.runAttempt - b.runAttempt;
+function jobShape(benchmark) {
+  if (benchmark.omittedJobs || !isDuration(benchmark.metrics?.elapsedMs) || !isDuration(benchmark.metrics?.runnerMs)) return void 0;
+  return JSON.stringify(benchmark.jobs.map((job) => [job.key, job.name]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+}
+var emptyRollup = () => ({
+  runs: [],
+  omittedRuns: 0,
+  byConclusion: [],
+  nonSuccessRunnerMs: 0,
+  nonSuccessRunsWithoutRunnerMs: 0,
+  quietSuccesses: 0
+});
 async function feedbackInventory(access, repo, since) {
   const target = await resolveRepository(access, repo);
   const client = repositoryReader(access, target);
@@ -78870,12 +78935,18 @@ async function readFeedback(access, repo, producer) {
   if (source.id !== benchmark.runId || source.run_attempt !== benchmark.runAttempt || source.head_sha !== benchmark.headSha || source.workflow_id !== benchmark.workflowId || source.repository?.id !== target.id || source.status !== "completed" || source.path !== benchmark.workflowPath || source.conclusion !== benchmark.conclusion) {
     throw new AgentError("Benchmark source run provenance does not match GitHub.");
   }
+  if (!(source.head_branch === null || typeof source.head_branch === "string") || typeof source.event !== "string" || !source.event.length || source.event.length > 100 || !external_exports.iso.datetime().safeParse(source.updated_at).success) {
+    throw new AgentError("Benchmark source run comparison metadata is unavailable; collection is incomplete.");
+  }
   return {
     key: `${target.id}:${producer.id}:${producer.run_attempt}`,
     repository: target.fullName,
     repositoryId: target.id,
     producer,
-    benchmark
+    benchmark,
+    sourceBranch: source.head_branch ?? "",
+    sourceEvent: source.event,
+    sourceUpdatedAt: source.updated_at
   };
 }
 function attachFeedback(server, remote, options) {
@@ -78892,9 +78963,26 @@ function attachFeedback(server, remote, options) {
   const retry = /* @__PURE__ */ new Map();
   const undelivered = /* @__PURE__ */ new Map();
   const newestNext = /* @__PURE__ */ new Map();
+  const snapshots = /* @__PURE__ */ new Map();
+  const sourceSeen = /* @__PURE__ */ new Map();
   const lastInventory = new Map(remote.allow.map((repo) => [repo.toLowerCase(), sinceMs]));
   let timer;
-  let status = { state: "starting", since: options.since, replayDays: 7, pending: 0 };
+  const gates = /* @__PURE__ */ new Map();
+  const maxGates = MAX_INVENTORY * remote.allow.length;
+  let filtered = 0;
+  let rolledUp = 0;
+  let suppressedUnchanged = 0;
+  const counters = () => {
+    let seriesAwaitingSuccess = 0;
+    let heldRuns = 0;
+    for (const gate of gates.values()) {
+      if (!gate.latest) seriesAwaitingSuccess++;
+      heldRuns += gate.rollup.runs.length + gate.rollup.omittedRuns;
+    }
+    const buffered = [...snapshots.values()].reduce((sum2, snapshot) => sum2 + snapshot.events.size, 0);
+    return { filtered, rolledUp, suppressedUnchanged, seriesAwaitingSuccess, heldRuns, buffered };
+  };
+  let status = { state: "starting", since: options.since, replayDays: 7, pending: 0, ...counters() };
   let errorResource;
   let lastError = "";
   let replayGap;
@@ -78902,7 +78990,7 @@ function attachFeedback(server, remote, options) {
   server.registerResource("feedback-status", "cicd://feedback/status", {
     title: "CI benchmark feed status",
     mimeType: "application/json",
-    description: "Replay scope, pending events, backpressure and collection errors. Empty findings are not a completeness guarantee."
+    description: "Replay scope, pending actionable events, filtered, rolled-up and unchanged benchmarks, backpressure and collection errors. Broadcasts start at a workflow's first successful run. No broadcast is not a completeness guarantee."
   }, (uri) => resource(uri, status));
   server.registerTool("feedback_ack", {
     title: "Acknowledge benchmark delivery",
@@ -78929,15 +79017,119 @@ function attachFeedback(server, remote, options) {
       mimeType: "application/json"
     }, (uri) => resource(uri, { error: message2, since: status.since }));
   };
+  const hold = (rollup, benchmark) => {
+    const runnerMs2 = benchmark.metrics?.runnerMs ?? null;
+    rollup.runs.push({
+      runId: benchmark.runId,
+      runAttempt: benchmark.runAttempt,
+      conclusion: benchmark.conclusion,
+      analysisStatus: benchmark.analysisStatus,
+      elapsedMs: benchmark.metrics?.elapsedMs ?? null,
+      runnerMs: runnerMs2
+    });
+    if (rollup.runs.length > MAX_ROLLUP_RUNS) {
+      rollup.runs.shift();
+      rollup.omittedRuns++;
+    }
+    const conclusion = benchmark.conclusion ?? "none";
+    const count = rollup.byConclusion.find((item) => item.conclusion === conclusion);
+    if (count) count.runs++;
+    else rollup.byConclusion.push({ conclusion, runs: 1 });
+    rollup.byConclusion.sort((a, b) => a.conclusion.localeCompare(b.conclusion));
+    if (benchmark.conclusion !== "success") {
+      if (isDuration(runnerMs2)) rollup.nonSuccessRunnerMs += runnerMs2;
+      else rollup.nonSuccessRunsWithoutRunnerMs++;
+    }
+  };
+  const publish = (event) => {
+    const uri = `cicd://feedback/runs/${event.key}`;
+    const handle = server.registerResource(`feedback-${event.key}`, uri, {
+      title: `CI benchmark ${event.benchmark.runId}, attempt ${event.benchmark.runAttempt}`,
+      mimeType: "application/json",
+      description: "Untrusted benchmark of a first or significantly changed successful run with evidenced remediation, from the authorized default-branch telemetry producer."
+    }, (url2) => resource(url2, event));
+    outbox.set(event.key, { event, resource: handle });
+  };
+  const decide = (event) => {
+    const { benchmark } = event;
+    const sourceKey = `${event.repositoryId}:${benchmark.runId}:${benchmark.runAttempt}`;
+    if (sourceSeen.has(sourceKey)) return;
+    const gateKey = JSON.stringify([event.repositoryId, benchmark.workflowId, event.sourceBranch, event.sourceEvent]);
+    if (!gates.has(gateKey) && gates.size >= maxGates) throw new AgentError("Feedback comparison capacity reached; delivery is incomplete.");
+    const gate = gates.get(gateKey) ?? { samples: /* @__PURE__ */ new Map(), rollup: emptyRollup(), lastSeen: 0 };
+    gate.lastSeen = Math.max(gate.lastSeen, Date.parse(event.producer.created_at));
+    gates.set(gateKey, gate);
+    sourceSeen.set(sourceKey, Date.parse(event.producer.created_at));
+    if (benchmark.conclusion !== "success" || benchmark.analysisStatus === "unavailable") {
+      hold(gate.rollup, benchmark);
+      if (benchmark.conclusion === "success") filtered++;
+      else rolledUp++;
+      return;
+    }
+    const findings4 = actionableFindings(benchmark);
+    const metrics = durationMetrics(benchmark);
+    const shape = jobShape(benchmark);
+    const triggers = /* @__PURE__ */ new Set();
+    if (!gate.latest || compareRuns(orderOf(event), gate.latest) > 0) {
+      gate.latest = orderOf(event);
+      const reference = gate.reference;
+      if (!reference) triggers.add("first successful run of this workflow and branch in the replay scope");
+      else {
+        for (const finding3 of findings4) {
+          if (!reference.signatures.has(findingSignature(finding3))) triggers.add(`new ${finding3.category} finding in ${finding3.jobKey}`);
+        }
+        if (shape !== void 0) {
+          if (reference.shape === void 0) triggers.add("whole-run metrics became available; previous analysis was incomplete");
+          else if (shape !== reference.shape) triggers.add("job set changed; durations are not comparable");
+          else for (const [name, ms] of metrics) {
+            const before = reference.metrics.get(name);
+            if (before !== void 0 && significantDurationChange(before, ms, gate.sampleShape === shape ? gate.samples.get(name) : void 0)) {
+              triggers.add(`${name} time changed from ${before} ms to ${ms} ms`);
+            }
+          }
+        }
+      }
+      if (shape !== void 0) {
+        if (shape !== gate.sampleShape) gate.samples.clear();
+        gate.sampleShape = shape;
+        for (const [name, ms] of metrics) {
+          const samples = gate.samples.get(name) ?? [];
+          samples.push(ms);
+          if (samples.length > MAX_SAMPLES) samples.shift();
+          gate.samples.set(name, samples);
+        }
+      }
+    }
+    if (!triggers.size || !findings4.length) {
+      gate.rollup.quietSuccesses++;
+      if (findings4.length) suppressedUnchanged++;
+      else filtered++;
+      return;
+    }
+    gate.reference = { metrics, signatures: new Set(findings4.map(findingSignature)), shape };
+    const rollup = gate.rollup;
+    gate.rollup = emptyRollup();
+    const trigger2 = [...triggers];
+    publish({
+      ...event,
+      trigger: trigger2.length > MAX_TRIGGERS ? [...trigger2.slice(0, MAX_TRIGGERS - 1), `${trigger2.length - MAX_TRIGGERS + 1} more changes`] : trigger2,
+      ...rollup.runs.length || rollup.omittedRuns || rollup.quietSuccesses ? { rollup } : {}
+    });
+  };
   const tick = async () => {
     const now = Date.now();
     const cutoff = Math.max(sinceMs, now - FEEDBACK_REPLAY_MS);
-    status = { state: "polling", since: new Date(cutoff).toISOString(), replayDays: 7, pending: outbox.size, checkedAt: new Date(now).toISOString() };
+    status = { state: "polling", since: new Date(cutoff).toISOString(), replayDays: 7, pending: outbox.size, ...counters(), checkedAt: new Date(now).toISOString() };
     let failed = false;
     if ([...lastInventory.values()].some((at) => now - at > FEEDBACK_REPLAY_MS)) {
       replayGap = "No complete inventory was obtained within the seven-day replay window; historical delivery is incomplete.";
     }
     for (const [key, created] of seen) if (created < cutoff && !outbox.has(key)) seen.delete(key);
+    for (const [key, created] of sourceSeen) if (created < cutoff) sourceSeen.delete(key);
+    for (const [key, gate] of gates) if (gate.lastSeen < cutoff) {
+      if (gate.rollup.runs.length || gate.rollup.omittedRuns) replayGap = "Held run summaries aged out of the replay window; historical rollup is incomplete.";
+      gates.delete(key);
+    }
     for (const [key, entry2] of retry) if (entry2.created < cutoff) {
       replayGap = `Unresolved producer ${key} aged out of the replay window; delivery is incomplete.`;
       retry.delete(key);
@@ -78972,9 +79164,14 @@ function attachFeedback(server, remote, options) {
           fail(`Known producer ${key} is absent from the complete inventory; delivery is incomplete.`);
           failed = true;
         }
+        let snapshot = snapshots.get(repo);
+        if (!snapshot) {
+          snapshot = { keys: new Set(producers.map((producer) => `${repoId}:${producer.id}:${producer.run_attempt}`).filter((key) => !seen.has(key))), events: /* @__PURE__ */ new Map(), ready: false };
+          snapshots.set(repo, snapshot);
+        }
         const eligible2 = producers.filter((producer) => {
           const key = `${repoId}:${producer.id}:${producer.run_attempt}`;
-          return producer.status === "completed" && !seen.has(key) && (retry.get(key)?.at ?? 0) <= now;
+          return snapshot.keys.has(key) && producer.status === "completed" && !seen.has(key) && (retry.get(key)?.at ?? 0) <= now;
         });
         let oldest = 0;
         let newest = eligible2.length - 1;
@@ -78985,13 +79182,7 @@ function attachFeedback(server, remote, options) {
           const key = `${repoId}:${producer.id}:${producer.run_attempt}`;
           try {
             const event = await operation((signal) => readFeedback(access(signal), repo, producer), controller.signal, LIMITS.operationMs);
-            const uri = `cicd://feedback/runs/${event.key}`;
-            const handle = server.registerResource(`feedback-${event.key}`, uri, {
-              title: `CI benchmark ${event.benchmark.runId}, attempt ${event.benchmark.runAttempt}`,
-              mimeType: "application/json",
-              description: "Untrusted benchmark evidence from the authorized default-branch telemetry producer."
-            }, (url2) => resource(url2, event));
-            outbox.set(event.key, { event, resource: handle });
+            snapshot.events.set(key, event);
             seen.set(event.key, Date.parse(producer.created_at));
             retry.delete(key);
             undelivered.delete(key);
@@ -79003,6 +79194,16 @@ function attachFeedback(server, remote, options) {
             failed = true;
           }
         }
+        if (snapshot.events.size === snapshot.keys.size) snapshot.ready = true;
+        if (snapshot.ready) {
+          for (const event of [...snapshot.events.values()].sort((a, b) => compareRuns(orderOf(a), orderOf(b)) || a.producer.id - b.producer.id || a.producer.run_attempt - b.producer.run_attempt)) {
+            if (outbox.size >= MAX_PENDING) break;
+            decide(event);
+            snapshot.events.delete(event.key);
+          }
+          if (!snapshot.events.size) snapshots.delete(repo);
+        }
+        Object.assign(status, counters());
       }
       if (!failed) {
         status = {
@@ -79056,7 +79257,7 @@ Options:
                       repeatable). Other repositories are refused.
   --github-cli-auth  Explicitly use the existing gh login for github.com instead
                       of environment tokens. Never used as an automatic fallback.
-  --watch            Broadcast completed CI benchmarks as MCP resource-list changes.
+  --watch            Broadcast actionable, materially changed successful CI benchmarks.
                       Requires remote access; client acknowledges accepted delivery.
   --since <ISO time> Replay starting here (required with --watch; last seven days).
   -h, --help          Show this help
