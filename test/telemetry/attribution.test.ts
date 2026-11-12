@@ -750,6 +750,53 @@ describe("attributeRun release toolchain installs", () => {
   });
 });
 
+describe("attributeRun tool-cache misses", () => {
+  const ORIGINAL = "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.";
+  const missLog = (phases: boolean) => [
+    `${at("00:00")} ##[group]Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1`,
+    `${at("00:00")} with:`,
+    `${at("00:00")}   node-version-file: .nvmrc`,
+    `${at("00:00")} ##[endgroup]`,
+    `${at("00:00")} Attempting to download 22...`,
+    ...(phases ? [
+      `${at("00:01")} Acquiring 22.23.5 - x64 from https://github.com/actions/node-versions/releases/download/22.23.5-43134205651/node-22.23.5-linux-x64.tar.gz`,
+      `${at("00:02")} Extracting ...`,
+      `${at("00:06")} Adding to the cache ...`,
+    ] : []),
+    `${at("00:18")} ##[group]Environment details`,
+    `${at("00:18")} node: v22.23.5`,
+    `${at("00:18")} ##[endgroup]`,
+    `${at("00:19")} Post job cleanup.`,
+  ].join("\n");
+  const attribute = (labels: string[], phases = true) => one(
+    attributeRun(snapshot([job(1, "pre_activation", "00:00", "00:19", { labels })]), new Map([[1, parseJobLog(missLog(phases))]])),
+    "toolchain-download", "pre_activation",
+  );
+  const MISS = "Run actions/setup-node@949feb2: tool cache miss, 19.0 s";
+  const PHASES = "Run actions/setup-node@949feb2: download 1.0 s, extract 4.0 s, adding to the tool cache 12.0 s";
+
+  it("explains that ubuntu-slim has no tool cache to hit and shows where the miss spent its time", () => {
+    const found = attribute(["ubuntu-slim"]);
+    expect(found).toMatchObject({ step: "Run actions/setup-node@949feb2", observedMs: 19_000 });
+    expect(found.recommendation).toContain("ubuntu-slim image has no hosted tool cache");
+    expect(found.recommendation).toContain("cannot produce a hit");
+    expect(found.recommendation).not.toContain(ORIGINAL);
+    expect(found.evidence).toEqual([MISS, PHASES]);
+  });
+
+  it("keeps the original advice unless the job ran on the hosted ubuntu-slim image", () => {
+    for (const labels of [["ubuntu-24.04"], ["self-hosted", "ubuntu-slim"]]) {
+      const found = attribute(labels);
+      expect(found.recommendation, labels.join(",")).toBe(ORIGINAL);
+      expect(found.evidence, labels.join(",")).toEqual([MISS, PHASES]);
+    }
+  });
+
+  it("omits the phase line when the log has no phase markers", () => {
+    expect(attribute(["ubuntu-slim"], false).evidence).toEqual([MISS]);
+  });
+});
+
 describe("attributeRun silent steps", () => {
   const ORIGINAL = "Run ./ took 17.0 s on the critical path and no recognised bottleneck pattern explains it.";
   const seconds = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, index) => `00:${String(from + index).padStart(2, "0")}`);

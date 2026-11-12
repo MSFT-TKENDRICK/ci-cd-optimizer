@@ -114,6 +114,12 @@ export interface LogStep {
   toolCache?: "hit" | "download";
   /** Set when the downloaded toolchain came from a pinned release archive rather than a runner tool cache. */
   toolSource?: "release";
+  /**
+   * Phases of a tool-cache miss, summed per step from the setup action's progress lines. Each phase ends at the next
+   * marker (the cache copy at the next non-debug log line), so it can include unlogged work; a phase is omitted unless
+   * both boundaries were logged.
+   */
+  toolPhases?: { downloadMs?: number; extractMs?: number; cacheAddMs?: number };
   packageCache?: "hit" | "miss";
   /** At most three recognized access entries printed by the build action, not an authorization decision. */
   cacheAccess?: {
@@ -456,6 +462,8 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
   const declaredOnly = new Set<BuildInvocation>();
   const pendingTests = new WeakMap<LogStep, TestFileTiming[]>();
   const pendingTransfers: PendingTransfers = new WeakMap();
+  const toolMarks = new WeakMap<LogStep, { downloadStartMs?: number; extractStartMs?: number }>();
+  let openCacheAdd: { step: LogStep; startMs: number } | undefined;
   let waitStartMs: number | undefined;
 
   const innermost = (): LogStep | undefined => {
@@ -464,6 +472,11 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
   };
 
   for (const { ms, text: line } of lines) {
+    if (openCacheAdd && !line.startsWith("##[debug]")) {
+      const phases = openCacheAdd.step.toolPhases ??= {};
+      phases.cacheAddMs = (phases.cacheAddMs ?? 0) + ms - openCacheAdd.startMs;
+      openCacheAdd = undefined;
+    }
     if (line.startsWith("##[start-action ")) {
       const id = /;id=([^;\]]+)/.exec(line)?.[1] ?? "";
       const display = /display=(.*?);id=/.exec(line)?.[1] ?? "";
@@ -634,10 +647,36 @@ export function parseJobLog(text: string, options: { truncated?: boolean } = {})
       continue;
     }
     if (line.startsWith("Found in cache @ ") || /^Reusing verified (?:[\w-]+ )?toolchain at \S/.test(line)) step.toolCache = "hit";
-    else if (/^(?:Attempting to download|Acquiring) \S/.test(line)) step.toolCache ??= "download";
+    else if (/^(?:Attempting to download|Acquiring) \S/.test(line)) {
+      step.toolCache ??= "download";
+      if (step.toolCache === "download") {
+        const marks = toolMarks.get(step) ?? {};
+        // Resolution precedes "Acquiring"; a fallback source logs it again, so the last one starts the download.
+        if (line.startsWith("Acquiring ")) marks.downloadStartMs = ms;
+        else marks.downloadStartMs ??= ms;
+        toolMarks.set(step, marks);
+      }
+    }
     else if (/^Downloading https:\/\/\S+\/releases\/download\/\S+\.(?:zip|tar\.gz|tgz|tar\.xz)$/.test(line)) {
       step.toolCache ??= "download";
       if (step.toolCache === "download") step.toolSource = "release";
+    }
+    else if (step.toolCache === "download" && step.toolSource !== "release" && /^Extracting\b/.test(line)) {
+      const marks = toolMarks.get(step) ?? {};
+      if (marks.downloadStartMs !== undefined) {
+        const phases = step.toolPhases ??= {};
+        phases.downloadMs = (phases.downloadMs ?? 0) + ms - marks.downloadStartMs;
+      }
+      toolMarks.set(step, { extractStartMs: ms });
+    }
+    else if (step.toolCache === "download" && step.toolSource !== "release" && /^Adding to the cache\b/.test(line)) {
+      const extractStartMs = toolMarks.get(step)?.extractStartMs;
+      if (extractStartMs !== undefined) {
+        const phases = step.toolPhases ??= {};
+        phases.extractMs = (phases.extractMs ?? 0) + ms - extractStartMs;
+      }
+      toolMarks.delete(step);
+      openCacheAdd = { step, startMs: ms };
     }
     else if (/^Cache restored from key: |^Cache hit for: |^Cache restored successfully/.test(line)) step.packageCache = "hit";
     else if (/^(?:\S+ )?cache is not found$|^Cache not found for (?:input )?keys?:/i.test(line)) step.packageCache = "miss";

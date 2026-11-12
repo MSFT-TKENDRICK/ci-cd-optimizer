@@ -555,6 +555,61 @@ describe("parseJobLog structure", () => {
     expect(evidence.steps[1]).not.toHaveProperty("toolSource");
   });
 
+  describe("tool-cache miss phases", () => {
+    const SETUP_NODE = [
+      [0, "##[group]Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1"],
+      [0, "with:"],
+      [0, "  node-version-file: .nvmrc"],
+      [0, "##[endgroup]"],
+      [320, "Resolved .nvmrc as 22"],
+    ] as const;
+    const MISS = [
+      [328, "Attempting to download 22..."],
+      [1210, "Acquiring 22.23.5 - x64 from https://github.com/actions/node-versions/releases/download/22.23.5-43134205651/node-22.23.5-linux-x64.tar.gz"],
+      [2083, "Extracting ..."],
+      [2145, "[command]/usr/bin/tar xz --strip 1 --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/a -f /home/runner/work/_temp/b"],
+      [5754, "Adding to the cache ..."],
+    ] as const;
+
+    it("times the download from the last acquisition and closes the cache copy at the next non-debug line", () => {
+      const [setup] = parseJobLog(log([
+        ...SETUP_NODE,
+        ...MISS,
+        [5800, "##[debug]Caching tool node 22.23.5 x64"],
+        [18162, "##[group]Environment details"],
+        [18508, "node: v22.23.5"],
+        [18525, "##[endgroup]"],
+        [18571, "Post job cleanup."],
+      ])).steps;
+      expect(setup).toMatchObject({ toolCache: "download", toolPhases: { downloadMs: 873, extractMs: 3671, cacheAddMs: 12_408 } });
+      expect(setup).not.toHaveProperty("toolSource");
+    });
+
+    it("omits a phase whose closing line was never logged", () => {
+      const [setup] = parseJobLog(log([...SETUP_NODE, ...MISS])).steps;
+      expect(setup?.toolPhases).toEqual({ downloadMs: 873, extractMs: 3671 });
+    });
+
+    it("records no phases for cache hits or release archives", () => {
+      const evidence = parseJobLog(log([
+        ...SETUP_NODE,
+        [400, "Found in cache @ /opt/hostedtoolcache/node/22.23.5/x64"],
+        [500, "##[group]Run npm run formal:setup"],
+        [500, "npm run formal:setup"],
+        [500, "##[endgroup]"],
+        [600, "Downloading https://github.com/dafny-lang/dafny/releases/download/v4.11.0/dafny-4.11.0-x64-ubuntu-22.04.zip"],
+        [900, "Extracting ..."],
+        [1500, "Adding to the cache ..."],
+        [2000, "Post job cleanup."],
+      ]));
+      expect(evidence.steps).toEqual([
+        expect.objectContaining({ toolCache: "hit" }),
+        expect.objectContaining({ toolCache: "download", toolSource: "release" }),
+      ]);
+      expect(evidence.steps.filter((entry) => entry.toolPhases)).toEqual([]);
+    });
+  });
+
   it("reads Jest, node:test, pytest and Vitest summaries", () => {
     const evidence = parseJobLog(log([
       [0, "##[group]Run npm test"],

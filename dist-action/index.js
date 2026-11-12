@@ -42567,7 +42567,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "6afe44f53111ac1a120dbf97c94a5027d893243d8cfed214c76b523a5504a2f6",
+  "implementationSha256": "1e4178668bf0bbae7b8c19ea84b4fe8d0e28cdd8cda2c3ad2f1a00f335acbc5c",
   "generatorSha256": "ea737477f2d148397dbd83697441713e2f12a542ce95f706181ff9563fb64699",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -67035,12 +67035,19 @@ function parseJobLog(text7, options = {}) {
   const declaredOnly = /* @__PURE__ */ new Set();
   const pendingTests = /* @__PURE__ */ new WeakMap();
   const pendingTransfers = /* @__PURE__ */ new WeakMap();
+  const toolMarks = /* @__PURE__ */ new WeakMap();
+  let openCacheAdd;
   let waitStartMs;
   const innermost = () => {
     for (let index = actions.length - 1; index >= 0; index -= 1) if (actions[index]?.step) return actions[index]?.step;
     return top;
   };
   for (const { ms, text: line } of lines) {
+    if (openCacheAdd && !line.startsWith("##[debug]")) {
+      const phases = openCacheAdd.step.toolPhases ??= {};
+      phases.cacheAddMs = (phases.cacheAddMs ?? 0) + ms - openCacheAdd.startMs;
+      openCacheAdd = void 0;
+    }
     if (line.startsWith("##[start-action ")) {
       const id2 = /;id=([^;\]]+)/.exec(line)?.[1] ?? "";
       const display4 = /display=(.*?);id=/.exec(line)?.[1] ?? "";
@@ -67207,10 +67214,32 @@ ${line.trim()}`);
       continue;
     }
     if (line.startsWith("Found in cache @ ") || /^Reusing verified (?:[\w-]+ )?toolchain at \S/.test(line)) step.toolCache = "hit";
-    else if (/^(?:Attempting to download|Acquiring) \S/.test(line)) step.toolCache ??= "download";
-    else if (/^Downloading https:\/\/\S+\/releases\/download\/\S+\.(?:zip|tar\.gz|tgz|tar\.xz)$/.test(line)) {
+    else if (/^(?:Attempting to download|Acquiring) \S/.test(line)) {
+      step.toolCache ??= "download";
+      if (step.toolCache === "download") {
+        const marks = toolMarks.get(step) ?? {};
+        if (line.startsWith("Acquiring ")) marks.downloadStartMs = ms;
+        else marks.downloadStartMs ??= ms;
+        toolMarks.set(step, marks);
+      }
+    } else if (/^Downloading https:\/\/\S+\/releases\/download\/\S+\.(?:zip|tar\.gz|tgz|tar\.xz)$/.test(line)) {
       step.toolCache ??= "download";
       if (step.toolCache === "download") step.toolSource = "release";
+    } else if (step.toolCache === "download" && step.toolSource !== "release" && /^Extracting\b/.test(line)) {
+      const marks = toolMarks.get(step) ?? {};
+      if (marks.downloadStartMs !== void 0) {
+        const phases = step.toolPhases ??= {};
+        phases.downloadMs = (phases.downloadMs ?? 0) + ms - marks.downloadStartMs;
+      }
+      toolMarks.set(step, { extractStartMs: ms });
+    } else if (step.toolCache === "download" && step.toolSource !== "release" && /^Adding to the cache\b/.test(line)) {
+      const extractStartMs = toolMarks.get(step)?.extractStartMs;
+      if (extractStartMs !== void 0) {
+        const phases = step.toolPhases ??= {};
+        phases.extractMs = (phases.extractMs ?? 0) + ms - extractStartMs;
+      }
+      toolMarks.delete(step);
+      openCacheAdd = { step, startMs: ms };
     } else if (/^Cache restored from key: |^Cache hit for: |^Cache restored successfully/.test(line)) step.packageCache = "hit";
     else if (/^(?:\S+ )?cache is not found$|^Cache not found for (?:input )?keys?:/i.test(line)) step.packageCache = "miss";
     else {
@@ -67542,6 +67571,15 @@ function cacheSaveFailure(evidence2) {
     evidence: failures.map((failure2) => `post-job cache save: ${failure2}`)
   };
 }
+function toolPhaseParts(step) {
+  const phases = step.toolPhases;
+  if (!phases) return [];
+  return [
+    ...phases.downloadMs === void 0 ? [] : [`download ${formatMs(phases.downloadMs)}`],
+    ...phases.extractMs === void 0 ? [] : [`extract ${formatMs(phases.extractMs)}`],
+    ...phases.cacheAddMs === void 0 ? [] : [`adding to the tool cache ${formatMs(phases.cacheAddMs)}`]
+  ];
+}
 function stepFindings(ctx, entry2) {
   const { step, label: label2 } = entry2;
   const findings4 = [];
@@ -67569,14 +67607,20 @@ function stepFindings(ctx, entry2) {
   }
   if (step.toolCache === "download" && step.durationMs >= MIN_FINDING_MS) {
     const release2 = step.toolSource === "release";
+    const phases = release2 ? [] : toolPhaseParts(step);
+    const runnerLabels2 = (ctx.job.labels ?? []).map((runnerLabel) => runnerLabel.trim().toLowerCase());
+    const slim = !release2 && runnerLabels2.includes("ubuntu-slim") && !runnerLabels2.includes("self-hosted");
     findings4.push(finding2(ctx, {
       category: "toolchain-download",
       detail: `s${entry2.path}`,
       step: label2,
       observedMs: step.durationMs,
       observation: release2 ? `${label2} downloaded and unpacked a pinned release archive with no reused install (${formatMs(step.durationMs)}).` : `${label2} downloaded its toolchain instead of finding it in the runner's tool cache (${formatMs(step.durationMs)}).`,
-      recommendation: release2 ? "Cache the extracted toolchain directory keyed by its version pin or lock file plus runner OS and architecture, and keep integrity verification before reusing it; a cache restore also takes time, so measure before and after." : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
-      evidence: [release2 ? `${label2}: release archive download with no reused install, ${formatMs(step.durationMs)}` : `${label2}: tool cache miss, ${formatMs(step.durationMs)}`],
+      recommendation: release2 ? "Cache the extracted toolchain directory keyed by its version pin or lock file plus runner OS and architecture, and keep integrity verification before reusing it; a cache restore also takes time, so measure before and after." : slim ? "The ubuntu-slim image has no hosted tool cache, so every run downloads, extracts and copies the toolchain, and choosing another version cannot produce a hit. Where the job's code supports a runtime the image preinstalls (see the image's software list), probe it with a version check and run the setup action only when the check fails; otherwise measure a standard hosted runner (including its startup and queue time) or a toolchain cache (a restore also writes to disk) before and after." : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
+      evidence: [
+        release2 ? `${label2}: release archive download with no reused install, ${formatMs(step.durationMs)}` : `${label2}: tool cache miss, ${formatMs(step.durationMs)}`,
+        ...phases.length > 0 ? [`${label2}: ${phases.join(", ")}`] : []
+      ],
       covers: [entry2.top]
     }));
   }
