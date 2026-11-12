@@ -75,6 +75,7 @@ export function remoteFixture(options: { files?: Record<string, string>; jobs?: 
       } finally { state.active -= 1; }
     }
     if (path.endsWith("/actions/runs/2000")) return Response.json(COLLECTOR_RUN);
+    if (path.endsWith("/actions/runs/2000/attempts/1")) return Response.json(COLLECTOR_RUN);
     if (path.endsWith("/actions/runs/2000/attempts/1/jobs")) {
       const page = Number(url.searchParams.get("page"));
       state.jobPages.push(page);

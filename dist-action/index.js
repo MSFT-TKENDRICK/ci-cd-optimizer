@@ -42567,9 +42567,9 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "6afe44f53111ac1a120dbf97c94a5027d893243d8cfed214c76b523a5504a2f6",
+  "implementationSha256": "db5b5d0247d1560215c5ac6dccf57eeaf2bfb3d6b0c890c222001e850fd5cf2b",
   "generatorSha256": "ea737477f2d148397dbd83697441713e2f12a542ce95f706181ff9563fb64699",
-  "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
+  "dependenciesSha256": "c79a46fc404e233fd78ae4a570c0e97591b19b80e72289beb9882dfbd4e89afd"
 };
 
 // src/experiments/plan.ts
@@ -67795,6 +67795,7 @@ function repeatedSetup(shape, evidenceById) {
       category: "repeated-setup",
       jobKey: clip2([...new Set(list3.map((use) => use.timed.job.key))].sort().join(", "), MAX_EVIDENCE),
       jobName: clip2(listed, MAX_EVIDENCE),
+      relatedJobIds: [...new Set(list3.map((use) => use.timed.job.id))].sort((a, b) => a - b),
       step: label2,
       observedMs: Math.round(total),
       elapsedSavingsBoundMs: elapsed2,
@@ -69019,6 +69020,7 @@ async function processWorkflowRun(client, repo, run4, options = {}) {
     ...jobs.length ? { jobBaselines: jobs } : {},
     ...attribution ? { attribution } : {},
     ...attributionUnavailable ? { attributionUnavailable } : {},
+    ...options.dashboardHistory ? { dashboardHistory: history } : {},
     benchmark: benchmarkRun(snapshot, attribution, prior.at(-1), history),
     ...knowledge ? { knowledge } : {},
     ...knowledgeSkipped ? { knowledgeSkipped } : {}

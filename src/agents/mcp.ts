@@ -9,6 +9,8 @@ import { RULESETS } from "../lint/rules/index.js";
 import { normalizeRepository, operationAccess, remoteRunReport, remoteScan, type RemoteOptions } from "./remote.js";
 import { agentErrorMessage, boundedResult, LIMITS, operation, sanitizeMarkdown, WorkLimiter } from "./safety.js";
 import { attachFeedback, type FeedbackOptions } from "./feedback.js";
+import { dashboardPage, dashboardLayout, defaultDashboardLayout } from "./dashboard.js";
+import { dashboardHtml } from "../dashboard-html.generated.js";
 import {
   AgentError,
   MAX_CONTENT_FILES,
@@ -36,6 +38,8 @@ export interface McpServerOptions {
   /** Enables the read-only GitHub tools (scan_repository, workflow_run_report) for the allowlisted repositories. */
   remote?: RemoteOptions;
   feedback?: FeedbackOptions;
+  /** Hosted requests must not expose the server's local filesystem. */
+  remoteOnly?: boolean;
   /** Timeout for the client's roots/list response (default 5000 ms). */
   rootsTimeoutMs?: number;
 }
@@ -50,6 +54,7 @@ export const MCP_TOOLS = {
   validateReviewProject: "validate_review_project",
   scanRepository: "scan_repository",
   workflowRunReport: "workflow_run_report",
+  dashboardMetrics: "dashboard_metrics",
 } as const;
 
 const INSTRUCTIONS = [
@@ -108,6 +113,8 @@ const strip = <T extends Record<string, unknown>>(value: T) =>
 
 const local = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 const github = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true } as const;
+const DASHBOARD_URI = "ui://ci-cd-optimizer/dashboard.html";
+const DASHBOARD_MIME = "text/html;profile=mcp-app";
 
 /** The developer-facing MCP server: the linter, rule catalog, and (opt-in) read-only GitHub telemetry as tools. */
 export function createMcpServer(options: McpServerOptions): McpServer {
@@ -200,6 +207,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     return root;
   };
 
+  if (!options.remoteOnly) {
   server.registerTool(MCP_TOOLS.lint, {
     title: "Lint CI/CD files",
     description: "Find CI/CD optimization and policy issues in the workspace's workflows, actions, Dockerfiles, and package manifests. "
@@ -266,6 +274,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     inputSchema: z.object({ root, path: relativePath.describe("Workspace-relative path to project.yaml.") }),
     annotations: local,
   }, (args, ctx) => guard(async (signal) => ({ ...(await validateReviewProject(await rootFor(args.root), args.path, signal)) }), ctx.mcpReq.signal));
+  }
 
   if (remote) {
     const access = (signal: AbortSignal) => operationAccess(remote, signal);
@@ -300,8 +309,41 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       }),
       annotations: github,
     }, (args, ctx) => guard(async (signal) => ({ ...(await remoteRunReport(access(signal), strip(args))) }), ctx.mcpReq.signal));
+
+    server.registerTool(MCP_TOOLS.dashboardMetrics, {
+      title: "Show a CI/CD performance dashboard",
+      description: "Render an interactive OpenUI dashboard for one completed workflow run, or return structured evidence and text to non-UI clients. "
+        + "Choose a layout by ordering or omitting the named sections overview, jobs, attribution, comparison. Never provide HTML or code. "
+        + "Run identity and pagination must remain fixed between calls. Findings are evidence and overlapping bounds, not measured savings. "
+        + `The dashboard is read-only and uses only these allowed repositories: ${remote.allow.join(", ")}.`,
+      inputSchema: z.strictObject({
+        repo: z.string().max(140).describe("Allowed owner/repo."),
+        runId: z.number().int().positive(),
+        runAttempt: z.number().int().positive().optional().describe("Exact attempt; reuse the attempt returned on the first page."),
+        layout: dashboardLayout.optional().describe("Declarative order/selection of allowed dashboard sections."),
+        jobId: z.number().int().positive().optional().describe("Only display this collected job and its evidence."),
+        jobOffset: z.number().int().min(0).max(100_000).optional(),
+        stepOffset: z.number().int().min(0).max(100_000).optional(),
+        findingOffset: z.number().int().min(0).max(100_000).optional(),
+        gapOffset: z.number().int().min(0).max(100_000).optional(),
+        evidenceOffset: z.number().int().min(0).max(100_000).optional(),
+      }),
+      annotations: github,
+      _meta: { ui: { resourceUri: DASHBOARD_URI } },
+    }, ({ layout, jobId, jobOffset, stepOffset, findingOffset, gapOffset, evidenceOffset, ...args }, ctx) => guard(async (signal) => {
+      const report = await remoteRunReport(access(signal), { ...strip(args), dashboard: true });
+      if (!report.dashboard) throw new AgentError(`Dashboard unavailable: ${report.reason ?? report.status}.`);
+      return {
+        ...dashboardPage(report.dashboard, strip({ jobId, jobOffset, stepOffset, findingOffset, gapOffset, evidenceOffset })),
+        layout: layout ?? defaultDashboardLayout,
+      };
+    }, ctx.mcpReq.signal));
+    server.registerResource("dashboard", DASHBOARD_URI, {
+      title: "CI/CD performance dashboard", mimeType: DASHBOARD_MIME,
+    }, async () => ({ contents: [{ uri: DASHBOARD_URI, mimeType: DASHBOARD_MIME, text: dashboardHtml, _meta: { ui: { prefersBorder: false } } }] }));
   }
 
+  if (!options.remoteOnly) {
   server.registerResource("rule", new ResourceTemplate("cicd://rules/{+id}", {
     list: () => ({
       resources: listRules().map((rule) => ({ uri: `cicd://rules/${rule.id}`, name: rule.id, description: rule.description, mimeType: "application/json" })),
@@ -367,6 +409,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       },
     }],
   }));
+  }
 
   return server;
 }
