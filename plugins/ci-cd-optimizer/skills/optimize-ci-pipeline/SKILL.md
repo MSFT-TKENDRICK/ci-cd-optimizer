@@ -1,6 +1,6 @@
 ---
 name: optimize-ci-pipeline
-description: Speed up a repository's CI/CD with the CI/CD Optimizer linter. Use when asked to make builds, tests, or releases faster or cheaper, to review GitHub Actions workflows, Dockerfiles, or package setup for caching, hermetic builds, container layers, GitHub Packages (ghcr.io, npm.pkg.github.com), concurrency, or affected-only testing, or to prepare a repo for frequent agent-driven pull requests.
+description: Optimize CI/CD build, test and release performance. Invoke before answering requests to reduce GitHub Actions job duration, runner runtime or wasted runner work, including follow-ups about slow jobs in a CI dashboard or Gantt chart. Also use for workflow and Dockerfile optimization, dependency caching, hermetic builds, shared container layers, GHCR/npm registries, concurrency and affected-only testing. Applies to advice and implementation even when telemetry or tools are unavailable; establish evidence and report limitations first. Not for production application latency, dashboard styling, analysis-only run reports or suppressing findings.
 license: MIT
 compatibility: Works best with the ci-cd-optimizer MCP server from the ci-cd-optimizer plugin. Falls back to the bundled CLI (server/cicd-agents.mjs lint), which needs Node.js 22+ and no install.
 ---
@@ -36,6 +36,7 @@ which explicitly ignores them; do not execute repository modules to bypass the r
 
 ## Steps
 
+0. **Reuse context.** A follow-up about "those jobs", runner runtime, or a CI dashboard is still a pipeline optimization request. Reuse the established repository, workflow, run and attempt; ask only for missing context. When the request is based on run timings or a Gantt chart, use `analyze-ci-run` before choosing changes, then continue this skill's preview/edit/verify procedure. Analysis-only requests belong to `analyze-ci-run`; suppression decisions belong to `triage-cicd-findings`.
 1. **Baseline.** Call `lint` with `minSeverity: "warn"`. If it reports nothing, call it again with `presets: ["agentic"]`, which adds the rules that matter most when agents open many small pull requests (affected-only testing, concurrency cancellation, merge queues).
 2. **Check coverage.** If `inventoryComplete` is false or `parseProblems` is non-empty, report known gaps and say when unvisited files cannot be enumerated. Report omission counts and output-budget errors; narrow the query rather than claiming the repository is clean.
 3. **Rank.** Group findings by `ruleId` and order by `severity`, then `impact` (`high` first), then count. The usual big wins are:
@@ -49,6 +50,7 @@ which explicitly ignores them; do not execute repository modules to bypass the r
 5. **Autofix preview.** For findings with `fixable: true`, call `fix_preview` (optionally with `ruleIds`) and show the complete diff. Apply it only after they agree and current contents still match `oldText`; otherwise regenerate the preview. Report `conflicts` and `omittedFiles`. Never apply an omitted/partial diff.
 6. **Manual fixes.** For the rest, draft the edit, then call `lint_content` with the new text. Only write the file once that finding is gone and no new `error` appeared.
 7. **Verify.** Call `lint` again on the touched `paths` and report before/after counts.
+8. **Measure runtime separately.** A clean lint result is not proof of optimal runtime. Profile evidence-supported test, setup, import, teardown and container hotspots; add a focused detector/regression when ordinary analysis reproduces an actionable finding the optimizer missed. Preserve coverage, assertions, security, isolation, formal checks and parity gates. For timed configuration changes, use comparable interleaved controls and include repeated setup/transfer costs and total runner work. Do not promise to halve jobs from historical averages. Repeat exact-attempt analysis after authorized validation runs; missing logs or incomparable baselines remain uncertainty, not zero opportunity. Never dispatch runs solely to keep a feedback loop alive, and do not infer merge, deployment or authorization changes from an optimization request.
 
 ## Guardrails
 

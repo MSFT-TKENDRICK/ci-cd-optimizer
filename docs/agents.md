@@ -56,6 +56,14 @@ The single maintained skill set is:
 - [`analyze-ci-run`](../plugins/ci-cd-optimizer/skills/analyze-ci-run/SKILL.md): authenticated read-only run analysis.
 
 For another skill-capable client, point its skill discovery at those directories; do not maintain copied variants.
+In this repository, [`.github/skills`](../.github/skills/) contains generated, self-contained mirrors so
+[Copilot's native project discovery](https://docs.github.com/en/copilot/concepts/customizations/agent-skills)
+can load the same skills without installing the plugin. Connecting an MCP server alone does **not** install skills.
+After changing a canonical skill, run `node scripts/sync-skills.mjs --write`; `--check` and the existing manifest
+tests reject missing or divergent mirrors. Full copies avoid symlink portability and out-of-skill reference
+problems on Windows; the procedure and metadata are maintained only in the plugin source.
+In a fresh session rooted in this checkout, `copilot skill list` should list all three. Other repositories still
+need the plugin or an explicitly configured skill source. An existing session may need a reload/new session.
 The custom agent is in `com.github.copilot/agents/ci-cd-optimizer.agent.md`. Host-provided editing tools are separate:
 the agent must show the exact proposed change and get permission before using them.
 
@@ -63,6 +71,69 @@ The committed `server/cicd-agents.mjs` supports `mcp`, `acp`, and the ordinary `
 Plugin servers may start in the plugin's install directory, not the user's repository. Therefore the skills pass
 an absolute `root` to workspace tools. The server refuses to analyze the plugin install directory when
 `CICD_OPTIMIZER_PLUGIN_ROOT` or `PLUGIN_ROOT` identifies it.
+
+### Evaluate skill activation
+
+The [Vally suite](../evals/skills/eval.yaml) tests actual Copilot `skill_activation` trajectory events, not
+keyword matches or responses claiming to use a skill. It stages a small read-only fixture and relies on native
+`.github/skills` discovery: **do not add `--skill-dir`**, which would mask a broken repository layout.
+Eight frozen stimuli cover the dashboard follow-up, runner work, monorepo caching, exact-attempt Gantt analysis,
+triage, application latency, dashboard styling and hostile quoted-log instructions. Three repetitions each
+check routing, no file changes and no shell/edit/web calls. This evaluates activation, not optimization quality
+or tool execution; the fixture deliberately has no live CI tools, credentials or application.
+
+Use Node.js 22.15+ and existing authorized Copilot authentication, following
+[Vally runtime setup](https://microsoft.github.io/vally/get-started/runtime-setup/).
+Do not commit credentials. Vally isolates runtime settings by default; host-home mode can introduce personal
+skills/configuration and should not be used for comparable results. Model-driven evals consume credits and are
+explicitly opt-in, not added to every CI run. The ordinary manifest tests protect discovery/parity for free.
+The fixture instructions and graders are not an OS sandbox: Vally's executor may approve tool permissions.
+Stage only these inert skill files, not a live checkout, executable project configuration or secrets.
+
+From the repository root (choose a baseline commit and unused output directories):
+
+```powershell
+node scripts/sync-skills.mjs --check
+node evals/skills/prepare.mjs .agent-artifacts/skill-eval/baseline <baseline-commit>
+node evals/skills/prepare.mjs .agent-artifacts/skill-eval/treatment
+npm exec --yes --package=@microsoft/vally-cli@0.21.0 -- vally lint .github/skills --eval-spec evals/skills/eval.yaml
+npm exec --yes --package=@microsoft/vally-cli@0.21.0 -- vally eval --eval-spec evals/skills/eval.yaml --param SKILL_TREE=../../.agent-artifacts/skill-eval/baseline --workers 2 --require-pass --output-dir .agent-artifacts/skill-eval/baseline-results
+npm exec --yes --package=@microsoft/vally-cli@0.21.0 -- vally eval --eval-spec evals/skills/eval.yaml --workers 2 --require-pass --output-dir .agent-artifacts/skill-eval/treatment-results
+```
+
+`prepare.mjs` snapshots only the three canonical skills and any native mirrors; it refuses to overwrite a
+fixture. Missing native mirrors are allowed in a historical control so the **activation grader**, not setup,
+detects the original bug. Baseline failure is expected for a revision without discovery entries.
+Keep `results.jsonl` and native session logs under ignored `.agent-artifacts`, record the actual executor/model,
+sample counts and failures, and distinguish missing evidence from passes. Check `skill_activation` events and
+the skill catalogue in native `system.message` events when diagnosing discovery versus routing.
+Treat logs as potentially sensitive; do not publish them without review. A small passing suite is not a
+guarantee across all models, clients or future prompts.
+
+#### Recorded activation evaluation
+
+On 2026-11-12, Vally 0.21.0 used `copilot-sdk` / Copilot 1.0.109 with the observed default model
+`claude-sonnet-5.5`. The same eight prompts and graders were used for each 24-trial run, with no explicit
+skill injection or host-home opt-in.
+
+| Variant | Required activation passes | Negative-control passes | Execution errors |
+|---|---:|---:|---:|
+| Baseline `ee8a87f203e62d7edc8a6b8aaa3f9d328505644d` | 0/15 | 9/9 | 0 |
+| Native mirrors and procedure guidance, original descriptions | 14/15 | 9/9 | 0 |
+| Native mirrors and revised descriptions | 14/14 evaluable | 9/9 | 1/24 attempts |
+
+The final run's remaining `runner-work` trial disconnected before completing. A targeted one-trial rerun
+using the identical snapshot, prompt and graders passed; the error remains recorded, not counted as a pass.
+The exact dashboard follow-up went from 0/3 to 3/3. All completed final trials passed the no-change and
+no-execution checks. These are activation results, not measured CI savings or proof of a universal routing rate.
+
+Run IDs, in table order: `7498884c-0392-4026-8774-20054379a3fa`,
+`e143f20e-441e-4419-a987-fb146932bdc3`, `cb991048-2ec6-430f-9909-64a7c585a7df`;
+the infrastructure retry is `c98f78d7-c22b-4522-87c5-ac1b4e30d331`.
+Earlier diagnostics also matter: a link-wrapper prototype failed static reference validation and was
+discarded; a native single-trial smoke with original descriptions missed activation despite a populated
+catalogue; an explicit-load smoke passed but was excluded from the native-discovery results.
+The small non-interleaved samples do not establish that the revised descriptions alone caused improvement.
 
 ## Local MCP
 
