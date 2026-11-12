@@ -58,9 +58,14 @@ Presets:
 Rule options and defaults are listed per rule in [rules.md](rules.md). Generated gh-aw `.lock.yml` workflows are
 ignored by default. Fix the `.md` source and recompile instead.
 
-The 14 rulesets include `nix` and `toolchains`; these work through every built-in entry point, with no separate
+The rulesets include `hooks`, `nix` and `toolchains`; these work through every built-in entry point, with no separate
 plugin or Nix/toolchain executable required. `rulesets: { nix: warn }` selects all 37 Nix rules regardless of preset;
 individual `rules` entries can then narrow them. See [Nix behavior and assumptions](nix.md).
+
+`rulesets: { hooks: warn }` selects Git-hook and pre-commit optimization rules. They flag direct dependency
+installs on the interactive hook path and explicit whole-repository lint entries that also receive batched
+filenames. Recommendations preserve secret scans, mandatory checks and CI gates; they never suggest bypassing
+hooks or automatically narrowing a repository-wide check to staged files.
 
 Absence-based rules need a complete inventory of relevant repository files. File limits, oversized content-bearing
 files, API filtering/truncation, unreadable entries, and symlinks/submodules can make that inventory incomplete.

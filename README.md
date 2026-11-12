@@ -233,7 +233,7 @@ registers itself as the reference example in [projects/ci-cd-optimizer](projects
 
 ## What it finds
 
-132 rules in 15 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
+133 rules in 16 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
 suppressions.
 
 | Ruleset | Examples |

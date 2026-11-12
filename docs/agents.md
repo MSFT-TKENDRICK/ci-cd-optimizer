@@ -496,13 +496,16 @@ conditional hypotheses and unmeasured resource costs never establish convergence
 
 Run `npm run ci:prepare` after source changes, review its generated diffs, then run `npm run ci:check-generated`
 before pushing. Preparation regenerates rule assurance, proof provenance, both shipped bundles and setup UI output.
-The check is read-only and preserves the existing CI parity gates. To opt in to the repository pre-push check:
+The check is read-only and preserves the existing CI parity gates. Install this repository's managed commit
+and push gates using the same setup as contributors:
 
 ```powershell
-git config --local core.hooksPath .githooks
+npm run secrets:install
+npm run hooks:install
 ```
 
-Fresh development/cloud bootstrap installs this hook with `--install-hooks`, refusing to replace an existing hook.
+Fresh development/cloud bootstrap installs these hooks with `--install-hooks`, refusing to replace existing hooks.
+Provision the pinned scanner separately with `npm run secrets:install`; bootstrap never bypasses missing checks.
 Review an existing hooks configuration before replacing it. Hooks are a local early warning, not a substitute for
 CI enforcement or proof verification. A reported artifact failure measures observed rework exposure, not promised savings.
 

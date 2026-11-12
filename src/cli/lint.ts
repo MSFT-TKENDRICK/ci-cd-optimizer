@@ -18,7 +18,7 @@ import { loadLocalRules } from "./local-rules.js";
 export const LINT_HELP = `Usage: ci-cd-optimizer lint [paths...] [options]
        cicd-lint [paths...] [options]
 
-Lints GitHub Actions workflows, Dockerfiles, Nix expressions/flakes, and package/toolchain configuration.
+Lints GitHub Actions workflows, Dockerfiles, Nix expressions/flakes, Git hooks, pre-commit, and package/toolchain configuration.
 Findings are static recommendations, not proofs of runtime behavior or performance.
 
 With no paths the current directory is the lint root, and a single directory argument becomes the root. Any other

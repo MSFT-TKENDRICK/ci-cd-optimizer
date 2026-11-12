@@ -18,8 +18,10 @@ test("startup authorizes one repository, preserves prior hooks and refuses malfo
     await mkdir(join(root, "scripts"));
     await mkdir(join(root, ".githooks"));
     await writeFile(join(root, ".githooks", "pre-push"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    await writeFile(join(root, ".githooks", "pre-commit"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     await mkdir(join(root, "plugins", "ci-cd-optimizer", "server"), { recursive: true });
     await copyFile(new URL("../../scripts/agent-startup.mjs", import.meta.url), script);
+    await copyFile(new URL("../../scripts/install-hooks.mjs", import.meta.url), join(root, "scripts", "install-hooks.mjs"));
     await writeFile(join(root, "plugins", "ci-cd-optimizer", "server", "cicd-agents.mjs"), "");
     await writeFile(env.GIT_CONFIG_GLOBAL, "");
     git("init", "--quiet");

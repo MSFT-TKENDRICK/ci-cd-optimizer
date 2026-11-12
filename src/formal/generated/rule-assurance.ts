@@ -616,6 +616,40 @@ export const RULE_ASSURANCE = {
       "optionalModelCertificates": []
     },
     {
+      "id": "hooks/install-in-hook",
+      "metadataSha256": "a033236bfd73d9563df2c9ca8e42d486d2c95718514bee66b86a4abe4b50e04d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Git hooks should not reinstall project dependencies on every invocation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A direct package-manager install in a commit/push hook repeats dependency resolution and potentially lifecycle scripts on the interactive path. Provision the same locked dependencies at setup and on lockfile changes, and fail explicitly when dependencies are absent. Do not remove secret scanning, linting or CI installation checks. No latency saving is guaranteed without measuring representative hooks."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hooks/pre-commit-repo-scan",
+      "metadataSha256": "6827c19cc1ec25ad7bce7d2bcd78672c2cd3a87bc5c62fc8778dc263326a86ef",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Explicit whole-repository pre-commit lint entries should not also receive batched filenames."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "pre-commit appends matching filenames by default and may split them across invocations to fit command-line limits. An entry that explicitly scans `.` can consequently repeat a whole-repository scan per batch. For intentionally whole-repository checks, pass_filenames: false avoids redundant arguments and batches without reducing analysis scope. Keep file filters, mandatory checks and CI gates; do not apply this advice to staged-file-only linters."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
       "id": "nix/accept-flake-config-untrusted",
       "metadataSha256": "c6610d8a0d9ec908e693209f9d7bc8859f744f0fd28b2f2205f789a68d4935f3",
       "detector": {

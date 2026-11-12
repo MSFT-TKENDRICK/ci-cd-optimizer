@@ -147,6 +147,8 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `ssdf`, `all`
 | [`toolchains/python-pip-no-hash-check`](#toolchains-python-pip-no-hash-check) | practice | info | strict |  | CI installs fully pinned requirements files with pip without hash-checking mode (`--hash` entries and `--require-hashes`). |
 | [`toolchains/uv-sync-unlocked`](#toolchains-uv-sync-unlocked) | practice | warn | recommended, agentic, strict |  | `uv sync` and `uv run` in CI should pass `--locked` so the committed `uv.lock` is enforced instead of silently re-locked. |
 | [`toolchains/rust-toolchain-unpinned`](#toolchains-rust-toolchain-unpinned) | practice | warn | recommended, agentic, strict |  | CI should build Rust with a pinned toolchain release rather than the floating `stable`/`nightly` channel. |
+| [`hooks/install-in-hook`](#hooks-install-in-hook) | practice | warn | recommended |  | Git hooks should not reinstall project dependencies on every invocation. |
+| [`hooks/pre-commit-repo-scan`](#hooks-pre-commit-repo-scan) | practice | warn | recommended |  | Explicit whole-repository pre-commit lint entries should not also receive batched filenames. |
 
 ## Ruleset: workflow
 
@@ -5214,3 +5216,40 @@ References:
 - <https://github.com/dtolnay/rust-toolchain#inputs>
 - <https://github.com/actions-rust-lang/setup-rust-toolchain#inputs>
 - <https://github.com/Swatinem/rust-cache#cache-details>
+
+## Ruleset: hooks
+
+<a id="hooks-install-in-hook"></a>
+
+### hooks/install-in-hook
+
+Git hooks should not reinstall project dependencies on every invocation.
+
+**Why:** A direct package-manager install in a commit/push hook repeats dependency resolution and potentially lifecycle scripts on the interactive path. Provision the same locked dependencies at setup and on lockfile changes, and fail explicitly when dependencies are absent. Do not remove secret scanning, linting or CI installation checks. No latency saving is guaranteed without measuring representative hooks.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`
+
+References:
+
+- <https://git-scm.com/docs/githooks>
+- <https://docs.npmjs.com/cli/commands/npm-ci>
+- <https://pre-commit.com/#new-hooks>
+
+<a id="hooks-pre-commit-repo-scan"></a>
+
+### hooks/pre-commit-repo-scan
+
+Explicit whole-repository pre-commit lint entries should not also receive batched filenames.
+
+**Why:** pre-commit appends matching filenames by default and may split them across invocations to fit command-line limits. An entry that explicitly scans `.` can consequently repeat a whole-repository scan per batch. For intentionally whole-repository checks, pass_filenames: false avoids redundant arguments and batches without reducing analysis scope. Keep file filters, mandatory checks and CI gates; do not apply this advice to staged-file-only linters.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`
+
+References:
+
+- <https://pre-commit.com/#hooks-pass_filenames>
+- <https://pre-commit.com/#creating-new-hooks>
