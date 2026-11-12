@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { run } from "../../src/cli/index.js";
 import type { CliIO } from "../../src/cli/io.js";
 import { allRules } from "../../src/lint/rules/index.js";
@@ -68,6 +68,51 @@ describe("cli", () => {
     expect(lintHelp.stdout).toContain("Usage: ci-cd-optimizer lint");
   });
 
+  it("loads only the requested command and reports import failures through the CLI", async () => {
+    const telemetry = vi.fn(() => vi.importActual("../../src/cli/telemetry.js"));
+    const doctor = vi.fn(() => { throw new Error("command module unavailable"); });
+    vi.doMock("../../src/cli/telemetry.js", telemetry);
+    vi.doMock("../../src/cli/doctor.js", doctor);
+    vi.resetModules();
+    try {
+      const { run: isolatedRun } = await import("../../src/cli/index.js");
+      for (const args of [["version"], ["--help"], ["rules"], ["lint", "--help"]]) {
+        expect(await isolatedRun(args, cli().io)).toBe(0);
+      }
+      expect(telemetry).not.toHaveBeenCalled();
+      expect(doctor).not.toHaveBeenCalled();
+
+      const help = cli();
+      expect(await isolatedRun(["help", "telemetry"], help.io)).toBe(0);
+      expect(help.stdout).toContain("Usage: ci-cd-optimizer telemetry");
+      expect(telemetry).toHaveBeenCalledTimes(1);
+      expect(doctor).not.toHaveBeenCalled();
+
+      const failure = cli();
+      expect(await isolatedRun(["doctor", "--help"], failure.io)).toBe(1);
+      expect(failure.stderr).toContain("ci-cd-optimizer: Error:");
+      expect(doctor).toHaveBeenCalledTimes(1);
+      expect(failure.stdout).toBe("");
+    } finally {
+      vi.doUnmock("../../src/cli/telemetry.js");
+      vi.doUnmock("../../src/cli/doctor.js");
+      vi.resetModules();
+    }
+  });
+
+  it.each(["experiments", "recipes", "scan", "telemetry", "knowledge", "maintenance", "execution", "review", "formal", "ssdf", "doctor"])(
+    "preserves both help entry points for %s",
+    async (command) => {
+      const topic = cli();
+      const direct = cli();
+      expect(await topic.run("help", command)).toBe(0);
+      expect(await direct.run(command, "--help")).toBe(0);
+      expect(topic.stdout).toContain(`ci-cd-optimizer ${command}`);
+      expect(direct.stdout).toBe(topic.stdout);
+      expect(topic.stderr + direct.stderr).toBe("");
+    },
+  );
+
   it("reports SSDF repository evidence in text and JSON", async () => {
     await write("SECURITY.md", "Report vulnerabilities here.");
     await write(WORKFLOW, MISSING_TIMEOUT);
@@ -116,6 +161,12 @@ describe("cli", () => {
     expect(typo.stderr).toContain('Unknown command "lnt"');
     expect(await cli().run("lint", "--nope")).toBe(2);
     expect(await cli().run("lint", "--stdin")).toBe(2);
+    const inherited = cli();
+    expect(await inherited.run("constructor")).toBe(2);
+    expect(inherited.stderr).toContain('Unknown command "constructor"');
+    const inheritedHelp = cli();
+    expect(await inheritedHelp.run("help", "constructor")).toBe(0);
+    expect(inheritedHelp.stdout).toContain("Usage: ci-cd-optimizer <command>");
   });
 
   it("treats several positionals as report filters rather than a usage error", async () => {

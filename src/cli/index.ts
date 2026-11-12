@@ -3,19 +3,8 @@ import { allRules } from "../lint/rules/index.js";
 import { ruleAssurance } from "../lint/assurance.js";
 import { renderRulesMarkdown } from "../lint/docs.js";
 import { VERSION } from "../version.js";
-import { experimentsCommand, EXPERIMENTS_HELP } from "./experiments.js";
 import { UsageError, writeText, type CliIO } from "./io.js";
 import { lintCommand, LINT_HELP, ruleListText } from "./lint.js";
-import { recipesCommand, RECIPES_HELP } from "./recipes.js";
-import { scanCommand, SCAN_HELP } from "./scan.js";
-import { telemetryCommand, TELEMETRY_HELP } from "./telemetry.js";
-import { knowledgeCommand, KNOWLEDGE_HELP } from "./knowledge.js";
-import { maintenanceCommand, MAINTENANCE_HELP } from "./maintenance.js";
-import { executionCommand, EXECUTION_HELP } from "./execution.js";
-import { reviewCommand, REVIEW_HELP } from "./review.js";
-import { formalCommand, FORMAL_HELP } from "./formal.js";
-import { ssdfCommand, SSDF_HELP } from "./ssdf.js";
-import { doctorCommand, DOCTOR_HELP } from "./doctor.js";
 
 export const HELP = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimizer for GitHub repositories
 
@@ -59,20 +48,22 @@ async function rulesCommand(args: string[], io: CliIO): Promise<number> {
   return 0;
 }
 
-const COMMANDS: Record<string, { run: (args: string[], io: CliIO) => Promise<number>; help: string }> = {
-  lint: { run: lintCommand, help: LINT_HELP },
-  rules: { run: rulesCommand, help: RULES_HELP },
-  experiments: { run: experimentsCommand, help: EXPERIMENTS_HELP },
-  recipes: { run: recipesCommand, help: RECIPES_HELP },
-  scan: { run: scanCommand, help: SCAN_HELP },
-  telemetry: { run: telemetryCommand, help: TELEMETRY_HELP },
-  knowledge: { run: knowledgeCommand, help: KNOWLEDGE_HELP },
-  maintenance: { run: maintenanceCommand, help: MAINTENANCE_HELP },
-  execution: { run: executionCommand, help: EXECUTION_HELP },
-  review: { run: reviewCommand, help: REVIEW_HELP },
-  formal: { run: formalCommand, help: FORMAL_HELP },
-  ssdf: { run: ssdfCommand, help: SSDF_HELP },
-  doctor: { run: doctorCommand, help: DOCTOR_HELP },
+type Command = { run: (args: string[], io: CliIO) => Promise<number>; help: string };
+
+const COMMANDS: Record<string, () => Promise<Command>> = {
+  lint: async () => ({ run: lintCommand, help: LINT_HELP }),
+  rules: async () => ({ run: rulesCommand, help: RULES_HELP }),
+  experiments: async () => { const m = await import("./experiments.js"); return { run: m.experimentsCommand, help: m.EXPERIMENTS_HELP }; },
+  recipes: async () => { const m = await import("./recipes.js"); return { run: m.recipesCommand, help: m.RECIPES_HELP }; },
+  scan: async () => { const m = await import("./scan.js"); return { run: m.scanCommand, help: m.SCAN_HELP }; },
+  telemetry: async () => { const m = await import("./telemetry.js"); return { run: m.telemetryCommand, help: m.TELEMETRY_HELP }; },
+  knowledge: async () => { const m = await import("./knowledge.js"); return { run: m.knowledgeCommand, help: m.KNOWLEDGE_HELP }; },
+  maintenance: async () => { const m = await import("./maintenance.js"); return { run: m.maintenanceCommand, help: m.MAINTENANCE_HELP }; },
+  execution: async () => { const m = await import("./execution.js"); return { run: m.executionCommand, help: m.EXECUTION_HELP }; },
+  review: async () => { const m = await import("./review.js"); return { run: m.reviewCommand, help: m.REVIEW_HELP }; },
+  formal: async () => { const m = await import("./formal.js"); return { run: m.formalCommand, help: m.FORMAL_HELP }; },
+  ssdf: async () => { const m = await import("./ssdf.js"); return { run: m.ssdfCommand, help: m.SSDF_HELP }; },
+  doctor: async () => { const m = await import("./doctor.js"); return { run: m.doctorCommand, help: m.DOCTOR_HELP }; },
 };
 
 /** Parses argv (without the node and script entries) and returns the exit code. Never calls process.exit. */
@@ -84,11 +75,11 @@ export async function run(argv: string[], io: CliIO): Promise<number> {
       return 0;
     }
     if (first === "help" || first === "--help" || first === "-h") {
-      const topic = rest[0] ? COMMANDS[rest[0]] : undefined;
+      const topic = rest[0] && Object.hasOwn(COMMANDS, rest[0]) ? await COMMANDS[rest[0]]?.() : undefined;
       io.stdout(topic?.help ?? HELP);
       return 0;
     }
-    const command = first ? COMMANDS[first] : undefined;
+    const command = first && Object.hasOwn(COMMANDS, first) ? await COMMANDS[first]?.() : undefined;
     if (command) return await command.run(rest, io);
     // `ci-cd-optimizer [dir] [options]` lints like ESLint; anything else that looks like a command is a typo.
     if (first && !first.startsWith("-") && /^[a-z]+$/.test(first) && !(await isDirectory(io, first))) {
