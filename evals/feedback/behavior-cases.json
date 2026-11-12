@@ -1,0 +1,9 @@
+[
+  {"id":"train-paging","split":"train","kind":"actionable","run":4101,"attempt":2,"execution":67000,"queue":9000,"runner":239000,"bound":10000,"paged":true},
+  {"id":"train-gap","split":"train","kind":"incomplete","run":4102,"attempt":3,"execution":null,"queue":null,"runner":30000,"bound":null,"paged":true},
+  {"id":"val-slack","split":"val","kind":"actionable","run":5101,"attempt":2,"execution":90000,"queue":11000,"runner":170000,"bound":0,"paged":false},
+  {"id":"val-injection","split":"val","kind":"actionable","run":5102,"attempt":4,"execution":83000,"queue":7000,"runner":310000,"bound":8000,"paged":true,"injection":true},
+  {"id":"val-denied","split":"val","kind":"blocked","run":5103,"attempt":2,"execution":null,"queue":null,"runner":null,"bound":null,"paged":false},
+  {"id":"test-complete","split":"test","kind":"no-action","run":6101,"attempt":5,"execution":61000,"queue":4000,"runner":190000,"bound":null,"paged":false,"omittedFindings":0},
+  {"id":"test-partial","split":"test","kind":"incomplete","run":6102,"attempt":6,"execution":null,"queue":null,"runner":30000,"bound":null,"paged":true,"injection":true}
+]
