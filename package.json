@@ -22,7 +22,8 @@
     "THIRD_PARTY_NOTICES.txt"
   ],
   "scripts": {
-    "build": "npm run build:dashboard && tsc -p tsconfig.json",
+    "build": "npm run build:dashboard && npm run build:server",
+    "build:server": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:ui": "tsc -p ui/setup/tsconfig.json --noEmit",
     "typecheck:dashboard": "tsc -p ui/dashboard/tsconfig.json --noEmit",

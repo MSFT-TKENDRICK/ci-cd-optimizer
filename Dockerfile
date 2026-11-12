@@ -10,7 +10,8 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+# src/dashboard-html.generated.ts is committed and checked by CI, so the image compiles only the server.
+RUN npm run build:server
 
 FROM gcr.io/distroless/nodejs22-debian12:nonroot
 WORKDIR /app
