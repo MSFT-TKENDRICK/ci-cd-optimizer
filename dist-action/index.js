@@ -42567,7 +42567,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "953f79a029ab589941fd321f89de02cc3b08f698784edc99bd2fa19f98d428be",
+  "implementationSha256": "50968aacca00c7333a972350532e1067165c7d361b3bc18cf77a2743340f1a3c",
   "generatorSha256": "ea737477f2d148397dbd83697441713e2f12a542ce95f706181ff9563fb64699",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -67267,6 +67267,9 @@ var MAX_EVIDENCE = 200;
 var MAX_LISTED = 5;
 var INFRA_STEP = /^(?:set up job|complete job|initialize containers|stop containers|post\b)/i;
 var STAGE_INSTRUCTION = /^\[[^\]]+\] [A-Z]+\b/;
+var STAGE_STEP = /^\[([^\]]+?) \d+\/\d+\] /;
+var METADATA_REQUEST = /^\[(?:[^\]\s]+ )?internal\] load metadata for (\S+)$/;
+var RESOLVED_BASE = /^\[([^\]]+?) \d+\/\d+\] FROM (\S+?)@(sha256:[a-f0-9]{64})(?:\s|$)/;
 var CHECKOUT_STEP = /\bactions\/checkout\b/i;
 var SETUP_STEP = /\b(?:set\s*up|setup|install|restore|cache|dependenc|deps|bootstrap|toolchain|prepare)/i;
 var INSTALL_COMMAND2 = /\b(?:npm\s+(?:ci|install|i)|pnpm\s+(?:install|i)|yarn\s+install|pip3?\s+install|poetry\s+install|bundle\s+install|composer\s+install|go\s+mod\s+download|dotnet\s+restore)\b/i;
@@ -67437,6 +67440,40 @@ function describeVertex(vertex) {
 function vertexUnionMs(vertices) {
   return unionMs(vertices.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs]));
 }
+function tagRequestedBases(build2, missed) {
+  const requested = /* @__PURE__ */ new Set();
+  for (const vertex of build2.vertices) {
+    const ref = METADATA_REQUEST.exec(vertex.name)?.[1];
+    if (ref) requested.add(ref);
+  }
+  const stages = /* @__PURE__ */ new Map();
+  for (const vertex of build2.vertices) {
+    const match2 = vertex.kind === "base-image" ? RESOLVED_BASE.exec(vertex.name) : null;
+    const [, stage, ref, digest] = match2 ?? [];
+    if (stage && ref && digest && requested.has(ref) && !requested.has(`${ref}@${digest}`)) {
+      stages.set(stage, { ref, digest, vertex: vertex.id });
+    }
+  }
+  const bases = /* @__PURE__ */ new Map();
+  let attributed = 0;
+  for (const vertex of missed) {
+    const stage = STAGE_STEP.exec(vertex.name)?.[1];
+    const base2 = stage === void 0 ? void 0 : stages.get(stage);
+    if (!stage || !base2) continue;
+    attributed += 1;
+    const key2 = `${base2.ref}@${base2.digest}`;
+    const entry2 = bases.get(key2) ?? { ...base2, stages: [], missed: 0 };
+    if (!entry2.stages.includes(stage)) entry2.stages.push(stage);
+    entry2.missed += 1;
+    bases.set(key2, entry2);
+  }
+  return { bases: [...bases.values()].sort((a, b) => b.missed - a.missed || a.vertex - b.vertex), attributed };
+}
+function baseDriftNote(bases, attributed, total) {
+  const listed = bases.slice(0, MAX_LISTED).map((base2) => `stage(s) ${clip2(base2.stages.join(", "), MAX_LABEL)} on ${clip2(base2.ref, MAX_LABEL)}, resolved to ${base2.digest.slice(0, 19)}\u2026`);
+  const rest = total - attributed;
+  return ` Candidate cause: ${attributed} of these ${total} vertices are in stages built on a base image requested by mutable tag (${listed.join("; ")}${bases.length > MAX_LISTED ? `; ${bases.length - MAX_LISTED} more` : ""}). If the tag resolved to a different digest when the imported cache was written, every layer built on it misses; this log cannot show the digest used then.${rest > 0 ? ` The other ${rest} could not be linked to a tag-requested base and are not attributed.` : ""}`;
+}
 function buildFindings(ctx, entry2, build2, index) {
   const findings4 = [];
   const detail = `s${entry2.path}b${index}`;
@@ -67502,16 +67539,18 @@ function buildFindings(ctx, entry2, build2, index) {
       const source = build2.cacheFrom.map((spec2) => spec2.raw).join("; ");
       const access = build2.cacheFrom.some((spec2) => spec2.type === "gha") ? entry2.step.cacheAccess : void 0;
       const cause = restored === 0 ? "No RUN or COPY vertex was marked CACHED; this alone does not distinguish changed inputs from missing or inaccessible cache entries." : `${restored} other RUN or COPY vertex/vertices were marked CACHED, but that does not prove that matching entries for these vertices were published or accessible.`;
+      const drift = executionOutput ? tagRequestedBases(build2, vertices) : { bases: [], attributed: 0 };
       findings4.push(finding2(ctx, {
         category: executionOutput ? "layer-cache-miss" : "layer-cache-unknown",
         detail,
         step: entry2.label,
         observedMs,
         ...!executionOutput ? { removableMs: 0 } : {},
-        observation: executionOutput ? `${entry2.label}: ${vertices.length} RUN vertex/vertices produced timed command output without a CACHED marker, spanning ${formatMs(observedMs)} of vertex time despite cache-from ${source}. Vertex time can include materialization, not just command execution. ${cause} The log alone does not establish the cause.` : `${entry2.label}: ${vertices.length} RUN vertex/vertices span ${formatMs(observedMs)} without a CACHED marker or timed command output (cache-from ${source}). They may be materializing cached layers or executing silently; the retained log does not establish a rebuild or removable cost. ${cause}`,
+        observation: executionOutput ? `${entry2.label}: ${vertices.length} RUN vertex/vertices produced timed command output without a CACHED marker, spanning ${formatMs(observedMs)} of vertex time despite cache-from ${source}. Vertex time can include materialization, not just command execution. ${cause} The log alone does not establish the cause.${drift.attributed > 0 ? baseDriftNote(drift.bases, drift.attributed, vertices.length) : ""}` : `${entry2.label}: ${vertices.length} RUN vertex/vertices span ${formatMs(observedMs)} without a CACHED marker or timed command output (cache-from ${source}). They may be materializing cached layers or executing silently; the retained log does not establish a rebuild or removable cost. ${cause}`,
         recommendation: [
           ...!executionOutput ? ["Inspect the build record's cache status and execution trace before treating these vertices as misses. Missing output is not proof of either a cache hit or a rebuild, and layer-transfer output alone is not command execution. Do not expose credentials or signed URLs from build records."] : [],
           "Compare consecutive runs with identical build inputs, including resolved base-image digests, build arguments and context contents, not just the same commit. Check successful cache publication, matching import/export scopes, branch visibility and eviction.",
+          ...drift.attributed > 0 ? ["Compare each resolved base digest listed in the evidence with the one logged by the run that published the imported cache. Pinning the base by digest (hermeticity/docker-base-digest with requireDigest: true) turns base updates into explicit, reviewed changes; pair pins with update automation so security fixes still land."] : [],
           ...access?.entries.length ? ["Use the action's logged runtime cache access as branch-permission evidence only: it does not prove publication, a matching entry or successful restoration. Missing or omitted entries do not prove denied access. Do not broaden permissions merely because a layer missed."] : [],
           "If misses persist, investigate cache lookup and backend behavior before restructuring the Dockerfile or changing permissions."
         ].join(" "),
@@ -67520,6 +67559,7 @@ function buildFindings(ctx, entry2, build2, index) {
             `Action-reported runtime cache access: ${access.entries.map((entry3) => `${entry3.scope}: ${entry3.permission}`).join("; ")}${access.omittedEntries ? `; ${access.omittedEntries} additional recognized access line(s) not retained` : ""}`
           ] : [],
           ...[...vertices].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
+          ...drift.bases.slice(0, MAX_LISTED).map((base2) => `#${base2.vertex} base for stage(s) ${clip2(base2.stages.join(", "), MAX_LABEL)}: ${clip2(base2.ref, MAX_EVIDENCE)} (requested by tag) resolved to ${base2.digest}`),
           ...build2.vertices.filter((vertex) => vertex.kind === "cache-import").map(describeVertex),
           ...build2.cacheFrom.map((spec2) => `cache-from: ${spec2.raw}`)
         ],

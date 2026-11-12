@@ -193,6 +193,15 @@ retained. Unsupported, oversized and malformed lines are ignored; credentials ar
 This is logged permission evidence, not proof of cache publication, matching layers or restoration.
 Missing or omitted entries do not imply denied access, and a miss alone never justifies broader permissions.
 
+When executed RUN misses sit in stages whose own `FROM` vertex logs a resolved digest, and the matching
+`[internal] load metadata for <ref>` request names that base by tag rather than by digest, the summary adds
+a candidate cause. A mutable tag that resolved to a different digest when the imported cache was written
+invalidates every layer built on it, but the log cannot show the digest used then, so the cause stays a
+candidate. Evidence lists each base's requested reference and resolved digest so it can be compared with
+the run that published the cache, and the recommendation points to `hermeticity/docker-base-digest` with
+`requireDigest: true` paired with update automation. Misses in stages without a logged `FROM` resolution
+(BuildKit prints identical bases once) are counted as unattributed. The hint never changes savings bounds.
+
 When a build imports a layer cache, `layer-materialization` reports Dockerfile-instruction vertices
 reporting both `CACHED` and a completion time, plus completed COPY/ADD vertices without a `CACHED` marker,
 once their union reaches three seconds. A reused layer can still be fetched and unpacked on a fresh

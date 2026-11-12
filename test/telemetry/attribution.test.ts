@@ -300,6 +300,48 @@ describe("attributeRun on run 42856555439", () => {
     expect(found.observedMs).toBeGreaterThan(0);
   });
 
+  it("names a tag-requested base as a candidate cause only for missed stages whose resolution is logged", () => {
+    const found = one(attribution, "layer-cache-miss", "app");
+    const digest = `sha256:f1${"0".repeat(61)}5`;
+    expect(found.summary).toContain("The log alone does not establish the cause. Candidate cause: 2 of these 3 vertices are in stages built on a base image requested by mutable tag (stage(s) build on docker.io/library/node:22-bookworm-slim, resolved to sha256:f10000000000…).");
+    expect(found.summary).toContain("this log cannot show the digest used then. The other 1 could not be linked to a tag-requested base");
+    expect(found.summary).not.toContain("distroless");
+    expect(found.evidence).toContain(`#11 base for stage(s) build: docker.io/library/node:22-bookworm-slim (requested by tag) resolved to ${digest}`);
+    expect(found.recommendation).toContain("hermeticity/docker-base-digest with requireDigest: true");
+    expect(found.recommendation).toContain("update automation");
+    expect(found).toMatchObject({ observedMs: 20_417 });
+
+    const pinned = APP_LOG.replaceAll("load metadata for docker.io/library/node:22-bookworm-slim", `load metadata for docker.io/library/node:22-bookworm-slim@${digest}`);
+    const unhinted = one(attributeRun(snapshot(), ciLogs([[APP, parseJobLog(pinned)]])), "layer-cache-miss", "app");
+    expect(unhinted.summary).toContain("The log alone does not establish the cause. Bound:");
+    expect(unhinted.summary).not.toContain("Candidate cause");
+    expect(unhinted.recommendation).not.toContain("docker-base-digest");
+    expect(unhinted.evidence.join(" ")).not.toContain("requested by tag");
+    expect(unhinted).toMatchObject({ observedMs: found.observedMs, runnerSavingsBoundMs: found.runnerSavingsBoundMs });
+  });
+
+  it.each([
+    ["by tag", "docker.io/library/node:22", true],
+    ["by digest", `docker.io/library/node:22@sha256:${"b".repeat(64)}`, false],
+    ["for another image", "docker.io/library/node:20", false],
+  ])("attributes platform-prefixed stages only when the base was requested %s", (_case, requested, hinted) => {
+    const evidence = parseJobLog([
+      ["38:59", "##[group]Run docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "shell: /usr/bin/bash -e {0}"], ["38:59", "##[endgroup]"],
+      ["38:59", `#3 [linux/amd64 internal] load metadata for ${requested}`], ["38:59", "#3 DONE 0.4s"],
+      ["38:59", `#5 [linux/amd64 build 1/3] FROM docker.io/library/node:22@sha256:${"b".repeat(64)}`], ["38:59", "#5 DONE 0.0s"],
+      ["39:00", "#8 [linux/amd64 build 3/3] RUN npm run build"], ["39:01", "#8 0.288 > tsc -p tsconfig.json"],
+      ["39:10", "#8 DONE 10.0s"],
+    ].map(([time, text]) => `${at(time!)} ${text}`).join("\n"));
+    const found = attributeRun(snapshot([job(1, "app", "38:59", "39:11")]), new Map([[1, evidence]]))
+      .bottlenecks.find((item) => item.category === "layer-cache-miss")!;
+    expect(found.observedMs).toBe(10_000);
+    expect(found.summary.includes("Candidate cause: 1 of these 1 vertices are in stages built on a base image requested by mutable tag (stage(s) linux/amd64 build on docker.io/library/node:22, resolved to sha256:bbbbbbbbbbbb…)")).toBe(hinted);
+    expect(found.summary.includes("could not be linked")).toBe(false);
+    expect(found.evidence.includes(`#5 base for stage(s) linux/amd64 build: docker.io/library/node:22 (requested by tag) resolved to sha256:${"b".repeat(64)}`)).toBe(hinted);
+  });
+
   it("separates executed RUN vertices from missing cache markers and broadcasts unknown status with zero savings", () => {
     const digest = `sha256:${"a".repeat(64)}`;
     const evidence = parseJobLog([
