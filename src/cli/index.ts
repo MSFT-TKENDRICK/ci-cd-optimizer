@@ -15,6 +15,7 @@ import { executionCommand, EXECUTION_HELP } from "./execution.js";
 import { reviewCommand, REVIEW_HELP } from "./review.js";
 import { formalCommand, FORMAL_HELP } from "./formal.js";
 import { ssdfCommand, SSDF_HELP } from "./ssdf.js";
+import { doctorCommand, DOCTOR_HELP } from "./doctor.js";
 
 export const HELP = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimizer for GitHub repositories
 
@@ -25,6 +26,7 @@ Commands:
   rules                 List rules (--format json|markdown)
   scan                  Scan a repository via the API like the App: SARIF, finding issues, autofix PRs
   telemetry             Report on a completed workflow run (Gantt, critical path) and raise duration alerts
+  doctor                Diagnose workflow failures; attempt safe local repairs (--report-only to observe)
   experiments <cmd>     Conditional CI model planning and measured experiments: plan, context, create, collect, evaluate, decide
   recipes <cmd>         Reusable fixes from promoted experiments: publish, apply, status, rollout
   knowledge <cmd>       Authorized mitigation history: applications, runs, inspect, refresh, evaluate
@@ -70,6 +72,7 @@ const COMMANDS: Record<string, { run: (args: string[], io: CliIO) => Promise<num
   review: { run: reviewCommand, help: REVIEW_HELP },
   formal: { run: formalCommand, help: FORMAL_HELP },
   ssdf: { run: ssdfCommand, help: SSDF_HELP },
+  doctor: { run: doctorCommand, help: DOCTOR_HELP },
 };
 
 /** Parses argv (without the node and script entries) and returns the exit code. Never calls process.exit. */
