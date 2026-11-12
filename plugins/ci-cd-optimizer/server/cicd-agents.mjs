@@ -45521,12 +45521,12 @@ async function uploadSarif(client, repo, options) {
 // src/lint/config.ts
 var import_yaml = __toESM(require_dist2(), 1);
 
-// node_modules/bignumber.js/bignumber.mjs
+// node_modules/bignumber.js/dist/bignumber.mjs
+var BigNumber = clone2();
 var isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
 var mathceil = Math.ceil;
 var mathfloor = Math.floor;
 var bignumberError = "[BigNumber Error] ";
-var tooManyDigits = bignumberError + "Number primitive has more than 15 significant digits: ";
 var BASE = 1e14;
 var LOG_BASE = 14;
 var MAX_SAFE_INTEGER = 9007199254740991;
@@ -45534,22 +45534,24 @@ var POWS_TEN = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12,
 var SQRT_BASE = 1e7;
 var MAX = 1e9;
 function clone2(configObject) {
-  var div, convertBase, parseNumeric, P = BigNumber2.prototype = { constructor: BigNumber2, toString: null, valueOf: null }, ONE = new BigNumber2(1), DECIMAL_PLACES = 20, ROUNDING_MODE = 4, TO_EXP_NEG = -7, TO_EXP_POS = 21, MIN_EXP = -1e7, MAX_EXP = 1e7, CRYPTO = false, MODULO_MODE = 1, POW_PRECISION = 0, FORMAT = {
+  var div, convertBase, basePrefix = /^(-?)0([xbo])(?=[^.])/i, isInfinityOrNaN = /^-?(Infinity|NaN)$/, whitespaceOrPlus = /^\s*\+(?!-)|^\s+|\s+$/g, P = BigNumber2.prototype = { constructor: BigNumber2, toString: null, valueOf: null }, ONE = new BigNumber2(1), DECIMAL_PLACES = 20, ROUNDING_MODE = 4, TO_EXP_NEG = -7, TO_EXP_POS = 21, MIN_EXP = -1e7, MAX_EXP = 1e7, CRYPTO = false, STRICT = true, MODULO_MODE = 1, POW_PRECISION = 0, FORMAT = {
     prefix: "",
+    negativeSign: "-",
+    positiveSign: "",
+    groupSeparator: ",",
     groupSize: 3,
     secondaryGroupSize: 0,
-    groupSeparator: ",",
     decimalSeparator: ".",
+    fractionGroupSeparator: "",
     fractionGroupSize: 0,
-    fractionGroupSeparator: "\xA0",
-    // non-breaking space
     suffix: ""
-  }, ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz", alphabetHasNormalDecimalDigits = true;
+  }, ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
   function BigNumber2(v, b) {
-    var alphabet, c, caseChanged, e, i, isNum, len, str2, x = this;
+    var e, i, str2, t, x = this;
     if (!(x instanceof BigNumber2)) return new BigNumber2(v, b);
+    t = typeof v;
     if (b == null) {
-      if (v && v._isBigNumber === true) {
+      if (isBigNumber(v)) {
         x.s = v.s;
         if (!v.c || v.e > MAX_EXP) {
           x.c = x.e = null;
@@ -45561,7 +45563,12 @@ function clone2(configObject) {
         }
         return;
       }
-      if ((isNum = typeof v == "number") && v * 0 == 0) {
+      if (t == "number") {
+        if (v * 0 != 0) {
+          x.s = isNaN(v) ? null : v < 0 ? -1 : 1;
+          x.c = x.e = null;
+          return;
+        }
         x.s = 1 / v < 0 ? (v = -v, -1) : 1;
         if (v === ~~v) {
           for (e = 0, i = v; i >= 10; i /= 10, e++) ;
@@ -45573,90 +45580,55 @@ function clone2(configObject) {
           }
           return;
         }
+        return parseValidString(x, String(v));
+      }
+      if (t == "bigint") {
+        x.s = v < 0 ? (v = -v, -1) : 1;
+        return parseValidString(x, String(v));
+      }
+      if (t == "string") {
+        str2 = v;
+      } else {
+        if (STRICT) {
+          throw Error(bignumberError + "BigNumber, string, number, or BigInt expected: " + v);
+        }
         str2 = String(v);
-      } else {
-        if (!isNumeric.test(str2 = String(v))) return parseNumeric(x, str2, isNum);
+      }
+      if (isNumeric.test(str2)) {
         x.s = str2.charCodeAt(0) == 45 ? (str2 = str2.slice(1), -1) : 1;
+        return parseValidString(x, str2);
       }
-      if ((e = str2.indexOf(".")) > -1) str2 = str2.replace(".", "");
-      if ((i = str2.search(/e/i)) > 0) {
-        if (e < 0) e = i;
-        e += +str2.slice(i + 1);
-        str2 = str2.substring(0, i);
-      } else if (e < 0) {
-        e = str2.length;
-      }
-    } else {
-      intCheck(b, 2, ALPHABET.length, "Base");
-      if (b == 10 && alphabetHasNormalDecimalDigits) {
-        x = new BigNumber2(v);
-        return round(x, DECIMAL_PLACES + x.e + 1, ROUNDING_MODE);
-      }
-      str2 = String(v);
-      if (isNum = typeof v == "number") {
-        if (v * 0 != 0) return parseNumeric(x, str2, isNum, b);
-        x.s = 1 / v < 0 ? (str2 = str2.slice(1), -1) : 1;
-        if (BigNumber2.DEBUG && str2.replace(/^0\.0*|\./, "").length > 15) {
-          throw Error(tooManyDigits + v);
-        }
-      } else {
-        x.s = str2.charCodeAt(0) === 45 ? (str2 = str2.slice(1), -1) : 1;
-      }
-      alphabet = ALPHABET.slice(0, b);
-      e = i = 0;
-      for (len = str2.length; i < len; i++) {
-        if (alphabet.indexOf(c = str2.charAt(i)) < 0) {
-          if (c == ".") {
-            if (i > e) {
-              e = len;
-              continue;
-            }
-          } else if (!caseChanged) {
-            if (str2 == str2.toUpperCase() && (str2 = str2.toLowerCase()) || str2 == str2.toLowerCase() && (str2 = str2.toUpperCase())) {
-              caseChanged = true;
-              i = -1;
-              e = 0;
-              continue;
-            }
-          }
-          return parseNumeric(x, String(v), isNum, b);
-        }
-      }
-      isNum = false;
-      str2 = convertBase(str2, b, 10, x.s);
-      if ((e = str2.indexOf(".")) > -1) str2 = str2.replace(".", "");
-      else e = str2.length;
-    }
-    for (i = 0; str2.charCodeAt(i) === 48; i++) ;
-    for (len = str2.length; str2.charCodeAt(--len) === 48; ) ;
-    if (str2 = str2.slice(i, ++len)) {
-      len -= i;
-      if (isNum && BigNumber2.DEBUG && len > 15 && (v > MAX_SAFE_INTEGER || v !== mathfloor(v))) {
-        throw Error(tooManyDigits + x.s * v);
-      }
-      if ((e = e - i - 1) > MAX_EXP) {
+      str2 = str2.replace(whitespaceOrPlus, "");
+      if (isInfinityOrNaN.test(str2)) {
+        x.s = isNaN(str2) ? null : str2 < 0 ? -1 : 1;
         x.c = x.e = null;
-      } else if (e < MIN_EXP) {
-        x.c = [x.e = 0];
-      } else {
-        x.e = e;
-        x.c = [];
-        i = (e + 1) % LOG_BASE;
-        if (e < 0) i += LOG_BASE;
-        if (i < len) {
-          if (i) x.c.push(+str2.slice(0, i));
-          for (len -= LOG_BASE; i < len; ) {
-            x.c.push(+str2.slice(i, i += LOG_BASE));
-          }
-          i = LOG_BASE - (str2 = str2.slice(i)).length;
-        } else {
-          i -= len;
-        }
-        for (; i--; str2 += "0") ;
-        x.c.push(+str2);
+        return;
       }
+      str2 = str2.replace(basePrefix, function(m, p1, p2) {
+        b = (p2 = p2.toLowerCase()) == "x" ? 16 : p2 == "b" ? 2 : 8;
+        return p1;
+      });
+      if (b) {
+        return parseBaseString(x, str2, b, v);
+      }
+      str2 = str2.replace(/(\d)_(?=\d)/g, "$1");
+      if (isNumeric.test(str2)) {
+        x.s = str2.charCodeAt(0) == 45 ? (str2 = str2.slice(1), -1) : 1;
+        return parseValidString(x, str2);
+      }
+      if (STRICT) {
+        throw Error(bignumberError + "Not a number: " + v);
+      }
+      x.s = x.c = x.e = null;
     } else {
-      x.c = [x.e = 0];
+      if (t != "string") {
+        if (STRICT) {
+          throw Error(bignumberError + "String expected: " + v);
+        }
+        v = String(v);
+      }
+      intCheck(b, 2, ALPHABET.length, "Base");
+      parseBaseString(x, v.replace(whitespaceOrPlus, ""), b, v);
     }
   }
   BigNumber2.clone = clone2;
@@ -45675,41 +45647,35 @@ function clone2(configObject) {
     if (obj != null) {
       if (typeof obj == "object") {
         if (obj.hasOwnProperty(p = "DECIMAL_PLACES")) {
-          v = obj[p];
-          intCheck(v, 0, MAX, p);
-          DECIMAL_PLACES = v;
+          DECIMAL_PLACES = intCheck(obj[p], 0, MAX, p);
         }
         if (obj.hasOwnProperty(p = "ROUNDING_MODE")) {
-          v = obj[p];
-          intCheck(v, 0, 8, p);
-          ROUNDING_MODE = v;
+          ROUNDING_MODE = intCheck(obj[p], 0, 8, p);
         }
         if (obj.hasOwnProperty(p = "EXPONENTIAL_AT")) {
           v = obj[p];
-          if (v && v.pop) {
+          if (isArray(v)) {
             intCheck(v[0], -MAX, 0, p);
             intCheck(v[1], 0, MAX, p);
             TO_EXP_NEG = v[0];
             TO_EXP_POS = v[1];
           } else {
-            intCheck(v, -MAX, MAX, p);
-            TO_EXP_NEG = -(TO_EXP_POS = v < 0 ? -v : v);
+            TO_EXP_NEG = -(TO_EXP_POS = intCheck(v, -MAX, MAX, p) < 0 ? -v : v);
           }
         }
         if (obj.hasOwnProperty(p = "RANGE")) {
           v = obj[p];
-          if (v && v.pop) {
-            intCheck(v[0], -MAX, -1, p);
-            intCheck(v[1], 1, MAX, p);
-            MIN_EXP = v[0];
-            MAX_EXP = v[1];
-          } else {
-            intCheck(v, -MAX, MAX, p);
-            if (v) {
-              MIN_EXP = -(MAX_EXP = v < 0 ? -v : v);
+          if (v) {
+            if (isArray(v)) {
+              intCheck(v[0], -MAX, -1, p);
+              intCheck(v[1], 1, MAX, p);
+              MIN_EXP = v[0];
+              MAX_EXP = v[1];
             } else {
-              throw Error(bignumberError + p + " cannot be zero: " + v);
+              MIN_EXP = -(MAX_EXP = intCheck(v, -MAX, MAX, p) < 0 ? -v : v);
             }
+          } else {
+            throw Error(bignumberError + p + " cannot be zero: " + v);
           }
         }
         if (obj.hasOwnProperty(p = "CRYPTO")) {
@@ -45729,25 +45695,35 @@ function clone2(configObject) {
             throw Error(bignumberError + p + " not true or false: " + v);
           }
         }
-        if (obj.hasOwnProperty(p = "MODULO_MODE")) {
+        if (obj.hasOwnProperty(p = "STRICT")) {
           v = obj[p];
-          intCheck(v, 0, 9, p);
-          MODULO_MODE = v;
+          if (v === !!v) {
+            STRICT = v;
+          } else {
+            throw Error(bignumberError + p + " not true or false: " + v);
+          }
+        }
+        if (obj.hasOwnProperty(p = "MODULO_MODE")) {
+          MODULO_MODE = intCheck(obj[p], 0, 9, p);
         }
         if (obj.hasOwnProperty(p = "POW_PRECISION")) {
-          v = obj[p];
-          intCheck(v, 0, MAX, p);
-          POW_PRECISION = v;
+          POW_PRECISION = intCheck(obj[p], 0, MAX, p);
         }
         if (obj.hasOwnProperty(p = "FORMAT")) {
           v = obj[p];
-          if (typeof v == "object") FORMAT = v;
-          else throw Error(bignumberError + p + " not an object: " + v);
+          if (typeof v == "object") {
+            for (p in v) {
+              if (v.hasOwnProperty(p) && FORMAT.hasOwnProperty(p)) {
+                FORMAT[p] = v[p];
+              }
+            }
+          } else {
+            throw Error(bignumberError + p + " not an object: " + v);
+          }
         }
         if (obj.hasOwnProperty(p = "ALPHABET")) {
           v = obj[p];
           if (typeof v == "string" && !/^.?$|[+\-.\s]|(.).*\1/.test(v)) {
-            alphabetHasNormalDecimalDigits = v.slice(0, 10) == "0123456789";
             ALPHABET = v;
           } else {
             throw Error(bignumberError + p + " invalid: " + v);
@@ -45763,36 +45739,81 @@ function clone2(configObject) {
       EXPONENTIAL_AT: [TO_EXP_NEG, TO_EXP_POS],
       RANGE: [MIN_EXP, MAX_EXP],
       CRYPTO,
+      STRICT,
       MODULO_MODE,
       POW_PRECISION,
       FORMAT,
       ALPHABET
     };
   };
-  BigNumber2.isBigNumber = function(v) {
-    if (!v || v._isBigNumber !== true) return false;
-    if (!BigNumber2.DEBUG) return true;
-    var i, n, c = v.c, e = v.e, s = v.s;
-    out: if ({}.toString.call(c) == "[object Array]") {
-      if ((s === 1 || s === -1) && e >= -MAX && e <= MAX && e === mathfloor(e)) {
-        if (c[0] === 0) {
-          if (e === 0 && c.length === 1) return true;
-          break out;
-        }
-        i = (e + 1) % LOG_BASE;
-        if (i < 1) i += LOG_BASE;
-        if (String(c[0]).length == i) {
-          for (i = 0; i < c.length; i++) {
-            n = c[i];
-            if (n < 0 || n >= BASE || n !== mathfloor(n)) break out;
-          }
-          if (n !== 0) return true;
+  BigNumber2.fromFormat = function(str2, options) {
+    if (typeof str2 !== "string") {
+      throw Error(bignumberError + "Not a string: " + str2);
+    }
+    if (options == null) {
+      options = FORMAT;
+    } else if (typeof options != "object") {
+      throw Error(bignumberError + "Argument not an object: " + options);
+    } else {
+      options = resolveFormatOptions(options);
+    }
+    var i, isNeg, integerPart, fractionPart, negativeSign = options.negativeSign || "-", positiveSign = options.positiveSign || "", prefix = options.prefix || "", suffix = options.suffix || "", groupSeparator = options.groupSeparator || "", decimalSeparator = options.decimalSeparator || ".", fractionGroupSeparator = options.fractionGroupSeparator || "";
+    if (prefix && str2.indexOf(prefix) === 0) str2 = str2.slice(prefix.length);
+    if (suffix && str2.lastIndexOf(suffix) === str2.length - suffix.length) {
+      str2 = str2.slice(0, -suffix.length);
+    }
+    if (negativeSign && str2.indexOf(negativeSign) === 0) {
+      str2 = str2.slice(negativeSign.length);
+      isNeg = true;
+    } else if (positiveSign && str2.indexOf(positiveSign) === 0) {
+      str2 = str2.slice(positiveSign.length);
+    }
+    i = str2.indexOf(decimalSeparator);
+    if (i < 0) {
+      if (groupSeparator) {
+        while (str2.indexOf(groupSeparator) > -1) {
+          str2 = str2.replace(groupSeparator, "");
         }
       }
-    } else if (c === null && e === null && (s === null || s === 1 || s === -1)) {
-      return true;
+    } else {
+      integerPart = str2.slice(0, i);
+      fractionPart = str2.slice(i + decimalSeparator.length);
+      if (groupSeparator) {
+        while (integerPart.indexOf(groupSeparator) > -1) {
+          integerPart = integerPart.replace(groupSeparator, "");
+        }
+      }
+      if (fractionGroupSeparator) {
+        while (fractionPart.indexOf(fractionGroupSeparator) > -1) {
+          fractionPart = fractionPart.replace(fractionGroupSeparator, "");
+        }
+      }
+      str2 = integerPart + "." + fractionPart;
     }
-    throw Error(bignumberError + "Invalid BigNumber: " + v);
+    return new BigNumber2(isNeg ? "-" + str2 : str2);
+  };
+  BigNumber2.isBigNumber = function(v) {
+    if (!isBigNumber(v)) return false;
+    var i, n, c = v.c, e = v.e, s = v.s;
+    if (!isArray(c)) {
+      return c === null && e === null && (s === null || s === 1 || s === -1);
+    }
+    if (s !== 1 && s !== -1 || e < -MAX || e > MAX || e !== mathfloor(e)) {
+      return false;
+    }
+    if (c[0] === 0) {
+      return e === 0 && c.length === 1;
+    }
+    i = (e + 1) % LOG_BASE;
+    if (i < 1) i += LOG_BASE;
+    if (String(c[0]).length !== i) {
+      return false;
+    }
+    for (i = 0; i < c.length; i++) {
+      n = c[i];
+      if (n < 0 || n >= BASE || n !== mathfloor(n)) return false;
+    }
+    return n !== 0;
   };
   BigNumber2.maximum = BigNumber2.max = function() {
     return maxOrMin(arguments, -1);
@@ -45809,8 +45830,7 @@ function clone2(configObject) {
     };
     return function(dp) {
       var a, b, e, k, v, i = 0, c = [], rand = new BigNumber2(ONE);
-      if (dp == null) dp = DECIMAL_PLACES;
-      else intCheck(dp, 0, MAX);
+      dp = dp == null ? DECIMAL_PLACES : intCheck(dp, 0, MAX);
       k = mathceil(dp / LOG_BASE);
       if (CRYPTO) {
         if (crypto.getRandomValues) {
@@ -45870,10 +45890,91 @@ function clone2(configObject) {
     };
   })();
   BigNumber2.sum = function() {
-    var i = 1, args = arguments, sum2 = new BigNumber2(args[0]);
-    for (; i < args.length; ) sum2 = sum2.plus(args[i++]);
+    var i = 0, sum2 = new BigNumber2(0);
+    for (; i < arguments.length; ) sum2 = sum2.plus(arguments[i++]);
     return sum2;
   };
+  function parseValidString(x, str2) {
+    var e, i, len;
+    if ((e = str2.indexOf(".")) > -1) str2 = str2.replace(".", "");
+    if ((i = str2.search(/e/i)) > 0) {
+      if (e < 0) e = i;
+      e += +str2.slice(i + 1);
+      str2 = str2.substring(0, i);
+    } else if (e < 0) {
+      e = str2.length;
+    }
+    for (i = 0; str2.charCodeAt(i) === 48; i++) ;
+    for (len = str2.length; str2.charCodeAt(--len) === 48; ) ;
+    if (str2 = str2.slice(i, ++len)) {
+      len -= i;
+      e = e - i - 1;
+      if (e > MAX_EXP) {
+        x.c = x.e = null;
+      } else if (e < MIN_EXP) {
+        x.c = [x.e = 0];
+      } else {
+        x.e = e;
+        x.c = [];
+        i = (e + 1) % LOG_BASE;
+        if (e < 0) i += LOG_BASE;
+        if (i < len) {
+          if (i) x.c.push(+str2.slice(0, i));
+          for (len -= LOG_BASE; i < len; ) {
+            x.c.push(+str2.slice(i, i += LOG_BASE));
+          }
+          i = LOG_BASE - (str2 = str2.slice(i)).length;
+        } else {
+          i -= len;
+        }
+        for (; i--; str2 += "0") ;
+        x.c.push(+str2);
+      }
+    } else {
+      x.c = [x.e = 0];
+    }
+  }
+  function parseBaseString(x, str2, b, v) {
+    var c, len, alphabet = ALPHABET.slice(0, b), i = 0, clean2 = "", hasDot = false, prevIsNumeral = false, caseChanged = false;
+    x.s = str2.charCodeAt(0) === 45 ? (str2 = str2.slice(1), -1) : 1;
+    for (len = str2.length; i < len; i++) {
+      c = str2.charAt(i);
+      if (alphabet.indexOf(c) >= 0) {
+        clean2 += c;
+        prevIsNumeral = true;
+        continue;
+      }
+      if (c == "_") {
+        if (prevIsNumeral && i + 1 < len) {
+          prevIsNumeral = false;
+          continue;
+        }
+      } else if (c == ".") {
+        if (i == 0 || !hasDot && prevIsNumeral) {
+          if (i + 1 == len) break;
+          if (i == 0) clean2 = "0";
+          clean2 += c;
+          hasDot = true;
+          prevIsNumeral = false;
+          continue;
+        }
+      } else if (!caseChanged) {
+        if (str2 == str2.toUpperCase() && alphabet == alphabet.toLowerCase() && (str2 = str2.toLowerCase()) || str2 == str2.toLowerCase() && alphabet == alphabet.toUpperCase() && (str2 = str2.toUpperCase())) {
+          i = -1;
+          clean2 = "";
+          caseChanged = true;
+          hasDot = prevIsNumeral = false;
+          continue;
+        }
+      }
+      if (STRICT) {
+        throw Error(bignumberError + "Not a base " + b + " number: " + v);
+      }
+      x.s = x.c = x.e = null;
+      return;
+    }
+    parseValidString(x, convertBase(clean2, b, 10, x.s));
+  }
   convertBase = /* @__PURE__ */ (function() {
     var decimal = "0123456789";
     function toBaseOut(str2, baseIn, baseOut, alphabet) {
@@ -45931,7 +46032,7 @@ function clone2(configObject) {
       if (d < 1 || !xc[0]) {
         str2 = r ? toFixedPoint(alphabet.charAt(1), -dp, alphabet.charAt(0)) : alphabet.charAt(0);
       } else {
-        xc.length = d;
+        if (d < xc.length) xc.length = d;
         if (r) {
           for (--baseOut; ++xc[--d] > baseOut; ) {
             xc[d] = 0;
@@ -46092,8 +46193,7 @@ function clone2(configObject) {
   })();
   function format2(n, i, rm, id2) {
     var c0, e, ne, len, str2;
-    if (rm == null) rm = ROUNDING_MODE;
-    else intCheck(rm, 0, 8);
+    rm = rm == null ? ROUNDING_MODE : intCheck(rm, 0, 8);
     if (!n.c) return n.toString();
     c0 = n.c[0];
     ne = n.e;
@@ -46124,6 +46224,9 @@ function clone2(configObject) {
     }
     return n.s < 0 && c0 ? "-" + str2 : str2;
   }
+  function isBigNumber(v) {
+    return v instanceof BigNumber2 || !!v && v._isBigNumber === true;
+  }
   function maxOrMin(args, n) {
     var k, y, i = 1, x = new BigNumber2(args[0]);
     for (; i < args.length; i++) {
@@ -46148,32 +46251,15 @@ function clone2(configObject) {
     }
     return n;
   }
-  parseNumeric = /* @__PURE__ */ (function() {
-    var basePrefix = /^(-?)0([xbo])(?=\w[\w.]*$)/i, dotAfter = /^([^.]+)\.$/, dotBefore = /^\.([^.]+)$/, isInfinityOrNaN = /^-?(Infinity|NaN)$/, whitespaceOrPlus = /^\s*\+(?=[\w.])|^\s+|\s+$/g;
-    return function(x, str2, isNum, b) {
-      var base2, s = isNum ? str2 : str2.replace(whitespaceOrPlus, "");
-      if (isInfinityOrNaN.test(s)) {
-        x.s = isNaN(s) ? null : s < 0 ? -1 : 1;
-      } else {
-        if (!isNum) {
-          s = s.replace(basePrefix, function(m, p1, p2) {
-            base2 = (p2 = p2.toLowerCase()) == "x" ? 16 : p2 == "b" ? 2 : 8;
-            return !b || b == base2 ? p1 : m;
-          });
-          if (b) {
-            base2 = b;
-            s = s.replace(dotAfter, "$1").replace(dotBefore, "0.$1");
-          }
-          if (str2 != s) return new BigNumber2(s, base2);
-        }
-        if (BigNumber2.DEBUG) {
-          throw Error(bignumberError + "Not a" + (b ? " base " + b : "") + " number: " + str2);
-        }
-        x.s = null;
+  function resolveFormatOptions(options) {
+    var key, resolved = {};
+    for (key in FORMAT) {
+      if (FORMAT.hasOwnProperty(key)) {
+        resolved[key] = options.hasOwnProperty(key) ? options[key] : FORMAT[key];
       }
-      x.c = x.e = null;
-    };
-  })();
+    }
+    return resolved;
+  }
   function round(x, sd, rm, r) {
     var d, i, j, k, n, ni, rd, xc = x.c, pows10 = POWS_TEN;
     if (xc) {
@@ -46278,10 +46364,11 @@ function clone2(configObject) {
   P.decimalPlaces = P.dp = function(dp, rm) {
     var c, n, v, x = this;
     if (dp != null) {
-      intCheck(dp, 0, MAX);
-      if (rm == null) rm = ROUNDING_MODE;
-      else intCheck(rm, 0, 8);
-      return round(new BigNumber2(x), dp + x.e + 1, rm);
+      return round(
+        new BigNumber2(x),
+        intCheck(dp, -MAX, MAX) + x.e + 1,
+        rm == null ? ROUNDING_MODE : intCheck(rm, 0, 8)
+      );
     }
     if (!(c = x.c)) return null;
     n = ((v = c.length - 1) - bitFloor(this.e / LOG_BASE)) * LOG_BASE;
@@ -46366,9 +46453,7 @@ function clone2(configObject) {
   };
   P.integerValue = function(rm) {
     var n = new BigNumber2(this);
-    if (rm == null) rm = ROUNDING_MODE;
-    else intCheck(rm, 0, 8);
-    return round(n, n.e + 1, rm);
+    return round(n, n.e + 1, rm == null ? ROUNDING_MODE : intCheck(rm, 0, 8));
   };
   P.isEqualTo = P.eq = function(y, b) {
     return compare(this, new BigNumber2(y, b)) === 0;
@@ -46598,10 +46683,11 @@ function clone2(configObject) {
   P.precision = P.sd = function(sd, rm) {
     var c, n, v, x = this;
     if (sd != null && sd !== !!sd) {
-      intCheck(sd, 1, MAX);
-      if (rm == null) rm = ROUNDING_MODE;
-      else intCheck(rm, 0, 8);
-      return round(new BigNumber2(x), sd, rm);
+      return round(
+        new BigNumber2(x),
+        intCheck(sd, 1, MAX),
+        rm == null ? ROUNDING_MODE : intCheck(rm, 0, 8)
+      );
     }
     if (!(c = x.c)) return null;
     v = c.length - 1;
@@ -46614,8 +46700,7 @@ function clone2(configObject) {
     return n;
   };
   P.shiftedBy = function(k) {
-    intCheck(k, -MAX_SAFE_INTEGER, MAX_SAFE_INTEGER);
-    return this.times("1e" + k);
+    return this.times("1e" + intCheck(k, -MAX_SAFE_INTEGER, MAX_SAFE_INTEGER));
   };
   P.squareRoot = P.sqrt = function() {
     var m, n, r, rep, t, x = this, c = x.c, s = x.s, e = x.e, dp = DECIMAL_PLACES + 4, half = new BigNumber2("0.5");
@@ -46671,38 +46756,60 @@ function clone2(configObject) {
     }
     return round(r, r.e + DECIMAL_PLACES + 1, ROUNDING_MODE, m);
   };
+  if (typeof BigInt == "function") {
+    P.toBigInt = function(rm) {
+      var x = this;
+      if (!x.c) return null;
+      return BigInt(format2(x, x.e + 1, rm));
+    };
+  }
   P.toExponential = function(dp, rm) {
-    if (dp != null) {
-      intCheck(dp, 0, MAX);
-      dp++;
-    }
-    return format2(this, dp, rm, 1);
+    return format2(this, dp == null ? dp : intCheck(dp, 0, MAX) + 1, rm, 1);
   };
   P.toFixed = function(dp, rm) {
-    if (dp != null) {
-      intCheck(dp, 0, MAX);
-      dp = dp + this.e + 1;
-    }
-    return format2(this, dp, rm);
+    return format2(this, dp == null ? dp : intCheck(dp, -MAX, MAX) + this.e + 1, rm);
   };
-  P.toFormat = function(dp, rm, format3) {
-    var str2, x = this;
-    if (format3 == null) {
-      if (dp != null && rm && typeof rm == "object") {
-        format3 = rm;
-        rm = null;
-      } else if (dp && typeof dp == "object") {
-        format3 = dp;
-        dp = rm = null;
-      } else {
-        format3 = FORMAT;
+  P.toFormat = function(dp, rm, options) {
+    var isNeg, min, max, str2, x = this;
+    if (options == null) {
+      options = FORMAT;
+      if (dp != null) {
+        if (rm != null) {
+          if (typeof rm == "object") {
+            options = resolveFormatOptions(rm);
+            rm = null;
+          }
+        } else if (typeof dp == "object" && !isArray(dp)) {
+          options = resolveFormatOptions(dp);
+          dp = rm = null;
+        }
       }
-    } else if (typeof format3 != "object") {
-      throw Error(bignumberError + "Argument not an object: " + format3);
+    } else if (typeof options != "object") {
+      throw Error(bignumberError + "Argument not an object: " + options);
+    } else {
+      options = resolveFormatOptions(options);
+    }
+    if (dp != null) {
+      if (isArray(dp) && dp.length <= 2) {
+        min = dp[0];
+        max = dp[1];
+        dp = x.dp();
+        if (max != null && dp > intCheck(max, 0, MAX)) dp = max;
+        if (min != null && intCheck(min, 0, MAX) !== 0) {
+          if (max != null && min > max) {
+            throw Error(bignumberError + "Minimum must not exceed maximum");
+          }
+          if (dp < min) dp = min;
+        }
+      } else {
+        intCheck(dp, -MAX, MAX);
+      }
     }
     str2 = x.toFixed(dp, rm);
+    isNeg = str2.charCodeAt(0) === 45;
+    if (isNeg) str2 = str2.slice(1);
     if (x.c) {
-      var i, arr = str2.split("."), g1 = +format3.groupSize, g2 = +format3.secondaryGroupSize, groupSeparator = format3.groupSeparator || "", intPart = arr[0], fractionPart = arr[1], isNeg = x.s < 0, intDigits = isNeg ? intPart.slice(1) : intPart, len = intDigits.length;
+      var i, arr = str2.split("."), g1 = +options.groupSize, g2 = +options.secondaryGroupSize, groupSeparator = options.groupSeparator || "", intPart = arr[0], fractionPart = arr[1], len = intPart.length;
       if (g2) {
         i = g1;
         g1 = g2;
@@ -46711,27 +46818,38 @@ function clone2(configObject) {
       }
       if (g1 > 0 && len > 0) {
         i = len % g1 || g1;
-        intPart = intDigits.substr(0, i);
-        for (; i < len; i += g1) intPart += groupSeparator + intDigits.substr(i, g1);
-        if (g2 > 0) intPart += groupSeparator + intDigits.slice(i);
-        if (isNeg) intPart = "-" + intPart;
+        str2 = intPart.substr(0, i);
+        for (; i < len; i += g1) {
+          str2 += groupSeparator + intPart.substr(i, g1);
+        }
+        if (g2 > 0) str2 += groupSeparator + intPart.slice(i);
+      } else {
+        str2 = intPart;
       }
-      str2 = fractionPart ? intPart + (format3.decimalSeparator || "") + ((g2 = +format3.fractionGroupSize) ? fractionPart.replace(
-        new RegExp("\\d{" + g2 + "}\\B", "g"),
-        "$&" + (format3.fractionGroupSeparator || "")
-      ) : fractionPart) : intPart;
+      if (fractionPart) {
+        i = +options.fractionGroupSize;
+        if (i) {
+          fractionPart = fractionPart.replace(
+            new RegExp("\\d{" + i + "}\\B", "g"),
+            "$&" + (options.fractionGroupSeparator || "")
+          );
+        }
+        str2 += (options.decimalSeparator || "") + fractionPart;
+      }
     }
-    return (format3.prefix || "") + str2 + (format3.suffix || "");
+    return (options.prefix || "") + (isNeg ? options.negativeSign || "" : x.s > 0 ? options.positiveSign || "" : "") + str2 + (options.suffix || "");
   };
   P.toFraction = function(md) {
-    var d, d0, d1, d2, e, exp, n, n0, n1, q, r, s, x = this, xc = x.c;
+    var d, d0, d1, d2, e, exp, n, n0, n1, q, r, s, xd, xn, x = this, xc = x.c;
     if (md != null) {
       n = new BigNumber2(md);
       if (!n.isInteger() && (n.c || n.s !== 1) || n.lt(ONE)) {
         throw Error(bignumberError + "Argument " + (n.isInteger() ? "out of range: " : "not an integer: ") + valueOf(n));
       }
     }
-    if (!xc) return new BigNumber2(x);
+    if (!xc) {
+      return [new BigNumber2(x.s || 0), new BigNumber2(0)];
+    }
     d = new BigNumber2(ONE);
     n1 = d0 = new BigNumber2(ONE);
     d1 = n0 = new BigNumber2(ONE);
@@ -46742,6 +46860,8 @@ function clone2(configObject) {
     exp = MAX_EXP;
     MAX_EXP = 1 / 0;
     n = new BigNumber2(s);
+    xn = n;
+    xd = d;
     n0.c[0] = 0;
     for (; ; ) {
       q = div(n, d, 0, 1);
@@ -46757,20 +46877,26 @@ function clone2(configObject) {
     d2 = div(md.minus(d0), d1, 0, 1);
     n0 = n0.plus(d2.times(n1));
     d0 = d0.plus(d2.times(d1));
-    n0.s = n1.s = x.s;
-    e = e * 2;
-    r = div(n1, d1, e, ROUNDING_MODE).minus(x).abs().comparedTo(
-      div(n0, d0, e, ROUNDING_MODE).minus(x).abs()
+    r = n1.times(xd).minus(xn.times(d1)).abs().times(d0).comparedTo(
+      n0.times(xd).minus(xn.times(d0)).abs().times(d1)
     ) < 1 ? [n1, d1] : [n0, d0];
+    r[0].s = x.s;
     MAX_EXP = exp;
     return r;
   };
   P.toNumber = function() {
     return +valueOf(this);
   };
+  P.toObject = function() {
+    var x = this;
+    return {
+      c: x.c ? x.c.slice() : null,
+      e: x.e,
+      s: x.s
+    };
+  };
   P.toPrecision = function(sd, rm) {
-    if (sd != null) intCheck(sd, 1, MAX);
-    return format2(this, sd, rm, 2);
+    return format2(this, sd == null ? sd : intCheck(sd, 1, MAX), rm, 2);
   };
   P.toString = function(b) {
     var str2, n = this, s = n.s, e = n.e;
@@ -46784,9 +46910,6 @@ function clone2(configObject) {
     } else {
       if (b == null) {
         str2 = e <= TO_EXP_NEG || e >= TO_EXP_POS ? toExponential(coeffToString(n.c), e) : toFixedPoint(coeffToString(n.c), e, "0");
-      } else if (b === 10 && alphabetHasNormalDecimalDigits) {
-        n = round(new BigNumber2(n), DECIMAL_PLACES + e + 1, ROUNDING_MODE);
-        str2 = toFixedPoint(coeffToString(n.c), n.e, "0");
       } else {
         intCheck(b, 2, ALPHABET.length, "Base");
         str2 = convertBase(toFixedPoint(coeffToString(n.c), e, "0"), 10, b, s, true);
@@ -46799,8 +46922,6 @@ function clone2(configObject) {
     return valueOf(this);
   };
   P._isBigNumber = true;
-  P[Symbol.toStringTag] = "BigNumber";
-  P[/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")] = P.valueOf;
   if (configObject != null) BigNumber2.set(configObject);
   return BigNumber2;
 }
@@ -46838,6 +46959,10 @@ function intCheck(n, min, max, name) {
   if (n < min || n > max || n !== mathfloor(n)) {
     throw Error(bignumberError + (name || "Argument") + (typeof n == "number" ? n < min || n > max ? " out of range: " : " not an integer: " : " not a primitive number: ") + String(n));
   }
+  return n;
+}
+function isArray(obj) {
+  return {}.toString.call(obj) == "[object Array]";
 }
 function isOdd(n) {
   var k = n.c.length - 1;
@@ -46862,7 +46987,6 @@ function toFixedPoint(str2, e, z2) {
   }
   return str2;
 }
-var BigNumber = clone2();
 
 // src/formal/generated/kernel.ts
 BigNumber.config({ MODULO_MODE: BigNumber.EUCLID });
