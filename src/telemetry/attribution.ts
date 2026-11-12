@@ -579,6 +579,16 @@ function cacheSaveFailure(evidence: JobLogEvidence) {
   };
 }
 
+function toolPhaseParts(step: LogStep): string[] {
+  const phases = step.toolPhases;
+  if (!phases) return [];
+  return [
+    ...(phases.downloadMs === undefined ? [] : [`download ${formatMs(phases.downloadMs)}`]),
+    ...(phases.extractMs === undefined ? [] : [`extract ${formatMs(phases.extractMs)}`]),
+    ...(phases.cacheAddMs === undefined ? [] : [`adding to the tool cache ${formatMs(phases.cacheAddMs)}`]),
+  ];
+}
+
 function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
   const { step, label } = entry;
   const findings: Bottleneck[] = [];
@@ -608,6 +618,9 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
 
   if (step.toolCache === "download" && step.durationMs >= MIN_FINDING_MS) {
     const release = step.toolSource === "release";
+    const phases = release ? [] : toolPhaseParts(step);
+    const runnerLabels = (ctx.job.labels ?? []).map((runnerLabel) => runnerLabel.trim().toLowerCase());
+    const slim = !release && runnerLabels.includes("ubuntu-slim") && !runnerLabels.includes("self-hosted");
     findings.push(finding(ctx, {
       category: "toolchain-download",
       detail: `s${entry.path}`,
@@ -618,10 +631,15 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
         : `${label} downloaded its toolchain instead of finding it in the runner's tool cache (${formatMs(step.durationMs)}).`,
       recommendation: release
         ? "Cache the extracted toolchain directory keyed by its version pin or lock file plus runner OS and architecture, and keep integrity verification before reusing it; a cache restore also takes time, so measure before and after."
-        : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
-      evidence: [release
-        ? `${label}: release archive download with no reused install, ${formatMs(step.durationMs)}`
-        : `${label}: tool cache miss, ${formatMs(step.durationMs)}`],
+        : slim
+          ? "The ubuntu-slim image has no hosted tool cache, so every run downloads, extracts and copies the toolchain, and choosing another version cannot produce a hit. Where the job's code supports a runtime the image preinstalls (see the image's software list), a version check can skip the setup action when it passes; a check looser than the setup action's version spec gives up that pin, so the runtime then changes with image updates. Where the job must stay pinned, measure a standard hosted runner (including its startup and queue time) or a toolchain cache (a restore also writes to disk) before and after."
+          : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
+      evidence: [
+        release
+          ? `${label}: release archive download with no reused install, ${formatMs(step.durationMs)}`
+          : `${label}: tool cache miss, ${formatMs(step.durationMs)}`,
+        ...(phases.length > 0 ? [`${label}: ${phases.join(", ")}`] : []),
+      ],
       covers: [entry.top],
     }));
   }
