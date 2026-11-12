@@ -1,0 +1,122 @@
+{
+  "date": "2026-11-12",
+  "scope": "Native synthetic-MCP report triage and handoff, not live repository remediation or CI savings",
+  "baselineRef": "968e4ca98af6b28b099fa612377685e5d6c25977",
+  "methods": {
+    "SkillOpt": "skillopt==0.2.0 evaluate_gate",
+    "SkillOpt-Sleep": "consolidate with train-only reflection and protected learned-region edits",
+    "SkillOpt-Lite": "Adapted skill-only loop with frozen splits, repeated trials and final holdout",
+    "HarnessOpt": "Separate composition-only adaptation; shared guarded production renderer, unchanged delivery and authorization"
+  },
+  "card": {
+    "repeatsPerCase": 3,
+    "aaBatches": 2,
+    "keep": "No per-case regression; gain above observed A/A spread or at least 15% fewer instruction bytes at equal behavior",
+    "guardsV2": "Every non-style validation check and every selected final trial must pass; no invented URLs",
+    "maxProposals": 4,
+    "maxCliInvocations": 120,
+    "maxMinutes": 45,
+    "autonomy": "L2 review only",
+    "budgetUnitCorrection": "The v1 card incorrectly said model invocations. The implemented counter measures native CLI launches, which can contain multiple model requests. No 120-model-request ceiling was enforced."
+  },
+  "accounting": {
+    "refinementCliInvocations": 85,
+    "postSelectionRegressionCliInvocations": 6,
+    "evaluationTrials": 87,
+    "proposalInvocations": 4,
+    "totalCountedCliInvocations": 91,
+    "recordedEvaluationModelRequests": 383,
+    "proposalModelRequestCount": null,
+    "observedEvaluationModel": "gpt-6.1-sol",
+    "copilotCli": "1.0.109-1",
+    "excluded": "Earlier instrument-calibration smokes and the separate three-trial SDK activation check are not included in the refinement counter. Cached traces are not new samples."
+  },
+  "hashes": {
+    "contract": "ce29a8e44efe1f7d94fe0e31788c621625a45318d15817ef14392d266b3f31a6",
+    "baselineProcedureNormalizedLf": "1233ecb4da01f3fc8a12223c6836ee07e65cc8065f7ca42d5be7aeec221c2829",
+    "selectedProcedureNormalizedLf": "7cc35110bb993918d9e332e98043388edf9eb5f824f2edbb5215ab8c3bed6025",
+    "v1Cases": "59797aa1759ff8ffaa08a542aebbf6212e791f6f818bcc3cfabe729f9d4c3070",
+    "v2Cases": "15f591d9bd2f71adccd2ecae4514aec1fdc843c09ebd53733287d8ddeb0bf6fd",
+    "v2FrozenInstrument": "a056ee4c8b96eb50b85f1b28803a4dec5f9a2fc6b64c1fb2b93d7654baf263fb"
+  },
+  "baseline": {
+    "aaFullCasePasses": [3, 3],
+    "trialsPerBatch": 9,
+    "observedAggregateSpread": 0,
+    "nonStyleValidationChecks": "All passed; baseline validation failures were verbosity",
+    "regradedAa": "Both batches still pass 3/9 under the strengthened URL grader"
+  },
+  "ledger": [
+    {
+      "proposal": 1,
+      "validation": "3/9 -> 9/9",
+      "instructionBytes": [3156, 3241],
+      "decision": "Provisionally kept, then rejected by the v1 final gate",
+      "hash": "e4ab277166a2471e12184d05a0d26377e834952be317851a1c98ca7d08d2bc1a"
+    },
+    {
+      "proposal": 2,
+      "validation": "9/9 -> 9/9",
+      "instructionBytes": [3241, 3171],
+      "decision": "Sleep utility gain, but rejected by the outer 15% materiality bar",
+      "hash": "a4b3fb7055ac25d6084d3efb39625fdffb65eb75442481aca297ece6bb4a50bb"
+    },
+    {
+      "proposal": 3,
+      "validation": "9/9 -> 9/9 (cached, not additional trials)",
+      "instructionBytes": [3241, 3241],
+      "decision": "Exact repeat of proposal 1; rejected",
+      "hash": "e4ab277166a2471e12184d05a0d26377e834952be317851a1c98ca7d08d2bc1a"
+    },
+    {
+      "proposal": 4,
+      "validation": "3/9 -> 9/9",
+      "instructionBytes": [3156, 2637],
+      "decision": "Both official gates and the outer keep bar passed; selected for review",
+      "hash": "7cc35110bb993918d9e332e98043388edf9eb5f824f2edbb5215ab8c3bed6025"
+    }
+  ],
+  "instrumentRepair": {
+    "v1FinalResult": "Baseline 0/6, provisional candidate 3/6; promotion rejected and original report retained",
+    "defects": [
+      "Clean-case oracle demanded zero savings without a finding supplying an estimate; null was appropriate.",
+      "The clean fixture also advertised an omitted finding, making incomplete defensible.",
+      "The grader missed candidate-created GitHub URLs that no tool supplied."
+    ],
+    "correction": "Null unknown bounds, consistent omission metadata, URL provenance and non-style validation guards; old test cases are regression cases",
+    "confirmation": "Two new cases were frozen before proposal 4 and withheld from the proposer; original controls were regraded, not resampled"
+  },
+  "confirmation": {
+    "uniqueCases": 2,
+    "baselineFullCasePasses": 2,
+    "candidateFullCasePasses": 6,
+    "trialsPerVariant": 6,
+    "exposedCaseRegressionPasses": 6,
+    "exposedCaseRegressionTrials": 6,
+    "instructionByteReductionPercent": 16.4,
+    "byteScope": "LF-normalized contract, procedure, revision and delimiter; event JSON excluded"
+  },
+  "nativeActivation": {
+    "vally": "0.21.0",
+    "runId": "a1e852cf-ae94-4157-af6c-058d4de8e7b8",
+    "observedModel": "claude-sonnet-5.5",
+    "passed": 3,
+    "trials": 3,
+    "checks": "Both native skills activated; no file changes or shell/edit/web calls",
+    "postHocHandoffWords": [79, 76, 101],
+    "limitation": "The <=80-word check was not an activation grader. One full-SDK handoff exceeded it; synthetic conciseness did not generalize perfectly. No new proposal was made after the leash."
+  },
+  "disposition": {
+    "reviewCandidateSelected": true,
+    "liveAdoption": false,
+    "convergenceEstablished": false,
+    "stop": "Four-proposal leash exhausted. The v1 plateau was invalidated by instrument repair; no logarithmic law or corrected-instrument plateau is claimed.",
+    "limits": "Small synthetic reduced reports, structured disposition tool, sequential rather than interleaved variants, and narrow native activation check. No measured CI, credit, wall-time, universal reasoning or safety improvement is claimed."
+  },
+  "localEvidence": [
+    ".agent-artifacts/feedback-loop/run-1",
+    ".agent-artifacts/feedback-loop/confirmation",
+    ".agent-artifacts/feedback-loop/regression-1",
+    ".agent-artifacts/feedback-activation/behavior-confirmation-results"
+  ]
+}

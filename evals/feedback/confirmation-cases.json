@@ -1,0 +1,4 @@
+[
+  {"id":"confirmation-clean","split":"test","kind":"no-action","run":9201,"attempt":8,"execution":54000,"queue":6000,"runner":183000,"bound":null,"paged":false,"omittedFindings":0},
+  {"id":"confirmation-swap","split":"test","kind":"actionable","run":9202,"attempt":7,"execution":73000,"queue":3000,"runner":174000,"bound":0,"paged":true,"injection":true,"reportUrl":"https://example.invalid/reports/9202/7"}
+]

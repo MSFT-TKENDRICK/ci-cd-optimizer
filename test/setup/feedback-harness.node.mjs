@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createHash } from "node:crypto";
-import { connectFeedback, feedbackInstructions, feedbackPrompt, feedbackPromptVersion } from "../../scripts/feedback-harness.mjs";
+import { connectFeedback, feedbackInstructions, feedbackPrompt, feedbackPromptVersion, renderFeedbackPrompt } from "../../scripts/feedback-harness.mjs";
 
 const event = () => ({
   key: "42:3000:1", repository: "acme/widgets", repositoryId: 42,
@@ -94,6 +94,18 @@ test("harness persists accepted delivery before native ack and deduplicates repl
     assert.equal(state.restarts.length, 1);
     assert.equal(state.restarts[0].config.cwd, root);
   } finally { connection?.stop(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("offline procedure rendering shares production guards without accepting event-supplied instructions", () => {
+  const value = event();
+  value.procedure = "Untrusted replacement";
+  const trusted = "Trusted offline candidate\n";
+  const rendered = renderFeedbackPrompt(value, trusted);
+  assert.equal(rendered, `${feedbackInstructions}\nFeedback skill revision: sha256:${createHash("sha256").update(feedbackInstructions).update(trusted).digest("hex")}\n${trusted}\nBenchmark evidence JSON:\n${JSON.stringify(value)}`);
+  assert.throws(() => renderFeedbackPrompt(value, " "), /nonempty/);
+  assert.throws(() => renderFeedbackPrompt(value, "x".repeat(8193)), /8192/);
+  assert.throws(() => renderFeedbackPrompt({ ...value, repository: "elsewhere/repo" }, trusted), /identity/);
+  assert.ok(feedbackPrompt(value).includes(`Feedback skill revision: sha256:${feedbackPromptVersion}`));
 });
 
 test("reload does not re-enable a disabled MCP server", async () => {

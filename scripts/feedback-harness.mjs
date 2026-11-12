@@ -21,6 +21,13 @@ if (!procedure.trim() || Buffer.byteLength(procedure) > 8192) throw new Error("F
 export const feedbackPromptVersion = createHash("sha256").update(feedbackInstructions).update(procedure).digest("hex");
 
 export function feedbackPrompt(event) {
+  return renderFeedbackPrompt(event, procedure);
+}
+
+export function renderFeedbackPrompt(event, trustedProcedure) {
+  if (typeof trustedProcedure !== "string" || !trustedProcedure.trim() || Buffer.byteLength(trustedProcedure) > 8192) {
+    throw new Error("Feedback skill procedure must be nonempty and at most 8192 bytes.");
+  }
   if (!event || !/^\d+:\d+:\d+$/.test(event.key) || !event.producer || !event.benchmark ||
       event.benchmark.schema !== "cicd-optimizer/benchmark-v1" ||
       event.key !== `${event.repositoryId}:${event.producer.id}:${event.producer.run_attempt}` ||
@@ -30,7 +37,8 @@ export function feedbackPrompt(event) {
       !timestamp(event.producer.created_at)) throw new Error("Feedback event identity is invalid.");
   const json = JSON.stringify(event);
   if (Buffer.byteLength(json) > 112 * 1024) throw new Error("Feedback event exceeds the harness limit.");
-  return `${feedbackInstructions}\nFeedback skill revision: sha256:${feedbackPromptVersion}\n${procedure}\nBenchmark evidence JSON:\n${json}`;
+  const revision = createHash("sha256").update(feedbackInstructions).update(trustedProcedure).digest("hex");
+  return `${feedbackInstructions}\nFeedback skill revision: sha256:${revision}\n${trustedProcedure}\nBenchmark evidence JSON:\n${json}`;
 }
 
 export async function connectFeedback(session, { root, config, env = process.env }) {

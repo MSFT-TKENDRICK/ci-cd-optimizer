@@ -150,7 +150,7 @@ The evolution surfaces are deliberately separate:
 | Method | Integration and scope |
 |---|---|
 | [Microsoft SkillOpt](https://github.com/microsoft/SkillOpt) | The pinned `skillopt==0.2.0` package's actual `skillopt.evaluation.gate.evaluate_gate` requires strict validation improvement. This is core-library integration, not the full research trainer. |
-| [SkillOpt-Sleep](https://microsoft.github.io/SkillOpt/docs/sleep/) | Its actual `consolidate` runs replay, train-failure reflection, bounded edits and validation through a repository-owned, tool-disabled Copilot text backend. No broad session harvesting, memory changes, schedules or adoption. |
+| [SkillOpt-Sleep](https://microsoft.github.io/SkillOpt/docs/sleep/) | Its actual `consolidate` runs replay, train-failure reflection, bounded edits and validation through repository-owned Copilot backends: text-only decisions or isolated synthetic MCP calls. No broad session harvesting, memory changes, schedules or adoption. |
 | [SkillOpt-Lite](https://github.com/EvolvingLMMs-Lab/SkillOpt-Lite) | Adapted [skill-only loop](../.github/prompts/skillopt-feedback.prompt.md): frozen splits, baseline, bounded edits, validation selection and final test. |
 | HarnessOpt | Adapted [harness-only loop](../.github/prompts/harnessopt-feedback.prompt.md): reproduce a composition failure, restrict edits, preserve security/delivery semantics, smoke-test and review separately from skill text. |
 
@@ -198,6 +198,80 @@ The production-composed broadcast also passed all three native Vally activation 
 `analyze-ci-run` and `optimize-ci-pipeline`, with no file changes or shell/edit/web calls. Run ID:
 `0d1a8870-348e-4c07-94fd-2a4d5816f12e`. This is a narrow positive activation check, not a measured improvement
 over the previous broadcast or a universal activation guarantee.
+
+#### Behavioral refinement loop
+
+[`behavior.py`](../evals/feedback/behavior.py) evaluates **actual native MCP calls**, not just text
+classification. It uses the same guarded renderer as production, but only an inert fixture server is
+available to the agent. The server exposes exact-attempt reports and a disposition recorder; it cannot
+contact GitHub, edit files, acknowledge real events or execute quoted commands. Pagination uses smaller
+fixture pages while preserving the report's independent job/step/finding/gap and per-finding evidence
+cursors. A separate deterministic grader checks every cursor combination, source-run identity rather
+than telemetry-producer identity, numeric conclusions, ordering, supplied-URL provenance, and a handoff
+of at most 80 words. Empty findings do not establish a zero savings estimate: absent bounds stay unknown.
+Known-good and deliberately broken traces calibrate the grader.
+
+```powershell
+.\.agent-artifacts\skillopt\Scripts\python.exe evals\feedback\behavior.py --output .agent-artifacts\feedback-loop\new-run
+```
+
+Each run freezes a Loop Card and hashes before evaluation, with two A/A batches and three trials per
+case/procedure. Train reflection never receives validation/test cases. Sleep's protected-region editor
+holds the complete procedure as one JSON-encoded learned item; the wrapper is decoded before rendering,
+never sent as agent instructions or adopted into the skill. Official Sleep and SkillOpt gates use a
+strict utility improvement (case pass rate minus a bounded procedure-size penalty). The additional keep
+bar requires **no per-case regression**, plus either pass-rate gain above A/A variation or at least 15%
+fewer instruction bytes at equal behavior. Every non-style validation check must pass, so aggregate
+improvements cannot hide a newly failed guard. Instruction bytes include the unchanged contract and
+revision envelope, but exclude unchanged event JSON. A shorter procedure alone cannot hide a behavior regression.
+
+The loop stops after two successive non-qualifying proposals, four rounds, 120 native CLI invocations
+(including proposals), or 45 minutes. Each CLI invocation can contain multiple model turns; this is not
+a model-request or token ceiling. Leash exhaustion is inconclusive, not convergence. Identical task/procedure replays reuse their
+three stored trials; cached reads are not extra samples. The final test slice is run only after selection;
+every selected test trial must pass without regression. Usage files capture the native CLI's actual model
+and consumption. Artifacts include accepts, rejects, traces and candidate snapshots, but never update the
+maintained skill or live extension automatically.
+
+An invalid grader invalidates the apparent plateau. Preserve the rejected report, calibrate the correction,
+and freeze a new Loop Card and holdout rather than retroactively relabeling the old test result as a win.
+The narrowly scoped `--confirm-run <prior-run-directory>` mode supports one fourth proposal after a
+three-proposal run. It verifies unchanged fixture content, regrades cached train/validation traces,
+uses `confirmation-cases.json` only for the final test, and carries forward the original CLI count and
+start time. It does not reset the leash or establish convergence after an instrument change. Once those
+confirmation cases have been inspected, they too are regression cases, not a fresh holdout for future work.
+
+#### Recorded behavioral refinement
+
+The [sanitized Loop Card and ledger](../evals/feedback/behavior-results.json) preserves all four proposals,
+including rejects. On 2026-11-12 the initial A/A batches both passed 3/9 full cases; identity, pagination,
+numeric and ordering checks already passed, so the validation gain was primarily a more concise handoff.
+Proposal 1 reached 9/9 validation, but the final gate rejected it. Inspection found a defective clean-case
+oracle (zero rather than unknown savings and contradictory omission metadata), plus fabricated evidence
+URLs that the grader missed. That report remains rejected, not retroactively called a successful plateau.
+
+After correcting the instrument and freezing two new confirmation cases, proposal 4 passed 9/9 validation
+and 6/6 fresh confirmation trials versus 2/6 for the incumbent. It also passed 6/6 previously exposed,
+corrected regression trials. The selected procedure reduces LF-normalized instruction bytes from 3,156
+to 2,637 (**16.4%**), with the protected contract unchanged. It is staged for review, not live adoption.
+The recorded work comprises 87 native evaluation trials and four proposal launches: 91 CLI invocations.
+All 87 evaluation usage files reported the default `gpt-6.1-sol`, totaling 383 model requests; proposal
+request counts were not captured. The v1 card's "model invocations" label was incorrect: the implemented
+ceiling counted CLI launches, not model requests. Earlier calibration smokes and separate SDK activation
+trials are outside that refinement counter.
+
+Vally run `a1e852cf-ae94-4157-af6c-058d4de8e7b8` then passed all three native activation/no-change/no-execution
+trials with observed default `claude-sonnet-5.5`. Post-hoc inspection found handoffs of 79, 76 and 101 words:
+**one exceeded the requested cap**, which was not an activation grader. Thus the synthetic conciseness gain
+does not establish perfect full-SDK generalization. The four-proposal leash ended without another edit;
+corrected-instrument convergence and a logarithmic decline remain unproven. Future refinement requires a
+new card and fresh held-out cases, not relabeling these exposed results. No merge, live extension reload,
+deployment, authority expansion, or CI-only training dispatch was performed.
+
+This instrument measures bounded report triage and handoff clarity, **not** native skill activation,
+repository remediation, CI runtime savings, or unrestricted-agent safety. Withheld synthetic cases are
+not production traffic and become regression cases once exposed. Prompt size is deterministic, not a
+latency claim; a short plateau is not evidence of a mathematical logarithmic law.
 
 ## Local MCP
 
