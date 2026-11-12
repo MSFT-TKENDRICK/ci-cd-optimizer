@@ -375,10 +375,96 @@ describe("attributeRun on run 42856555439", () => {
     expect(before.recommendation).not.toContain("logged runtime cache access");
   });
 
+  it("attributes reused-layer completion and completed copies as diagnosis-only layer materialization", () => {
+    const lines = (cachedDone: boolean) => parseJobLog([
+      ["38:59", "##[group]Run docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "shell: /usr/bin/bash -e {0}"], ["38:59", "##[endgroup]"],
+      ["39:00", "#16 [build 5/7] COPY tsconfig.json ./"], ["39:00", "#16 CACHED"],
+      // BuildKit reprints a lazily pulled vertex with interim DONE lines; only the final completion counts.
+      ...(cachedDone ? [
+        ["39:04", "#16 DONE 3.8s"], ["39:04", "#16 [build 5/7] COPY tsconfig.json ./"],
+        ["39:05", "#16 extracting sha256:b4e2e5b749b1 2.0s done"], ["39:06", "#16 DONE 5.2s"],
+      ] : []),
+      ...(cachedDone ? [["39:06", "#17 [build 6/7] COPY src ./src"], ["39:10", "#17 DONE 3.7s"]] : []),
+      ["39:10", "#18 [build 7/7] RUN npm run build"], ["39:11", "#18 0.159 > tsc"], ["39:17", "#18 DONE 6.2s"],
+      ["39:17", "#21 [stage-2 3/5] COPY --from=dependencies /app/node_modules ./node_modules"], ["39:17", "#21 CACHED"],
+      ...(cachedDone ? [
+        ["39:19", "#21 DONE 1.6s"], ["39:19", "#21 [stage-2 3/5] COPY --from=dependencies /app/node_modules ./node_modules"],
+        ["39:20", "#21 DONE 2.8s"],
+      ] : []),
+      ...(cachedDone ? [["39:20", "#22 [stage-2 4/5] COPY --from=build /app/dist ./dist"], ["39:22", "#22 DONE 1.7s"]] : []),
+    ].map(([time, text]) => `${at(time!)} ${text}`).join("\n"));
+    const source = snapshot([job(1, "app", "38:59", "39:26")]);
+    const evidence = lines(true);
+    const result = attributeRun(source, new Map([[1, evidence]]));
+    const found = result.bottlenecks.find((item) => item.category === "layer-materialization")!;
+    expect(found).toMatchObject({ observedMs: 13_400, runnerSavingsBoundMs: 0, elapsedSavingsBoundMs: 0 });
+    expect(found.summary).toContain("2 vertex/vertices reported CACHED and a completion time (8.0 s)");
+    expect(found.summary).toContain("2 COPY/ADD vertex/vertices completed without a CACHED marker (5.4 s)");
+    expect(found.summary).toContain("not evidence of a cache failure");
+    expect(found.summary).toContain("or changed inputs; a matching entry may be absent");
+    expect(found.summary).toContain("No time saving is bounded");
+    expect(found.recommendation).toContain("interleaved experiment");
+    expect(found.evidence.join(" ")).not.toContain("#18");
+    expect(found.evidence).toContain("#16 [build 5/7] COPY tsconfig.json ./: 5.2 s (CACHED; timed completion)");
+    expect(found.evidence).toContain("cache-from: type=gha,scope=app");
+    expect(result.bottlenecks.find((item) => item.category === "layer-cache-miss")).toMatchObject({ observedMs: 6200 });
+    expect(benchmarkRun(source, result, undefined, []).findings).toContainEqual(expect.objectContaining({
+      category: "layer-materialization", observedMs: 13_400, runnerSavingsBoundMs: 0, elapsedSavingsBoundMs: 0,
+    }));
+    for (const build of evidence.steps.flatMap((step) => step.builds)) build.cacheFrom = [];
+    expect(attributeRun(source, new Map([[1, evidence]])).bottlenecks.some((item) => item.category === "layer-materialization")).toBe(false);
+    const markersOnly = attributeRun(source, new Map([[1, lines(false)]]));
+    expect(markersOnly.bottlenecks.some((item) => item.category === "layer-materialization")).toBe(false);
+    expect(markersOnly.bottlenecks.some((item) => item.category === "layer-cache-miss")).toBe(true);
+  });
+
+  it("unions overlapping materialization and excludes base, internal and export vertices", () => {
+    const evidence = parseJobLog([
+      ["38:59", "##[group]Run docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "shell: /usr/bin/bash -e {0}"], ["38:59", "##[endgroup]"],
+      ["39:00", "#1 [internal] load build definition from Dockerfile"],
+      ["39:00", "#2 [base 1/1] FROM node:22"], ["39:00", "#2 CACHED"],
+      ["39:00", "#3 [build 1/3] RUN npm ci"], ["39:00", "#3 CACHED"],
+      ["39:02", "#4 [build 2/3] COPY src ./src"], ["39:05", "#3 DONE 5.0s"],
+      ["39:06", "#5 [build 3/3] WORKDIR /app"], ["39:06", "#5 CACHED"],
+      ["39:07", "#4 DONE 5.0s"], ["39:09", "#5 DONE 3.0s"],
+      ["39:15", "#1 DONE 15.0s"], ["39:20", "#2 DONE 20.0s"],
+      ["39:20", "#6 exporting to docker image format"], ["39:20", "#6 CACHED"], ["39:35", "#6 DONE 15.0s"],
+    ].map(([time, text]) => `${at(time!)} ${text}`).join("\n"));
+    const found = one(attributeRun(snapshot([job(1, "app", "38:59", "39:40")]), new Map([[1, evidence]])),
+      "layer-materialization", "app");
+    expect(found).toMatchObject({ observedMs: 9000, runnerSavingsBoundMs: 0, elapsedSavingsBoundMs: 0 });
+    expect(found.evidence.filter((line) => line.startsWith("#"))).toEqual([
+      "#3 [build 1/3] RUN npm ci: 5.0 s (CACHED; timed completion)",
+      "#4 [build 2/3] COPY src ./src: 5.0 s",
+      "#5 [build 3/3] WORKDIR /app: 3.0 s (CACHED; timed completion)",
+    ]);
+  });
+
+  it("does not turn unfinished or errored copies into completed materialization", () => {
+    const evidence = parseJobLog([
+      ["38:59", "##[group]Run docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "shell: /usr/bin/bash -e {0}"], ["38:59", "##[endgroup]"],
+      ["39:00", "#10 [build 1/5] COPY src ./src"], ["39:05", "#10 extracting sha256:abc 5.0s done"],
+      ["39:06", "#11 [build 2/5] ADD files /files"], ["39:12", "#11 ERROR: transfer failed"], ["39:12", "#11 DONE 6.0s"],
+      ["39:13", "#12 [build 3/5] RUN npm run build"], ["39:14", "#12 0.1 > tsc"], ["39:18", "#12 DONE 5.0s"],
+      ["39:19", "#13 [build 4/5] COPY package.json ./"], ["39:19", "#13 CACHED"],
+      ["39:20", "#14 [build 5/5] COPY config ./config"], ["39:22", "#14 DONE 2.0s"],
+    ].map(([time, text]) => `${at(time!)} ${text}`).join("\n"));
+    const result = attributeRun(snapshot([job(1, "app", "38:59", "39:25")]), new Map([[1, evidence]]));
+    expect(result.bottlenecks.some((item) => item.category === "layer-materialization")).toBe(false);
+    expect(one(result, "layer-cache-miss", "app").observedMs).toBe(5000);
+  });
+
   it("describes savings only as bounds and never exceeds the observed time or the headroom", () => {
     expect(attribution.bottlenecks.length).toBeGreaterThan(0);
     for (const entry of attribution.bottlenecks) {
-      expect(entry.summary).toMatch(/up to/);
+      if (entry.runnerSavingsBoundMs === 0) expect(entry.summary).toContain("No time saving is bounded");
+      else expect(entry.summary).toMatch(/up to/);
       expect(entry.summary).not.toMatch(/\bwill (?:save|reduce|cut|speed)\b/i);
       expect(entry.runnerSavingsBoundMs).toBeLessThanOrEqual(entry.observedMs);
       expect(entry.elapsedSavingsBoundMs).toBeLessThanOrEqual(entry.runnerSavingsBoundMs);

@@ -25,6 +25,7 @@ const MAX_EVIDENCE = 200;
 const MAX_LISTED = 5;
 
 const INFRA_STEP = /^(?:set up job|complete job|initialize containers|stop containers|post\b)/i;
+const STAGE_INSTRUCTION = /^\[[^\]]+\] [A-Z]+\b/;
 const CHECKOUT_STEP = /\bactions\/checkout\b/i;
 const SETUP_STEP = /\b(?:set\s*up|setup|install|restore|cache|dependenc|deps|bootstrap|toolchain|prepare)/i;
 const INSTALL_COMMAND =
@@ -33,7 +34,8 @@ const INSTALL_COMMAND =
 export type BottleneckCategory =
   | "cache-export" | "image-load" | "layer-cache-miss" | "builder-setup" | "builder-teardown" | "package-cache"
   | "toolchain-download" | "repeated-command" | "service-startup" | "test-runtime" | "repeated-setup"
-  | "generated-artifact-drift" | "queue-pressure" | "interrupted-transfer" | "layer-cache-unknown";
+  | "generated-artifact-drift" | "queue-pressure" | "interrupted-transfer" | "layer-cache-unknown"
+  | "layer-materialization";
 
 export interface Bottleneck {
   id: string;
@@ -472,6 +474,37 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
         covers,
       }));
     }
+  }
+
+  // Cached vertices can complete again while BuildKit lazily materializes layers.
+  const reused = build.vertices.filter((vertex) => vertex.cached && vertex.durationMs !== undefined && !vertex.error
+    && (vertex.kind === "run" || vertex.kind === "copy" || (vertex.kind === "other" && STAGE_INSTRUCTION.test(vertex.name))));
+  const copied = build.vertices.filter((vertex) => vertex.kind === "copy" && !vertex.cached
+    && vertex.durationMs !== undefined && !vertex.error);
+  const materialized = [...reused, ...copied];
+  const materializedMs = vertexUnionMs(materialized);
+  if (build.cacheFrom.length > 0 && materializedMs >= MIN_FINDING_MS) {
+    const source = build.cacheFrom.map((spec) => spec.raw).join("; ");
+    const parts = [
+      ...(reused.length > 0 ? [`${reused.length} vertex/vertices reported CACHED and a completion time (${formatMs(vertexUnionMs(reused))})`] : []),
+      ...(copied.length > 0 ? [`${copied.length} COPY/ADD vertex/vertices completed without a CACHED marker (${formatMs(vertexUnionMs(copied))})`] : []),
+    ];
+    const listed = [...materialized].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id);
+    findings.push(finding(ctx, {
+      category: "layer-materialization",
+      detail,
+      step: entry.label,
+      observedMs: materializedMs,
+      removableMs: 0,
+      observation: `${entry.label}: ${parts.join(" and ")}, spanning ${formatMs(materializedMs)} of non-overlapping vertex time despite cache-from ${source}. A CACHED marker does not mean zero transfer or unpacking cost: on a fresh builder, reused layers may still be fetched and unpacked before a later vertex can build on them. Completed copies without a CACHED marker are not evidence of a cache failure or changed inputs; a matching entry may be absent. The log does not separate fetch, unpack and copy time or establish removable cost.`,
+      recommendation: "Measure before restructuring: use the build record or trace to split fetch, unpack and copy time per vertex. Order Dockerfile instructions so frequently changing inputs (source, build configuration) are copied after heavy, stable dependency layers and only into the stages that need them, and keep copied contexts and cross-stage copies small. Compare a registry cache (for example GHCR with type=registry) or a persistent builder only in an interleaved experiment with identical build inputs, counting fetch, unpack and export cost. Preserve hermetic in-container builds, image contents and smoke/parity checks.",
+      evidence: [
+        ...listed.slice(0, MAX_LISTED).map((vertex) => `${describeVertex(vertex)}${vertex.cached ? " (CACHED; timed completion)" : ""}`),
+        ...(listed.length > MAX_LISTED ? [`${listed.length - MAX_LISTED} more vertex/vertices not listed; their intervals are included.`] : []),
+        ...build.cacheFrom.map((spec) => `cache-from: ${spec.raw}`),
+      ],
+      covers,
+    }));
   }
   return findings;
 }
