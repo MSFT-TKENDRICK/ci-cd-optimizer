@@ -93,6 +93,7 @@ tarball. Inside the clone, `npm run cli -- <command>` runs the TypeScript source
 | `scan` | Lint a repository's default branch through the API like the App, then upload SARIF (`--upload-sarif`), sync finding issues, and open fix pull requests. `--dry-run` previews. | `--repo`, a token |
 | `ssdf` | Report repository-visible evidence against all 42 NIST SP 800-218 SSDF v1.1 tasks (`--format json` for machine-readable output; `--repo owner/name` reads a remote repository). Not a compliance determination. | A checkout, or a token for a remote repository |
 | `telemetry` | Report on a completed workflow run (`--run-id`) with a Gantt chart, critical path, and bounded log-backed bottleneck evidence. Raises duration alerts; `--check` posts a check run. | A token with `actions: read` |
+| `doctor` | Diagnose the latest or selected failed workflow attempt; attempt guarded local YAML repairs by default. `--report-only` emits issue-ready Markdown or JSON without repairs. See [workflow doctor](docs/doctor.md). | A token with `actions: read`, `contents: read`; a clean exact-revision checkout for repairs |
 | `review <cmd>` | Review program: `validate`, `run`, `intake`, `intake-artifact`, `intake-status`, `scheduled` | A token for API reads |
 | `experiments <cmd>` | Hill climbing: `list`, `context`, `create`, `collect`, `evaluate`, `decide` | A token |
 | `experiments plan` | Exactly optimize an explicit bounded CI job/mode/resource model; no publication | A model JSON file; no token |
@@ -232,16 +233,16 @@ registers itself as the reference example in [projects/ci-cd-optimizer](projects
 
 ## What it finds
 
-131 rules in 15 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
+135 rules in 16 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
 suppressions.
 
 | Ruleset | Examples |
 |---|---|
-| `workflow` | Concurrency cancellation, job timeouts, merge queue support, matrix coverage/budgets, duplicate triggers, setup version files |
+| `workflow` | Artifact-backed job success gates, concurrency cancellation, job timeouts, merge queue support, matrix coverage/budgets, duplicate triggers, setup version files |
 | `checkout` | Sparse checkout, partial clone (`filter: blob:none`), correct base refs for affected detection |
 | `affected` | Change detection, affected-only test selection instead of `nx run-many`, `turbo run`, `lerna run`, `pnpm -r`, workspace-wide npm/Yarn, or `bazel test //...`, path-filtered required checks |
 | `caching` | setup-* dependency caches, build-tool caches, matrix platform compatibility, artifact compression, redundant installs |
-| `hermeticity` | Frozen lockfiles, pinned actions, runners, container images, and base image digests |
+| `hermeticity` | Frozen lockfiles, pinned actions or a verified actions lockfile, runners, container images, and base image digests |
 | `containers` | Dependency layers, multi-stage builds, BuildKit cache scope/mode and mounts, context size, QEMU, verified script downloads |
 | `packages` | Monolith decomposition signals, `exports` maps, `files` allowlists, version drift across a monorepo |
 | `registries` | Publishing images to GHCR and packages to the GitHub npm registry for org-wide reuse |
@@ -249,13 +250,19 @@ suppressions.
 | `redundancy` | Duplicate setup steps and commands, the same build repeated per job, toolchain version drift, shadowed `env` |
 | `testing` | Playwright browser caching, incremental tool caches, watch mode in CI, masked failures, fixed sleeps |
 | `security` | Expression injection, untrusted checkouts in privileged triggers, cache poisoning, excessive token permissions, persisted credentials |
+| `ssdf` | Publishing without SBOM or provenance evidence, attestation token permissions, static cloud credentials instead of workload identity |
+| `hooks` | Git hooks that reinstall dependencies on every run, whole-repository pre-commit scans that also receive batched filenames |
 | `nix` | 37 rules for CI configuration, evaluation inputs, flake locks, cache/trust boundaries, fetchers, derivations and image layers |
 | `toolchains` | 10 rules for Gradle cache/parallel settings, Cargo locking/incremental builds and Rust selection, Bazel, pip, uv and Go |
 
-Presets are `recommended` (default), `strict`, `agentic`, `github`, `insights`, and `all`. The full catalog with
+Presets are `recommended` (default), `strict`, `agentic`, `github`, `insights`, `ssdf`, and `all`. The full catalog with
 rationale, examples, and references is in [docs/rules.md](docs/rules.md). Configuration is covered in
 [docs/configuration.md](docs/configuration.md), and suppressions and custom local rules in
 [docs/linter.md](docs/linter.md#suppressions).
+
+The [job dependency check](docs/linter.md#job-dependency-success-gates) links literal same-run artifact transfers
+to missing `needs` paths without serializing independent jobs. It excludes intentional failure handlers and
+aggregates, offers no autofix, and does not claim measured runner-minute savings.
 
 The directory, Git-revision, and GitHub API loaders share an inventory of workflows/composite actions, Dockerfiles
 and containerfiles, package manifests/locks, `*.nix`, `flake.lock`, devenv files, `.cargo/config[.toml]`, Gradle

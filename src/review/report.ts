@@ -9,6 +9,7 @@ import type { ReviewOutcome, ReviewStatus } from "./review.js";
  * privileged workflows). Public reports show only how many there are; maintainers get details privately.
  */
 export const SENSITIVE_RULES: ReadonlySet<string> = new Set([
+  "hermeticity/actions-lock",
   "hermeticity/pin-actions",
   "hermeticity/pin-container-images",
   "hermeticity/docker-base-digest",

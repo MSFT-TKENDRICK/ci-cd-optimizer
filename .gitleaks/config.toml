@@ -1,0 +1,4 @@
+title = "CI/CD Optimizer secret policy"
+
+[extend]
+useDefault = true

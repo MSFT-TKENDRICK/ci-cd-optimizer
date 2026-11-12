@@ -42,6 +42,14 @@ startup and removal failures are both preserved. An interrupted worker still rel
 process cleanup. Startup, readiness and cleanup failures fail CI. Overlapping work is not itself proof of a speedup: compare complete
 run latency and runner work across fixed-head samples, not only the removed service-initialization step.
 
+CI skips explicit Buildx builder cleanup only on GitHub-hosted runners, whose VMs are disposed after the job.
+Self-hosted or unknown environments retain cleanup. Build records, summaries, image loading and the separate
+PostgreSQL cleanup remain enabled; removing teardown is not itself a measured whole-run speedup.
+
+The Node dependency and build stages pin the same multi-platform base-image digest, retaining the readable
+version tag and Dependabot's existing weekly Docker updates. This prevents a mutable Node tag from silently
+changing those stages between commits; it does not pin every build input or establish a performance improvement.
+
 ## The loop
 
 ### 1. Generator: weekly ([experiment-generator.md](../.github/workflows/experiment-generator.md))

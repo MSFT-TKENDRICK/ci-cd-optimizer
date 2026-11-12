@@ -167,3 +167,57 @@ describe("baseline diagnostics and per-job history", () => {
     expect(perJob).not.toContain("formal");
   });
 });
+
+describe("skip-gated workloads", () => {
+  const gated = snapshot(2000, 120, [["build", 60], ["test", 0, "skipped"]]);
+  const gatedPrior = { ...gated, runId: 1001, durationMs: 100_000 };
+
+  it("compares runs that skipped the same jobs without sampling the skipped jobs", () => {
+    expect(comparisonExclusion(gated)).toBeUndefined();
+    expect(comparisonKey(gatedPrior)).toBe(comparisonKey(gated));
+    expect(comparableHistory([gatedPrior], gated)).toEqual([gatedPrior]);
+    expect(diagnoseBaseline([gatedPrior], gated)).toEqual({ examined: 1, eligible: 1, comparable: 1, excluded: {} });
+    const baseline = computeBaseline([gatedPrior], gated);
+    expect(baseline).toMatchObject({ sampleCount: 1, medianDurationMs: 100_000, jobs: { build: 60_000 } });
+    expect(Object.keys(baseline?.jobs ?? {})).toEqual(["build"]);
+    expect(jobBaselines([gatedPrior], gated).map((job) => job.key)).toEqual(["build"]);
+    expect(buildSeries([gatedPrior, gated]).map((series) => [series.jobKey ?? "workflow", series.points.map((point) => point.runId)])).toEqual([
+      ["workflow", [1001, 2000]], ["build", [1001, 2000]],
+    ]);
+  });
+
+  it("identifies a skipped job by key, name and needs rather than runner fields it never used", () => {
+    const unrouted = { ...gatedPrior, jobs: gatedPrior.jobs.map((job) => job.conclusion === "skipped" ? { ...job, labels: [], runnerGroupId: 3 } : job) };
+    expect(comparisonExclusion(unrouted)).toBeUndefined();
+    expect(comparisonKey(unrouted)).toBe(comparisonKey(gated));
+    const rewired = { ...gatedPrior, jobs: gatedPrior.jobs.map((job) => job.conclusion === "skipped" ? { ...job, needs: [] } : job) };
+    expect(comparisonKey(rewired)).toBeDefined();
+    expect(comparableHistory([rewired], gated)).toEqual([]);
+  });
+
+  it("does not mix runs that executed a job with runs that skipped it", () => {
+    expect(comparisonKey(gated)).toBeDefined();
+    expect(comparisonKey(gated)).not.toBe(comparisonKey(current));
+    expect(comparableHistory([prior], gated)).toEqual([]);
+    expect(comparableHistory([gatedPrior], current)).toEqual([]);
+    expect(diagnoseBaseline([prior], gated)).toEqual({ examined: 1, eligible: 1, comparable: 0, excluded: { "job-set-changed": 1 } });
+  });
+
+  it.each(["failure", "cancelled", "timed_out", "action_required", null])("still abstains when a job concluded %s", (conclusion) => {
+    const run = { ...gated, jobs: gated.jobs.map((job) => job.key === "test" ? { ...job, conclusion } : job) };
+    expect(comparisonExclusion(run)).toBe("job-failed");
+    expect(comparisonKey(run)).toBeUndefined();
+  });
+
+  it("still abstains without an executed job or with an unlabeled executed job", () => {
+    const idle = snapshot(2000, 5, [["build", 0, "skipped"], ["test", 0, "skipped"]]);
+    expect(comparisonExclusion(idle)).toBe("no-jobs");
+    expect(summarizeBaselineGap(diagnoseBaseline([], idle))).toBe("no baseline: no executed jobs were observed");
+    const unlabeled = { ...gated, jobs: gated.jobs.map((job) => job.key === "build" ? { ...job, labels: [] } : job) };
+    expect(comparisonExclusion(unlabeled)).toBe("labels-missing");
+  });
+
+  it("keeps the comparison key of runs without skipped jobs", () => {
+    expect(comparisonKey(current)).toBe("183687f94d13f1f5c7784dc2669129ef495e20edd58b8376695f8d503374c68c");
+  });
+});

@@ -120,9 +120,10 @@ duration, the statistic behind it, a duration chart, and links to the runs invol
   Missing jobs/series or a different context do not prove recovery.
 - **Snooze:** closing an alert as **not planned** silences that workflow/context for `snoozeDays` (14).
 
-Contexts distinguish branches, trigger events, executed job/matrix sets, dependencies and observed runner labels/groups.
-Only successful first attempts with complete, versioned collection provenance are eligible. Partial/warmed retries,
-legacy or incomplete collection, missing runner information and failed jobs cannot open, refresh or close these alerts.
+Contexts distinguish branches, trigger events, executed job/matrix sets, skipped-job sets, dependencies and observed
+runner labels/groups. Only successful first attempts with complete, versioned collection provenance are eligible.
+Partial/warmed retries, legacy or incomplete collection, missing runner information and failed, cancelled or unfinished
+jobs cannot open, refresh or close these alerts. Skipped jobs do not disqualify a run but are never sampled.
 Changed contexts have separate issue identities. A qualified replacement supersedes legacy workflow-only alerts and
 same-branch contexts proven absent from the bounded active-context window; unknown or still-active contexts are
 preserved. Existing dismissals continue to suppress replacement alerts during the snooze period.
@@ -192,6 +193,25 @@ to three recognized branch/tag/PR-ref permission entries and counts additional r
 retained. Unsupported, oversized and malformed lines are ignored; credentials are not decoded.
 This is logged permission evidence, not proof of cache publication, matching layers or restoration.
 Missing or omitted entries do not imply denied access, and a miss alone never justifies broader permissions.
+
+When executed RUN misses sit in stages whose own `FROM` vertex logs a resolved digest, and the matching
+`[internal] load metadata for <ref>` request names that base by tag rather than by digest, the summary adds
+a candidate cause. A mutable tag that resolved to a different digest when the imported cache was written
+invalidates every layer built on it, but the log cannot show the digest used then, so the cause stays a
+candidate. Evidence lists each base's requested reference and resolved digest so it can be compared with
+the run that published the cache, and the recommendation points to `hermeticity/docker-base-digest` with
+`requireDigest: true` paired with update automation. Misses in stages without a logged `FROM` resolution
+(BuildKit prints identical bases once) are counted as unattributed. The hint never changes savings bounds.
+
+When a build imports a layer cache, `layer-materialization` reports Dockerfile-instruction vertices
+reporting both `CACHED` and a completion time, plus completed COPY/ADD vertices without a `CACHED` marker,
+once their union reaches three seconds. A reused layer can still be fetched and unpacked on a fresh
+builder. A copy without a cache marker does not prove changed inputs or a cache failure: a matching entry
+may be absent. Unfinished and errored vertices are excluded. Uncached RUN vertices are left to the
+layer-cache findings, and base-image, internal and export vertices are excluded.
+The finding is diagnosis-only with zero savings bounds: split fetch, unpack and copy time from the build
+record first, then compare instruction ordering, a registry cache or a persistent builder only in a
+controlled interleaved experiment with identical build inputs.
 
 Failed, cancelled and timed-out jobs also report unfinished BuildKit digest transfers when repeated
 unchanged byte/total reports span at least ten seconds on both the log and transfer clocks. Progress,

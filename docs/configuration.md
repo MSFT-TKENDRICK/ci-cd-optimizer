@@ -58,9 +58,14 @@ Presets:
 Rule options and defaults are listed per rule in [rules.md](rules.md). Generated gh-aw `.lock.yml` workflows are
 ignored by default. Fix the `.md` source and recompile instead.
 
-The 14 rulesets include `nix` and `toolchains`; these work through every built-in entry point, with no separate
+The rulesets include `hooks`, `nix` and `toolchains`; these work through every built-in entry point, with no separate
 plugin or Nix/toolchain executable required. `rulesets: { nix: warn }` selects all 37 Nix rules regardless of preset;
 individual `rules` entries can then narrow them. See [Nix behavior and assumptions](nix.md).
+
+`rulesets: { hooks: warn }` selects Git-hook and pre-commit optimization rules. They flag direct dependency
+installs on the interactive hook path and explicit whole-repository lint entries that also receive batched
+filenames. Recommendations preserve secret scans, mandatory checks and CI gates; they never suggest bypassing
+hooks or automatically narrowing a repository-wide check to staged files.
 
 Absence-based rules need a complete inventory of relevant repository files. File limits, oversized content-bearing
 files, API filtering/truncation, unreadable entries, and symlinks/submodules can make that inventory incomplete.
@@ -83,7 +88,9 @@ Agent exposure/authentication is **process configuration**, not repository-contr
 `--enable-remote`, explicit `--repo` allowlists, and a provisioned token. Hosted ACP requires
 `CICD_OPTIMIZER_ACP=true`, `CICD_OPTIMIZER_ACP_AUTH=github-user`, and
 `CICD_OPTIMIZER_ACP_REPOSITORIES=owner/repo:numeric-id`; see [hosted setup](agents.md#hosted-acp-on-your-own-app-deployment)
-for authentication, transport, limits, and deployment requirements. Repository settings cannot enable writes or
+for authentication, transport, limits, and deployment requirements. Hosted MCP has separate
+`CICD_OPTIMIZER_MCP`, `CICD_OPTIMIZER_MCP_AUTH`, and `CICD_OPTIMIZER_MCP_REPOSITORIES` settings; see
+[hosted MCP](agents.md#hosted-mcp-on-your-own-app-deployment). Repository settings cannot enable writes or
 raise agent transport quotas.
 
 ### Legacy keys
@@ -231,7 +238,8 @@ Workflow paths are exact, not globs. Budgets must be positive safe integers in m
 budget. Missing job selectors are reported as unassessed, not passed. Ambiguous display-name mappings (including
 collisions with matrix prefixes or name templates) withhold comparison/budget assessment rather than selecting the
 first matching job. Objectives apply to eligible successful
-first attempts, not shortened failed/cancelled runs. Current configuration is compared with the current run and
+first attempts, not shortened failed/cancelled runs. Skipped jobs are neither sampled nor budgeted; an objective whose
+job was skipped in the current run is reported as unmatched. Current configuration is compared with the current run and
 eligible history; this is **not** a record of which objective applied when a historical run executed, nor SLO
 compliance or a deployment gate. The definition digest changes when the budget/selector changes; raw measurements
 and sample quantiles do not. Configuration remains versioned in Git.

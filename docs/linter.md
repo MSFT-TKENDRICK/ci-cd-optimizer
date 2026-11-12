@@ -10,13 +10,14 @@ The same built-in rules power [developer-agent skills, MCP, and ACP](agents.md).
 unsaved content and return exact fix previews without writing files or importing repository-local rules.
 The ordinary CLI's `--fix` and `--allow-local-rules` are separate, explicit opt-ins; no protocol write API exists.
 
-It reads GitHub Actions workflows, composite actions, Dockerfiles, Nix expressions/flakes, and package/toolchain
+It reads GitHub Actions workflows, composite actions, Dockerfiles, Nix expressions/flakes, Git hooks, pre-commit, and package/toolchain
 configuration. Findings identify declared practices and potential improvements, not proven speedups or universally
 equivalent rewrites. The [rule catalog](rules.md) lists every rule; the [Nix guide](nix.md) explains its static model.
 
 - [Quick start](#quick-start)
 - [Command line](#command-line)
 - [Supported inputs](#supported-inputs)
+- [Job dependency success gates](#job-dependency-success-gates)
 - [Output formats and editors](#output-formats-and-editors)
 - [Configuration](#configuration)
 - [Suppressions](#suppressions)
@@ -106,6 +107,7 @@ The CLI, Git-revision baseline, GitHub App/API scan and Action use the same inve
 | Family | Recognized input |
 |---|---|
 | Actions | `.github/workflows/*.yml` / `*.yaml`, composite `action.yml` / `action.yaml`, optimizer/Dependabot/Renovate configuration |
+| Git hooks | Standard hook names in root `.githooks/` and `.husky/`, `.pre-commit-config.yaml` / `.yml`, `.pre-commit-hooks.yaml` / `.yml` |
 | Containers | `Dockerfile` / `Containerfile` and suffixed variants, `*.dockerfile` / `*.containerfile`, `.dockerignore` / `*.dockerignore`, Compose and Bake configuration |
 | Nix | `*.nix` (case-insensitive), `flake.lock`, `.envrc`, `devenv.yaml`, `devenv.lock` |
 | Packages | Supported Node, Python, Cargo, Go and .NET manifests/locks; `pnpm-workspace.yaml`; `requirements*.txt` and `requirements/*.txt` |
@@ -131,6 +133,52 @@ The built-in rules do not execute shell scripts, evaluate Nix, resolve arbitrary
 run package managers. Unsupported/dynamic constructs are often left unanalyzed. A clean report is not proof of
 correctness, complete coverage, hermeticity, or performance. Manual recommendations can change trust, dependencies,
 coverage, lock policy and resource usage; validate those decisions in the target environment.
+
+### Job dependency success gates
+
+`workflow/artifact-success-gating` warns when a success-path job downloads a literal named artifact from a
+unique producer in the same workflow, but has no direct or transitive `needs` path to that producer. It is
+enabled in `recommended`, `agentic` and `strict`; it is advisory and has no autofix.
+
+```powershell
+npm run cli -- lint --rule workflow/artifact-success-gating=warn
+npm run cli -- lint --explain workflow/artifact-success-gating
+```
+
+For example, a job downloading `dist` from a job uploading `dist` normally needs that producer. Review adding
+the producer to its existing `needs` list, preserving other dependencies. The warning points at the download
+and includes the upload as related evidence. Multiple downloads from the same producer produce one warning.
+An upload can finish before a later step fails: artifact existence is not proof that its producer succeeded.
+Validate the change across all triggers and failure/skip paths before adopting it.
+
+**Conservative initial scope.** Only direct official `actions/upload-artifact` / `actions/download-artifact`
+steps with exact literal names are linked; an omitted upload name means `artifact`. Downloads without a name,
+pattern/ID downloads, cross-run/repository/token selectors, dynamic names, duplicate producers, producer matrices,
+reusable/composite internals and conditional or failure-tolerant transfers are not inferred. A dynamic upload
+suppresses this rule for that workflow because it could collide with a literal name. Jobs and transfers must
+have no condition, `true`, or exactly `success()` (optionally expression-wrapped). Other conditions are left
+unanalyzed. Failure-aware consumers, result-context users and required-check aggregation are excluded rather
+than forced behind a success gate. Circular candidate edges are not recommended. This is not a general DAG
+validator or an assertion that excluded workflows have correct failure propagation.
+
+**Keep distinct failure policies distinct.** `needs` skips dependent jobs after failure (including dependency
+chains); it does not cancel already-running independent jobs. An intermediate `always()` job alone is not
+evidence that downstream default-success jobs bypass all ancestor failures. Explicit consumer `always()`,
+`failure()` and `!cancelled()` conditions may intentionally collect diagnostics, clean up, notify, or aggregate
+required checks. Their correctness requires understanding the result policy and scripts, so this rule does
+not diagnose or rewrite them. Required-check aggregates must still inspect required outcomes and fail correctly;
+do not make them skip failures in pursuit of fewer minutes. Independent lint/tests keep their useful parallelism:
+names alone never establish an edge.
+
+`triggers/shard-fail-fast` separately reviews an explicit `fail-fast: false` on a recognized sharded PR test
+matrix; matrix cancellation is not inter-job gating. `workflow/concurrency` concerns superseded workflow runs,
+not prerequisite failure. `testing/masked-failures` separately handles recognized silenced tests. These policies
+are not interchangeable.
+
+This detector supplies static configuration evidence, not telemetry-derived cost or savings. Existing run
+telemetry retains its dependency attribution and overlapping savings-bound semantics. Observed failed-run
+runner time is exposure, not proven removable cost; never sum overlapping bounds or describe bounds as measured
+improvements. No other CI platform is covered by this rule. A clean report does not prove complete gating.
 
 ### Exit codes
 
@@ -418,6 +466,15 @@ places alerts on the right files.
 
 ## Git hooks
 
+The `hooks` ruleset treats hook scripts and pre-commit definitions as optimization targets, not only an
+integration for running this linter. It inspects literal POSIX-shell commands (including shebang-free Husky
+hooks) and explicitly declared YAML entries. Non-shell shebangs, arbitrary script delegation and remote
+hook behavior without a declared entry remain unknown; custom hooks directories are not inferred.
+It recommends moving repeated dependency installation to setup, with missing-dependency failures, and setting
+`pass_filenames: false` for an explicit whole-repository linter to avoid repeat scans across filename batches.
+Neither rule removes mandatory checks, narrows secret scans, enables skipping or supplies an automatic fix.
+For this repository's mandatory secret/lint/push gates, see [Contributing](../CONTRIBUTING.md).
+
 ### pre-commit
 
 ```yaml
@@ -432,7 +489,7 @@ repos:
 
 The `cicd-lint` hook in [`.pre-commit-hooks.yaml`](../.pre-commit-hooks.yaml) works as follows:
 
-- It runs when a staged file is a workflow, `action.yml`, a Dockerfile or Containerfile, `package.json`,
+- It runs when a staged file is a Git hook, pre-commit config/definition, workflow, `action.yml`, a Dockerfile or Containerfile, `package.json`,
   `package-lock.json`, `pnpm-lock.yaml`, or `yarn.lock`.
 - It lints the whole repository, not just the staged files (`pass_filenames: false`), because rules compare files.
 - It needs Node.js 22 or later on `PATH`. It is a `language: script` hook that runs the committed, self-contained

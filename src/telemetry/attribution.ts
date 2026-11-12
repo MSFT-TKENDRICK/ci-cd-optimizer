@@ -25,6 +25,10 @@ const MAX_EVIDENCE = 200;
 const MAX_LISTED = 5;
 
 const INFRA_STEP = /^(?:set up job|complete job|initialize containers|stop containers|post\b)/i;
+const STAGE_INSTRUCTION = /^\[[^\]]+\] [A-Z]+\b/;
+const STAGE_STEP = /^\[([^\]]+?) \d+\/\d+\] /;
+const METADATA_REQUEST = /^\[(?:[^\]\s]+ )?internal\] load metadata for (\S+)$/;
+const RESOLVED_BASE = /^\[([^\]]+?) \d+\/\d+\] FROM (\S+?)@(sha256:[a-f0-9]{64})(?:\s|$)/;
 const CHECKOUT_STEP = /\bactions\/checkout\b/i;
 const SETUP_STEP = /\b(?:set\s*up|setup|install|restore|cache|dependenc|deps|bootstrap|toolchain|prepare)/i;
 const INSTALL_COMMAND =
@@ -33,13 +37,16 @@ const INSTALL_COMMAND =
 export type BottleneckCategory =
   | "cache-export" | "image-load" | "layer-cache-miss" | "builder-setup" | "builder-teardown" | "package-cache"
   | "toolchain-download" | "repeated-command" | "service-startup" | "test-runtime" | "repeated-setup"
-  | "generated-artifact-drift" | "queue-pressure" | "interrupted-transfer" | "layer-cache-unknown";
+  | "generated-artifact-drift" | "queue-pressure" | "interrupted-transfer" | "layer-cache-unknown"
+  | "layer-materialization";
 
 export interface Bottleneck {
   id: string;
   category: BottleneckCategory;
   jobKey: string;
   jobName: string;
+  /** Exact contributing jobs for aggregate findings; the display key can be truncated. */
+  relatedJobIds?: number[];
   step?: string;
   /** Time observed for this cause in the run. */
   observedMs: number;
@@ -368,6 +375,50 @@ function vertexUnionMs(vertices: readonly BuildVertex[]): number {
   return unionMs(vertices.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs] as const));
 }
 
+interface TagRequestedBase { ref: string; digest: string; vertex: number; stages: string[]; missed: number }
+
+/**
+ * Groups missed RUN vertices by the base image their stage was built on, when this build requested that base by mutable
+ * tag (`load metadata for <ref>` without a digest) and logged the digest it resolved to. A stage whose FROM vertex is not
+ * logged (BuildKit prints identical FROMs once) or whose base was also requested by that digest is not attributed.
+ */
+function tagRequestedBases(build: BuildInvocation, missed: readonly BuildVertex[]): { bases: TagRequestedBase[]; attributed: number } {
+  const requested = new Set<string>();
+  for (const vertex of build.vertices) {
+    const ref = METADATA_REQUEST.exec(vertex.name)?.[1];
+    if (ref) requested.add(ref);
+  }
+  const stages = new Map<string, Omit<TagRequestedBase, "stages" | "missed">>();
+  for (const vertex of build.vertices) {
+    const match = vertex.kind === "base-image" ? RESOLVED_BASE.exec(vertex.name) : null;
+    const [, stage, ref, digest] = match ?? [];
+    if (stage && ref && digest && requested.has(ref) && !requested.has(`${ref}@${digest}`)) {
+      stages.set(stage, { ref, digest, vertex: vertex.id });
+    }
+  }
+  const bases = new Map<string, TagRequestedBase>();
+  let attributed = 0;
+  for (const vertex of missed) {
+    const stage = STAGE_STEP.exec(vertex.name)?.[1];
+    const base = stage === undefined ? undefined : stages.get(stage);
+    if (!stage || !base) continue;
+    attributed += 1;
+    const key = `${base.ref}@${base.digest}`;
+    const entry = bases.get(key) ?? { ...base, stages: [], missed: 0 };
+    if (!entry.stages.includes(stage)) entry.stages.push(stage);
+    entry.missed += 1;
+    bases.set(key, entry);
+  }
+  return { bases: [...bases.values()].sort((a, b) => b.missed - a.missed || a.vertex - b.vertex), attributed };
+}
+
+function baseDriftNote(bases: readonly TagRequestedBase[], attributed: number, total: number): string {
+  const listed = bases.slice(0, MAX_LISTED).map((base) =>
+    `stage(s) ${clip(base.stages.join(", "), MAX_LABEL)} on ${clip(base.ref, MAX_LABEL)}, resolved to ${base.digest.slice(0, 19)}…`);
+  const rest = total - attributed;
+  return ` Candidate cause: ${attributed} of these ${total} vertices are in stages built on a base image requested by mutable tag (${listed.join("; ")}${bases.length > MAX_LISTED ? `; ${bases.length - MAX_LISTED} more` : ""}). If the tag resolved to a different digest when the imported cache was written, every layer built on it misses; this log cannot show the digest used then.${rest > 0 ? ` The other ${rest} could not be linked to a tag-requested base and are not attributed.` : ""}`;
+}
+
 function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocation, index: number): Bottleneck[] {
   const findings: Bottleneck[] = [];
   const detail = `s${entry.path}b${index}`;
@@ -446,6 +497,7 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
       const cause = restored === 0
         ? "No RUN or COPY vertex was marked CACHED; this alone does not distinguish changed inputs from missing or inaccessible cache entries."
         : `${restored} other RUN or COPY vertex/vertices were marked CACHED, but that does not prove that matching entries for these vertices were published or accessible.`;
+      const drift = executionOutput ? tagRequestedBases(build, vertices) : { bases: [], attributed: 0 };
       findings.push(finding(ctx, {
         category: executionOutput ? "layer-cache-miss" : "layer-cache-unknown",
         detail,
@@ -453,11 +505,12 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
         observedMs,
         ...(!executionOutput ? { removableMs: 0 } : {}),
         observation: executionOutput
-          ? `${entry.label}: ${vertices.length} RUN vertex/vertices produced timed command output without a CACHED marker, spanning ${formatMs(observedMs)} of vertex time despite cache-from ${source}. Vertex time can include materialization, not just command execution. ${cause} The log alone does not establish the cause.`
+          ? `${entry.label}: ${vertices.length} RUN vertex/vertices produced timed command output without a CACHED marker, spanning ${formatMs(observedMs)} of vertex time despite cache-from ${source}. Vertex time can include materialization, not just command execution. ${cause} The log alone does not establish the cause.${drift.attributed > 0 ? baseDriftNote(drift.bases, drift.attributed, vertices.length) : ""}`
           : `${entry.label}: ${vertices.length} RUN vertex/vertices span ${formatMs(observedMs)} without a CACHED marker or timed command output (cache-from ${source}). They may be materializing cached layers or executing silently; the retained log does not establish a rebuild or removable cost. ${cause}`,
         recommendation: [
           ...(!executionOutput ? ["Inspect the build record's cache status and execution trace before treating these vertices as misses. Missing output is not proof of either a cache hit or a rebuild, and layer-transfer output alone is not command execution. Do not expose credentials or signed URLs from build records."] : []),
           "Compare consecutive runs with identical build inputs, including resolved base-image digests, build arguments and context contents, not just the same commit. Check successful cache publication, matching import/export scopes, branch visibility and eviction.",
+          ...(drift.attributed > 0 ? ["Compare each resolved base digest listed in the evidence with the one logged by the run that published the imported cache. Pinning the base by digest (hermeticity/docker-base-digest with requireDigest: true) turns base updates into explicit, reviewed changes; pair pins with update automation so security fixes still land."] : []),
           ...(access?.entries.length ? ["Use the action's logged runtime cache access as branch-permission evidence only: it does not prove publication, a matching entry or successful restoration. Missing or omitted entries do not prove denied access. Do not broaden permissions merely because a layer missed."] : []),
           "If misses persist, investigate cache lookup and backend behavior before restructuring the Dockerfile or changing permissions.",
         ].join(" "),
@@ -466,12 +519,45 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
             `Action-reported runtime cache access: ${access.entries.map((entry) => `${entry.scope}: ${entry.permission}`).join("; ")}${access.omittedEntries ? `; ${access.omittedEntries} additional recognized access line(s) not retained` : ""}`,
           ] : []),
           ...[...vertices].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
+          ...drift.bases.slice(0, MAX_LISTED).map((base) =>
+            `#${base.vertex} base for stage(s) ${clip(base.stages.join(", "), MAX_LABEL)}: ${clip(base.ref, MAX_EVIDENCE)} (requested by tag) resolved to ${base.digest}`),
           ...build.vertices.filter((vertex) => vertex.kind === "cache-import").map(describeVertex),
           ...build.cacheFrom.map((spec) => `cache-from: ${spec.raw}`),
         ],
         covers,
       }));
     }
+  }
+
+  // Cached vertices can complete again while BuildKit lazily materializes layers.
+  const reused = build.vertices.filter((vertex) => vertex.cached && vertex.durationMs !== undefined && !vertex.error
+    && (vertex.kind === "run" || vertex.kind === "copy" || (vertex.kind === "other" && STAGE_INSTRUCTION.test(vertex.name))));
+  const copied = build.vertices.filter((vertex) => vertex.kind === "copy" && !vertex.cached
+    && vertex.durationMs !== undefined && !vertex.error);
+  const materialized = [...reused, ...copied];
+  const materializedMs = vertexUnionMs(materialized);
+  if (build.cacheFrom.length > 0 && materializedMs >= MIN_FINDING_MS) {
+    const source = build.cacheFrom.map((spec) => spec.raw).join("; ");
+    const parts = [
+      ...(reused.length > 0 ? [`${reused.length} vertex/vertices reported CACHED and a completion time (${formatMs(vertexUnionMs(reused))})`] : []),
+      ...(copied.length > 0 ? [`${copied.length} COPY/ADD vertex/vertices completed without a CACHED marker (${formatMs(vertexUnionMs(copied))})`] : []),
+    ];
+    const listed = [...materialized].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id);
+    findings.push(finding(ctx, {
+      category: "layer-materialization",
+      detail,
+      step: entry.label,
+      observedMs: materializedMs,
+      removableMs: 0,
+      observation: `${entry.label}: ${parts.join(" and ")}, spanning ${formatMs(materializedMs)} of non-overlapping vertex time despite cache-from ${source}. A CACHED marker does not mean zero transfer or unpacking cost: on a fresh builder, reused layers may still be fetched and unpacked before a later vertex can build on them. Completed copies without a CACHED marker are not evidence of a cache failure or changed inputs; a matching entry may be absent. The log does not separate fetch, unpack and copy time or establish removable cost.`,
+      recommendation: "Measure before restructuring: use the build record or trace to split fetch, unpack and copy time per vertex. Order Dockerfile instructions so frequently changing inputs (source, build configuration) are copied after heavy, stable dependency layers and only into the stages that need them, and keep copied contexts and cross-stage copies small. Compare a registry cache (for example GHCR with type=registry) or a persistent builder only in an interleaved experiment with identical build inputs, counting fetch, unpack and export cost. Preserve hermetic in-container builds, image contents and smoke/parity checks.",
+      evidence: [
+        ...listed.slice(0, MAX_LISTED).map((vertex) => `${describeVertex(vertex)}${vertex.cached ? " (CACHED; timed completion)" : ""}`),
+        ...(listed.length > MAX_LISTED ? [`${listed.length - MAX_LISTED} more vertex/vertices not listed; their intervals are included.`] : []),
+        ...build.cacheFrom.map((spec) => `cache-from: ${spec.raw}`),
+      ],
+      covers,
+    }));
   }
   return findings;
 }
@@ -493,6 +579,16 @@ function cacheSaveFailure(evidence: JobLogEvidence) {
       : "Investigate the cache service and the logged save error before changing cache keys or job structure.",
     evidence: failures.map((failure) => `post-job cache save: ${failure}`),
   };
+}
+
+function toolPhaseParts(step: LogStep): string[] {
+  const phases = step.toolPhases;
+  if (!phases) return [];
+  return [
+    ...(phases.downloadMs === undefined ? [] : [`download ${formatMs(phases.downloadMs)}`]),
+    ...(phases.extractMs === undefined ? [] : [`extract ${formatMs(phases.extractMs)}`]),
+    ...(phases.cacheAddMs === undefined ? [] : [`adding to the tool cache ${formatMs(phases.cacheAddMs)}`]),
+  ];
 }
 
 function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
@@ -524,6 +620,9 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
 
   if (step.toolCache === "download" && step.durationMs >= MIN_FINDING_MS) {
     const release = step.toolSource === "release";
+    const phases = release ? [] : toolPhaseParts(step);
+    const runnerLabels = (ctx.job.labels ?? []).map((runnerLabel) => runnerLabel.trim().toLowerCase());
+    const slim = !release && runnerLabels.includes("ubuntu-slim") && !runnerLabels.includes("self-hosted");
     findings.push(finding(ctx, {
       category: "toolchain-download",
       detail: `s${entry.path}`,
@@ -534,10 +633,15 @@ function stepFindings(ctx: JobContext, entry: LocatedStep): Bottleneck[] {
         : `${label} downloaded its toolchain instead of finding it in the runner's tool cache (${formatMs(step.durationMs)}).`,
       recommendation: release
         ? "Cache the extracted toolchain directory keyed by its version pin or lock file plus runner OS and architecture, and keep integrity verification before reusing it; a cache restore also takes time, so measure before and after."
-        : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
-      evidence: [release
-        ? `${label}: release archive download with no reused install, ${formatMs(step.durationMs)}`
-        : `${label}: tool cache miss, ${formatMs(step.durationMs)}`],
+        : slim
+          ? "The ubuntu-slim image has no hosted tool cache, so every run downloads, extracts and copies the toolchain, and choosing another version cannot produce a hit. Where the job's code supports a runtime the image preinstalls (see the image's software list), a version check can skip the setup action when it passes; a check looser than the setup action's version spec gives up that pin, so the runtime then changes with image updates. Where the job must stay pinned, measure a standard hosted runner (including its startup and queue time) or a toolchain cache (a restore also writes to disk) before and after."
+          : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
+      evidence: [
+        release
+          ? `${label}: release archive download with no reused install, ${formatMs(step.durationMs)}`
+          : `${label}: tool cache miss, ${formatMs(step.durationMs)}`,
+        ...(phases.length > 0 ? [`${label}: ${phases.join(", ")}`] : []),
+      ],
       covers: [entry.top],
     }));
   }
@@ -796,6 +900,7 @@ function repeatedSetup(shape: RunShape, evidenceById: Map<number, JobLogEvidence
       category: "repeated-setup",
       jobKey: clip([...new Set(list.map((use) => use.timed.job.key))].sort().join(", "), MAX_EVIDENCE),
       jobName: clip(listed, MAX_EVIDENCE),
+      relatedJobIds: [...new Set(list.map((use) => use.timed.job.id))].sort((a, b) => a - b),
       step: label,
       observedMs: Math.round(total),
       elapsedSavingsBoundMs: elapsed,

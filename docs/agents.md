@@ -9,10 +9,11 @@ write access. The shipped interfaces are:
 | `cicd-mcp --enable-remote --repo owner/repo` | Local stdio; outbound GitHub reads | The above, plus repository scans and completed-run reports for explicitly allowlisted repositories |
 | `cicd-acp` | Local ACP v1 over stdio | Deterministic lint/preview/explanation commands in the client's session directory |
 | GitHub App `/acp` | Opt-in ACP v1 HTTP/SSE | Authenticated repository scans, run reports, and built-in rule documentation; **no server-local filesystem access** |
+| GitHub App `/mcp` | Opt-in stateless MCP over HTTP | Authenticated read-only repository tools; **no server-local filesystem access** |
 | [Agent plugin](../plugins/ci-cd-optimizer/) | Bundled MCP server, skills, and custom agent | The canonical developer-agent integration, requiring Node.js 22+ but no dependency installation or build |
 
 These are implemented transports, not a public hosted service. There is **no public deployment or npm registry
-release**. Build/install a checkout, use its committed plugin bundle, or enable `/acp` on infrastructure you operate.
+release**. Build/install a checkout, use its committed plugin bundle, or enable an endpoint on infrastructure you operate.
 The [setup MCP App](setup.md) is a separate, owner-operated provisioning interface; it is not the read-only linter.
 
 ## Install from a checkout
@@ -56,6 +57,14 @@ The single maintained skill set is:
 - [`analyze-ci-run`](../plugins/ci-cd-optimizer/skills/analyze-ci-run/SKILL.md): authenticated read-only run analysis.
 
 For another skill-capable client, point its skill discovery at those directories; do not maintain copied variants.
+In this repository, [`.github/skills`](../.github/skills/) contains generated, self-contained mirrors so
+[Copilot's native project discovery](https://docs.github.com/en/copilot/concepts/customizations/agent-skills)
+can load the same skills without installing the plugin. Connecting an MCP server alone does **not** install skills.
+After changing a canonical skill, run `node scripts/sync-skills.mjs --write`; `--check` and the existing manifest
+tests reject missing or divergent mirrors. Full copies avoid symlink portability and out-of-skill reference
+problems on Windows; the procedure and metadata are maintained only in the plugin source.
+In a fresh session rooted in this checkout, `copilot skill list` should list all three. Other repositories still
+need the plugin or an explicitly configured skill source. An existing session may need a reload/new session.
 The custom agent is in `com.github.copilot/agents/ci-cd-optimizer.agent.md`. Host-provided editing tools are separate:
 the agent must show the exact proposed change and get permission before using them.
 
@@ -63,6 +72,207 @@ The committed `server/cicd-agents.mjs` supports `mcp`, `acp`, and the ordinary `
 Plugin servers may start in the plugin's install directory, not the user's repository. Therefore the skills pass
 an absolute `root` to workspace tools. The server refuses to analyze the plugin install directory when
 `CICD_OPTIMIZER_PLUGIN_ROOT` or `PLUGIN_ROOT` identifies it.
+
+### Evaluate skill activation
+
+The [Vally suite](../evals/skills/eval.yaml) tests actual Copilot `skill_activation` trajectory events, not
+keyword matches or responses claiming to use a skill. It stages a small read-only fixture and relies on native
+`.github/skills` discovery: **do not add `--skill-dir`**, which would mask a broken repository layout.
+Eight frozen stimuli cover the dashboard follow-up, runner work, monorepo caching, exact-attempt Gantt analysis,
+triage, application latency, dashboard styling and hostile quoted-log instructions. Three repetitions each
+check routing, no file changes and no shell/edit/web calls. This evaluates activation, not optimization quality
+or tool execution; the fixture deliberately has no live CI tools, credentials or application.
+
+Use Node.js 22.15+ and existing authorized Copilot authentication, following
+[Vally runtime setup](https://microsoft.github.io/vally/get-started/runtime-setup/).
+Do not commit credentials. Vally isolates runtime settings by default; host-home mode can introduce personal
+skills/configuration and should not be used for comparable results. Model-driven evals consume credits and are
+explicitly opt-in, not added to every CI run. The ordinary manifest tests protect discovery/parity for free.
+The fixture instructions and graders are not an OS sandbox: Vally's executor may approve tool permissions.
+Stage only these inert skill files, not a live checkout, executable project configuration or secrets.
+
+From the repository root (choose a baseline commit and unused output directories):
+
+```powershell
+node scripts/sync-skills.mjs --check
+node evals/skills/prepare.mjs .agent-artifacts/skill-eval/baseline <baseline-commit>
+node evals/skills/prepare.mjs .agent-artifacts/skill-eval/treatment
+npm exec --yes --package=@microsoft/vally-cli@0.21.0 -- vally lint .github/skills --eval-spec evals/skills/eval.yaml
+npm exec --yes --package=@microsoft/vally-cli@0.21.0 -- vally eval --eval-spec evals/skills/eval.yaml --param SKILL_TREE=../../.agent-artifacts/skill-eval/baseline --workers 2 --require-pass --output-dir .agent-artifacts/skill-eval/baseline-results
+npm exec --yes --package=@microsoft/vally-cli@0.21.0 -- vally eval --eval-spec evals/skills/eval.yaml --workers 2 --require-pass --output-dir .agent-artifacts/skill-eval/treatment-results
+```
+
+`prepare.mjs` snapshots only the three canonical skills and any native mirrors; it refuses to overwrite a
+fixture. Missing native mirrors are allowed in a historical control so the **activation grader**, not setup,
+detects the original bug. Baseline failure is expected for a revision without discovery entries.
+Keep `results.jsonl` and native session logs under ignored `.agent-artifacts`, record the actual executor/model,
+sample counts and failures, and distinguish missing evidence from passes. Check `skill_activation` events and
+the skill catalogue in native `system.message` events when diagnosing discovery versus routing.
+Treat logs as potentially sensitive; do not publish them without review. A small passing suite is not a
+guarantee across all models, clients or future prompts.
+
+#### Recorded activation evaluation
+
+On 2026-11-12, Vally 0.21.0 used `copilot-sdk` / Copilot 1.0.109 with the observed default model
+`claude-sonnet-5.5`. The same eight prompts and graders were used for each 24-trial run, with no explicit
+skill injection or host-home opt-in.
+
+| Variant | Required activation passes | Negative-control passes | Execution errors |
+|---|---:|---:|---:|
+| Baseline `ee8a87f203e62d7edc8a6b8aaa3f9d328505644d` | 0/15 | 9/9 | 0 |
+| Native mirrors and procedure guidance, original descriptions | 14/15 | 9/9 | 0 |
+| Native mirrors and revised descriptions | 14/14 evaluable | 9/9 | 1/24 attempts |
+
+The final run's remaining `runner-work` trial disconnected before completing. A targeted one-trial rerun
+using the identical snapshot, prompt and graders passed; the error remains recorded, not counted as a pass.
+The exact dashboard follow-up went from 0/3 to 3/3. All completed final trials passed the no-change and
+no-execution checks. These are activation results, not measured CI savings or proof of a universal routing rate.
+
+Run IDs, in table order: `7498884c-0392-4026-8774-20054379a3fa`,
+`e143f20e-441e-4419-a987-fb146932bdc3`, `cb991048-2ec6-430f-9909-64a7c585a7df`;
+the infrastructure retry is `c98f78d7-c22b-4522-87c5-ac1b4e30d331`.
+Earlier diagnostics also matter: a link-wrapper prototype failed static reference validation and was
+discarded; a native single-trial smoke with original descriptions missed activation despite a populated
+catalogue; an explicit-load smoke passed but was excluded from the native-discovery results.
+The small non-interleaved samples do not establish that the revised descriptions alone caused improvement.
+
+### Evolve benchmark feedback as a skill
+
+The broadcast harness now composes its existing immutable evidence/authorization contract with the canonical
+[`benchmark-feedback.md`](../plugins/ci-cd-optimizer/skills/optimize-ci-pipeline/references/benchmark-feedback.md)
+procedure, then the untrusted JSON evidence. A SHA-256 revision identifies the exact contract and procedure;
+payload text cannot choose a procedure or candidate. Native skill mirrors and Vally snapshots include
+references, not just `SKILL.md`. Event validation, repository authorization, receipt-before-ack ordering,
+denial handling and replay-gap behavior remain unchanged. Prompt text is not a security sandbox: existing
+tool approvals and code-level validation remain necessary.
+
+The evolution surfaces are deliberately separate:
+
+| Method | Integration and scope |
+|---|---|
+| [Microsoft SkillOpt](https://github.com/microsoft/SkillOpt) | The pinned `skillopt==0.2.0` package's actual `skillopt.evaluation.gate.evaluate_gate` requires strict validation improvement. This is core-library integration, not the full research trainer. |
+| [SkillOpt-Sleep](https://microsoft.github.io/SkillOpt/docs/sleep/) | Its actual `consolidate` runs replay, train-failure reflection, bounded edits and validation through repository-owned Copilot backends: text-only decisions or isolated synthetic MCP calls. No broad session harvesting, memory changes, schedules or adoption. |
+| [SkillOpt-Lite](https://github.com/EvolvingLMMs-Lab/SkillOpt-Lite) | Adapted [skill-only loop](../.github/prompts/skillopt-feedback.prompt.md): frozen splits, baseline, bounded edits, validation selection and final test. |
+| HarnessOpt | Adapted [harness-only loop](../.github/prompts/harnessopt-feedback.prompt.md): reproduce a composition failure, restrict edits, preserve security/delivery semantics, smoke-test and review separately from skill text. |
+
+Lite/HarnessOpt are agent-driven workflows in **EvolvingLMMs-Lab**, linked by Microsoft Research, not two
+additional Microsoft-owned Python packages. The upstream examples are adapted rather than executed blindly:
+their reset commands, model choices, large evaluation budgets and tool grants are not inherited.
+
+The optional [evaluator](../evals/feedback/evolve.py) uses ten fixed synthetic decision cases: two train,
+four validation, four test. Expected typed decision objects remain outside rollout prompts; only train
+failures enter reflection. Validation must improve strictly with identical complete case sets and no
+per-case regression; final test failures block review eligibility. Infrastructure errors abort instead of
+becoming successful empty results. All outputs stay under ignored `.agent-artifacts`; even eligible results
+are proposals, never live updates. Its working directory/settings are isolated and tools are disabled.
+Use existing authorized Copilot authentication; do not change credentials to make an experiment pass.
+
+```powershell
+python -m venv .agent-artifacts/skillopt
+.agent-artifacts/skillopt/Scripts/python.exe -m pip install -r evals/feedback/requirements.txt
+.agent-artifacts/skillopt/Scripts/python.exe -m unittest discover -s evals/feedback -p "test_*.py"
+.agent-artifacts/skillopt/Scripts/python.exe evals/feedback/evolve.py --output .agent-artifacts/feedback-evolution/new-round
+```
+
+Use a compatible Python with wheels available for the dependencies (x64 Python 3.12 was used on Windows).
+The evaluator needs a native `copilot` executable; it refuses a Windows shell shim. It never writes maintained
+skills. Review the report and selected snapshot before any manual adoption, then synchronize mirrors.
+After a test split has been inspected, subsequent runs are regression checks; create and freeze a new,
+reviewed holdout before making a new generalization claim.
+
+For native activation, `node evals/feedback/prepare-activation.mjs .agent-artifacts/feedback-activation/new-round`
+creates an inert skill-only snapshot and Vally spec using the **actual production prompt composer**.
+Run `vally eval --eval-spec .agent-artifacts/feedback-activation/new-round/eval.yaml --require-pass`
+with the pinned Vally setup above. Three trials require real activation of both analysis and optimization
+skills, no file changes and no shell/edit/web calls. This does not bypass the earlier fixture/sandbox warning.
+
+On 2026-11-12 the real SkillOpt/Sleep evaluation made 14 Copilot rollouts across the ten unique cases:
+2/2 train, 4/4 validation before and after, and 4/4 final test decisions passed. The CLI was 1.0.109-1;
+its default concrete model was not captured. There were no training failures and no proposed edits;
+both official gates retained the incumbent on the 1.0-to-1.0 tie. **No learned quality improvement is
+claimed and no candidate was adopted.** The manually authored initial procedure is a reviewed integration
+change, not a claim that training discovered it. This small, text-only decision suite does not measure native
+skill activation, actual report pagination/tool execution or CI runtime; retain the separate Vally and
+delivery regressions for those boundaries.
+
+The production-composed broadcast also passed all three native Vally activation trials, loading both
+`analyze-ci-run` and `optimize-ci-pipeline`, with no file changes or shell/edit/web calls. Run ID:
+`0d1a8870-348e-4c07-94fd-2a4d5816f12e`. This is a narrow positive activation check, not a measured improvement
+over the previous broadcast or a universal activation guarantee.
+
+#### Behavioral refinement loop
+
+[`behavior.py`](../evals/feedback/behavior.py) evaluates **actual native MCP calls**, not just text
+classification. It uses the same guarded renderer as production, but only an inert fixture server is
+available to the agent. The server exposes exact-attempt reports and a disposition recorder; it cannot
+contact GitHub, edit files, acknowledge real events or execute quoted commands. Pagination uses smaller
+fixture pages while preserving the report's independent job/step/finding/gap and per-finding evidence
+cursors. A separate deterministic grader checks every cursor combination, source-run identity rather
+than telemetry-producer identity, numeric conclusions, ordering, supplied-URL provenance, and a handoff
+of at most 80 words. Empty findings do not establish a zero savings estimate: absent bounds stay unknown.
+Known-good and deliberately broken traces calibrate the grader.
+
+```powershell
+.\.agent-artifacts\skillopt\Scripts\python.exe evals\feedback\behavior.py --output .agent-artifacts\feedback-loop\new-run
+```
+
+Each run freezes a Loop Card and hashes before evaluation, with two A/A batches and three trials per
+case/procedure. Train reflection never receives validation/test cases. Sleep's protected-region editor
+holds the complete procedure as one JSON-encoded learned item; the wrapper is decoded before rendering,
+never sent as agent instructions or adopted into the skill. Official Sleep and SkillOpt gates use a
+strict utility improvement (case pass rate minus a bounded procedure-size penalty). The additional keep
+bar requires **no per-case regression**, plus either pass-rate gain above A/A variation or at least 15%
+fewer instruction bytes at equal behavior. Every non-style validation check must pass, so aggregate
+improvements cannot hide a newly failed guard. Instruction bytes include the unchanged contract and
+revision envelope, but exclude unchanged event JSON. A shorter procedure alone cannot hide a behavior regression.
+
+The loop stops after two successive non-qualifying proposals, four rounds, 120 native CLI invocations
+(including proposals), or 45 minutes. Each CLI invocation can contain multiple model turns; this is not
+a model-request or token ceiling. Leash exhaustion is inconclusive, not convergence. Identical task/procedure replays reuse their
+three stored trials; cached reads are not extra samples. The final test slice is run only after selection;
+every selected test trial must pass without regression. Usage files capture the native CLI's actual model
+and consumption. Artifacts include accepts, rejects, traces and candidate snapshots, but never update the
+maintained skill or live extension automatically.
+
+An invalid grader invalidates the apparent plateau. Preserve the rejected report, calibrate the correction,
+and freeze a new Loop Card and holdout rather than retroactively relabeling the old test result as a win.
+The narrowly scoped `--confirm-run <prior-run-directory>` mode supports one fourth proposal after a
+three-proposal run. It verifies unchanged fixture content, regrades cached train/validation traces,
+uses `confirmation-cases.json` only for the final test, and carries forward the original CLI count and
+start time. It does not reset the leash or establish convergence after an instrument change. Once those
+confirmation cases have been inspected, they too are regression cases, not a fresh holdout for future work.
+
+#### Recorded behavioral refinement
+
+The [sanitized Loop Card and ledger](../evals/feedback/behavior-results.json) preserves all four proposals,
+including rejects. On 2026-11-12 the initial A/A batches both passed 3/9 full cases; identity, pagination,
+numeric and ordering checks already passed, so the validation gain was primarily a more concise handoff.
+Proposal 1 reached 9/9 validation, but the final gate rejected it. Inspection found a defective clean-case
+oracle (zero rather than unknown savings and contradictory omission metadata), plus fabricated evidence
+URLs that the grader missed. That report remains rejected, not retroactively called a successful plateau.
+
+After correcting the instrument and freezing two new confirmation cases, proposal 4 passed 9/9 validation
+and 6/6 fresh confirmation trials versus 2/6 for the incumbent. It also passed 6/6 previously exposed,
+corrected regression trials. The selected procedure reduces LF-normalized instruction bytes from 3,156
+to 2,637 (**16.4%**), with the protected contract unchanged. It is staged for review, not live adoption.
+The recorded work comprises 87 native evaluation trials and four proposal launches: 91 CLI invocations.
+All 87 evaluation usage files reported the default `gpt-6.1-sol`, totaling 383 model requests; proposal
+request counts were not captured. The v1 card's "model invocations" label was incorrect: the implemented
+ceiling counted CLI launches, not model requests. Earlier calibration smokes and separate SDK activation
+trials are outside that refinement counter.
+
+Vally run `a1e852cf-ae94-4157-af6c-058d4de8e7b8` then passed all three native activation/no-change/no-execution
+trials with observed default `claude-sonnet-5.5`. Post-hoc inspection found handoffs of 79, 76 and 101 words:
+**one exceeded the requested cap**, which was not an activation grader. Thus the synthetic conciseness gain
+does not establish perfect full-SDK generalization. The four-proposal leash ended without another edit;
+corrected-instrument convergence and a logarithmic decline remain unproven. Future refinement requires a
+new card and fresh held-out cases, not relabeling these exposed results. No merge, live extension reload,
+deployment, authority expansion, or CI-only training dispatch was performed.
+
+This instrument measures bounded report triage and handoff clarity, **not** native skill activation,
+repository remediation, CI runtime savings, or unrestricted-agent safety. Withheld synthetic cases are
+not production traffic and become regression cases once exposed. Prompt size is deterministic, not a
+latency claim; a short plateau is not evidence of a mathematical logarithmic law.
 
 ## Local MCP
 
@@ -100,6 +310,7 @@ The protocol is newline-delimited JSON on stdout; startup/errors go to stderr.
 | `validate_review_project` | `root?`, root-relative `path` to `project.yaml` |
 | `scan_repository` (opt-in) | `repo`, `ref?`, `minSeverity?`, `limit?` |
 | `workflow_run_report` (opt-in) | `repo`, positive numeric `runId`, `runAttempt?`, `jobOffset?`, `stepOffset?`, `findingOffset?`, `evidenceOffset?`, `gapOffset?`, `markdown?` |
+| `dashboard_metrics` (opt-in) | `repo`, `runId`, `runAttempt?`, `layout?`, `jobId?`, and independent job, step, finding, evidence, and gap offsets |
 
 Results include structured JSON and equivalent text. `cicd://config` and `cicd://rules/<rule-id>` are JSON resources;
 `optimize-pipeline` and `triage-findings` are prompt templates. Rule resources use built-in defaults when no usable
@@ -138,6 +349,44 @@ The exact Actions job-log endpoint may follow one validated HTTPS signed-storage
 Remote operations are dry runs: they do not publish checks/SARIF, synchronize issues, run experiments, write
 telemetry to a database, or open fix PRs. Run reports fetch recent comparison data through the same bounded reader;
 they do not expose the App's privileged installation client or persistent telemetry history.
+
+### Inline performance dashboard in VS Code
+
+VS Code GitHub Copilot supports MCP Apps. For example, put the following in the workspace's `.vscode/mcp.json`,
+adjusting the absolute plugin path and explicit repository allowlist. It uses the existing `gh` login, not a token
+in the configuration:
+
+```json
+{
+  "servers": {
+    "ci-cd-optimizer": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "C:\\src\\ci-cd-optimizer\\plugins\\ci-cd-optimizer\\server\\cicd-agents.mjs",
+        "mcp",
+        "--enable-remote",
+        "--repo",
+        "acme/widgets",
+        "--github-cli-auth"
+      ]
+    }
+  }
+}
+```
+
+In Copilot Chat, ask: **“Show the CI/CD performance dashboard for acme/widgets run 2000, with jobs first and
+attribution next. Explain missing telemetry and compare only compatible runs.”** The agent can select or order
+the allowlisted `overview`, `jobs`, `attribution`, and `comparison` sections. The dashboard fetches evidence
+through the authenticated MCP server; refresh and drilldown retain the selected run attempt. Hosts without MCP
+App rendering receive the same paginated structured data and text instead; inline support is host-dependent.
+
+The interface uses the locally bundled open-source OpenUI Lang renderer and a bounded declarative component
+layout generated by Copilot. It is not the managed OpenUI Dashboards cloud service and does not send telemetry
+to OpenUI or require an OpenUI account, inference service, or API key. Unknown and partial measurements are
+identified as such; finding bounds can overlap and are not additive measured savings. Failed-run work is
+rework exposure, not removable cost. Collection and each response are bounded: follow the returned page controls
+or offsets for additional collected jobs, steps, findings, gaps, and evidence.
 
 ### Remote result completeness
 
@@ -200,6 +449,42 @@ repository numeric identity and exact source attempt/SHA before exposing it as
 `cicd://feedback/runs/<repository-id>:<producer-run>:<producer-attempt>`.
 Integrity framing alone is not authentication. Legacy producer runs without frames are coverage errors.
 
+Benchmarking stays **per run; optimization broadcasts are actionable-only and success-gated**. The watcher publishes a run resource
+only for a successful source attempt, when analysis is available and at least one identified bottleneck has a nonblank summary, remediation
+recommendation and supporting evidence. Clean/skipped reports without findings, gap-only or unavailable analysis,
+omission counts alone, and findings without remediation or evidence do not enqueue agent instructions.
+They remain in the producer's benchmark log and on-demand reports. Successfully filtered producers are marked
+processed within the replay scope without occupying an outbox slot or requiring an acknowledgement; the status
+resource's process-lifetime `filtered` count records these decisions. No broadcast does **not** mean no opportunities.
+Savings need not be positive: generated-artifact drift and cache-save failures can warrant fixes without proven
+removable work. A qualifying partial report still broadcasts its full bounded payload, including
+gaps and omissions; the receiver must verify applicability and retrieve exact-run evidence before remediation.
+
+Each repository/workflow/source-branch/trigger series starts broadcasting at its first actionable success **within
+the replay scope**, not the workflow's lifetime. Failures, cancellations, skipped attempts and unavailable analyses
+are held until the next qualifying success. Its `rollup` contains up to 20 exact run/attempt summaries,
+explicit omitted-run and conclusion counts, non-success runner work (rework exposure, never removable cost),
+and the number of quiet successes. Full evidence remains in producer logs and exact-run reports.
+Duplicate producers for the same source attempt do not inflate rollups. A quiet success does not flush a rollup.
+
+Later successes broadcast only for a new evidenced finding, a changed complete job set, newly available whole-run
+metrics, or a substantial duration change relative to the **last broadcast**, allowing gradual drift to accumulate.
+Run-specific numeric job ids are removed from finding identities; different finding details remain distinct.
+Novel actionable evidence can therefore notify even with unchanged timings. Execution elapsed, queue-inclusive
+latency, total runner work and per-job durations are compared separately, never added.
+Metric comparisons require complete whole-run metrics, no omitted jobs, and identical job keys/names (including
+matrix multiplicity). Trigger type is separated, but equal job sets do not prove identical dispatch inputs,
+runner resources or workloads; this is a notification filter, not an experiment or causal improvement claim.
+
+The fixed duration heuristic rejects absolute changes below 1 second and compares `ln(ms + 10,000)`.
+The base threshold is `ln(1.1)`. With at least three earlier comparable successes, the threshold becomes
+`min(ln(2), ln(1.1) + 2 * 1.4826 * MAD(log durations))`, using at most ten samples and excluding the current
+observation. These are product noise-filter choices, **not** validated human-perception constants, p-values
+or statistical significance. The cap applies to offset durations, not raw doubling. Thus 75 vs 73 minutes
+is quiet, 60 vs 10 minutes and 40 vs 120 minutes notify, and 40 vs 120 microseconds is quiet.
+Incomplete metrics and older delayed successes do not contaminate recent variability or replace the reference.
+No broadcast does not establish stability when evidence is missing.
+
 ```powershell
 node scripts/agent-startup.mjs --repo MSFT-TKENDRICK/ci-cd-optimizer --auth github-cli
 ```
@@ -224,9 +509,18 @@ a crash between accepting a message and persisting its receipt can replay the me
 
 The watcher polls every 60 seconds per allowlisted repository (maximum five), replays at most seven days/1,000
 producer runs per repository, and holds 50 unacknowledged events without silently evicting them. Each poll fetches
-at most four eligible producers per repository, alternating newest and oldest so current results do not wait
-behind the entire replay history and older events still make progress. Alternation survives single-slot backpressure;
-delivery order is not chronological.
+at most four eligible producers per repository, alternating newest and oldest within a frozen inventory snapshot.
+It buffers verified benchmarks until every member (including in-progress or retried producers) has been collected,
+then decides in authenticated source-attempt `updated_at` order, with run/attempt tie-breakers. This prevents
+a newest-first fetch from broadcasting success without failures elsewhere in that snapshot. New arrivals belong
+to the next snapshot, so they cannot perpetually extend the current one. Buffered events respect the same inventory
+bound; a full outbox pauses draining without dropping them. `buffered` and `catching-up` distinguish collection
+from delivery. An unresolved member blocks its snapshot and remains visible as an error or backlog, not a clean result.
+Late arrivals cannot retroactively amend an accepted broadcast; held failures join the next qualifying success.
+GitHub's attempt update timestamp is the ordering proxy, not a separately measured end-to-end duration.
+Comparison state is process-local and reconstructed from the bounded replay on reconnect; existing receipts prevent
+redelivery of the same accepted producer. It is not a permanent lifetime baseline and older replay boundaries or
+changed evidence can change decisions. Aged-out unresolved rollups are reported as replay gaps.
 Collection and replay gaps remain visible in status/error resources. Long-offline gaps cannot be reconstructed by this bounded feed.
 An upstream read timeout is reported explicitly without exposing download URLs, credentials or raw exception messages.
 It is incomplete analysis or delivery, not an empty result; existing deadlines, cancellation and retry backoff still apply.
@@ -242,13 +536,16 @@ conditional hypotheses and unmeasured resource costs never establish convergence
 
 Run `npm run ci:prepare` after source changes, review its generated diffs, then run `npm run ci:check-generated`
 before pushing. Preparation regenerates rule assurance, proof provenance, both shipped bundles and setup UI output.
-The check is read-only and preserves the existing CI parity gates. To opt in to the repository pre-push check:
+The check is read-only and preserves the existing CI parity gates. Install this repository's managed commit
+and push gates using the same setup as contributors:
 
 ```powershell
-git config --local core.hooksPath .githooks
+npm run secrets:install
+npm run hooks:install
 ```
 
-Fresh development/cloud bootstrap installs this hook with `--install-hooks`, refusing to replace an existing hook.
+Fresh development/cloud bootstrap installs these hooks with `--install-hooks`, refusing to replace existing hooks.
+Provision the pinned scanner separately with `npm run secrets:install`; bootstrap never bypasses missing checks.
 Review an existing hooks configuration before replacing it. Hooks are a local early warning, not a substitute for
 CI enforcement or proof verification. A reported artifact failure measures observed rework exposure, not promised savings.
 
@@ -336,6 +633,24 @@ Hosted commands:
 Hosted sessions reject file attachments and local commands (`/lint`, `/fix-preview`, `/config`); no server-local
 filesystem data is exposed. Browser-origin/CORS access, URL tokens, query parameters, JSON-RPC batches, unknown
 methods, unsupported HTTP verbs, and forged connection/session IDs are rejected. There is no unauthenticated mode.
+
+## Hosted MCP on your own App deployment
+
+The optional `/mcp` endpoint uses the same TLS proxy, ingress limits, GitHub user-token authentication and
+immutable repository-ID restrictions as hosted ACP. Configure it separately with process environment values:
+
+```dotenv
+CICD_OPTIMIZER_MCP=true
+CICD_OPTIMIZER_MCP_AUTH=github-user
+CICD_OPTIMIZER_MCP_REPOSITORIES=acme/widgets:12345678
+```
+
+It is disabled by default, serves stateless MCP POST requests, and authenticates each request independently.
+The client must supply `Authorization: Bearer …` on every request using its secret store. It has no access to the
+deployment's local workspace or installation credentials; each repository read rechecks the caller's pull access
+and pinned ID. Browser-origin requests, query parameters, batches and other HTTP methods are rejected. The MCP UI
+communicates through the host bridge, not by sending credentials from the iframe. The endpoint must not share the
+webhook path. In-process quotas are not a substitute for reverse-proxy limits.
 
 ## Bounds, cancellation, and interpretation
 

@@ -5,6 +5,8 @@ import {
 } from "../../src/telemetry/attribution.js";
 import { parseJobLog } from "../../src/telemetry/logs.js";
 import { benchmarkRun } from "../../src/telemetry/benchmark.js";
+import { projectDashboardMetrics } from "../../src/telemetry/dashboard-metrics.js";
+import { dashboardPage } from "../../src/agents/dashboard.js";
 import type { JobSnapshot, StepSnapshot, WorkflowSnapshot } from "../../src/telemetry/types.js";
 import { fakeClient, httpError, repo } from "../experiments/fixtures.js";
 import { callsTo, fakeApi } from "../service/api.js";
@@ -300,6 +302,48 @@ describe("attributeRun on run 42856555439", () => {
     expect(found.observedMs).toBeGreaterThan(0);
   });
 
+  it("names a tag-requested base as a candidate cause only for missed stages whose resolution is logged", () => {
+    const found = one(attribution, "layer-cache-miss", "app");
+    const digest = `sha256:f1${"0".repeat(61)}5`;
+    expect(found.summary).toContain("The log alone does not establish the cause. Candidate cause: 2 of these 3 vertices are in stages built on a base image requested by mutable tag (stage(s) build on docker.io/library/node:22-bookworm-slim, resolved to sha256:f10000000000…).");
+    expect(found.summary).toContain("this log cannot show the digest used then. The other 1 could not be linked to a tag-requested base");
+    expect(found.summary).not.toContain("distroless");
+    expect(found.evidence).toContain(`#11 base for stage(s) build: docker.io/library/node:22-bookworm-slim (requested by tag) resolved to ${digest}`);
+    expect(found.recommendation).toContain("hermeticity/docker-base-digest with requireDigest: true");
+    expect(found.recommendation).toContain("update automation");
+    expect(found).toMatchObject({ observedMs: 20_417 });
+
+    const pinned = APP_LOG.replaceAll("load metadata for docker.io/library/node:22-bookworm-slim", `load metadata for docker.io/library/node:22-bookworm-slim@${digest}`);
+    const unhinted = one(attributeRun(snapshot(), ciLogs([[APP, parseJobLog(pinned)]])), "layer-cache-miss", "app");
+    expect(unhinted.summary).toContain("The log alone does not establish the cause. Bound:");
+    expect(unhinted.summary).not.toContain("Candidate cause");
+    expect(unhinted.recommendation).not.toContain("docker-base-digest");
+    expect(unhinted.evidence.join(" ")).not.toContain("requested by tag");
+    expect(unhinted).toMatchObject({ observedMs: found.observedMs, runnerSavingsBoundMs: found.runnerSavingsBoundMs });
+  });
+
+  it.each([
+    ["by tag", "docker.io/library/node:22", true],
+    ["by digest", `docker.io/library/node:22@sha256:${"b".repeat(64)}`, false],
+    ["for another image", "docker.io/library/node:20", false],
+  ])("attributes platform-prefixed stages only when the base was requested %s", (_case, requested, hinted) => {
+    const evidence = parseJobLog([
+      ["38:59", "##[group]Run docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "shell: /usr/bin/bash -e {0}"], ["38:59", "##[endgroup]"],
+      ["38:59", `#3 [linux/amd64 internal] load metadata for ${requested}`], ["38:59", "#3 DONE 0.4s"],
+      ["38:59", `#5 [linux/amd64 build 1/3] FROM docker.io/library/node:22@sha256:${"b".repeat(64)}`], ["38:59", "#5 DONE 0.0s"],
+      ["39:00", "#8 [linux/amd64 build 3/3] RUN npm run build"], ["39:01", "#8 0.288 > tsc -p tsconfig.json"],
+      ["39:10", "#8 DONE 10.0s"],
+    ].map(([time, text]) => `${at(time!)} ${text}`).join("\n"));
+    const found = attributeRun(snapshot([job(1, "app", "38:59", "39:11")]), new Map([[1, evidence]]))
+      .bottlenecks.find((item) => item.category === "layer-cache-miss")!;
+    expect(found.observedMs).toBe(10_000);
+    expect(found.summary.includes("Candidate cause: 1 of these 1 vertices are in stages built on a base image requested by mutable tag (stage(s) linux/amd64 build on docker.io/library/node:22, resolved to sha256:bbbbbbbbbbbb…)")).toBe(hinted);
+    expect(found.summary.includes("could not be linked")).toBe(false);
+    expect(found.evidence.includes(`#5 base for stage(s) linux/amd64 build: docker.io/library/node:22 (requested by tag) resolved to sha256:${"b".repeat(64)}`)).toBe(hinted);
+  });
+
   it("separates executed RUN vertices from missing cache markers and broadcasts unknown status with zero savings", () => {
     const digest = `sha256:${"a".repeat(64)}`;
     const evidence = parseJobLog([
@@ -375,10 +419,96 @@ describe("attributeRun on run 42856555439", () => {
     expect(before.recommendation).not.toContain("logged runtime cache access");
   });
 
+  it("attributes reused-layer completion and completed copies as diagnosis-only layer materialization", () => {
+    const lines = (cachedDone: boolean) => parseJobLog([
+      ["38:59", "##[group]Run docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "shell: /usr/bin/bash -e {0}"], ["38:59", "##[endgroup]"],
+      ["39:00", "#16 [build 5/7] COPY tsconfig.json ./"], ["39:00", "#16 CACHED"],
+      // BuildKit reprints a lazily pulled vertex with interim DONE lines; only the final completion counts.
+      ...(cachedDone ? [
+        ["39:04", "#16 DONE 3.8s"], ["39:04", "#16 [build 5/7] COPY tsconfig.json ./"],
+        ["39:05", "#16 extracting sha256:b4e2e5b749b1 2.0s done"], ["39:06", "#16 DONE 5.2s"],
+      ] : []),
+      ...(cachedDone ? [["39:06", "#17 [build 6/7] COPY src ./src"], ["39:10", "#17 DONE 3.7s"]] : []),
+      ["39:10", "#18 [build 7/7] RUN npm run build"], ["39:11", "#18 0.159 > tsc"], ["39:17", "#18 DONE 6.2s"],
+      ["39:17", "#21 [stage-2 3/5] COPY --from=dependencies /app/node_modules ./node_modules"], ["39:17", "#21 CACHED"],
+      ...(cachedDone ? [
+        ["39:19", "#21 DONE 1.6s"], ["39:19", "#21 [stage-2 3/5] COPY --from=dependencies /app/node_modules ./node_modules"],
+        ["39:20", "#21 DONE 2.8s"],
+      ] : []),
+      ...(cachedDone ? [["39:20", "#22 [stage-2 4/5] COPY --from=build /app/dist ./dist"], ["39:22", "#22 DONE 1.7s"]] : []),
+    ].map(([time, text]) => `${at(time!)} ${text}`).join("\n"));
+    const source = snapshot([job(1, "app", "38:59", "39:26")]);
+    const evidence = lines(true);
+    const result = attributeRun(source, new Map([[1, evidence]]));
+    const found = result.bottlenecks.find((item) => item.category === "layer-materialization")!;
+    expect(found).toMatchObject({ observedMs: 13_400, runnerSavingsBoundMs: 0, elapsedSavingsBoundMs: 0 });
+    expect(found.summary).toContain("2 vertex/vertices reported CACHED and a completion time (8.0 s)");
+    expect(found.summary).toContain("2 COPY/ADD vertex/vertices completed without a CACHED marker (5.4 s)");
+    expect(found.summary).toContain("not evidence of a cache failure");
+    expect(found.summary).toContain("or changed inputs; a matching entry may be absent");
+    expect(found.summary).toContain("No time saving is bounded");
+    expect(found.recommendation).toContain("interleaved experiment");
+    expect(found.evidence.join(" ")).not.toContain("#18");
+    expect(found.evidence).toContain("#16 [build 5/7] COPY tsconfig.json ./: 5.2 s (CACHED; timed completion)");
+    expect(found.evidence).toContain("cache-from: type=gha,scope=app");
+    expect(result.bottlenecks.find((item) => item.category === "layer-cache-miss")).toMatchObject({ observedMs: 6200 });
+    expect(benchmarkRun(source, result, undefined, []).findings).toContainEqual(expect.objectContaining({
+      category: "layer-materialization", observedMs: 13_400, runnerSavingsBoundMs: 0, elapsedSavingsBoundMs: 0,
+    }));
+    for (const build of evidence.steps.flatMap((step) => step.builds)) build.cacheFrom = [];
+    expect(attributeRun(source, new Map([[1, evidence]])).bottlenecks.some((item) => item.category === "layer-materialization")).toBe(false);
+    const markersOnly = attributeRun(source, new Map([[1, lines(false)]]));
+    expect(markersOnly.bottlenecks.some((item) => item.category === "layer-materialization")).toBe(false);
+    expect(markersOnly.bottlenecks.some((item) => item.category === "layer-cache-miss")).toBe(true);
+  });
+
+  it("unions overlapping materialization and excludes base, internal and export vertices", () => {
+    const evidence = parseJobLog([
+      ["38:59", "##[group]Run docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "shell: /usr/bin/bash -e {0}"], ["38:59", "##[endgroup]"],
+      ["39:00", "#1 [internal] load build definition from Dockerfile"],
+      ["39:00", "#2 [base 1/1] FROM node:22"], ["39:00", "#2 CACHED"],
+      ["39:00", "#3 [build 1/3] RUN npm ci"], ["39:00", "#3 CACHED"],
+      ["39:02", "#4 [build 2/3] COPY src ./src"], ["39:05", "#3 DONE 5.0s"],
+      ["39:06", "#5 [build 3/3] WORKDIR /app"], ["39:06", "#5 CACHED"],
+      ["39:07", "#4 DONE 5.0s"], ["39:09", "#5 DONE 3.0s"],
+      ["39:15", "#1 DONE 15.0s"], ["39:20", "#2 DONE 20.0s"],
+      ["39:20", "#6 exporting to docker image format"], ["39:20", "#6 CACHED"], ["39:35", "#6 DONE 15.0s"],
+    ].map(([time, text]) => `${at(time!)} ${text}`).join("\n"));
+    const found = one(attributeRun(snapshot([job(1, "app", "38:59", "39:40")]), new Map([[1, evidence]])),
+      "layer-materialization", "app");
+    expect(found).toMatchObject({ observedMs: 9000, runnerSavingsBoundMs: 0, elapsedSavingsBoundMs: 0 });
+    expect(found.evidence.filter((line) => line.startsWith("#"))).toEqual([
+      "#3 [build 1/3] RUN npm ci: 5.0 s (CACHED; timed completion)",
+      "#4 [build 2/3] COPY src ./src: 5.0 s",
+      "#5 [build 3/3] WORKDIR /app: 3.0 s (CACHED; timed completion)",
+    ]);
+  });
+
+  it("does not turn unfinished or errored copies into completed materialization", () => {
+    const evidence = parseJobLog([
+      ["38:59", "##[group]Run docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "docker build --cache-from type=gha,scope=app ."],
+      ["38:59", "shell: /usr/bin/bash -e {0}"], ["38:59", "##[endgroup]"],
+      ["39:00", "#10 [build 1/5] COPY src ./src"], ["39:05", "#10 extracting sha256:abc 5.0s done"],
+      ["39:06", "#11 [build 2/5] ADD files /files"], ["39:12", "#11 ERROR: transfer failed"], ["39:12", "#11 DONE 6.0s"],
+      ["39:13", "#12 [build 3/5] RUN npm run build"], ["39:14", "#12 0.1 > tsc"], ["39:18", "#12 DONE 5.0s"],
+      ["39:19", "#13 [build 4/5] COPY package.json ./"], ["39:19", "#13 CACHED"],
+      ["39:20", "#14 [build 5/5] COPY config ./config"], ["39:22", "#14 DONE 2.0s"],
+    ].map(([time, text]) => `${at(time!)} ${text}`).join("\n"));
+    const result = attributeRun(snapshot([job(1, "app", "38:59", "39:25")]), new Map([[1, evidence]]));
+    expect(result.bottlenecks.some((item) => item.category === "layer-materialization")).toBe(false);
+    expect(one(result, "layer-cache-miss", "app").observedMs).toBe(5000);
+  });
+
   it("describes savings only as bounds and never exceeds the observed time or the headroom", () => {
     expect(attribution.bottlenecks.length).toBeGreaterThan(0);
     for (const entry of attribution.bottlenecks) {
-      expect(entry.summary).toMatch(/up to/);
+      if (entry.runnerSavingsBoundMs === 0) expect(entry.summary).toContain("No time saving is bounded");
+      else expect(entry.summary).toMatch(/up to/);
       expect(entry.summary).not.toMatch(/\bwill (?:save|reduce|cut|speed)\b/i);
       expect(entry.runnerSavingsBoundMs).toBeLessThanOrEqual(entry.observedMs);
       expect(entry.elapsedSavingsBoundMs).toBeLessThanOrEqual(entry.runnerSavingsBoundMs);
@@ -637,8 +767,15 @@ describe("attributeRun repeated setup", () => {
     const jobs = [setupJob(1, "lint", "00:28"), setupJob(2, "types", "00:30"), setupJob(3, "unit", "00:32")];
     const found = attributeRun(snapshot(jobs)).bottlenecks.filter((entry) => entry.category === "repeated-setup");
     expect(found).toHaveLength(1);
-    expect(found[0]).toMatchObject({ jobKey: "lint, types, unit", observedMs: 42_000, runnerSavingsBoundMs: 26_000 });
+    expect(found[0]).toMatchObject({ jobKey: "lint, types, unit", relatedJobIds: [1, 2, 3], observedMs: 42_000, runnerSavingsBoundMs: 26_000 });
     expect(found[0]?.summary).toMatch(/3 jobs/);
+    const run = { ...snapshot(jobs), provenance: { version: 1 as const, collector: "github-actions-rest" as const,
+      collectedAt: at("40:00"), jobsComplete: true, definitionKnown: true } };
+    const projection = projectDashboardMetrics({ snapshot: run, attribution: attributeRun(run) });
+    for (const jobId of [1, 2, 3]) {
+      expect(dashboardPage(projection, { jobId }).metrics.attribution.findings)
+        .toEqual(expect.arrayContaining([expect.objectContaining({ category: "repeated-setup", scope: "multiple-jobs" })]));
+    }
   });
 
   it("ignores checkout and setup that repeats too little", () => {
@@ -747,6 +884,55 @@ describe("attributeRun release toolchain installs", () => {
   it("reports nothing when the step reuses a verified install", () => {
     expect(attribute("Reusing verified toolchain at .proof-tools/4.11.0").bottlenecks
       .filter((entry) => entry.category === "toolchain-download")).toEqual([]);
+  });
+});
+
+describe("attributeRun tool-cache misses", () => {
+  const ORIGINAL = "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.";
+  const missLog = (phases: boolean) => [
+    `${at("00:00")} ##[group]Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1`,
+    `${at("00:00")} with:`,
+    `${at("00:00")}   node-version-file: .nvmrc`,
+    `${at("00:00")} ##[endgroup]`,
+    `${at("00:00")} Attempting to download 22...`,
+    ...(phases ? [
+      `${at("00:01")} Acquiring 22.23.5 - x64 from https://github.com/actions/node-versions/releases/download/22.23.5-43134205651/node-22.23.5-linux-x64.tar.gz`,
+      `${at("00:02")} Extracting ...`,
+      `${at("00:06")} Adding to the cache ...`,
+    ] : []),
+    `${at("00:18")} ##[group]Environment details`,
+    `${at("00:18")} node: v22.23.5`,
+    `${at("00:18")} ##[endgroup]`,
+    `${at("00:19")} Post job cleanup.`,
+  ].join("\n");
+  const attribute = (labels: string[], phases = true) => one(
+    attributeRun(snapshot([job(1, "pre_activation", "00:00", "00:19", { labels })]), new Map([[1, parseJobLog(missLog(phases))]])),
+    "toolchain-download", "pre_activation",
+  );
+  const MISS = "Run actions/setup-node@949feb2: tool cache miss, 19.0 s";
+  const PHASES = "Run actions/setup-node@949feb2: download 1.0 s, extract 4.0 s, adding to the tool cache 12.0 s";
+
+  it("explains that ubuntu-slim has no tool cache to hit and shows where the miss spent its time", () => {
+    const found = attribute(["ubuntu-slim"]);
+    expect(found).toMatchObject({ step: "Run actions/setup-node@949feb2", observedMs: 19_000 });
+    expect(found.recommendation).toContain("ubuntu-slim image has no hosted tool cache");
+    expect(found.recommendation).toContain("cannot produce a hit");
+    expect(found.recommendation).toContain("gives up that pin");
+    expect(found.recommendation).toContain("Where the job must stay pinned");
+    expect(found.recommendation).not.toContain(ORIGINAL);
+    expect(found.evidence).toEqual([MISS, PHASES]);
+  });
+
+  it("keeps the original advice unless the job ran on the hosted ubuntu-slim image", () => {
+    for (const labels of [["ubuntu-24.04"], ["self-hosted", "ubuntu-slim"]]) {
+      const found = attribute(labels);
+      expect(found.recommendation, labels.join(",")).toBe(ORIGINAL);
+      expect(found.evidence, labels.join(",")).toEqual([MISS, PHASES]);
+    }
+  });
+
+  it("omits the phase line when the log has no phase markers", () => {
+    expect(attribute(["ubuntu-slim"], false).evidence).toEqual([MISS]);
   });
 });
 

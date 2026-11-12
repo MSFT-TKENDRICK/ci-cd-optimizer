@@ -1,4 +1,5 @@
 import { matchesGlob } from "../utils.js";
+import { parseHooks, type HookCommand } from "./parsers/hooks.js";
 import { isDockerfilePath, parseDockerfile, type DockerfileModel } from "./parsers/dockerfile.js";
 import { isManifestPath, parseManifest, type PackageManifest } from "./parsers/manifest.js";
 import {
@@ -63,6 +64,7 @@ export interface ProjectModel {
   actions: WorkflowModel[];
   dockerfiles: DockerfileModel[];
   manifests: PackageManifest[];
+  hooks: HookCommand[];
   rootManifest?: PackageManifest;
   nix: NixModel;
   facts: ProjectFacts;
@@ -159,6 +161,8 @@ function workspaceGlobsFrom(root: PackageManifest | undefined, files: Map<string
 export function buildProject(input: AnalysisInput): ProjectModel {
   const files = new Map(input.files.map((file) => [file.path, file]));
   const parseProblems: ParseProblem[] = [];
+  const hooks = parseHooks(input.files);
+  parseProblems.push(...hooks.problems);
   const workflows: WorkflowModel[] = [];
   const actions: WorkflowModel[] = [];
   const dockerfiles: DockerfileModel[] = [];
@@ -280,6 +284,7 @@ export function buildProject(input: AnalysisInput): ProjectModel {
     actions,
     dockerfiles,
     manifests,
+    hooks: hooks.commands,
     ...(rootManifest ? { rootManifest } : {}),
     nix,
     facts: {

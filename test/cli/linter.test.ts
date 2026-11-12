@@ -555,7 +555,7 @@ describe("packaging", () => {
     const hooks = parseYaml(await readFile(join(REPO_ROOT, ".pre-commit-hooks.yaml"), "utf8")) as Record<string, unknown>[];
     expect(hooks).toEqual([expect.objectContaining({ id: "cicd-lint", entry: "scripts/cicd-lint-hook.mjs", language: "script", pass_filenames: false })]);
     const files = new RegExp(String(hooks[0]?.files));
-    for (const path of [WORKFLOW, "action.yml", "sub/action.yaml", "Dockerfile", "api.Dockerfile", "docker/Dockerfile.prod", "Containerfile", "package.json", "web/package-lock.json", "pnpm-lock.yaml", "yarn.lock"]) {
+    for (const path of [WORKFLOW, "action.yml", "sub/action.yaml", "Dockerfile", "api.Dockerfile", "docker/Dockerfile.prod", "Containerfile", "package.json", "web/package-lock.json", "pnpm-lock.yaml", "yarn.lock", ".githooks/pre-commit", ".husky/pre-push", ".pre-commit-config.yaml", ".pre-commit-hooks.yaml"]) {
       expect(files.test(path), path).toBe(true);
     }
     for (const path of ["src/index.ts", "README.md", ".github/workflows/nested/x.yml", "docs/workflows/ci.yml"]) {

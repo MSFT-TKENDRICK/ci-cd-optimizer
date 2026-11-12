@@ -1,8 +1,9 @@
 import { parseActionRef } from "../../parsers/workflow.js";
+import { ACTIONS_LOCK_PATH, isActionLockCovered, parseActionsLock } from "../../parsers/actions-lock.js";
 import { defineRule } from "../helpers.js";
 
 const SUGGESTION =
-  "Pin to the full 40-character commit SHA with a version comment, e.g. `uses: owner/repo@<sha> # v1.2.3`; Dependabot and Renovate keep SHA pins and their comments up to date.";
+  "Pin to the full 40-character commit SHA with a version comment, e.g. `uses: owner/repo@<sha> # v1.2.3`, or cover the action in `.github/workflows/actions.lock` and run `gh actions-lock --verify` in CI.";
 
 function describeRef(ref: string | undefined): string {
   if (ref === undefined) return "has no ref";
@@ -14,9 +15,9 @@ export default defineRule({
   meta: {
     id: "hermeticity/pin-actions",
     ruleset: "hermeticity",
-    description: "Third-party actions and reusable workflows should be pinned to a full commit SHA.",
+    description: "Third-party actions and reusable workflows should use immutable references or a workflow dependency lockfile.",
     rationale:
-      "Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)",
+      "Tags and branches can be moved, so `@v4` may run different code tomorrow than today. Use a full-length commit SHA, or cover direct and transitive action dependencies in GitHub's workflow dependency lockfile. The lockfile does not cover reusable workflow calls or container images, and static analysis cannot verify provenance or reachability.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["strict"],
@@ -28,6 +29,8 @@ export default defineRule({
         : [],
     references: [
       "https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions",
+      "https://docs.github.com/en/actions/concepts/security/workflow-dependency-lockfiles",
+      "https://github.com/github/gh-actions-lock",
       "https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned-dependencies",
       "https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot",
     ],
@@ -38,6 +41,8 @@ export default defineRule({
     },
   },
   check({ project, options, report }) {
+    const lockFile = project.files.get(ACTIONS_LOCK_PATH);
+    const actionsLock = lockFile ? parseActionsLock(lockFile) : undefined;
     const ignored = new Set(options.ignoreOwners.map((owner) => owner.toLowerCase()));
     const skip = (owner: string | undefined) => owner !== undefined && ignored.has(owner);
     for (const workflow of [...project.workflows, ...project.actions]) {
@@ -66,7 +71,12 @@ export default defineRule({
               message: `Docker action image \`${action.raw}\` is not pinned to an \`@sha256:\` digest.`,
               suggestion: "Pin the image by digest, e.g. `docker://alpine:3.22@sha256:<digest>`.",
             });
-          } else if (action.kind === "remote" && !action.shaPinned && !skip(action.owner)) {
+          } else if (
+            action.kind === "remote" &&
+            !action.shaPinned &&
+            !isActionLockCovered(actionsLock, workflow.path, action.raw) &&
+            !skip(action.owner)
+          ) {
             report({
               path: workflow.path,
               line: uses.line,

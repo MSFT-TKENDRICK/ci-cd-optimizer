@@ -15,6 +15,7 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `ssdf`, `all`
 | Rule | Kind | Default | Presets | Fixable | Description |
 | --- | --- | --- | --- | --- | --- |
 | [`workflow/artifact-retention`](#workflow-artifact-retention) | practice | info | recommended, agentic | yes | Uploaded artifacts should set a short `retention-days` instead of the repository default. |
+| [`workflow/artifact-success-gating`](#workflow-artifact-success-gating) | practice | warn | recommended, agentic, strict |  | Success-gate same-run artifact consumers on their producer jobs. |
 | [`workflow/concurrency`](#workflow-concurrency) | practice | warn | recommended, agentic, strict | yes | Pull request workflows should cancel superseded runs; deploy workflows must not. |
 | [`workflow/duplicate-push-pull-request-trigger`](#workflow-duplicate-push-pull-request-trigger) | practice | warn | recommended, agentic, strict |  | A workflow accepting both broad `push` and `pull_request` events may repeat overlapping work for same-repository pull requests. |
 | [`workflow/job-timeout`](#workflow-job-timeout) | practice | warn | recommended, agentic, strict | yes | Jobs should set `timeout-minutes` well below the 360 minute default. |
@@ -38,9 +39,10 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `ssdf`, `all`
 | [`caching/pr-branch-cache-save`](#caching-pr-branch-cache-save) | insight | info | insights, strict |  | A workflow that only runs on `pull_request` saves caches no other pull request or branch can restore. |
 | [`caching/setup-cache`](#caching-setup-cache) | practice | warn | recommended, agentic | yes | Language setup actions should cache downloaded dependencies. |
 | [`caching/uncompressed-artifact-upload`](#caching-uncompressed-artifact-upload) | practice | info | recommended, agentic, strict |  | Artifacts that only contain already-compressed files should be uploaded with `compression-level: 0`. |
+| [`hermeticity/actions-lock`](#hermeticity-actions-lock) | practice | warn | strict |  | Use a verified workflow dependency lockfile as an alternative to SHA-pinning mutable action refs. |
 | [`hermeticity/docker-base-digest`](#hermeticity-docker-base-digest) | practice | warn | recommended, agentic, strict |  | Dockerfile base images should use pinned versions (and digests when required). |
 | [`hermeticity/frozen-lockfile`](#hermeticity-frozen-lockfile) | practice | error | recommended, agentic, strict | yes | CI installs must be locked to the committed lockfile. |
-| [`hermeticity/pin-actions`](#hermeticity-pin-actions) | practice | warn | strict |  | Third-party actions and reusable workflows should be pinned to a full commit SHA. |
+| [`hermeticity/pin-actions`](#hermeticity-pin-actions) | practice | warn | strict |  | Third-party actions and reusable workflows should use immutable references or a workflow dependency lockfile. |
 | [`hermeticity/pin-container-images`](#hermeticity-pin-container-images) | practice | warn | recommended, agentic, strict |  | Job containers and service containers should use pinned image versions. |
 | [`hermeticity/pin-runner`](#hermeticity-pin-runner) | practice | warn | recommended, agentic, strict | yes | Jobs should run on a pinned runner image label instead of `*-latest`. |
 | [`containers/apt-hygiene`](#containers-apt-hygiene) | practice | warn | recommended, agentic, strict | yes | apt and apk installs in Dockerfiles should skip recommended packages, update and install in one layer, and not leave package caches in the image. |
@@ -145,6 +147,8 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `ssdf`, `all`
 | [`toolchains/python-pip-no-hash-check`](#toolchains-python-pip-no-hash-check) | practice | info | strict |  | CI installs fully pinned requirements files with pip without hash-checking mode (`--hash` entries and `--require-hashes`). |
 | [`toolchains/uv-sync-unlocked`](#toolchains-uv-sync-unlocked) | practice | warn | recommended, agentic, strict |  | `uv sync` and `uv run` in CI should pass `--locked` so the committed `uv.lock` is enforced instead of silently re-locked. |
 | [`toolchains/rust-toolchain-unpinned`](#toolchains-rust-toolchain-unpinned) | practice | warn | recommended, agentic, strict |  | CI should build Rust with a pinned toolchain release rather than the floating `stable`/`nightly` channel. |
+| [`hooks/install-in-hook`](#hooks-install-in-hook) | practice | warn | recommended |  | Git hooks should not reinstall project dependencies on every invocation. |
+| [`hooks/pre-commit-repo-scan`](#hooks-pre-commit-repo-scan) | practice | warn | recommended |  | Explicit whole-repository pre-commit lint entries should not also receive batched filenames. |
 
 ## Ruleset: workflow
 
@@ -184,6 +188,63 @@ References:
 
 - <https://github.com/actions/upload-artifact#retention-period>
 - <https://docs.github.com/en/actions/how-tos/manage-workflow-runs/remove-workflow-artifacts#setting-the-retention-period-for-an-artifact>
+
+<a id="workflow-artifact-success-gating"></a>
+
+### workflow/artifact-success-gating
+
+Success-gate same-run artifact consumers on their producer jobs.
+
+**Why:** A literal artifact upload/download pair identifies a data prerequisite, unlike job names. Without a needs path, the consumer can start before the producer finishes, or continue after its failure. An artifact may already exist when a later producer step fails. GitHub needs skips dependent jobs after failure through the dependency chain; it cannot cancel independent work already running. Review the artifact contract before adding a direct needs edge; do not serialize unrelated checks or restrict intentional failure handlers and required-check aggregates. These warnings identify a static gating gap, not measured waste or guaranteed removable runner minutes.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+jobs:
+  producer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+  consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+```
+
+After:
+
+```yaml
+jobs:
+  producer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+  consumer:
+    needs: producer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds>
+- <https://docs.github.com/en/actions/tutorials/store-and-share-data>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions>
 
 <a id="workflow-concurrency"></a>
 
@@ -1094,6 +1155,40 @@ References:
 
 ## Ruleset: hermeticity
 
+<a id="hermeticity-actions-lock"></a>
+
+### hermeticity/actions-lock
+
+Use a verified workflow dependency lockfile as an alternative to SHA-pinning mutable action refs.
+
+**Why:** GitHub's generated actions.lock records commits for direct and transitive action dependencies and can replace mutable refs; full SHA pins remain a valid alternative. This rule checks direct workflow action refs against declared entries, not transitive closure, commit provenance, or runtime enforcement. Use the networked `gh actions-lock --verify` check and review lockfile diffs. The lockfile does not cover remote reusable workflows or container images.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: practice; default severity: warn; impact: low
+- Presets: `strict`
+
+Before:
+
+```yaml
+on: pull_request
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v7
+```
+
+After:
+
+```yaml
+Run `gh actions-lock` to generate `.github/workflows/actions.lock`, then run `gh actions-lock --verify` in CI.
+```
+
+References:
+
+- <https://docs.github.com/en/actions/concepts/security/workflow-dependency-lockfiles>
+- <https://docs.github.com/en/actions/how-tos/secure-your-work/lock-workflow-dependencies>
+- <https://github.com/github/gh-actions-lock>
+
 <a id="hermeticity-docker-base-digest"></a>
 
 ### hermeticity/docker-base-digest
@@ -1159,9 +1254,9 @@ References:
 
 ### hermeticity/pin-actions
 
-Third-party actions and reusable workflows should be pinned to a full commit SHA.
+Third-party actions and reusable workflows should use immutable references or a workflow dependency lockfile.
 
-**Why:** Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)
+**Why:** Tags and branches can be moved, so `@v4` may run different code tomorrow than today. Use a full-length commit SHA, or cover direct and transitive action dependencies in GitHub's workflow dependency lockfile. The lockfile does not cover reusable workflow calls or container images, and static analysis cannot verify provenance or reachability.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: low
@@ -1183,6 +1278,8 @@ After:
 References:
 
 - <https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions>
+- <https://docs.github.com/en/actions/concepts/security/workflow-dependency-lockfiles>
+- <https://github.com/github/gh-actions-lock>
 - <https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned-dependencies>
 - <https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot>
 
@@ -5119,3 +5216,40 @@ References:
 - <https://github.com/dtolnay/rust-toolchain#inputs>
 - <https://github.com/actions-rust-lang/setup-rust-toolchain#inputs>
 - <https://github.com/Swatinem/rust-cache#cache-details>
+
+## Ruleset: hooks
+
+<a id="hooks-install-in-hook"></a>
+
+### hooks/install-in-hook
+
+Git hooks should not reinstall project dependencies on every invocation.
+
+**Why:** A direct package-manager install in a commit/push hook repeats dependency resolution and potentially lifecycle scripts on the interactive path. Provision the same locked dependencies at setup and on lockfile changes, and fail explicitly when dependencies are absent. Do not remove secret scanning, linting or CI installation checks. No latency saving is guaranteed without measuring representative hooks.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`
+
+References:
+
+- <https://git-scm.com/docs/githooks>
+- <https://docs.npmjs.com/cli/commands/npm-ci>
+- <https://pre-commit.com/#new-hooks>
+
+<a id="hooks-pre-commit-repo-scan"></a>
+
+### hooks/pre-commit-repo-scan
+
+Explicit whole-repository pre-commit lint entries should not also receive batched filenames.
+
+**Why:** pre-commit appends matching filenames by default and may split them across invocations to fit command-line limits. An entry that explicitly scans `.` can consequently repeat a whole-repository scan per batch. For intentionally whole-repository checks, pass_filenames: false avoids redundant arguments and batches without reducing analysis scope. Keep file filters, mandatory checks and CI gates; do not apply this advice to staged-file-only linters.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: practice; default severity: warn; impact: medium
+- Presets: `recommended`
+
+References:
+
+- <https://pre-commit.com/#hooks-pass_filenames>
+- <https://pre-commit.com/#creating-new-hooks>

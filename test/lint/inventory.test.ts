@@ -19,6 +19,9 @@ const paths = [
   ".sdkmanrc", "gradle.properties", "gradle/wrapper/gradle-wrapper.properties", "go.work", "uv.lock",
   "requirements/ci.txt", "requirements-extra.txt", "docker/app.containerfile", "docker/app.dockerignore",
   ".github/renovate.json5", ".renovaterc.json", ".renovaterc.json5", "pnpm-workspace.yaml",
+  ".github/workflows/actions.lock",
+  ".githooks/pre-commit", ".githooks/pre-push", ".husky/commit-msg",
+  ".pre-commit-config.yaml", ".pre-commit-hooks.yaml",
 ];
 const contents: Record<string, string> = Object.fromEntries(paths.map((path) => [path, "\n"]));
 Object.assign(contents, {
@@ -28,6 +31,9 @@ Object.assign(contents, {
   "flake.nix": "{ outputs = { self }: {}; }\n",
   "flake.lock": '{"version":7,"root":"root","nodes":{"root":{}}}\n',
   "sub/UPPER.NIX": "builtins.currentSystem\n",
+  ".githooks/pre-commit": "#!/bin/sh\nnpm ci\n",
+  ".pre-commit-config.yaml": "repos: []\n",
+  ".pre-commit-hooks.yaml": "[]\n",
 });
 
 const git = async (root: string, ...args: string[]): Promise<string> => (await exec("git", args, { cwd: root })).stdout.trim();
@@ -52,7 +58,7 @@ afterEach(async () => {
 describe("shared repository inventory", () => {
   it.each(paths)("includes %s", (path) => expect(isInventoryPath(path)).toBe(true));
 
-  it.each(["node_modules/example/flake.nix", "target/build/Cargo.toml", ".direnv/flake.nix", "src/index.ts"])(
+  it.each(["node_modules/example/flake.nix", "target/build/Cargo.toml", ".direnv/flake.nix", "src/index.ts", ".githooks/pre-commit.sample", ".husky/_/pre-commit"])(
     "excludes generated or unsupported content %s", (path) => expect(isInventoryPath(path)).toBe(false),
   );
 

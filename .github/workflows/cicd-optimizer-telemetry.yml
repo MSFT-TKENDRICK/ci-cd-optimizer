@@ -8,6 +8,7 @@ on:
     # Explicit names avoid self-triggered chains of skipped telemetry runs. Coverage is checked by tests.
     workflows:
       - CI
+      - Secret scanning
       - Container
       - CI/CD Optimizer daily
       - CI/CD Optimizer scan

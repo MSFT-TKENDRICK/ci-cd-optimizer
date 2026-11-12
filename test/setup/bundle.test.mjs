@@ -218,8 +218,19 @@ describe("the built bundle in a browser-like page", () => {
   });
 
   it("carries a resumed App from a click, through the real server, to the next step", { timeout: 20_000 }, async () => {
-    const setup = await serve({ saved, command: verificationCommand() });
-    const { document, problems } = await openPage(setup);
+    const onRunRead = vi.fn();
+    const verification = { run: { status: "in_progress", conclusion: null }, onRunRead };
+    const setup = await serve({ saved, command: verificationCommand(verification) });
+    const { window, document, problems } = await openPage(setup);
+    const timers = vi.spyOn(window, "setTimeout");
+    cleanups.push(() => timers.mockRestore());
+    const firePoll = (delay) => {
+      expect(timers).toHaveBeenLastCalledWith(expect.any(Function), delay);
+      const [callback] = timers.mock.calls.at(-1);
+      // Run the bundle's scheduled poll, not a manual refresh, without spending its idle interval.
+      window.clearTimeout(timers.mock.results.at(-1).value);
+      callback();
+    };
     await vi.waitFor(() => expect(currentStep(document)).toBe("install"), WAIT);
     expect(document.body.textContent).toContain("Resumed");
 
@@ -228,8 +239,18 @@ describe("the built bundle in a browser-like page", () => {
     button(document.querySelector('[role="alertdialog"]'), "Verify")?.click();
     await vi.waitFor(() => expect(document.body.textContent).toContain("Verification requested in GitHub Actions."), WAIT);
 
-    // The fake run has already succeeded, so the page's own polling finds it and the ceremony moves on.
+    expect(onRunRead).not.toHaveBeenCalled();
+    firePoll(10_000);
+    await vi.waitFor(() => expect(timers).toHaveBeenLastCalledWith(expect.any(Function), 3_000), WAIT);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Verification is still queued or running."), WAIT);
+    expect(onRunRead).toHaveBeenCalledTimes(1);
+    expect(currentStep(document)).toBe("install");
+
+    verification.run = { status: "completed", conclusion: "success" };
+    firePoll(3_000);
     await vi.waitFor(() => expect(currentStep(document)).toBe("scan"), { timeout: 12_000, interval: 100 });
+    expect(onRunRead).toHaveBeenCalledTimes(2);
+    expect(timers).toHaveBeenLastCalledWith(expect.any(Function), 10_000);
     expect(button(document, "Run scan and assign pending findings")).toBeDefined();
     expect(problems).toEqual([]);
   });
