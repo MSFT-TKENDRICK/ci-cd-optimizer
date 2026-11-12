@@ -93,6 +93,7 @@ tarball. Inside the clone, `npm run cli -- <command>` runs the TypeScript source
 | `scan` | Lint a repository's default branch through the API like the App, then upload SARIF (`--upload-sarif`), sync finding issues, and open fix pull requests. `--dry-run` previews. | `--repo`, a token |
 | `ssdf` | Report repository-visible evidence against all 42 NIST SP 800-218 SSDF v1.1 tasks (`--format json` for machine-readable output; `--repo owner/name` reads a remote repository). Not a compliance determination. | A checkout, or a token for a remote repository |
 | `telemetry` | Report on a completed workflow run (`--run-id`) with a Gantt chart, critical path, and bounded log-backed bottleneck evidence. Raises duration alerts; `--check` posts a check run. | A token with `actions: read` |
+| `doctor` | Diagnose the latest or selected failed workflow attempt; attempt guarded local YAML repairs by default. `--report-only` emits issue-ready Markdown or JSON without repairs. See [workflow doctor](docs/doctor.md). | A token with `actions: read`, `contents: read`; a clean exact-revision checkout for repairs |
 | `review <cmd>` | Review program: `validate`, `run`, `intake`, `intake-artifact`, `intake-status`, `scheduled` | A token for API reads |
 | `experiments <cmd>` | Hill climbing: `list`, `context`, `create`, `collect`, `evaluate`, `decide` | A token |
 | `experiments plan` | Exactly optimize an explicit bounded CI job/mode/resource model; no publication | A model JSON file; no token |

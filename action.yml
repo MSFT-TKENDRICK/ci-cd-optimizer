@@ -6,7 +6,7 @@ branding:
   color: green
 inputs:
   command:
-    description: "CLI command: lint, scan, telemetry, experiments, recipes, rules, knowledge, execution, or operator-only maintenance."
+    description: "CLI command: lint, scan, telemetry, doctor, experiments, recipes, rules, knowledge, execution, or operator-only maintenance."
     required: false
     default: lint
   args:
