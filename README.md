@@ -83,6 +83,8 @@ cicd-lint -f sarif -o cicd.sarif
 
 `cicd-lint [args]` is shorthand for `ci-cd-optimizer lint [args]`. `npm pack` in the clone builds an installable
 tarball. Inside the clone, `npm run cli -- <command>` runs the TypeScript sources without building.
+Non-lint command modules load on demand, so version, top-level help, lint and rule listing do not initialize
+unrelated subcommands. Both `help <command>` and `<command> --help` remain supported.
 
 ### CLI commands
 
