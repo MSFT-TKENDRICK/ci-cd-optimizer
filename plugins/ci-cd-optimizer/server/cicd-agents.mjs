@@ -37245,13 +37245,13 @@ var require_util = /* @__PURE__ */ __commonJSMin(((exports) => {
     const { opts, self } = it;
     if (!opts.strictSchema) return;
     if (typeof schema === "boolean") return;
-    const rules16 = self.RULES.keywords;
-    for (const key in schema) if (!rules16[key]) checkStrictMode(it, `unknown keyword: "${key}"`);
+    const rules17 = self.RULES.keywords;
+    for (const key in schema) if (!rules17[key]) checkStrictMode(it, `unknown keyword: "${key}"`);
   }
   exports.checkUnknownRules = checkUnknownRules;
-  function schemaHasRules(schema, rules16) {
+  function schemaHasRules(schema, rules17) {
     if (typeof schema == "boolean") return !schema;
-    for (const key in schema) if (rules16[key]) return true;
+    for (const key in schema) if (rules17[key]) return true;
     return false;
   }
   exports.schemaHasRules = schemaHasRules;
@@ -38499,9 +38499,9 @@ var require_validate = /* @__PURE__ */ __commonJSMin(((exports) => {
     if (ts.length > 1 && !(ts.length === 2 && ts.includes("null"))) strictTypesError(it, "use allowUnionTypes to allow union type keyword");
   }
   function checkKeywordTypes(it, ts) {
-    const rules16 = it.self.RULES.all;
-    for (const keyword in rules16) {
-      const rule = rules16[keyword];
+    const rules17 = it.self.RULES.all;
+    for (const keyword in rules17) {
+      const rule = rules17[keyword];
       if (typeof rule == "object" && (0, applicability_1.shouldUseRule)(it.schema, rule)) {
         const { type } = rule.definition;
         if (type.length && !type.some((t) => hasApplicableType(ts, t))) strictTypesError(it, `missing type "${type.join(",")}" for keyword "${keyword}"`);
@@ -40260,14 +40260,14 @@ var require_core$3 = /* @__PURE__ */ __commonJSMin(((exports) => {
       return errors.map((e) => `${dataVar}${e.instancePath} ${e.message}`).reduce((text4, msg) => text4 + separator + msg);
     }
     $dataMetaSchema(metaSchema, keywordsJsonPointers) {
-      const rules16 = this.RULES.all;
+      const rules17 = this.RULES.all;
       metaSchema = JSON.parse(JSON.stringify(metaSchema));
       for (const jsonPointer of keywordsJsonPointers) {
         const segments = jsonPointer.split("/").slice(1);
         let keywords = metaSchema;
         for (const seg of segments) keywords = keywords[seg];
-        for (const key in rules16) {
-          const rule = rules16[key];
+        for (const key in rules17) {
+          const rule = rules17[key];
           if (typeof rule != "object") continue;
           const { $data } = rule.definition;
           const schema = keywords[key];
@@ -50053,11 +50053,11 @@ function migrateLegacyConfig(raw) {
   if (!legacyKeys.some((key) => key in raw)) return void 0;
   const migrated = { ...raw };
   if (Array.isArray(raw.disabledRules)) {
-    const rules16 = isRecord2(raw.rules) ? { ...raw.rules } : {};
+    const rules17 = isRecord2(raw.rules) ? { ...raw.rules } : {};
     for (const id2 of raw.disabledRules) {
-      if (typeof id2 === "string") rules16[DEPRECATED_RULE_IDS[id2] ?? id2] = "off";
+      if (typeof id2 === "string") rules17[DEPRECATED_RULE_IDS[id2] ?? id2] = "off";
     }
-    migrated.rules = rules16;
+    migrated.rules = rules17;
   }
   if ("failOnSeverity" in raw) {
     const map2 = { high: "error", medium: "warn", low: "info", never: "never" };
@@ -50074,7 +50074,7 @@ function migrateLegacyConfig(raw) {
   for (const key of legacyKeys) delete migrated[key];
   return migrated;
 }
-function validateConfig(input3, rules16) {
+function validateConfig(input3, rules17) {
   const v = new Validator();
   if (input3 === void 0 || input3 === null) return { config: structuredClone(DEFAULT_CONFIG), problems: [], migrated: false };
   if (!isRecord2(input3)) {
@@ -50102,8 +50102,8 @@ function validateConfig(input3, rules16) {
   if (raw.schemaVersion !== void 0 && raw.schemaVersion !== 1) {
     v.problem("schemaVersion", `Unsupported schemaVersion ${String(raw.schemaVersion)}; expected 1.`);
   }
-  const ruleIds = rules16.map((rule) => rule.meta.id);
-  const rulesetNames = [...new Set(rules16.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules17.map((rule) => rule.meta.id);
+  const rulesetNames = [...new Set(rules17.map((rule) => rule.meta.ruleset))];
   const config2 = structuredClone(DEFAULT_CONFIG);
   if (raw.localRules !== void 0) {
     if (Array.isArray(raw.localRules) && raw.localRules.every((entry2) => typeof entry2 === "string")) {
@@ -50112,7 +50112,7 @@ function validateConfig(input3, rules16) {
       v.problem("localRules", "Expected a list of repository-relative .js or .mjs paths.");
     }
   }
-  const skipLocal = config2.localRules.length > 0 && !rules16.some((rule) => rule.meta.ruleset === "local");
+  const skipLocal = config2.localRules.length > 0 && !rules17.some((rule) => rule.meta.ruleset === "local");
   const isSkippedLocal = (id2) => skipLocal && id2.startsWith("local/");
   config2.enabled = v.boolean("enabled", raw.enabled, true);
   config2.extends = v.strings("extends", raw.extends, DEFAULT_CONFIG.extends).filter((preset, index) => {
@@ -50132,7 +50132,7 @@ function validateConfig(input3, rules16) {
     const id2 = DEPRECATED_RULE_IDS[rawId] ?? rawId;
     if (isSkippedLocal(id2)) continue;
     if (id2 !== rawId) v.problem(`rules.${rawId}`, `Rule "${rawId}" is deprecated; use "${id2}".`);
-    const rule = rules16.find((candidate) => candidate.meta.id === id2);
+    const rule = rules17.find((candidate) => candidate.meta.id === id2);
     if (!rule) {
       v.problem(`rules.${rawId}`, `Unknown rule "${rawId}".${didYouMean(rawId, ruleIds)}`);
       continue;
@@ -50262,7 +50262,7 @@ function validateConfig(input3, rules16) {
   v.problems.push(...durationPolicyProblems(config2.durations));
   return { config: config2, problems: v.problems, migrated: legacy !== void 0 };
 }
-function parseConfigText(text4, rules16, path = CONFIG_PATHS[0] ?? "config") {
+function parseConfigText(text4, rules17, path = CONFIG_PATHS[0] ?? "config") {
   let raw;
   try {
     raw = (0, import_yaml.parse)(text4, { maxAliasCount: 100 });
@@ -50273,11 +50273,11 @@ function parseConfigText(text4, rules16, path = CONFIG_PATHS[0] ?? "config") {
       migrated: false
     };
   }
-  return validateConfig(raw, rules16);
+  return validateConfig(raw, rules17);
 }
-function resolveRules(config2, rules16, presetOverride) {
+function resolveRules(config2, rules17, presetOverride) {
   const presets = presetOverride ?? config2.extends;
-  return rules16.flatMap((rule) => {
+  return rules17.flatMap((rule) => {
     const setting = config2.rules[rule.meta.id];
     const level2 = resolveSeverity([
       ...presets.map((preset) => preset === "all" || rule.meta.presets.includes(preset) ? rule.meta.defaultSeverity : void 0),
@@ -50357,610 +50357,6 @@ async function mapLimit(items2, limit, fn) {
   };
   await Promise.all(Array.from({ length: Math.min(limit, items2.length) }, worker));
   return results;
-}
-
-// src/lint/inventory-paths.ts
-var BASENAMES = /* @__PURE__ */ new Set([
-  "package.json",
-  "package-lock.json",
-  "npm-shrinkwrap.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-  "yarn.lock",
-  "bun.lock",
-  "bun.lockb",
-  ".npmrc",
-  ".yarnrc.yml",
-  ".npmignore",
-  ".nvmrc",
-  ".node-version",
-  ".tool-versions",
-  "tsconfig.json",
-  "nx.json",
-  "turbo.json",
-  "lerna.json",
-  "rush.json",
-  "MODULE.bazel",
-  "WORKSPACE",
-  "WORKSPACE.bazel",
-  ".bazelrc",
-  ".bazelversion",
-  ".bazeliskrc",
-  "pants.toml",
-  "settings.gradle",
-  "settings.gradle.kts",
-  "build.gradle",
-  "build.gradle.kts",
-  "gradle.properties",
-  "pom.xml",
-  "build.sbt",
-  "Cargo.toml",
-  "Cargo.lock",
-  "go.mod",
-  "go.sum",
-  "go.work",
-  "pyproject.toml",
-  "poetry.lock",
-  "Pipfile",
-  "Pipfile.lock",
-  "uv.lock",
-  "packages.lock.json",
-  "Directory.Packages.props",
-  "global.json",
-  "docker-bake.hcl",
-  "docker-compose.yml",
-  "docker-compose.yaml",
-  "compose.yml",
-  "compose.yaml",
-  ".dockerignore",
-  "action.yml",
-  "action.yaml",
-  "flake.lock",
-  ".envrc",
-  "devenv.yaml",
-  "devenv.lock",
-  "CMakeLists.txt",
-  "meson.build",
-  ".python-version",
-  ".go-version",
-  ".java-version",
-  ".sdkmanrc",
-  "rust-toolchain",
-  "rust-toolchain.toml",
-  "renovate.json",
-  "renovate.json5",
-  ".renovaterc",
-  ".renovaterc.json",
-  ".renovaterc.json5"
-]);
-var LOCKFILES = /* @__PURE__ */ new Set(["package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb", "Cargo.lock", "go.sum", "poetry.lock", "Pipfile.lock", "uv.lock", "packages.lock.json"]);
-var SKIP_DIRS = /* @__PURE__ */ new Set([".git", "node_modules", ".pnpm-store", ".yarn", ".venv", "venv", "__pycache__", ".turbo", ".nx", "target", ".gradle", ".direnv"]);
-function isInventoryPath(path) {
-  if (path.split("/").slice(0, -1).some((part) => SKIP_DIRS.has(part))) return false;
-  if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
-  if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
-  if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;
-  if (/^(?:\.github\/|docs\/)?CODEOWNERS$/.test(path)) return true;
-  if (/^(?:SECURITY\.md|\.github\/SECURITY\.md|docs\/SECURITY\.md)$/.test(path)) return true;
-  if (/^\.github\/ISSUE_TEMPLATE\/[^/]+(?:\.ya?ml|\.md)$/i.test(path)) return true;
-  if (/(^|\/)\.cargo\/config(\.toml)?$/.test(path) || /(^|\/)gradle\/wrapper\/gradle-wrapper\.properties$/.test(path)) return true;
-  const name = path.slice(path.lastIndexOf("/") + 1);
-  if (BASENAMES.has(name)) return true;
-  if (/^(Dockerfile|Containerfile)(\.[^/]+)?$/i.test(name) || /\.(dockerfile|containerfile|dockerignore)$/i.test(name)) return true;
-  if (/^requirements.*\.txt$/i.test(name) || /(^|\/)requirements\/[^/]+\.txt$/i.test(path)) return true;
-  if (/\.bazelrc$/i.test(name) || /\.(csproj|fsproj|sln)$/i.test(name)) return true;
-  if (/\.nix$/i.test(name)) return true;
-  return path === ".changeset/config.json";
-}
-var isLockfile = (path) => LOCKFILES.has(path.slice(path.lastIndexOf("/") + 1));
-
-// src/lint/inventory.ts
-var run = promisify(execFile);
-var LOCKFILE_HEAD_BYTES = 8192;
-function selectInventory(entries3, config2) {
-  const paths2 = [];
-  const truncated = [];
-  let complete = true;
-  let excluded = false;
-  const ignored2 = (path) => config2.ignorePaths.some((glob) => matchesGlob(path, glob) || matchesGlob(path, `${glob}/**`));
-  for (const entry2 of [...entries3].sort((a, b) => a.path.localeCompare(b.path))) {
-    if (ignored2(entry2.path)) {
-      if (isInventoryPath(entry2.path) || entry2.opaque && !entry2.path.split("/").some((part) => SKIP_DIRS.has(part))) excluded = true;
-      continue;
-    }
-    if (entry2.opaque) {
-      if (!entry2.path.split("/").some((part) => SKIP_DIRS.has(part))) complete = false;
-      continue;
-    }
-    if (!isInventoryPath(entry2.path)) continue;
-    if (paths2.length >= config2.limits.maxFiles) {
-      complete = false;
-      break;
-    }
-    if ((entry2.size ?? 0) > config2.limits.maxFileBytes) {
-      if (!isLockfile(entry2.path)) {
-        complete = false;
-        continue;
-      }
-      truncated.push(entry2.path);
-    }
-    paths2.push(entry2.path);
-  }
-  return { paths: paths2, truncated, selectionComplete: complete, complete: complete && !excluded };
-}
-function truncateContent(content3) {
-  return content3.length > LOCKFILE_HEAD_BYTES ? content3.slice(0, LOCKFILE_HEAD_BYTES) : content3;
-}
-async function walk(root2, dir, out) {
-  for (const entry2 of await readdir(dir, { withFileTypes: true })) {
-    const full = join(dir, entry2.name);
-    if (entry2.isDirectory()) {
-      if (!SKIP_DIRS.has(entry2.name)) await walk(root2, full, out);
-    } else if (entry2.isSymbolicLink()) {
-      out.push({ path: relative(root2, full).split(sep).join("/"), opaque: true });
-    } else if (entry2.isFile()) {
-      const path = relative(root2, full).split(sep).join("/");
-      if (isInventoryPath(path)) out.push({ path, size: (await stat(full)).size });
-    }
-  }
-}
-async function loadDirectory(root2, config2, change) {
-  const entries3 = [];
-  await walk(root2, root2, entries3);
-  const selection = selectInventory(entries3, config2);
-  const truncated = new Set(selection.truncated);
-  const files = await Promise.all(
-    selection.paths.map(async (path) => {
-      const content3 = path.endsWith(".lockb") ? "" : await readFile(join(root2, path), "utf8");
-      return { path, content: truncated.has(path) ? truncateContent(content3) : content3 };
-    })
-  );
-  return { files, mode: "repository", inventoryComplete: selection.complete, truncated: selection.truncated, ...change ? { change } : {} };
-}
-async function git(root2, args) {
-  const { stdout } = await run("git", args, { cwd: root2, maxBuffer: 64 * 1024 * 1024 });
-  return stdout;
-}
-async function loadGitRevision(root2, ref, config2) {
-  const listing = await git(root2, ["ls-tree", "-r", "-l", "-z", "--full-tree", ref]);
-  const entries3 = listing.split("\0").map((line2) => /^(\d+) (?:blob|commit) [0-9a-f]+\s+(\d+|-)\t([\s\S]+)$/.exec(line2)).filter((match) => match !== null).map((match) => ({ path: match[3], size: Number(match[2]) || 0, opaque: match[1] === "120000" || match[1] === "160000" }));
-  const selection = selectInventory(entries3, config2);
-  const truncated = new Set(selection.truncated);
-  const files = [];
-  for (const path of selection.paths) {
-    const content3 = path.endsWith(".lockb") ? "" : await git(root2, ["show", `${ref}:${path}`]);
-    files.push({ path, content: truncated.has(path) ? truncateContent(content3) : content3 });
-  }
-  return { files, mode: "repository", inventoryComplete: selection.complete };
-}
-async function changedSince(root2, base2) {
-  const mergeBase = (await git(root2, ["merge-base", base2, "HEAD"])).trim();
-  const committed = await git(root2, ["diff", "--name-only", "-z", "--no-renames", mergeBase]);
-  const untracked = await git(root2, ["ls-files", "--others", "--exclude-standard", "-z"]);
-  const changedPaths = [...new Set([...committed.split("\0"), ...untracked.split("\0")].filter(Boolean))];
-  const head = (await git(root2, ["rev-parse", "HEAD"])).trim();
-  return { event: "pull_request", baseSha: mergeBase, headSha: head, changedPaths };
-}
-
-// src/lint/parsers/workflow.ts
-var import_yaml3 = __toESM(require_dist2(), 1);
-
-// src/lint/parsers/yaml.ts
-var import_yaml2 = __toESM(require_dist2(), 1);
-var MAX_ALIAS_DEPTH = 16;
-function parseYaml(path, content3) {
-  const lineCounter = new import_yaml2.LineCounter();
-  const doc = (0, import_yaml2.parseDocument)(content3, {
-    lineCounter,
-    merge: true,
-    uniqueKeys: false,
-    prettyErrors: true,
-    strict: false
-  });
-  const blockScalarLines = [];
-  (0, import_yaml2.visit)(doc, {
-    Scalar(_key, node2) {
-      if ((node2.type === import_yaml2.Scalar.BLOCK_LITERAL || node2.type === import_yaml2.Scalar.BLOCK_FOLDED) && node2.range) {
-        const start = lineCounter.linePos(node2.range[0]).line;
-        const end = lineCounter.linePos(Math.max(node2.range[0], node2.range[1] - 1)).line;
-        blockScalarLines.push([start, end]);
-      }
-    }
-  });
-  return { path, doc, lineCounter, blockScalarLines };
-}
-function lineOfNode(source, node2) {
-  if (!node2?.range) return 1;
-  return source.lineCounter.linePos(node2.range[0]).line;
-}
-function resolveNode(source, node2) {
-  let current = node2;
-  let viaAlias = false;
-  for (let depth = 0; depth < MAX_ALIAS_DEPTH && (0, import_yaml2.isAlias)(current); depth += 1) {
-    viaAlias = true;
-    current = current.resolve(source.doc) ?? null;
-  }
-  if ((0, import_yaml2.isAlias)(current)) return { node: null, viaAlias };
-  return { node: current ?? null, viaAlias };
-}
-function isMergeKey(key) {
-  if ((0, import_yaml2.isScalar)(key)) return key.value === "<<" || key.source === "<<";
-  return key === "<<";
-}
-function keyName(key) {
-  if ((0, import_yaml2.isScalar)(key)) {
-    const value = key.value;
-    return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : void 0;
-  }
-  return typeof key === "string" ? key : void 0;
-}
-function entries(source, node2) {
-  const { node: mapNode } = resolveNode(source, node2);
-  if (!(0, import_yaml2.isMap)(mapNode)) return [];
-  const direct = [];
-  const merged = [];
-  for (const pair of mapNode.items) {
-    if (!(0, import_yaml2.isPair)(pair)) continue;
-    if (isMergeKey(pair.key)) {
-      const sources = (0, import_yaml2.isSeq)(pair.value) ? pair.value.items : [pair.value];
-      for (const item of sources) {
-        for (const field2 of entries(source, item)) {
-          merged.push({ ...field2, origin: "merge" });
-        }
-      }
-      continue;
-    }
-    const name = keyName(pair.key);
-    if (name === void 0) continue;
-    const resolved = resolveNode(source, pair.value);
-    direct.push({
-      key: name,
-      value: resolved.node,
-      line: lineOfNode(source, pair.key),
-      origin: resolved.viaAlias ? "alias" : "direct"
-    });
-  }
-  const seen = new Set(direct.map((field2) => field2.key));
-  for (const field2 of merged) {
-    if (!seen.has(field2.key)) {
-      seen.add(field2.key);
-      direct.push(field2);
-    }
-  }
-  return direct;
-}
-function field(source, node2, key) {
-  return entries(source, node2).find((entry2) => entry2.key === key);
-}
-function items(source, node2) {
-  const { node: seqNode } = resolveNode(source, node2);
-  if (!(0, import_yaml2.isSeq)(seqNode)) return [];
-  return seqNode.items.map((item) => resolveNode(source, item).node).filter((item) => item !== null);
-}
-function scalarValue(node2) {
-  if (!(0, import_yaml2.isScalar)(node2)) return void 0;
-  const value = node2.value;
-  if (value === null) return null;
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return value;
-  }
-  return String(value);
-}
-function stringValue(node2) {
-  const value = scalarValue(node2);
-  if (value === void 0 || value === null) return void 0;
-  return String(value);
-}
-function toJS(source, node2) {
-  if (!node2) return void 0;
-  return node2.toJS(source.doc, { maxAliasCount: 100 });
-}
-function classify(value) {
-  if (typeof value !== "string") return "literal";
-  const trimmed = value.trim();
-  if (/^\$\{\{[\s\S]*\}\}$/.test(trimmed) && trimmed.indexOf("${{", 3) === -1) return "expression";
-  return trimmed.includes("${{") ? "interpolated" : "literal";
-}
-function parseErrors(source) {
-  return source.doc.errors.map((error62) => ({
-    line: error62.linePos?.[0]?.line ?? 1,
-    message: error62.message.split("\n")[0] ?? error62.message
-  }));
-}
-
-// src/lint/parsers/workflow.ts
-var SHA_PATTERN = /^[0-9a-f]{40}$/i;
-function parseActionRef(raw) {
-  const value = raw.trim();
-  if (value.includes("${{")) return { raw: value, kind: "expression", shaPinned: false };
-  if (value.startsWith("./") || value.startsWith("../")) {
-    return { raw: value, kind: "local", shaPinned: true };
-  }
-  if (value.startsWith("docker://")) {
-    return { raw: value, kind: "docker", shaPinned: /@sha256:[0-9a-f]{64}$/i.test(value) };
-  }
-  const at = value.lastIndexOf("@");
-  const path = at >= 0 ? value.slice(0, at) : value;
-  const ref = at >= 0 ? value.slice(at + 1) : void 0;
-  const [owner, repo] = path.split("/");
-  return {
-    raw: value,
-    kind: "remote",
-    ...owner ? { owner: owner.toLowerCase() } : {},
-    ...repo ? { repo: repo.toLowerCase() } : {},
-    name: path.toLowerCase(),
-    ...ref !== void 0 ? { ref } : {},
-    shaPinned: ref !== void 0 && SHA_PATTERN.test(ref)
-  };
-}
-function sourced(source, entry2) {
-  if (!entry2) return void 0;
-  const value = toJS(source, entry2.value);
-  return { value, kind: classify(value), line: entry2.line, origin: entry2.origin };
-}
-function sourcedString(source, entry2) {
-  const result = sourced(source, entry2);
-  if (!result || result.value === void 0 || result.value === null) return void 0;
-  return { ...result, value: String(result.value) };
-}
-function stringList(source, node2) {
-  if (!node2) return void 0;
-  const value = toJS(source, node2);
-  if (typeof value === "string") return [value];
-  if (Array.isArray(value)) return value.map(String);
-  return void 0;
-}
-function record2(source, node2) {
-  const value = toJS(source, node2);
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-function parseSteps(source, stepsNode, keyPrefix) {
-  return items(source, stepsNode).map((stepNode3, index) => {
-    const usesField = field(source, stepNode3, "uses");
-    const runField = field(source, stepNode3, "run");
-    const withField = field(source, stepNode3, "with");
-    const withMap = /* @__PURE__ */ new Map();
-    for (const entry2 of entries(source, withField?.value)) {
-      const value = sourced(source, entry2);
-      if (value) withMap.set(entry2.key, value);
-    }
-    const uses = sourcedString(source, usesField);
-    const run2 = sourcedString(source, runField);
-    const runNode = runField?.value;
-    const isBlock = (0, import_yaml3.isScalar)(runNode) && (runNode.type === import_yaml3.Scalar.BLOCK_LITERAL || runNode.type === import_yaml3.Scalar.BLOCK_FOLDED);
-    const contentLine = runNode ? lineOfNode(source, runNode) + (isBlock ? 1 : 0) : 0;
-    const id2 = stringValue(field(source, stepNode3, "id")?.value);
-    const name = stringValue(field(source, stepNode3, "name")?.value);
-    const workingDirectory3 = stringValue(field(source, stepNode3, "working-directory")?.value);
-    const shell = stringValue(field(source, stepNode3, "shell")?.value);
-    const condition = stringValue(field(source, stepNode3, "if")?.value);
-    return {
-      index,
-      line: lineOfNode(source, stepNode3),
-      key: `${keyPrefix}.steps[${index}]`,
-      ...id2 !== void 0 ? { id: id2 } : {},
-      ...name !== void 0 ? { name } : {},
-      ...uses ? { uses: { ...uses, action: parseActionRef(uses.value) } } : {},
-      with: withMap,
-      ...run2 ? { run: { ...run2, contentLine } } : {},
-      ...workingDirectory3 !== void 0 ? { workingDirectory: workingDirectory3 } : {},
-      ...shell !== void 0 ? { shell } : {},
-      ...condition !== void 0 ? { if: condition } : {},
-      env: record2(source, field(source, stepNode3, "env")?.value)
-    };
-  });
-}
-function defaultsWorkingDirectory(source, node2) {
-  const run2 = field(source, field(source, node2, "defaults")?.value, "run");
-  return stringValue(field(source, run2?.value, "working-directory")?.value);
-}
-function defaultsShell(source, node2) {
-  const run2 = field(source, field(source, node2, "defaults")?.value, "run");
-  return stringValue(field(source, run2?.value, "shell")?.value);
-}
-function parseTriggers(source, onField) {
-  if (!onField) return [];
-  const value = toJS(source, onField.value);
-  if (typeof value === "string") return [{ event: value, line: onField.line }];
-  if (Array.isArray(value)) return value.map((event) => ({ event: String(event), line: onField.line }));
-  return entries(source, onField.value).map((entry2) => {
-    const paths2 = stringList(source, field(source, entry2.value, "paths")?.value);
-    const pathsIgnore = stringList(source, field(source, entry2.value, "paths-ignore")?.value);
-    const branches = stringList(source, field(source, entry2.value, "branches")?.value);
-    const types = stringList(source, field(source, entry2.value, "types")?.value);
-    return {
-      event: entry2.key,
-      line: entry2.line,
-      ...paths2 ? { paths: paths2 } : {},
-      ...pathsIgnore ? { pathsIgnore } : {},
-      ...branches ? { branches } : {},
-      ...types ? { types } : {}
-    };
-  });
-}
-function parseJob(source, entry2) {
-  const node2 = entry2.value;
-  const key = `jobs.${entry2.key}`;
-  const needsValue = toJS(source, field(source, node2, "needs")?.value);
-  const needs = typeof needsValue === "string" ? [needsValue] : Array.isArray(needsValue) ? needsValue.map(String) : [];
-  const containerField = field(source, node2, "container");
-  const containerImage = containerField && stringValue(containerField.value) !== void 0 ? sourcedString(source, containerField) : sourcedString(source, field(source, containerField?.value, "image"));
-  const services = entries(source, field(source, node2, "services")?.value).map((service) => {
-    const image = sourcedString(source, field(source, service.value, "image"));
-    return image ? { name: service.key, image } : void 0;
-  }).filter((service) => service !== void 0);
-  const strategy = field(source, node2, "strategy");
-  const matrix = toJS(source, field(source, strategy?.value, "matrix")?.value);
-  const name = stringValue(field(source, node2, "name")?.value);
-  const condition = stringValue(field(source, node2, "if")?.value);
-  const workingDirectory3 = defaultsWorkingDirectory(source, node2);
-  const shell = defaultsShell(source, node2);
-  const runsOn = sourced(source, field(source, node2, "runs-on"));
-  const timeoutMinutes = sourced(source, field(source, node2, "timeout-minutes"));
-  const uses = sourcedString(source, field(source, node2, "uses"));
-  const concurrency = sourced(source, field(source, node2, "concurrency"));
-  const environment2 = sourced(source, field(source, node2, "environment"));
-  return {
-    id: entry2.key,
-    line: entry2.line,
-    key,
-    ...name !== void 0 ? { name } : {},
-    ...runsOn ? { runsOn } : {},
-    needs,
-    ...timeoutMinutes ? { timeoutMinutes } : {},
-    ...uses ? { uses } : {},
-    ...containerImage ? { containerImage } : {},
-    services,
-    ...concurrency ? { concurrency } : {},
-    ...environment2 ? { environment: environment2 } : {},
-    ...condition !== void 0 ? { if: condition } : {},
-    ...matrix && typeof matrix === "object" && !Array.isArray(matrix) ? { matrix } : typeof matrix === "string" ? { matrix: { __expression: matrix } } : {},
-    steps: parseSteps(source, field(source, node2, "steps")?.value, key),
-    ...workingDirectory3 !== void 0 ? { workingDirectory: workingDirectory3 } : {},
-    ...shell !== void 0 ? { shell } : {},
-    env: record2(source, field(source, node2, "env")?.value)
-  };
-}
-function isWorkflowPath(path) {
-  return /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path);
-}
-function isActionPath(path) {
-  return /(^|\/)action\.ya?ml$/i.test(path);
-}
-function parseWorkflow(path, content3) {
-  const source = parseYaml(path, content3);
-  const root2 = source.doc.contents;
-  const name = stringValue(field(source, root2, "name")?.value);
-  if (isActionPath(path) && !isWorkflowPath(path)) {
-    const runs = field(source, root2, "runs");
-    const using = stringValue(field(source, runs?.value, "using")?.value);
-    const composite = using === "composite";
-    const steps2 = composite ? parseSteps(source, field(source, runs?.value, "steps")?.value, "runs") : [];
-    return {
-      kind: composite ? "composite-action" : "action",
-      path,
-      source,
-      ...name !== void 0 ? { name } : {},
-      triggers: [],
-      triggersLine: 1,
-      env: {},
-      jobs: composite ? [
-        {
-          id: "(composite)",
-          line: runs?.line ?? 1,
-          key: "runs",
-          needs: [],
-          services: [],
-          steps: steps2,
-          env: {}
-        }
-      ] : []
-    };
-  }
-  const onField = field(source, root2, "on");
-  const concurrency = sourced(source, field(source, root2, "concurrency"));
-  const workingDirectory3 = defaultsWorkingDirectory(source, root2);
-  const shell = defaultsShell(source, root2);
-  return {
-    kind: "workflow",
-    path,
-    source,
-    ...name !== void 0 ? { name } : {},
-    triggers: parseTriggers(source, onField),
-    triggersLine: onField?.line ?? 1,
-    ...concurrency ? { concurrency } : {},
-    ...workingDirectory3 !== void 0 ? { workingDirectory: workingDirectory3 } : {},
-    ...shell !== void 0 ? { shell } : {},
-    env: record2(source, field(source, root2, "env")?.value),
-    jobs: entries(source, field(source, root2, "jobs")?.value).map((entry2) => parseJob(source, entry2))
-  };
-}
-function runLine(step, offset) {
-  if (!step.run) return step.line;
-  const before = step.run.value.slice(0, Math.max(0, offset));
-  return step.run.contentLine + (before.match(/\n/g)?.length ?? 0);
-}
-function hasTrigger(workflow, ...events) {
-  return workflow.triggers.some((trigger2) => events.includes(trigger2.event));
-}
-function trigger(workflow, event) {
-  return workflow.triggers.find((candidate) => candidate.event === event);
-}
-function withString(step, key) {
-  const value = step.with.get(key)?.value;
-  return value === void 0 || value === null ? void 0 : String(value);
-}
-
-// src/lint/rules/helpers.ts
-var import_yaml5 = __toESM(require_dist2(), 1);
-
-// src/lint/fix.ts
-function lineStart(content3, line2) {
-  let offset = 0;
-  for (let current = 1; current < line2; current += 1) {
-    const next = content3.indexOf("\n", offset);
-    if (next < 0) return content3.length;
-    offset = next + 1;
-  }
-  return offset;
-}
-function lineText(content3, line2) {
-  const start = lineStart(content3, line2);
-  const end = content3.indexOf("\n", start);
-  return content3.slice(start, end < 0 ? content3.length : end).replace(/\r$/, "");
-}
-function indentOf(content3, line2) {
-  return /^\s*/.exec(lineText(content3, line2))?.[0] ?? "";
-}
-function newline2(content3) {
-  return content3.includes("\r\n") ? "\r\n" : "\n";
-}
-function replaceOnLine(file2, line2, search, replacement3) {
-  const start = lineStart(file2.content, line2);
-  const text4 = lineText(file2.content, line2);
-  const match = typeof search === "string" ? { index: text4.indexOf(search), 0: search } : search.exec(text4);
-  if (!match || match.index < 0) return void 0;
-  return { path: file2.path, start: start + match.index, end: start + match.index + match[0].length, text: replacement3 };
-}
-function insertLinesAfter(file2, line2, lines) {
-  const eol = newline2(file2.content);
-  if (line2 <= 0) return { path: file2.path, start: 0, end: 0, text: lines.map((entry2) => entry2 + eol).join("") };
-  const start = lineStart(file2.content, line2 + 1);
-  const atEnd = start >= file2.content.length && !file2.content.endsWith("\n");
-  const text4 = (atEnd ? eol : "") + lines.map((entry2) => entry2 + eol).join("");
-  return { path: file2.path, start, end: start, text: text4 };
-}
-function fix(description, ...edits) {
-  const defined = edits.filter((edit) => edit !== void 0);
-  return defined.length === edits.length && defined.length > 0 ? { description, edits: defined } : void 0;
-}
-function applyFixes(files, diagnostics) {
-  const contents = new Map(files.map((file2) => [file2.path, file2.content]));
-  const accepted = [];
-  const applied = [];
-  const conflicts = [];
-  const overlaps = (a, b) => a.path === b.path && (a.start < b.end && b.start < a.end || a.start === a.end && a.start === b.start);
-  for (const diagnostic of diagnostics) {
-    const edits = diagnostic.fix?.edits;
-    if (!edits || edits.length === 0) continue;
-    if (edits.some((edit) => !contents.has(edit.path) || accepted.some((other) => overlaps(edit, other)))) {
-      conflicts.push(diagnostic);
-      continue;
-    }
-    accepted.push(...edits);
-    applied.push(diagnostic);
-  }
-  const byPath = /* @__PURE__ */ new Map();
-  for (const edit of accepted) byPath.set(edit.path, [...byPath.get(edit.path) ?? [], edit]);
-  const output3 = /* @__PURE__ */ new Map();
-  for (const [path, edits] of byPath) {
-    let content3 = contents.get(path) ?? "";
-    for (const edit of [...edits].sort((a, b) => b.start - a.start || b.end - a.end)) {
-      content3 = content3.slice(0, edit.start) + edit.text + content3.slice(edit.end);
-    }
-    output3.set(path, content3);
-  }
-  return { files: output3, applied, conflicts };
 }
 
 // src/lint/parsers/shell.ts
@@ -51145,6 +50541,651 @@ function splitShellCommands(script) {
   return result;
 }
 
+// src/lint/parsers/yaml.ts
+var import_yaml2 = __toESM(require_dist2(), 1);
+var MAX_ALIAS_DEPTH = 16;
+function parseYaml(path, content3) {
+  const lineCounter = new import_yaml2.LineCounter();
+  const doc = (0, import_yaml2.parseDocument)(content3, {
+    lineCounter,
+    merge: true,
+    uniqueKeys: false,
+    prettyErrors: true,
+    strict: false
+  });
+  const blockScalarLines = [];
+  (0, import_yaml2.visit)(doc, {
+    Scalar(_key, node2) {
+      if ((node2.type === import_yaml2.Scalar.BLOCK_LITERAL || node2.type === import_yaml2.Scalar.BLOCK_FOLDED) && node2.range) {
+        const start = lineCounter.linePos(node2.range[0]).line;
+        const end = lineCounter.linePos(Math.max(node2.range[0], node2.range[1] - 1)).line;
+        blockScalarLines.push([start, end]);
+      }
+    }
+  });
+  return { path, doc, lineCounter, blockScalarLines };
+}
+function lineOfNode(source, node2) {
+  if (!node2?.range) return 1;
+  return source.lineCounter.linePos(node2.range[0]).line;
+}
+function resolveNode(source, node2) {
+  let current = node2;
+  let viaAlias = false;
+  for (let depth = 0; depth < MAX_ALIAS_DEPTH && (0, import_yaml2.isAlias)(current); depth += 1) {
+    viaAlias = true;
+    current = current.resolve(source.doc) ?? null;
+  }
+  if ((0, import_yaml2.isAlias)(current)) return { node: null, viaAlias };
+  return { node: current ?? null, viaAlias };
+}
+function isMergeKey(key) {
+  if ((0, import_yaml2.isScalar)(key)) return key.value === "<<" || key.source === "<<";
+  return key === "<<";
+}
+function keyName(key) {
+  if ((0, import_yaml2.isScalar)(key)) {
+    const value = key.value;
+    return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : void 0;
+  }
+  return typeof key === "string" ? key : void 0;
+}
+function entries(source, node2) {
+  const { node: mapNode } = resolveNode(source, node2);
+  if (!(0, import_yaml2.isMap)(mapNode)) return [];
+  const direct = [];
+  const merged = [];
+  for (const pair of mapNode.items) {
+    if (!(0, import_yaml2.isPair)(pair)) continue;
+    if (isMergeKey(pair.key)) {
+      const sources = (0, import_yaml2.isSeq)(pair.value) ? pair.value.items : [pair.value];
+      for (const item of sources) {
+        for (const field2 of entries(source, item)) {
+          merged.push({ ...field2, origin: "merge" });
+        }
+      }
+      continue;
+    }
+    const name = keyName(pair.key);
+    if (name === void 0) continue;
+    const resolved = resolveNode(source, pair.value);
+    direct.push({
+      key: name,
+      value: resolved.node,
+      line: lineOfNode(source, pair.key),
+      origin: resolved.viaAlias ? "alias" : "direct"
+    });
+  }
+  const seen = new Set(direct.map((field2) => field2.key));
+  for (const field2 of merged) {
+    if (!seen.has(field2.key)) {
+      seen.add(field2.key);
+      direct.push(field2);
+    }
+  }
+  return direct;
+}
+function field(source, node2, key) {
+  return entries(source, node2).find((entry2) => entry2.key === key);
+}
+function items(source, node2) {
+  const { node: seqNode } = resolveNode(source, node2);
+  if (!(0, import_yaml2.isSeq)(seqNode)) return [];
+  return seqNode.items.map((item) => resolveNode(source, item).node).filter((item) => item !== null);
+}
+function scalarValue(node2) {
+  if (!(0, import_yaml2.isScalar)(node2)) return void 0;
+  const value = node2.value;
+  if (value === null) return null;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  return String(value);
+}
+function stringValue(node2) {
+  const value = scalarValue(node2);
+  if (value === void 0 || value === null) return void 0;
+  return String(value);
+}
+function toJS(source, node2) {
+  if (!node2) return void 0;
+  return node2.toJS(source.doc, { maxAliasCount: 100 });
+}
+function classify(value) {
+  if (typeof value !== "string") return "literal";
+  const trimmed = value.trim();
+  if (/^\$\{\{[\s\S]*\}\}$/.test(trimmed) && trimmed.indexOf("${{", 3) === -1) return "expression";
+  return trimmed.includes("${{") ? "interpolated" : "literal";
+}
+function parseErrors(source) {
+  return source.doc.errors.map((error62) => ({
+    line: error62.linePos?.[0]?.line ?? 1,
+    message: error62.message.split("\n")[0] ?? error62.message
+  }));
+}
+
+// src/lint/parsers/hooks.ts
+var EVENTS = "applypatch-msg|pre-applypatch|post-applypatch|pre-commit|pre-merge-commit|prepare-commit-msg|commit-msg|post-commit|pre-rebase|post-checkout|post-merge|pre-push|post-rewrite|sendemail-validate|push-to-checkout|pre-receive|update|post-receive|post-update|reference-transaction";
+var SCRIPT_PATH = new RegExp(`^(?:\\.githooks|\\.husky)/(${EVENTS})$`);
+var isGitHookPath = (path) => SCRIPT_PATH.test(path);
+var isPreCommitPath = (path) => /^\.pre-commit-(?:config|hooks)\.ya?ml$/.test(path);
+function parseHooks(files) {
+  const commands = [];
+  const problems = [];
+  for (const file2 of files) {
+    if (isGitHookPath(file2.path)) {
+      if (file2.content.startsWith("#!") && !/^#![^\r\n]*\b(?:sh|bash|dash)\r?\n/.test(file2.content)) continue;
+      for (const { command: command2, offset } of splitShellCommands(file2.content)) {
+        commands.push({
+          path: file2.path,
+          line: file2.content.slice(0, offset).split("\n").length,
+          command: command2,
+          words: commandTokens(command2).map((token) => token.value)
+        });
+      }
+    } else if (isPreCommitPath(file2.path)) {
+      const source = parseYaml(file2.path, file2.content);
+      const errors = parseErrors(source);
+      problems.push(...errors.map((error62) => ({ path: file2.path, ...error62 })));
+      if (errors.length) continue;
+      const definitions = file2.path.includes("-hooks.") ? items(source, source.doc.contents) : items(source, field(source, source.doc.contents, "repos")?.value).flatMap((repo) => items(source, field(source, repo, "hooks")?.value));
+      for (const hook of definitions) {
+        const entry2 = field(source, hook, "entry");
+        const command2 = stringValue(entry2?.value);
+        if (!command2) continue;
+        commands.push({
+          path: file2.path,
+          line: entry2?.line ?? lineOfNode(source, hook),
+          command: command2,
+          words: commandTokens(command2).map((token) => token.value),
+          passFilenames: scalarValue(field(source, hook, "pass_filenames")?.value) !== false
+        });
+      }
+    }
+  }
+  return { commands, problems };
+}
+
+// src/lint/inventory-paths.ts
+var BASENAMES = /* @__PURE__ */ new Set([
+  "package.json",
+  "package-lock.json",
+  "npm-shrinkwrap.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
+  ".npmrc",
+  ".yarnrc.yml",
+  ".npmignore",
+  ".nvmrc",
+  ".node-version",
+  ".tool-versions",
+  "tsconfig.json",
+  "nx.json",
+  "turbo.json",
+  "lerna.json",
+  "rush.json",
+  "MODULE.bazel",
+  "WORKSPACE",
+  "WORKSPACE.bazel",
+  ".bazelrc",
+  ".bazelversion",
+  ".bazeliskrc",
+  "pants.toml",
+  "settings.gradle",
+  "settings.gradle.kts",
+  "build.gradle",
+  "build.gradle.kts",
+  "gradle.properties",
+  "pom.xml",
+  "build.sbt",
+  "Cargo.toml",
+  "Cargo.lock",
+  "go.mod",
+  "go.sum",
+  "go.work",
+  "pyproject.toml",
+  "poetry.lock",
+  "Pipfile",
+  "Pipfile.lock",
+  "uv.lock",
+  "packages.lock.json",
+  "Directory.Packages.props",
+  "global.json",
+  "docker-bake.hcl",
+  "docker-compose.yml",
+  "docker-compose.yaml",
+  "compose.yml",
+  "compose.yaml",
+  ".dockerignore",
+  "action.yml",
+  "action.yaml",
+  "flake.lock",
+  ".envrc",
+  "devenv.yaml",
+  "devenv.lock",
+  "CMakeLists.txt",
+  "meson.build",
+  ".python-version",
+  ".go-version",
+  ".java-version",
+  ".sdkmanrc",
+  "rust-toolchain",
+  "rust-toolchain.toml",
+  "renovate.json",
+  "renovate.json5",
+  ".renovaterc",
+  ".renovaterc.json",
+  ".renovaterc.json5"
+]);
+var LOCKFILES = /* @__PURE__ */ new Set(["package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb", "Cargo.lock", "go.sum", "poetry.lock", "Pipfile.lock", "uv.lock", "packages.lock.json"]);
+var SKIP_DIRS = /* @__PURE__ */ new Set([".git", "node_modules", ".pnpm-store", ".yarn", ".venv", "venv", "__pycache__", ".turbo", ".nx", "target", ".gradle", ".direnv"]);
+function isInventoryPath(path) {
+  if (path.split("/").slice(0, -1).some((part) => SKIP_DIRS.has(part))) return false;
+  if (isGitHookPath(path) || isPreCommitPath(path)) return true;
+  if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
+  if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
+  if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;
+  if (/^(?:\.github\/|docs\/)?CODEOWNERS$/.test(path)) return true;
+  if (/^(?:SECURITY\.md|\.github\/SECURITY\.md|docs\/SECURITY\.md)$/.test(path)) return true;
+  if (/^\.github\/ISSUE_TEMPLATE\/[^/]+(?:\.ya?ml|\.md)$/i.test(path)) return true;
+  if (/(^|\/)\.cargo\/config(\.toml)?$/.test(path) || /(^|\/)gradle\/wrapper\/gradle-wrapper\.properties$/.test(path)) return true;
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  if (BASENAMES.has(name)) return true;
+  if (/^(Dockerfile|Containerfile)(\.[^/]+)?$/i.test(name) || /\.(dockerfile|containerfile|dockerignore)$/i.test(name)) return true;
+  if (/^requirements.*\.txt$/i.test(name) || /(^|\/)requirements\/[^/]+\.txt$/i.test(path)) return true;
+  if (/\.bazelrc$/i.test(name) || /\.(csproj|fsproj|sln)$/i.test(name)) return true;
+  if (/\.nix$/i.test(name)) return true;
+  return path === ".changeset/config.json";
+}
+var isLockfile = (path) => LOCKFILES.has(path.slice(path.lastIndexOf("/") + 1));
+
+// src/lint/inventory.ts
+var run = promisify(execFile);
+var LOCKFILE_HEAD_BYTES = 8192;
+function selectInventory(entries3, config2) {
+  const paths2 = [];
+  const truncated = [];
+  let complete = true;
+  let excluded = false;
+  const ignored2 = (path) => config2.ignorePaths.some((glob) => matchesGlob(path, glob) || matchesGlob(path, `${glob}/**`));
+  for (const entry2 of [...entries3].sort((a, b) => a.path.localeCompare(b.path))) {
+    if (ignored2(entry2.path)) {
+      if (isInventoryPath(entry2.path) || entry2.opaque && !entry2.path.split("/").some((part) => SKIP_DIRS.has(part))) excluded = true;
+      continue;
+    }
+    if (entry2.opaque) {
+      if (!entry2.path.split("/").some((part) => SKIP_DIRS.has(part))) complete = false;
+      continue;
+    }
+    if (!isInventoryPath(entry2.path)) continue;
+    if (paths2.length >= config2.limits.maxFiles) {
+      complete = false;
+      break;
+    }
+    if ((entry2.size ?? 0) > config2.limits.maxFileBytes) {
+      if (!isLockfile(entry2.path)) {
+        complete = false;
+        continue;
+      }
+      truncated.push(entry2.path);
+    }
+    paths2.push(entry2.path);
+  }
+  return { paths: paths2, truncated, selectionComplete: complete, complete: complete && !excluded };
+}
+function truncateContent(content3) {
+  return content3.length > LOCKFILE_HEAD_BYTES ? content3.slice(0, LOCKFILE_HEAD_BYTES) : content3;
+}
+async function walk(root2, dir, out) {
+  for (const entry2 of await readdir(dir, { withFileTypes: true })) {
+    const full = join(dir, entry2.name);
+    if (entry2.isDirectory()) {
+      if (!SKIP_DIRS.has(entry2.name)) await walk(root2, full, out);
+    } else if (entry2.isSymbolicLink()) {
+      out.push({ path: relative(root2, full).split(sep).join("/"), opaque: true });
+    } else if (entry2.isFile()) {
+      const path = relative(root2, full).split(sep).join("/");
+      if (isInventoryPath(path)) out.push({ path, size: (await stat(full)).size });
+    }
+  }
+}
+async function loadDirectory(root2, config2, change) {
+  const entries3 = [];
+  await walk(root2, root2, entries3);
+  const selection = selectInventory(entries3, config2);
+  const truncated = new Set(selection.truncated);
+  const files = await Promise.all(
+    selection.paths.map(async (path) => {
+      const content3 = path.endsWith(".lockb") ? "" : await readFile(join(root2, path), "utf8");
+      return { path, content: truncated.has(path) ? truncateContent(content3) : content3 };
+    })
+  );
+  return { files, mode: "repository", inventoryComplete: selection.complete, truncated: selection.truncated, ...change ? { change } : {} };
+}
+async function git(root2, args) {
+  const { stdout } = await run("git", args, { cwd: root2, maxBuffer: 64 * 1024 * 1024 });
+  return stdout;
+}
+async function loadGitRevision(root2, ref, config2) {
+  const listing = await git(root2, ["ls-tree", "-r", "-l", "-z", "--full-tree", ref]);
+  const entries3 = listing.split("\0").map((line2) => /^(\d+) (?:blob|commit) [0-9a-f]+\s+(\d+|-)\t([\s\S]+)$/.exec(line2)).filter((match) => match !== null).map((match) => ({ path: match[3], size: Number(match[2]) || 0, opaque: match[1] === "120000" || match[1] === "160000" }));
+  const selection = selectInventory(entries3, config2);
+  const truncated = new Set(selection.truncated);
+  const files = [];
+  for (const path of selection.paths) {
+    const content3 = path.endsWith(".lockb") ? "" : await git(root2, ["show", `${ref}:${path}`]);
+    files.push({ path, content: truncated.has(path) ? truncateContent(content3) : content3 });
+  }
+  return { files, mode: "repository", inventoryComplete: selection.complete };
+}
+async function changedSince(root2, base2) {
+  const mergeBase = (await git(root2, ["merge-base", base2, "HEAD"])).trim();
+  const committed = await git(root2, ["diff", "--name-only", "-z", "--no-renames", mergeBase]);
+  const untracked = await git(root2, ["ls-files", "--others", "--exclude-standard", "-z"]);
+  const changedPaths = [...new Set([...committed.split("\0"), ...untracked.split("\0")].filter(Boolean))];
+  const head = (await git(root2, ["rev-parse", "HEAD"])).trim();
+  return { event: "pull_request", baseSha: mergeBase, headSha: head, changedPaths };
+}
+
+// src/lint/parsers/workflow.ts
+var import_yaml4 = __toESM(require_dist2(), 1);
+var SHA_PATTERN = /^[0-9a-f]{40}$/i;
+function parseActionRef(raw) {
+  const value = raw.trim();
+  if (value.includes("${{")) return { raw: value, kind: "expression", shaPinned: false };
+  if (value.startsWith("./") || value.startsWith("../")) {
+    return { raw: value, kind: "local", shaPinned: true };
+  }
+  if (value.startsWith("docker://")) {
+    return { raw: value, kind: "docker", shaPinned: /@sha256:[0-9a-f]{64}$/i.test(value) };
+  }
+  const at = value.lastIndexOf("@");
+  const path = at >= 0 ? value.slice(0, at) : value;
+  const ref = at >= 0 ? value.slice(at + 1) : void 0;
+  const [owner, repo] = path.split("/");
+  return {
+    raw: value,
+    kind: "remote",
+    ...owner ? { owner: owner.toLowerCase() } : {},
+    ...repo ? { repo: repo.toLowerCase() } : {},
+    name: path.toLowerCase(),
+    ...ref !== void 0 ? { ref } : {},
+    shaPinned: ref !== void 0 && SHA_PATTERN.test(ref)
+  };
+}
+function sourced(source, entry2) {
+  if (!entry2) return void 0;
+  const value = toJS(source, entry2.value);
+  return { value, kind: classify(value), line: entry2.line, origin: entry2.origin };
+}
+function sourcedString(source, entry2) {
+  const result = sourced(source, entry2);
+  if (!result || result.value === void 0 || result.value === null) return void 0;
+  return { ...result, value: String(result.value) };
+}
+function stringList(source, node2) {
+  if (!node2) return void 0;
+  const value = toJS(source, node2);
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.map(String);
+  return void 0;
+}
+function record2(source, node2) {
+  const value = toJS(source, node2);
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function parseSteps(source, stepsNode, keyPrefix) {
+  return items(source, stepsNode).map((stepNode3, index) => {
+    const usesField = field(source, stepNode3, "uses");
+    const runField = field(source, stepNode3, "run");
+    const withField = field(source, stepNode3, "with");
+    const withMap = /* @__PURE__ */ new Map();
+    for (const entry2 of entries(source, withField?.value)) {
+      const value = sourced(source, entry2);
+      if (value) withMap.set(entry2.key, value);
+    }
+    const uses = sourcedString(source, usesField);
+    const run2 = sourcedString(source, runField);
+    const runNode = runField?.value;
+    const isBlock = (0, import_yaml4.isScalar)(runNode) && (runNode.type === import_yaml4.Scalar.BLOCK_LITERAL || runNode.type === import_yaml4.Scalar.BLOCK_FOLDED);
+    const contentLine = runNode ? lineOfNode(source, runNode) + (isBlock ? 1 : 0) : 0;
+    const id2 = stringValue(field(source, stepNode3, "id")?.value);
+    const name = stringValue(field(source, stepNode3, "name")?.value);
+    const workingDirectory3 = stringValue(field(source, stepNode3, "working-directory")?.value);
+    const shell = stringValue(field(source, stepNode3, "shell")?.value);
+    const condition = stringValue(field(source, stepNode3, "if")?.value);
+    return {
+      index,
+      line: lineOfNode(source, stepNode3),
+      key: `${keyPrefix}.steps[${index}]`,
+      ...id2 !== void 0 ? { id: id2 } : {},
+      ...name !== void 0 ? { name } : {},
+      ...uses ? { uses: { ...uses, action: parseActionRef(uses.value) } } : {},
+      with: withMap,
+      ...run2 ? { run: { ...run2, contentLine } } : {},
+      ...workingDirectory3 !== void 0 ? { workingDirectory: workingDirectory3 } : {},
+      ...shell !== void 0 ? { shell } : {},
+      ...condition !== void 0 ? { if: condition } : {},
+      env: record2(source, field(source, stepNode3, "env")?.value)
+    };
+  });
+}
+function defaultsWorkingDirectory(source, node2) {
+  const run2 = field(source, field(source, node2, "defaults")?.value, "run");
+  return stringValue(field(source, run2?.value, "working-directory")?.value);
+}
+function defaultsShell(source, node2) {
+  const run2 = field(source, field(source, node2, "defaults")?.value, "run");
+  return stringValue(field(source, run2?.value, "shell")?.value);
+}
+function parseTriggers(source, onField) {
+  if (!onField) return [];
+  const value = toJS(source, onField.value);
+  if (typeof value === "string") return [{ event: value, line: onField.line }];
+  if (Array.isArray(value)) return value.map((event) => ({ event: String(event), line: onField.line }));
+  return entries(source, onField.value).map((entry2) => {
+    const paths2 = stringList(source, field(source, entry2.value, "paths")?.value);
+    const pathsIgnore = stringList(source, field(source, entry2.value, "paths-ignore")?.value);
+    const branches = stringList(source, field(source, entry2.value, "branches")?.value);
+    const types = stringList(source, field(source, entry2.value, "types")?.value);
+    return {
+      event: entry2.key,
+      line: entry2.line,
+      ...paths2 ? { paths: paths2 } : {},
+      ...pathsIgnore ? { pathsIgnore } : {},
+      ...branches ? { branches } : {},
+      ...types ? { types } : {}
+    };
+  });
+}
+function parseJob(source, entry2) {
+  const node2 = entry2.value;
+  const key = `jobs.${entry2.key}`;
+  const needsValue = toJS(source, field(source, node2, "needs")?.value);
+  const needs = typeof needsValue === "string" ? [needsValue] : Array.isArray(needsValue) ? needsValue.map(String) : [];
+  const containerField = field(source, node2, "container");
+  const containerImage = containerField && stringValue(containerField.value) !== void 0 ? sourcedString(source, containerField) : sourcedString(source, field(source, containerField?.value, "image"));
+  const services = entries(source, field(source, node2, "services")?.value).map((service) => {
+    const image = sourcedString(source, field(source, service.value, "image"));
+    return image ? { name: service.key, image } : void 0;
+  }).filter((service) => service !== void 0);
+  const strategy = field(source, node2, "strategy");
+  const matrix = toJS(source, field(source, strategy?.value, "matrix")?.value);
+  const name = stringValue(field(source, node2, "name")?.value);
+  const condition = stringValue(field(source, node2, "if")?.value);
+  const workingDirectory3 = defaultsWorkingDirectory(source, node2);
+  const shell = defaultsShell(source, node2);
+  const runsOn = sourced(source, field(source, node2, "runs-on"));
+  const timeoutMinutes = sourced(source, field(source, node2, "timeout-minutes"));
+  const uses = sourcedString(source, field(source, node2, "uses"));
+  const concurrency = sourced(source, field(source, node2, "concurrency"));
+  const environment2 = sourced(source, field(source, node2, "environment"));
+  return {
+    id: entry2.key,
+    line: entry2.line,
+    key,
+    ...name !== void 0 ? { name } : {},
+    ...runsOn ? { runsOn } : {},
+    needs,
+    ...timeoutMinutes ? { timeoutMinutes } : {},
+    ...uses ? { uses } : {},
+    ...containerImage ? { containerImage } : {},
+    services,
+    ...concurrency ? { concurrency } : {},
+    ...environment2 ? { environment: environment2 } : {},
+    ...condition !== void 0 ? { if: condition } : {},
+    ...matrix && typeof matrix === "object" && !Array.isArray(matrix) ? { matrix } : typeof matrix === "string" ? { matrix: { __expression: matrix } } : {},
+    steps: parseSteps(source, field(source, node2, "steps")?.value, key),
+    ...workingDirectory3 !== void 0 ? { workingDirectory: workingDirectory3 } : {},
+    ...shell !== void 0 ? { shell } : {},
+    env: record2(source, field(source, node2, "env")?.value)
+  };
+}
+function isWorkflowPath(path) {
+  return /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path);
+}
+function isActionPath(path) {
+  return /(^|\/)action\.ya?ml$/i.test(path);
+}
+function parseWorkflow(path, content3) {
+  const source = parseYaml(path, content3);
+  const root2 = source.doc.contents;
+  const name = stringValue(field(source, root2, "name")?.value);
+  if (isActionPath(path) && !isWorkflowPath(path)) {
+    const runs = field(source, root2, "runs");
+    const using = stringValue(field(source, runs?.value, "using")?.value);
+    const composite = using === "composite";
+    const steps2 = composite ? parseSteps(source, field(source, runs?.value, "steps")?.value, "runs") : [];
+    return {
+      kind: composite ? "composite-action" : "action",
+      path,
+      source,
+      ...name !== void 0 ? { name } : {},
+      triggers: [],
+      triggersLine: 1,
+      env: {},
+      jobs: composite ? [
+        {
+          id: "(composite)",
+          line: runs?.line ?? 1,
+          key: "runs",
+          needs: [],
+          services: [],
+          steps: steps2,
+          env: {}
+        }
+      ] : []
+    };
+  }
+  const onField = field(source, root2, "on");
+  const concurrency = sourced(source, field(source, root2, "concurrency"));
+  const workingDirectory3 = defaultsWorkingDirectory(source, root2);
+  const shell = defaultsShell(source, root2);
+  return {
+    kind: "workflow",
+    path,
+    source,
+    ...name !== void 0 ? { name } : {},
+    triggers: parseTriggers(source, onField),
+    triggersLine: onField?.line ?? 1,
+    ...concurrency ? { concurrency } : {},
+    ...workingDirectory3 !== void 0 ? { workingDirectory: workingDirectory3 } : {},
+    ...shell !== void 0 ? { shell } : {},
+    env: record2(source, field(source, root2, "env")?.value),
+    jobs: entries(source, field(source, root2, "jobs")?.value).map((entry2) => parseJob(source, entry2))
+  };
+}
+function runLine(step, offset) {
+  if (!step.run) return step.line;
+  const before = step.run.value.slice(0, Math.max(0, offset));
+  return step.run.contentLine + (before.match(/\n/g)?.length ?? 0);
+}
+function hasTrigger(workflow, ...events) {
+  return workflow.triggers.some((trigger2) => events.includes(trigger2.event));
+}
+function trigger(workflow, event) {
+  return workflow.triggers.find((candidate) => candidate.event === event);
+}
+function withString(step, key) {
+  const value = step.with.get(key)?.value;
+  return value === void 0 || value === null ? void 0 : String(value);
+}
+
+// src/lint/rules/helpers.ts
+var import_yaml6 = __toESM(require_dist2(), 1);
+
+// src/lint/fix.ts
+function lineStart(content3, line2) {
+  let offset = 0;
+  for (let current = 1; current < line2; current += 1) {
+    const next = content3.indexOf("\n", offset);
+    if (next < 0) return content3.length;
+    offset = next + 1;
+  }
+  return offset;
+}
+function lineText(content3, line2) {
+  const start = lineStart(content3, line2);
+  const end = content3.indexOf("\n", start);
+  return content3.slice(start, end < 0 ? content3.length : end).replace(/\r$/, "");
+}
+function indentOf(content3, line2) {
+  return /^\s*/.exec(lineText(content3, line2))?.[0] ?? "";
+}
+function newline2(content3) {
+  return content3.includes("\r\n") ? "\r\n" : "\n";
+}
+function replaceOnLine(file2, line2, search, replacement3) {
+  const start = lineStart(file2.content, line2);
+  const text4 = lineText(file2.content, line2);
+  const match = typeof search === "string" ? { index: text4.indexOf(search), 0: search } : search.exec(text4);
+  if (!match || match.index < 0) return void 0;
+  return { path: file2.path, start: start + match.index, end: start + match.index + match[0].length, text: replacement3 };
+}
+function insertLinesAfter(file2, line2, lines) {
+  const eol = newline2(file2.content);
+  if (line2 <= 0) return { path: file2.path, start: 0, end: 0, text: lines.map((entry2) => entry2 + eol).join("") };
+  const start = lineStart(file2.content, line2 + 1);
+  const atEnd = start >= file2.content.length && !file2.content.endsWith("\n");
+  const text4 = (atEnd ? eol : "") + lines.map((entry2) => entry2 + eol).join("");
+  return { path: file2.path, start, end: start, text: text4 };
+}
+function fix(description, ...edits) {
+  const defined = edits.filter((edit) => edit !== void 0);
+  return defined.length === edits.length && defined.length > 0 ? { description, edits: defined } : void 0;
+}
+function applyFixes(files, diagnostics) {
+  const contents = new Map(files.map((file2) => [file2.path, file2.content]));
+  const accepted = [];
+  const applied = [];
+  const conflicts = [];
+  const overlaps = (a, b) => a.path === b.path && (a.start < b.end && b.start < a.end || a.start === a.end && a.start === b.start);
+  for (const diagnostic of diagnostics) {
+    const edits = diagnostic.fix?.edits;
+    if (!edits || edits.length === 0) continue;
+    if (edits.some((edit) => !contents.has(edit.path) || accepted.some((other) => overlaps(edit, other)))) {
+      conflicts.push(diagnostic);
+      continue;
+    }
+    accepted.push(...edits);
+    applied.push(diagnostic);
+  }
+  const byPath = /* @__PURE__ */ new Map();
+  for (const edit of accepted) byPath.set(edit.path, [...byPath.get(edit.path) ?? [], edit]);
+  const output3 = /* @__PURE__ */ new Map();
+  for (const [path, edits] of byPath) {
+    let content3 = contents.get(path) ?? "";
+    for (const edit of [...edits].sort((a, b) => b.start - a.start || b.end - a.end)) {
+      content3 = content3.slice(0, edit.start) + edit.text + content3.slice(edit.end);
+    }
+    output3.set(path, content3);
+  }
+  return { files: output3, applied, conflicts };
+}
+
 // src/lint/rules/helpers.ts
 function defineRule(rule) {
   return rule;
@@ -51191,9 +51232,9 @@ function jobRunsOnLabels(job) {
   return [];
 }
 function directChild(node2, key) {
-  if (!(0, import_yaml5.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml5.isPair)(item) && (0, import_yaml5.isScalar)(item.key) && String(item.key.value) === key);
-  return pair && !(0, import_yaml5.isAlias)(pair.value) ? pair.value : void 0;
+  if (!(0, import_yaml6.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml6.isPair)(item) && (0, import_yaml6.isScalar)(item.key) && String(item.key.value) === key);
+  return pair && !(0, import_yaml6.isAlias)(pair.value) ? pair.value : void 0;
 }
 function directWith(workflow, step) {
   const match = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -51201,11 +51242,11 @@ function directWith(workflow, step) {
   const root2 = workflow.source.doc.contents;
   const parent = match[1] !== void 0 ? directChild(directChild(root2, "jobs"), match[1]) : directChild(root2, "runs");
   const stepsNode = directChild(parent, "steps");
-  if (!(0, import_yaml5.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml6.isSeq)(stepsNode)) return void 0;
   const stepNode3 = stepsNode.items[Number(match[2])];
-  if (!(0, import_yaml5.isMap)(stepNode3) || stepNode3.flow || lineOfNode(workflow.source, stepNode3) !== step.line) return void 0;
+  if (!(0, import_yaml6.isMap)(stepNode3) || stepNode3.flow || lineOfNode(workflow.source, stepNode3) !== step.line) return void 0;
   const withNode = directChild(stepNode3, "with");
-  return (0, import_yaml5.isMap)(withNode) && !withNode.flow ? withNode : void 0;
+  return (0, import_yaml6.isMap)(withNode) && !withNode.flow ? withNode : void 0;
 }
 function expandedJobSteps(project, workflow, job) {
   return job.steps.flatMap(
@@ -56276,7 +56317,7 @@ var pin_container_images_default = defineRule({
 });
 
 // src/lint/rules/hermeticity/pin-runner.ts
-var import_yaml10 = __toESM(require_dist2(), 1);
+var import_yaml11 = __toESM(require_dist2(), 1);
 var LATEST = /^(ubuntu|windows|macos)-latest$/i;
 var MATRIX_REF = /^\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}$/;
 function escapeRegExp(text4) {
@@ -56294,7 +56335,7 @@ function runsOnLabels(source, jobNode7, job) {
   let node2 = runsOn.value;
   let key = `${job.key}.runs-on`;
   let direct = runsOn.origin === "direct";
-  if ((0, import_yaml10.isMap)(node2)) {
+  if ((0, import_yaml11.isMap)(node2)) {
     if (field(source, node2, "group")) return void 0;
     const labels = field(source, node2, "labels");
     if (!labels?.value) return [];
@@ -56302,29 +56343,29 @@ function runsOnLabels(source, jobNode7, job) {
     key += ".labels";
     direct &&= labels.origin === "direct";
   }
-  if ((0, import_yaml10.isScalar)(node2)) {
+  if ((0, import_yaml11.isScalar)(node2)) {
     const value = stringValue(node2);
     return value === void 0 ? [] : [{ node: node2, value, key, direct }];
   }
-  if (!(0, import_yaml10.isSeq)(node2)) return [];
+  if (!(0, import_yaml11.isSeq)(node2)) return [];
   return node2.items.flatMap((raw, index) => {
     const resolved = resolveNode(source, raw).node;
-    const value = (0, import_yaml10.isScalar)(resolved) ? stringValue(resolved) : void 0;
-    return resolved && value !== void 0 ? [{ node: resolved, value, key: `${key}[${index}]`, direct: direct && !(0, import_yaml10.isAlias)(raw) }] : [];
+    const value = (0, import_yaml11.isScalar)(resolved) ? stringValue(resolved) : void 0;
+    return resolved && value !== void 0 ? [{ node: resolved, value, key: `${key}[${index}]`, direct: direct && !(0, import_yaml11.isAlias)(raw) }] : [];
   });
 }
 function matrixValues(source, jobNode7, job, name) {
   const matrix = field(source, field(source, jobNode7, "strategy")?.value, "matrix")?.value;
   const result = [];
   const axis = field(source, matrix, name)?.value;
-  const axisNodes = (0, import_yaml10.isSeq)(resolveNode(source, axis).node) ? items(source, axis) : axis ? [axis] : [];
+  const axisNodes = (0, import_yaml11.isSeq)(resolveNode(source, axis).node) ? items(source, axis) : axis ? [axis] : [];
   axisNodes.forEach((node2, index) => {
-    const value = (0, import_yaml10.isScalar)(node2) ? stringValue(node2) : void 0;
+    const value = (0, import_yaml11.isScalar)(node2) ? stringValue(node2) : void 0;
     if (value !== void 0) result.push({ node: node2, value, key: `${job.key}.strategy.matrix.${name}[${index}]`, direct: false });
   });
   items(source, field(source, matrix, "include")?.value).forEach((entry2, index) => {
     const node2 = field(source, entry2, name)?.value;
-    const value = (0, import_yaml10.isScalar)(node2) ? stringValue(node2) : void 0;
+    const value = (0, import_yaml11.isScalar)(node2) ? stringValue(node2) : void 0;
     if (node2 && value !== void 0) result.push({ node: node2, value, key: `${job.key}.strategy.matrix.include[${index}].${name}`, direct: false });
   });
   return result;
@@ -56401,6 +56442,77 @@ var pin_runner_default = defineRule({
 
 // src/lint/rules/hermeticity/index.ts
 var rules5 = [docker_base_digest_default, frozen_lockfile_default, pin_actions_default, pin_container_images_default, pin_runner_default];
+
+// src/lint/rules/hooks/install-in-hook.ts
+var install_in_hook_default = defineRule({
+  meta: {
+    id: "hooks/install-in-hook",
+    ruleset: "hooks",
+    description: "Git hooks should not reinstall project dependencies on every invocation.",
+    rationale: "A direct package-manager install in a commit/push hook repeats dependency resolution and potentially lifecycle scripts on the interactive path. Provision the same locked dependencies at setup and on lockfile changes, and fail explicitly when dependencies are absent. Do not remove secret scanning, linting or CI installation checks. No latency saving is guaranteed without measuring representative hooks.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://git-scm.com/docs/githooks", "https://docs.npmjs.com/cli/commands/npm-ci", "https://pre-commit.com/#new-hooks"],
+    impact: "medium",
+    fixable: false
+  },
+  check({ project, report }) {
+    for (const hook of project.hooks) {
+      const [tool2, subcommand] = hook.words;
+      if (!tool2 || !subcommand || !["npm", "pnpm", "yarn", "bun"].includes(tool2)) continue;
+      if (!["install", "ci"].includes(subcommand)) continue;
+      if (hook.words.some((word) => ["-g", "--global", "--package-lock-only", "--lockfile-only"].includes(word))) continue;
+      report({
+        path: hook.path,
+        line: hook.line,
+        key: `install:${hook.line}`,
+        message: `Hook command \`${hook.command}\` installs dependencies on the interactive Git path.`,
+        suggestion: "Move this locked installation to documented developer setup and lockfile-change provisioning. Keep every mandatory hook check and make missing dependencies a blocking error; retain the clean install in CI."
+      });
+    }
+  }
+});
+
+// src/lint/rules/hooks/pre-commit-repo-scan.ts
+var pre_commit_repo_scan_default = defineRule({
+  meta: {
+    id: "hooks/pre-commit-repo-scan",
+    ruleset: "hooks",
+    description: "Explicit whole-repository pre-commit lint entries should not also receive batched filenames.",
+    rationale: "pre-commit appends matching filenames by default and may split them across invocations to fit command-line limits. An entry that explicitly scans `.` can consequently repeat a whole-repository scan per batch. For intentionally whole-repository checks, pass_filenames: false avoids redundant arguments and batches without reducing analysis scope. Keep file filters, mandatory checks and CI gates; do not apply this advice to staged-file-only linters.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://pre-commit.com/#hooks-pass_filenames", "https://pre-commit.com/#creating-new-hooks"],
+    impact: "medium",
+    fixable: false
+  },
+  check({ project, report }) {
+    for (const hook of project.hooks) {
+      if (hook.passFilenames !== true) continue;
+      const [tool2, ...args] = hook.words;
+      if (!["eslint", "prettier", "cicd-lint"].includes(tool2 ?? "")) continue;
+      const flags = /* @__PURE__ */ new Set(["--check", "--write", "--fix", "--quiet", "--cache"]);
+      if (args.filter((arg) => !flags.has(arg)).join("\0") !== ".") continue;
+      if (/[;&|$`]/.test(hook.command) || args.includes("--")) continue;
+      report({
+        path: hook.path,
+        line: hook.line,
+        key: `repo-scan:${hook.line}`,
+        message: `Pre-commit entry \`${hook.command}\` explicitly scans \`.\` and also receives filenames by default; filename batches can repeat the repository scan.`,
+        suggestion: "Set pass_filenames: false for this whole-repository entry. Preserve its files/types filters and all mandatory checks. Do not replace repository-wide analysis with staged-only analysis."
+      });
+    }
+  }
+});
+
+// src/lint/rules/hooks/index.ts
+var rules6 = [install_in_hook_default, pre_commit_repo_scan_default];
 
 // src/lint/parsers/manifest.ts
 function isManifestPath(path) {
@@ -57238,6 +57350,8 @@ function workspaceGlobsFrom(root2, files) {
 function buildProject(input3) {
   const files = new Map(input3.files.map((file2) => [file2.path, file2]));
   const parseProblems = [];
+  const hooks = parseHooks(input3.files);
+  parseProblems.push(...hooks.problems);
   const workflows = [];
   const actions = [];
   const dockerfiles = [];
@@ -57339,6 +57453,7 @@ function buildProject(input3) {
     actions,
     dockerfiles,
     manifests,
+    hooks: hooks.commands,
     ...rootManifest ? { rootManifest } : {},
     nix,
     facts: {
@@ -59545,7 +59660,7 @@ var fetchtarball_no_hash_default = defineRule({
 import { posix as posix3 } from "node:path";
 
 // src/lint/rules/toolchains/shared.ts
-var import_yaml13 = __toESM(require_dist2(), 1);
+var import_yaml14 = __toESM(require_dist2(), 1);
 function context(project, workflow, job) {
   const entries3 = expandedJobSteps(project, workflow, job);
   const commands = entries3.flatMap(
@@ -59673,13 +59788,13 @@ function effectiveEnv(ctx, entry2, command2) {
   return env;
 }
 function child(node2, key) {
-  if (!(0, import_yaml13.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml13.isPair)(item) && (0, import_yaml13.isScalar)(item.key) && String(item.key.value) === key);
+  if (!(0, import_yaml14.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml14.isPair)(item) && (0, import_yaml14.isScalar)(item.key) && String(item.key.value) === key);
   return pair?.value;
 }
 function keyLine(workflow, map2, key) {
-  if (!(0, import_yaml13.isMap)(map2)) return void 0;
-  const pair = map2.items.find((item) => (0, import_yaml13.isPair)(item) && (0, import_yaml13.isScalar)(item.key) && String(item.key.value) === key);
+  if (!(0, import_yaml14.isMap)(map2)) return void 0;
+  const pair = map2.items.find((item) => (0, import_yaml14.isPair)(item) && (0, import_yaml14.isScalar)(item.key) && String(item.key.value) === key);
   return pair ? lineOfNode(workflow.source, pair.key) : void 0;
 }
 function envKeyLine(workflow, scope2, key) {
@@ -59690,7 +59805,7 @@ function envKeyLine(workflow, scope2, key) {
   if (!match) return void 0;
   const parent = match[1] !== void 0 ? child(child(root2, "jobs"), match[1]) : child(root2, "runs");
   const stepsNode = child(parent, "steps");
-  if (!(0, import_yaml13.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml14.isSeq)(stepsNode)) return void 0;
   return keyLine(workflow, child(stepsNode.items[Number(match[2])], "env"), key);
 }
 function envSource(project, ctx, command2, name) {
@@ -62030,7 +62145,7 @@ A restored store is another option; include platform and Nix compatibility in it
 });
 
 // src/lint/rules/nix/no-lock-update-automation.ts
-var import_yaml15 = __toESM(require_dist2(), 1);
+var import_yaml16 = __toESM(require_dist2(), 1);
 var DEPENDABOT = /^\.github\/dependabot\.ya?ml$/;
 var RENOVATE_CONFIG = /^(?:\.github\/|\.gitlab\/)?(?:renovate\.json5?|\.renovaterc(?:\.json5?)?)$/;
 var BUILT_IN_PRESETS = /* @__PURE__ */ new Set([
@@ -62173,7 +62288,7 @@ function manualUpdateWorkflow(workflows) {
 function dependabotNixCoverage(content3) {
   let config2;
   try {
-    config2 = (0, import_yaml15.parse)(content3);
+    config2 = (0, import_yaml16.parse)(content3);
   } catch {
     return "unknown";
   }
@@ -63304,7 +63419,7 @@ var src_whole_repo_default = defineRule({
 });
 
 // src/lint/rules/nix/index.ts
-var rules6 = [
+var rules7 = [
   accept_flake_config_untrusted_default,
   builtins_fetchurl_unverified_default,
   channel_in_ci_default,
@@ -63676,10 +63791,10 @@ var version_drift_default = defineRule({
 });
 
 // src/lint/rules/packages/index.ts
-var rules7 = [exports_map_default, files_allowlist_default, monolith_default, version_drift_default];
+var rules8 = [exports_map_default, files_allowlist_default, monolith_default, version_drift_default];
 
 // src/lint/rules/redundancy/shared.ts
-var import_yaml16 = __toESM(require_dist2(), 1);
+var import_yaml17 = __toESM(require_dist2(), 1);
 var SETUP_ACTIONS = {
   "actions/setup-node": { version: "node-version", versionFiles: ["node-version-file"] },
   "actions/setup-python": { version: "python-version", versionFiles: ["python-version-file"] },
@@ -63736,12 +63851,12 @@ function stepSignature(workflow, job, step) {
   ].join("\0");
 }
 function directChild2(node2, key) {
-  if (!(0, import_yaml16.isMap)(node2)) return void 0;
-  return node2.items.find((item) => (0, import_yaml16.isPair)(item) && (0, import_yaml16.isScalar)(item.key) && String(item.key.value) === key);
+  if (!(0, import_yaml17.isMap)(node2)) return void 0;
+  return node2.items.find((item) => (0, import_yaml17.isPair)(item) && (0, import_yaml17.isScalar)(item.key) && String(item.key.value) === key);
 }
 function jobNode(workflow, job) {
   const node2 = directChild2(directChild2(workflow.source.doc.contents, "jobs")?.value, job.id)?.value;
-  return (0, import_yaml16.isMap)(node2) ? node2 : void 0;
+  return (0, import_yaml17.isMap)(node2) ? node2 : void 0;
 }
 function stepNode(workflow, step) {
   const match = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -63749,18 +63864,18 @@ function stepNode(workflow, step) {
   const root2 = workflow.source.doc.contents;
   const parent = match[1] !== void 0 ? directChild2(directChild2(root2, "jobs")?.value, match[1])?.value : directChild2(root2, "runs")?.value;
   const stepsNode = directChild2(parent, "steps")?.value;
-  if (!(0, import_yaml16.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml17.isSeq)(stepsNode)) return void 0;
   const node2 = stepsNode.items[Number(match[2])];
-  return (0, import_yaml16.isMap)(node2) ? node2 : void 0;
+  return (0, import_yaml17.isMap)(node2) ? node2 : void 0;
 }
 function nestedPair(parent, mapKey, key) {
   const map2 = directChild2(parent, mapKey)?.value;
-  if (!(0, import_yaml16.isMap)(map2)) return void 0;
+  if (!(0, import_yaml17.isMap)(map2)) return void 0;
   const pair = directChild2(map2, key);
   return pair ? { map: map2, pair } : void 0;
 }
 function rawScalar(content3, node2) {
-  if (!(0, import_yaml16.isScalar)(node2) || !node2.range) return void 0;
+  if (!(0, import_yaml17.isScalar)(node2) || !node2.range) return void 0;
   const text4 = content3.slice(node2.range[0], node2.range[1]).trim();
   const quoted = /^(["'])([\s\S]*)\1$/.exec(text4);
   return quoted ? quoted[2] : text4;
@@ -64101,19 +64216,19 @@ var repeated_job_setup_default = defineRule({
 });
 
 // src/lint/rules/redundancy/shadowed-env.ts
-var import_yaml17 = __toESM(require_dist2(), 1);
+var import_yaml18 = __toESM(require_dist2(), 1);
 function entry(workflow, file2, parent, key) {
   const found = nestedPair(parent, "env", key);
-  if (!found || !(0, import_yaml17.isScalar)(found.pair.value)) return void 0;
+  if (!found || !(0, import_yaml18.isScalar)(found.pair.value)) return void 0;
   const raw = rawScalar(file2.content, found.pair.value);
   if (raw === void 0) return void 0;
-  const owner = (0, import_yaml17.isMap)(parent) ? parent.items.find((item) => item.value === found.map) : void 0;
+  const owner = (0, import_yaml18.isMap)(parent) ? parent.items.find((item) => item.value === found.map) : void 0;
   return { map: found.map, owner, pair: found.pair, raw, line: lineOfNode(workflow.source, found.pair.key) };
 }
 function removal(workflow, file2, inner) {
   if (inner.map.flow) return void 0;
   const value = inner.pair.value;
-  if (!(0, import_yaml17.isScalar)(value) || !value.range) return void 0;
+  if (!(0, import_yaml18.isScalar)(value) || !value.range) return void 0;
   if (lineOfNode(workflow.source, value) !== inner.line) return void 0;
   const valueEnd = workflow.source.lineCounter.linePos(value.range[1]).line;
   if (valueEnd !== inner.line) return void 0;
@@ -64391,7 +64506,7 @@ var toolchain_version_drift_default = defineRule({
 });
 
 // src/lint/rules/redundancy/index.ts
-var rules8 = [
+var rules9 = [
   duplicate_setup_step_default,
   repeated_job_setup_default,
   rebuild_per_job_default,
@@ -64822,10 +64937,10 @@ var github_npm_default = defineRule({
 });
 
 // src/lint/rules/registries/index.ts
-var rules9 = [ghcr_default, github_npm_default];
+var rules10 = [ghcr_default, github_npm_default];
 
 // src/lint/rules/security/shared.ts
-var import_yaml20 = __toESM(require_dist2(), 1);
+var import_yaml21 = __toESM(require_dist2(), 1);
 var PRIVILEGED_TRIGGERS = ["pull_request_target", "workflow_run", "issue_comment"];
 function isPrivileged(workflow) {
   return workflow.kind === "workflow" && hasTrigger(workflow, ...PRIVILEGED_TRIGGERS);
@@ -64964,9 +65079,9 @@ function executesWorkspace(step) {
   }
 }
 function directChild3(node2, key) {
-  if (!(0, import_yaml20.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml20.isPair)(item) && (0, import_yaml20.isScalar)(item.key) && String(item.key.value) === key);
-  return pair && !(0, import_yaml20.isAlias)(pair.value) ? pair.value : void 0;
+  if (!(0, import_yaml21.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml21.isPair)(item) && (0, import_yaml21.isScalar)(item.key) && String(item.key.value) === key);
+  return pair && !(0, import_yaml21.isAlias)(pair.value) ? pair.value : void 0;
 }
 function directStep(workflow, step) {
   const match = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -64974,10 +65089,10 @@ function directStep(workflow, step) {
   const root2 = rootNode2(workflow);
   const parent = match[1] !== void 0 ? directChild3(directChild3(root2, "jobs"), match[1]) : directChild3(root2, "runs");
   const stepsNode = directChild3(parent, "steps");
-  if (!(0, import_yaml20.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml21.isSeq)(stepsNode)) return void 0;
   const node2 = stepsNode.items[Number(match[2])];
-  if (!(0, import_yaml20.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
-  if (node2.items.some((pair) => !(0, import_yaml20.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
+  if (!(0, import_yaml21.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
+  if (node2.items.some((pair) => !(0, import_yaml21.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
   return node2;
 }
 
@@ -65343,9 +65458,9 @@ var mutable_remote_ref_default = defineRule({
 });
 
 // src/lint/rules/security/persisted-credentials.ts
-var import_yaml22 = __toESM(require_dist2(), 1);
+var import_yaml23 = __toESM(require_dist2(), 1);
 var UPLOAD_ACTIONS = ["actions/upload-artifact", "actions/upload-artifact/merge"];
-var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml22.Scalar.PLAIN, import_yaml22.Scalar.QUOTE_DOUBLE, import_yaml22.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml23.Scalar.PLAIN, import_yaml23.Scalar.QUOTE_DOUBLE, import_yaml23.Scalar.QUOTE_SINGLE]);
 var WORKSPACE_ROOT = /^(?:\.\/?|\$\{\{\s*github\.workspace\s*\}\}\/?)$/;
 function uploadsGitDirectory(step, file2) {
   if (!usesAction(step, ...UPLOAD_ACTIONS)) return false;
@@ -65369,7 +65484,7 @@ function addPersistCredentials(file2, workflow, step) {
   const description = "Set persist-credentials: false";
   if (step.with.size > 0 || step.uses?.kind !== "literal") {
     const withNode = directWith(workflow, step);
-    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml22.isScalar)(pair.key) && pair.key.value !== "<<");
+    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml23.isScalar)(pair.key) && pair.key.value !== "<<");
     const first = pairs[0];
     const last = pairs[pairs.length - 1];
     if (!first || !last) return void 0;
@@ -65377,14 +65492,14 @@ function addPersistCredentials(file2, workflow, step) {
     const indent2 = indentOf(file2.content, firstLine);
     const lastLine = lineOfNode(workflow.source, last.key);
     const value = last.value;
-    const endsOnKeyLine = (0, import_yaml22.isScalar)(value) && SINGLE_LINE.has(value.type) && value.range !== void 0 && value.range !== null && workflow.source.lineCounter.linePos(Math.max(value.range[0], value.range[1] - 1)).line === lastLine;
+    const endsOnKeyLine = (0, import_yaml23.isScalar)(value) && SINGLE_LINE.has(value.type) && value.range !== void 0 && value.range !== null && workflow.source.lineCounter.linePos(Math.max(value.range[0], value.range[1] - 1)).line === lastLine;
     const line2 = `${indent2}persist-credentials: false`;
     return fix(description, insertLinesAfter(file2, endsOnKeyLine ? lastLine : firstLine - 1, [line2]));
   }
   const node2 = directStep(workflow, step);
-  if (!node2 || node2.items.some((pair) => (0, import_yaml22.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
-  const usesPair = node2.items.find((pair) => (0, import_yaml22.isScalar)(pair.key) && pair.key.value === "uses");
-  if (!usesPair || !(0, import_yaml22.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
+  if (!node2 || node2.items.some((pair) => (0, import_yaml23.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
+  const usesPair = node2.items.find((pair) => (0, import_yaml23.isScalar)(pair.key) && pair.key.value === "uses");
+  if (!usesPair || !(0, import_yaml23.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
   const usesLine = lineOfNode(workflow.source, usesPair.key);
   const text4 = lineText(file2.content, usesLine);
   const match = /^(\s*)(-\s+)?uses\s*:/.exec(text4);
@@ -65657,7 +65772,7 @@ var untrusted_checkout_default = defineRule({
 });
 
 // src/lint/rules/security/index.ts
-var rules10 = [
+var rules11 = [
   env_file_injection_default,
   excessive_permissions_default,
   expression_injection_default,
@@ -65856,7 +65971,7 @@ var static_cloud_credentials_default = defineRule({
 });
 
 // src/lint/rules/ssdf/index.ts
-var rules11 = [
+var rules12 = [
   attestation_missing_permissions_default,
   publish_without_provenance_default,
   publish_without_sbom_default,
@@ -66373,7 +66488,7 @@ var tool_incremental_cache_default = defineRule({
 });
 
 // src/lint/rules/testing/unconditional-debug-upload.ts
-var import_yaml25 = __toESM(require_dist2(), 1);
+var import_yaml26 = __toESM(require_dist2(), 1);
 var DEBUG_PATH = /(^|[/\\])(?:playwright-report|test-results|traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)/i;
 var HEAVY_PATH = /(^|[/\\])(?:traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)|\.(?:zip|webm|mp4|png)$/i;
 var MACHINE_READABLE = /junit|\.(?:xml|json|trx|sarif|lcov)$|coverage/i;
@@ -66447,7 +66562,7 @@ var unconditional_debug_upload_default = defineRule({
         const file2 = project.files.get(workflow.path);
         const first = file2 ? lineText(file2.content, step.line) : "";
         const dash = /^(\s*)-\s+[\w-]+:/.exec(first);
-        if (file2 && dash && (0, import_yaml25.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
+        if (file2 && dash && (0, import_yaml26.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
           applied = fix("Upload only when the job fails", insertLinesAfter(file2, step.line, [`${dash[1] ?? ""}  if: failure()`]));
         }
       }
@@ -66568,7 +66683,7 @@ var watch_mode_in_ci_default = defineRule({
 });
 
 // src/lint/rules/testing/index.ts
-var rules12 = [
+var rules13 = [
   playwright_browser_cache_default,
   tool_incremental_cache_default,
   watch_mode_in_ci_default,
@@ -68325,7 +68440,7 @@ An earlier check does not constrain later commands. On uv >= 0.4.25, \`UV_LOCKED
 });
 
 // src/lint/rules/toolchains/index.ts
-var rules13 = [
+var rules14 = [
   gradle_build_cache_disabled_default,
   gradle_configuration_cache_disabled_default,
   gradle_parallel_disabled_default,
@@ -68804,7 +68919,7 @@ var workflow_run_chain_default = defineRule({
 });
 
 // src/lint/rules/triggers/index.ts
-var rules14 = [
+var rules15 = [
   workflow_run_chain_default,
   serialized_matrix_default,
   draft_pr_gating_default,
@@ -68815,9 +68930,9 @@ var rules14 = [
 ];
 
 // src/lint/rules/workflow/artifact-retention.ts
-var import_yaml32 = __toESM(require_dist2(), 1);
+var import_yaml33 = __toESM(require_dist2(), 1);
 var UPLOAD_ACTIONS2 = /* @__PURE__ */ new Set(["actions/upload-artifact", "actions/upload-artifact/merge"]);
-var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml32.Scalar.PLAIN, import_yaml32.Scalar.QUOTE_DOUBLE, import_yaml32.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml33.Scalar.PLAIN, import_yaml33.Scalar.QUOTE_DOUBLE, import_yaml33.Scalar.QUOTE_SINGLE]);
 function retentionDays(value) {
   if (typeof value === "number") return value;
   if (typeof value === "string" && /^\s*\d+\s*$/.test(value)) return Number(value);
@@ -68825,7 +68940,7 @@ function retentionDays(value) {
 }
 function addRetention(file2, workflow, step, days) {
   const withNode = directWith(workflow, step);
-  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml32.isScalar)(pair.key) && pair.key.value !== "<<");
+  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml33.isScalar)(pair.key) && pair.key.value !== "<<");
   const first = pairs[0];
   const last = pairs[pairs.length - 1];
   if (!first || !last) return void 0;
@@ -68833,7 +68948,7 @@ function addRetention(file2, workflow, step, days) {
   const indent = indentOf(file2.content, firstLine);
   const lastLine = lineOfNode(workflow.source, last.key);
   const value = last.value;
-  const endsOnKeyLine = (0, import_yaml32.isScalar)(value) && SINGLE_LINE2.has(value.type) && value.range !== void 0 && value.range !== null && workflow.source.lineCounter.linePos(Math.max(value.range[0], value.range[1] - 1)).line === lastLine;
+  const endsOnKeyLine = (0, import_yaml33.isScalar)(value) && SINGLE_LINE2.has(value.type) && value.range !== void 0 && value.range !== null && workflow.source.lineCounter.linePos(Math.max(value.range[0], value.range[1] - 1)).line === lastLine;
   const line2 = `${indent}retention-days: ${days}`;
   return fix(
     `Set retention-days: ${days}`,
@@ -69282,7 +69397,7 @@ var larger_runner_unjustified_default = defineRule({
 });
 
 // src/lint/rules/workflow/matrix-explosion.ts
-var import_yaml36 = __toESM(require_dist2(), 1);
+var import_yaml37 = __toESM(require_dist2(), 1);
 var LIMIT = 256;
 var ENUMERATION_CAP = 5e4;
 var isPrimitive2 = (value) => value === null || ["string", "number", "boolean"].includes(typeof value);
@@ -69294,7 +69409,7 @@ function records2(value) {
 }
 function scalarTexts(source, content3, node2) {
   const nodes = items(source, node2);
-  const texts = nodes.map((item) => (0, import_yaml36.isScalar)(item) && item.range ? content3.slice(item.range[0], item.range[1]) : void 0);
+  const texts = nodes.map((item) => (0, import_yaml37.isScalar)(item) && item.range ? content3.slice(item.range[0], item.range[1]) : void 0);
   const flowSafe = (text4) => text4 !== void 0 && !text4.includes("\n") && (/^["']/.test(text4) || !/[,[\]{}]/.test(text4));
   return texts.every(flowSafe) ? texts : void 0;
 }
@@ -69796,7 +69911,7 @@ Inspect ${tool2.rangeFiles.join(" and ")} before reusing them: constraints may a
 });
 
 // src/lint/rules/workflow/unnecessary-needs-serialization.ts
-var import_yaml39 = __toESM(require_dist2(), 1);
+var import_yaml40 = __toESM(require_dist2(), 1);
 var DEPLOY = /deploy|release|publish|promote|rollout|ship/i;
 var GATE = /test|lint|build|check|verify|validat|typecheck|compile|scan|audit|\bci\b|e2e|smoke|format|fmt|analy|codeql|security|review|approv|gate|guard|preflight|sanity|wait|lock|migrat|provision|setup-env|infra/i;
 var STANDARD_RUNNER = /^(ubuntu|windows|macos)-(latest|\d[\w.]*)(-arm|-intel)?$/;
@@ -69852,7 +69967,7 @@ function needsLine(workflow, job, dependency) {
   const source = workflow.source;
   const needs = field(source, jobNode6(workflow, job), "needs");
   if (!needs) return job.line;
-  const item = items(source, needs.value).find((node2) => (0, import_yaml39.isScalar)(node2) && String(node2.value) === dependency);
+  const item = items(source, needs.value).find((node2) => (0, import_yaml40.isScalar)(node2) && String(node2.value) === dependency);
   return item ? lineOfNode(source, item) : needs.line;
 }
 function standardHosted(job) {
@@ -69918,7 +70033,7 @@ var unnecessary_needs_serialization_default = defineRule({
 });
 
 // src/lint/rules/workflow/index.ts
-var rules15 = [
+var rules16 = [
   artifact_retention_default,
   concurrency_default,
   duplicate_push_pull_request_trigger_default,
@@ -69932,23 +70047,24 @@ var rules15 = [
 ];
 
 // src/lint/rules/index.ts
-var RULESETS = ["workflow", "checkout", "affected", "caching", "hermeticity", "containers", "packages", "registries", "security", "ssdf", "triggers", "redundancy", "testing", "nix", "toolchains"];
+var RULESETS = ["workflow", "checkout", "affected", "caching", "hermeticity", "containers", "packages", "registries", "security", "ssdf", "triggers", "redundancy", "testing", "nix", "toolchains", "hooks"];
 var allRules = [
-  ...rules15,
+  ...rules16,
   ...rules3,
   ...rules,
   ...rules2,
   ...rules5,
   ...rules4,
-  ...rules7,
-  ...rules9,
+  ...rules8,
   ...rules10,
   ...rules11,
-  ...rules14,
-  ...rules8,
   ...rules12,
-  ...rules6,
-  ...rules13
+  ...rules15,
+  ...rules9,
+  ...rules13,
+  ...rules7,
+  ...rules14,
+  ...rules6
 ];
 
 // src/github/git.ts
@@ -70469,14 +70585,14 @@ async function listManagedPullRequests(client, repo, discovery) {
   return result;
 }
 function dismissalsFrom(prs) {
-  const rules16 = /* @__PURE__ */ new Set();
+  const rules17 = /* @__PURE__ */ new Set();
   const groups = /* @__PURE__ */ new Set();
   for (const pr of prs) {
     if (!pr.labels.includes(IGNORED_LABEL)) continue;
-    for (const rule of pr.ignoredRules) rules16.add(rule);
+    for (const rule of pr.ignoredRules) rules17.add(rule);
     if (pr.ignoredGroup) groups.add(pr.group);
   }
-  return { rules: rules16, groups };
+  return { rules: rules17, groups };
 }
 async function currentFix(client, repo, previous) {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous.number });
@@ -71005,9 +71121,9 @@ function suppress(entry2, diagnostic) {
   }
   return hit;
 }
-function unusedDirectives(suppressionsFor, paths2, skipped, rules16) {
+function unusedDirectives(suppressionsFor, paths2, skipped, rules17) {
   const skippedIds = new Set(skipped.map((skip) => skip.ruleId));
-  const skippedRulesets = new Set(rules16.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
+  const skippedRulesets = new Set(rules17.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
   const result = [];
   for (const path of paths2) {
     for (const directive of suppressionsFor(path)?.directives ?? []) {
@@ -71339,8 +71455,8 @@ function markdown(result, options = {}) {
   }
   return lines.join("\n");
 }
-function sarif(result, rules16, version2 = "0.0.0") {
-  const used = rules16.filter((rule) => result.diagnostics.some((d) => d.ruleId === rule.meta.id));
+function sarif(result, rules17, version2 = "0.0.0") {
+  const used = rules17.filter((rule) => result.diagnostics.some((d) => d.ruleId === rule.meta.id));
   const index = new Map(used.map((rule, position) => [rule.meta.id, position]));
   const level2 = { error: "error", warn: "warning", info: "note" };
   const securitySeverity = { high: "7.0", medium: "4.0", low: "2.0" };
@@ -71398,12 +71514,12 @@ ${rule.meta.references.map((ref) => `- ${ref}`).join("\n")}` },
     2
   );
 }
-function format(name, result, rules16, version2) {
+function format(name, result, rules17, version2) {
   switch (name) {
     case "json":
       return json3(result);
     case "sarif":
-      return sarif(result, rules16, version2);
+      return sarif(result, rules17, version2);
     case "markdown":
       return markdown(result);
     case "github":
@@ -71447,7 +71563,7 @@ function snapshotIdentity(snapshot) {
 }
 
 // src/knowledge/extract.ts
-var import_yaml42 = __toESM(require_dist2(), 1);
+var import_yaml43 = __toESM(require_dist2(), 1);
 var packageName3 = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 var managers = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
 var toolFiles = {
@@ -71578,7 +71694,7 @@ function extractKnowledge(repository, revision, input3, options = {}) {
   if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
   else if (pnpm) {
     try {
-      const parsed = (0, import_yaml42.parseDocument)(pnpm.content, { uniqueKeys: true });
+      const parsed = (0, import_yaml43.parseDocument)(pnpm.content, { uniqueKeys: true });
       if (parsed.errors.length) throw new Error("Invalid workspace YAML");
       const value = parsed.toJS();
       addWorkspace(record5(value) ? value.packages : void 0, pnpm, "/packages");
@@ -74127,7 +74243,7 @@ function escapeCell(value) {
 }
 
 // src/telemetry/snapshot.ts
-var import_yaml43 = __toESM(require_dist2(), 1);
+var import_yaml44 = __toESM(require_dist2(), 1);
 function isExternalCheckRun(job, key) {
   return key === void 0 && !job.runner_id && !job.runner_name && !job.steps?.length && typeof job.html_url === "string" && !/\/actions\/runs\/\d+\/job\/\d+/.test(job.html_url);
 }
@@ -74137,7 +74253,7 @@ function workflowPath(path) {
 function parseJobDefinitions(text4) {
   let document;
   try {
-    document = (0, import_yaml43.parse)(text4);
+    document = (0, import_yaml44.parse)(text4);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -74631,7 +74747,7 @@ function validateMitigationApplicationEvent(event) {
 }
 
 // src/recipes/recipe.ts
-var import_yaml44 = __toESM(require_dist2(), 1);
+var import_yaml45 = __toESM(require_dist2(), 1);
 
 // src/service/recipe-knowledge.ts
 function time3(value) {
@@ -75548,6 +75664,40 @@ var RULE_ASSURANCE = {
         "rationale": "`ubuntu-latest`, `windows-latest` and `macos-latest` move to a new OS image during a gradual multi-week rollout, so identical commits can pass on one run and fail on the next with different toolchains and preinstalled software. `ubuntu-latest` is migrating from Ubuntu 24.04 to 26.04 between Oct 19 and Nov 19, 2026. Pinning makes the upgrade a deliberate, reviewable change."
       },
       "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hooks/install-in-hook",
+      "metadataSha256": "a033236bfd73d9563df2c9ca8e42d486d2c95718514bee66b86a4abe4b50e04d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Git hooks should not reinstall project dependencies on every invocation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A direct package-manager install in a commit/push hook repeats dependency resolution and potentially lifecycle scripts on the interactive path. Provision the same locked dependencies at setup and on lockfile changes, and fail explicitly when dependencies are absent. Do not remove secret scanning, linting or CI installation checks. No latency saving is guaranteed without measuring representative hooks."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hooks/pre-commit-repo-scan",
+      "metadataSha256": "6827c19cc1ec25ad7bce7d2bcd78672c2cd3a87bc5c62fc8778dc263326a86ef",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Explicit whole-repository pre-commit lint entries should not also receive batched filenames."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "pre-commit appends matching filenames by default and may split them across invocations to fit command-line limits. An entry that explicitly scans `.` can consequently repeat a whole-repository scan per batch. For intentionally whole-repository checks, pass_filenames: false avoids redundant arguments and batches without reducing analysis scope. Keep file filters, mandatory checks and CI gates; do not apply this advice to staged-file-only linters."
+      },
+      "autofix": "not-provided",
       "engineContracts": [
         "severity-last-assignment-wins"
       ],
@@ -77245,16 +77395,16 @@ function withFile(input3, file2, limits, label2 = "--stdin content") {
   const truncated = input3.truncated.filter((path) => path !== file2.path);
   return { ...input3, files, truncated: oversized ? [...truncated, file2.path] : truncated };
 }
-function effectiveSeverities(config2, rules16, presets) {
-  const severities = new Map(rules16.map((rule) => [rule.meta.id, "off"]));
-  for (const { rule, severity: severity3 } of resolveRules(config2, [...rules16], presets)) severities.set(rule.meta.id, severity3);
+function effectiveSeverities(config2, rules17, presets) {
+  const severities = new Map(rules17.map((rule) => [rule.meta.id, "off"]));
+  for (const { rule, severity: severity3 } of resolveRules(config2, [...rules17], presets)) severities.set(rule.meta.id, severity3);
   return severities;
 }
-function unknownRuleMessage(label2, id2, rules16) {
-  return `${label2}: unknown rule "${id2}".${didYouMean(id2, rules16.map((candidate) => candidate.meta.id))}`;
+function unknownRuleMessage(label2, id2, rules17) {
+  return `${label2}: unknown rule "${id2}".${didYouMean(id2, rules17.map((candidate) => candidate.meta.id))}`;
 }
-function explainRuleText(id2, rules16, severities) {
-  const rule = rules16.find((candidate) => candidate.meta.id === id2);
+function explainRuleText(id2, rules17, severities) {
+  const rule = rules17.find((candidate) => candidate.meta.id === id2);
   if (!rule) return void 0;
   const { meta: meta3 } = rule;
   const indent = (text4) => text4.replace(/\n$/, "").split("\n").map((line2) => `    ${line2}`).join("\n");
@@ -77280,7 +77430,7 @@ function explainRuleText(id2, rules16, severities) {
 }
 
 // src/review/project.ts
-var import_yaml45 = __toESM(require_dist2(), 1);
+var import_yaml46 = __toESM(require_dist2(), 1);
 
 // src/review/escape.ts
 var LINE_BREAKS = /[\r\n\t\v\f\u0085\u2028\u2029]+/g;
@@ -77315,7 +77465,7 @@ function parseStrictYaml(text4, maxBytes, label2) {
   if (/^%/m.test(text4)) return { problems: [`${label2} must not contain YAML directives (lines starting with %).`] };
   let documents;
   try {
-    documents = (0, import_yaml45.parseAllDocuments)(text4, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+    documents = (0, import_yaml46.parseAllDocuments)(text4, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
   } catch (error62) {
     return { problems: [`${label2} is not valid YAML (${describeValue(error62 instanceof Error ? error62.message : String(error62))}).`] };
   }
@@ -77328,20 +77478,20 @@ function parseStrictYaml(text4, maxBytes, label2) {
   for (const issue2 of [...document.errors, ...document.warnings]) {
     problems.push(`${label2} is not valid YAML: ${issue2.code} at line ${issue2.linePos?.[0]?.line ?? "?"}.`);
   }
-  if (!(0, import_yaml45.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
-  (0, import_yaml45.visit)(document, {
+  if (!(0, import_yaml46.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
+  (0, import_yaml46.visit)(document, {
     Alias() {
       problems.push(`${label2} must not use YAML aliases (*name).`);
-      return import_yaml45.visit.BREAK;
+      return import_yaml46.visit.BREAK;
     },
     Node(_key, node2) {
       if (node2.anchor) problems.push(`${label2} must not use YAML anchors (&name).`);
       if (node2.tag) problems.push(`${label2} must not use YAML tags (${describeValue(node2.tag)}).`);
     },
     Pair(_key, pair) {
-      if (!(0, import_yaml45.isScalar)(pair.key) || typeof pair.key.value !== "string") {
+      if (!(0, import_yaml46.isScalar)(pair.key) || typeof pair.key.value !== "string") {
         problems.push(`${label2} keys must be plain strings.`);
-        return import_yaml45.visit.SKIP;
+        return import_yaml46.visit.SKIP;
       }
       if (pair.key.value === "<<") problems.push(`${label2} must not use YAML merge keys (<<).`);
       return void 0;
@@ -78499,12 +78649,12 @@ async function explainCommand(turn) {
 }
 async function rulesCommand(turn) {
   const query = turn.args.join(" ").trim();
-  const rules16 = listRules(query ? { query } : {});
-  const lines = [`**${rules16.length} rule(s)**${query ? ` matching ${code2(query)}` : ""}:`, ""];
-  for (const rule of rules16.slice(0, MAX_LISTED2 * 2)) {
+  const rules17 = listRules(query ? { query } : {});
+  const lines = [`**${rules17.length} rule(s)**${query ? ` matching ${code2(query)}` : ""}:`, ""];
+  for (const rule of rules17.slice(0, MAX_LISTED2 * 2)) {
     lines.push(`- ${code2(rule.id)} (${rule.defaultSeverity}${rule.fixable ? ", fixable" : ""}) \u2014 ${rule.description}`);
   }
-  if (rules16.length > MAX_LISTED2 * 2) lines.push("", `_${rules16.length - MAX_LISTED2 * 2} rules omitted. Narrow the list with a search term, for example \`/rules cache\`._`);
+  if (rules17.length > MAX_LISTED2 * 2) lines.push("", `_${rules17.length - MAX_LISTED2 * 2} rules omitted. Narrow the list with a search term, for example \`/rules cache\`._`);
   await say(turn, lines.join("\n"));
 }
 async function configCommand(turn) {
@@ -79325,8 +79475,8 @@ function createMcpServer(options) {
     }),
     annotations: { ...local }
   }, ({ limit = 50, ...args }, ctx) => guard(async () => {
-    const rules16 = listRules(strip(args));
-    return { total: rules16.length, omittedRules: Math.max(0, rules16.length - limit), rules: rules16.slice(0, limit) };
+    const rules17 = listRules(strip(args));
+    return { total: rules17.length, omittedRules: Math.max(0, rules17.length - limit), rules: rules17.slice(0, limit) };
   }, ctx.mcpReq.signal));
   server.registerTool(MCP_TOOLS.explainRule, {
     title: "Explain a lint rule",
@@ -79631,7 +79781,7 @@ async function loadLocalRules(root2, entries3, builtins) {
 var LINT_HELP = `Usage: ci-cd-optimizer lint [paths...] [options]
        cicd-lint [paths...] [options]
 
-Lints GitHub Actions workflows, Dockerfiles, Nix expressions/flakes, and package/toolchain configuration.
+Lints GitHub Actions workflows, Dockerfiles, Nix expressions/flakes, Git hooks, pre-commit, and package/toolchain configuration.
 Findings are static recommendations, not proofs of runtime behavior or performance.
 
 With no paths the current directory is the lint root, and a single directory argument becomes the root. Any other
@@ -79758,9 +79908,9 @@ function extractUnusedFlag(args) {
   }
   return { args: rest, severity: severity3 === "off" ? void 0 : severity3 };
 }
-function ruleListText(rules16) {
-  const width = Math.max(...rules16.map((rule) => rule.meta.id.length));
-  return rules16.map((rule) => {
+function ruleListText(rules17) {
+  const width = Math.max(...rules17.map((rule) => rule.meta.id.length));
+  return rules17.map((rule) => {
     const builtin = allRules.some((candidate) => candidate.meta.id === rule.meta.id);
     if (builtin) ruleAssurance(rule.meta.id);
     return `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}  [${builtin ? "heuristic" : "local/unreviewed"}]`;
@@ -79785,10 +79935,10 @@ async function loadLintConfig(io, root2, explicit, options = {}) {
     if (!options.allowLocalRules) {
       throw new UsageError(`${path} lists localRules, which run JavaScript from the repository. Pass --allow-local-rules to load them (trusted repositories only).`);
     }
-    const rules16 = [...allRules, ...await loadLocalRules(root2, parsed.config.localRules, allRules)];
-    const strict = parseConfigText(text4, rules16, path);
+    const rules17 = [...allRules, ...await loadLocalRules(root2, parsed.config.localRules, allRules)];
+    const strict = parseConfigText(text4, rules17, path);
     if (strict.problems.length > 0) throw invalidConfig(path, strict.problems);
-    return { config: strict.config, path, rules: rules16 };
+    return { config: strict.config, path, rules: rules17 };
   }
   return { config: structuredClone(DEFAULT_CONFIG), rules: allRules };
 }
@@ -79825,9 +79975,9 @@ async function missReason(root2, selector, config2, inventoryComplete) {
   if (config2.ignorePaths.some((glob) => matchesGlob(selector, glob) || matchesGlob(selector, `${glob}/**`))) return "excluded by ignorePaths";
   return inventoryComplete ? "not analyzed (inside a directory the inventory skips, such as node_modules or .git)" : "not analyzed: the inventory hit limits.maxFiles or limits.maxFileBytes";
 }
-function explainRule2(id2, rules16, severities) {
-  const text4 = explainRuleText(id2, rules16, severities);
-  if (text4 === void 0) throw new UsageError(unknownRuleMessage("--explain", id2, rules16));
+function explainRule2(id2, rules17, severities) {
+  const text4 = explainRuleText(id2, rules17, severities);
+  if (text4 === void 0) throw new UsageError(unknownRuleMessage("--explain", id2, rules17));
   return text4;
 }
 async function initConfig(io, root2, explicit) {
@@ -79920,13 +80070,13 @@ async function lintCommand2(rawArgs, io) {
   const { root: root2, paths: paths2 } = await resolveTarget(io, values.root, positionals3);
   if (values.init) return await initConfig(io, root2, values.config);
   const loaded = await loadLintConfig(io, root2, values.config, { localRules: true, allowLocalRules: values["allow-local-rules"] });
-  const { config: config2, rules: rules16 } = loaded;
+  const { config: config2, rules: rules17 } = loaded;
   const presets = values.preset?.map((preset) => {
     if (!PRESETS.includes(preset)) throw new UsageError(`--preset ${preset}: unknown preset.${didYouMean(preset, PRESETS)}`);
     return preset;
   });
-  const ruleIds = rules16.map((rule) => rule.meta.id);
-  const rulesets = [...new Set(rules16.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules17.map((rule) => rule.meta.id);
+  const rulesets = [...new Set(rules17.map((rule) => rule.meta.ruleset))];
   for (const value of values.ruleset ?? []) {
     const [id2, severity3] = parseOverride("ruleset", value, rulesets);
     config2.rulesets = { ...config2.rulesets, [id2]: severity3 };
@@ -79940,13 +80090,13 @@ async function lintCommand2(rawArgs, io) {
     config2.failOn = values["fail-on"];
   }
   if (values["list-rules"]) {
-    await writeText(io, values.output, ruleListText(rules16));
+    await writeText(io, values.output, ruleListText(rules17));
     return 0;
   }
-  const severities = effectiveSeverities(config2, rules16, presets);
+  const severities = effectiveSeverities(config2, rules17, presets);
   if (values.explain !== void 0) {
     const withMeta = new Map(severities).set(UNUSED_DIRECTIVE_RULE_ID, unusedSeverity ?? "off");
-    await writeText(io, values.output, explainRule2(values.explain, [...rules16, UNUSED_DIRECTIVE_RULE], withMeta));
+    await writeText(io, values.output, explainRule2(values.explain, [...rules17, UNUSED_DIRECTIVE_RULE], withMeta));
     return 0;
   }
   if (values["print-config"]) {
@@ -79970,14 +80120,14 @@ async function lintCommand2(rawArgs, io) {
     try {
       change = await changedSince(root2, values.base);
       const baseInput = await loadGitRevision(root2, change.baseSha ?? values.base, config2);
-      baseFingerprints = new Set(lint(baseInput, { config: config2, rules: rules16, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
+      baseFingerprints = new Set(lint(baseInput, { config: config2, rules: rules17, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
     } catch (error62) {
       throw new UsageError(`--base ${values.base}: ${error62.message.split("\n")[0]}`);
     }
   }
   const options = {
     config: config2,
-    rules: rules16,
+    rules: rules17,
     ...presets ? { presets } : {},
     ...baseFingerprints ? { baseFingerprints } : {},
     reportUnusedDirectives: unusedSeverity !== void 0
@@ -80035,7 +80185,7 @@ async function lintCommand2(rawArgs, io) {
     ...unusedDirectives2 ? { unusedDirectives: unusedDirectives2 } : {}
   };
   if (!input3.inventoryComplete) io.stderr("Inventory is incomplete; rules requiring complete inventory were skipped.");
-  const reportRules = [...rules16, UNUSED_DIRECTIVE_RULE];
+  const reportRules = [...rules17, UNUSED_DIRECTIVE_RULE];
   await writeText(io, values.output, format(formatName, shown, reportRules, VERSION));
   if (values.sarif) await writeText(io, values.sarif, sarif(shown, reportRules, VERSION));
   const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "warn").length;

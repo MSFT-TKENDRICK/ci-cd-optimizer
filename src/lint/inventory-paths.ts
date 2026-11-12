@@ -1,3 +1,5 @@
+import { isGitHookPath, isPreCommitPath } from "./parsers/hooks.js";
+
 /** Files whose presence or content rules depend on. Everything else is outside the built-in inventory. */
 const BASENAMES = new Set([
   "package.json",
@@ -79,6 +81,7 @@ export const SKIP_DIRS: ReadonlySet<string> = new Set([".git", "node_modules", "
 
 export function isInventoryPath(path: string): boolean {
   if (path.split("/").slice(0, -1).some((part) => SKIP_DIRS.has(part))) return false;
+  if (isGitHookPath(path) || isPreCommitPath(path)) return true;
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
   if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
   if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;

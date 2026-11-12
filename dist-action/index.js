@@ -7769,7 +7769,7 @@ var init_run_observation = __esm({
 
 // src/knowledge/mitigation.ts
 function definitionContent(definition) {
-  const { version: version2, source, key: key2, revision, title, summary: summary3, instructions, risk, rules: rules16, files, technologies, contraindications, provenance } = definition;
+  const { version: version2, source, key: key2, revision, title, summary: summary3, instructions, risk, rules: rules17, files, technologies, contraindications, provenance } = definition;
   return {
     version: version2,
     source: version2 === 1 ? source : { host: source.host, repositoryId: source.repositoryId },
@@ -7779,7 +7779,7 @@ function definitionContent(definition) {
     summary: summary3,
     instructions,
     risk,
-    rules: rules16,
+    rules: rules17,
     files,
     technologies,
     contraindications,
@@ -19648,6 +19648,77 @@ var pin_runner_default = defineRule({
 // src/lint/rules/hermeticity/index.ts
 var rules5 = [docker_base_digest_default, frozen_lockfile_default, pin_actions_default, pin_container_images_default, pin_runner_default];
 
+// src/lint/rules/hooks/install-in-hook.ts
+var install_in_hook_default = defineRule({
+  meta: {
+    id: "hooks/install-in-hook",
+    ruleset: "hooks",
+    description: "Git hooks should not reinstall project dependencies on every invocation.",
+    rationale: "A direct package-manager install in a commit/push hook repeats dependency resolution and potentially lifecycle scripts on the interactive path. Provision the same locked dependencies at setup and on lockfile changes, and fail explicitly when dependencies are absent. Do not remove secret scanning, linting or CI installation checks. No latency saving is guaranteed without measuring representative hooks.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://git-scm.com/docs/githooks", "https://docs.npmjs.com/cli/commands/npm-ci", "https://pre-commit.com/#new-hooks"],
+    impact: "medium",
+    fixable: false
+  },
+  check({ project, report }) {
+    for (const hook of project.hooks) {
+      const [tool2, subcommand] = hook.words;
+      if (!tool2 || !subcommand || !["npm", "pnpm", "yarn", "bun"].includes(tool2)) continue;
+      if (!["install", "ci"].includes(subcommand)) continue;
+      if (hook.words.some((word) => ["-g", "--global", "--package-lock-only", "--lockfile-only"].includes(word))) continue;
+      report({
+        path: hook.path,
+        line: hook.line,
+        key: `install:${hook.line}`,
+        message: `Hook command \`${hook.command}\` installs dependencies on the interactive Git path.`,
+        suggestion: "Move this locked installation to documented developer setup and lockfile-change provisioning. Keep every mandatory hook check and make missing dependencies a blocking error; retain the clean install in CI."
+      });
+    }
+  }
+});
+
+// src/lint/rules/hooks/pre-commit-repo-scan.ts
+var pre_commit_repo_scan_default = defineRule({
+  meta: {
+    id: "hooks/pre-commit-repo-scan",
+    ruleset: "hooks",
+    description: "Explicit whole-repository pre-commit lint entries should not also receive batched filenames.",
+    rationale: "pre-commit appends matching filenames by default and may split them across invocations to fit command-line limits. An entry that explicitly scans `.` can consequently repeat a whole-repository scan per batch. For intentionally whole-repository checks, pass_filenames: false avoids redundant arguments and batches without reducing analysis scope. Keep file filters, mandatory checks and CI gates; do not apply this advice to staged-file-only linters.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://pre-commit.com/#hooks-pass_filenames", "https://pre-commit.com/#creating-new-hooks"],
+    impact: "medium",
+    fixable: false
+  },
+  check({ project, report }) {
+    for (const hook of project.hooks) {
+      if (hook.passFilenames !== true) continue;
+      const [tool2, ...args] = hook.words;
+      if (!["eslint", "prettier", "cicd-lint"].includes(tool2 ?? "")) continue;
+      const flags = /* @__PURE__ */ new Set(["--check", "--write", "--fix", "--quiet", "--cache"]);
+      if (args.filter((arg) => !flags.has(arg)).join("\0") !== ".") continue;
+      if (/[;&|$`]/.test(hook.command) || args.includes("--")) continue;
+      report({
+        path: hook.path,
+        line: hook.line,
+        key: `repo-scan:${hook.line}`,
+        message: `Pre-commit entry \`${hook.command}\` explicitly scans \`.\` and also receives filenames by default; filename batches can repeat the repository scan.`,
+        suggestion: "Set pass_filenames: false for this whole-repository entry. Preserve its files/types filters and all mandatory checks. Do not replace repository-wide analysis with staged-only analysis."
+      });
+    }
+  }
+});
+
+// src/lint/rules/hooks/index.ts
+var rules6 = [install_in_hook_default, pre_commit_repo_scan_default];
+
 // src/utils.ts
 function matchesGlob(path, glob) {
   let matched = new Uint8Array(path.length + 1);
@@ -19704,6 +19775,48 @@ async function mapLimit(items2, limit3, fn) {
   };
   await Promise.all(Array.from({ length: Math.min(limit3, items2.length) }, worker));
   return results;
+}
+
+// src/lint/parsers/hooks.ts
+var EVENTS = "applypatch-msg|pre-applypatch|post-applypatch|pre-commit|pre-merge-commit|prepare-commit-msg|commit-msg|post-commit|pre-rebase|post-checkout|post-merge|pre-push|post-rewrite|sendemail-validate|push-to-checkout|pre-receive|update|post-receive|post-update|reference-transaction";
+var SCRIPT_PATH = new RegExp(`^(?:\\.githooks|\\.husky)/(${EVENTS})$`);
+var isGitHookPath = (path) => SCRIPT_PATH.test(path);
+var isPreCommitPath = (path) => /^\.pre-commit-(?:config|hooks)\.ya?ml$/.test(path);
+function parseHooks(files) {
+  const commands = [];
+  const problems = [];
+  for (const file2 of files) {
+    if (isGitHookPath(file2.path)) {
+      if (file2.content.startsWith("#!") && !/^#![^\r\n]*\b(?:sh|bash|dash)\r?\n/.test(file2.content)) continue;
+      for (const { command, offset } of splitShellCommands(file2.content)) {
+        commands.push({
+          path: file2.path,
+          line: file2.content.slice(0, offset).split("\n").length,
+          command,
+          words: commandTokens(command).map((token) => token.value)
+        });
+      }
+    } else if (isPreCommitPath(file2.path)) {
+      const source = parseYaml(file2.path, file2.content);
+      const errors = parseErrors(source);
+      problems.push(...errors.map((error63) => ({ path: file2.path, ...error63 })));
+      if (errors.length) continue;
+      const definitions = file2.path.includes("-hooks.") ? items(source, source.doc.contents) : items(source, field(source, source.doc.contents, "repos")?.value).flatMap((repo) => items(source, field(source, repo, "hooks")?.value));
+      for (const hook of definitions) {
+        const entry2 = field(source, hook, "entry");
+        const command = stringValue(entry2?.value);
+        if (!command) continue;
+        commands.push({
+          path: file2.path,
+          line: entry2?.line ?? lineOfNode(source, hook),
+          command,
+          words: commandTokens(command).map((token) => token.value),
+          passFilenames: scalarValue(field(source, hook, "pass_filenames")?.value) !== false
+        });
+      }
+    }
+  }
+  return { commands, problems };
 }
 
 // src/lint/parsers/manifest.ts
@@ -20542,6 +20655,8 @@ function workspaceGlobsFrom(root, files) {
 function buildProject(input3) {
   const files = new Map(input3.files.map((file2) => [file2.path, file2]));
   const parseProblems = [];
+  const hooks = parseHooks(input3.files);
+  parseProblems.push(...hooks.problems);
   const workflows = [];
   const actions = [];
   const dockerfiles = [];
@@ -20643,6 +20758,7 @@ function buildProject(input3) {
     actions,
     dockerfiles,
     manifests,
+    hooks: hooks.commands,
     ...rootManifest ? { rootManifest } : {},
     nix,
     facts: {
@@ -22849,7 +22965,7 @@ var fetchtarball_no_hash_default = defineRule({
 import { posix as posix3 } from "node:path";
 
 // src/lint/rules/toolchains/shared.ts
-var import_yaml12 = __toESM(require_dist(), 1);
+var import_yaml13 = __toESM(require_dist(), 1);
 function context(project, workflow, job) {
   const entries3 = expandedJobSteps(project, workflow, job);
   const commands = entries3.flatMap(
@@ -22977,13 +23093,13 @@ function effectiveEnv(ctx, entry2, command) {
   return env;
 }
 function child(node2, key2) {
-  if (!(0, import_yaml12.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml12.isPair)(item) && (0, import_yaml12.isScalar)(item.key) && String(item.key.value) === key2);
+  if (!(0, import_yaml13.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml13.isPair)(item) && (0, import_yaml13.isScalar)(item.key) && String(item.key.value) === key2);
   return pair?.value;
 }
 function keyLine(workflow, map2, key2) {
-  if (!(0, import_yaml12.isMap)(map2)) return void 0;
-  const pair = map2.items.find((item) => (0, import_yaml12.isPair)(item) && (0, import_yaml12.isScalar)(item.key) && String(item.key.value) === key2);
+  if (!(0, import_yaml13.isMap)(map2)) return void 0;
+  const pair = map2.items.find((item) => (0, import_yaml13.isPair)(item) && (0, import_yaml13.isScalar)(item.key) && String(item.key.value) === key2);
   return pair ? lineOfNode(workflow.source, pair.key) : void 0;
 }
 function envKeyLine(workflow, scope2, key2) {
@@ -22994,7 +23110,7 @@ function envKeyLine(workflow, scope2, key2) {
   if (!match2) return void 0;
   const parent = match2[1] !== void 0 ? child(child(root, "jobs"), match2[1]) : child(root, "runs");
   const stepsNode = child(parent, "steps");
-  if (!(0, import_yaml12.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml13.isSeq)(stepsNode)) return void 0;
   return keyLine(workflow, child(stepsNode.items[Number(match2[2])], "env"), key2);
 }
 function envSource(project, ctx, command, name) {
@@ -25334,7 +25450,7 @@ A restored store is another option; include platform and Nix compatibility in it
 });
 
 // src/lint/rules/nix/no-lock-update-automation.ts
-var import_yaml14 = __toESM(require_dist(), 1);
+var import_yaml15 = __toESM(require_dist(), 1);
 var DEPENDABOT = /^\.github\/dependabot\.ya?ml$/;
 var RENOVATE_CONFIG = /^(?:\.github\/|\.gitlab\/)?(?:renovate\.json5?|\.renovaterc(?:\.json5?)?)$/;
 var BUILT_IN_PRESETS = /* @__PURE__ */ new Set([
@@ -25477,7 +25593,7 @@ function manualUpdateWorkflow(workflows) {
 function dependabotNixCoverage(content2) {
   let config2;
   try {
-    config2 = (0, import_yaml14.parse)(content2);
+    config2 = (0, import_yaml15.parse)(content2);
   } catch {
     return "unknown";
   }
@@ -26608,7 +26724,7 @@ var src_whole_repo_default = defineRule({
 });
 
 // src/lint/rules/nix/index.ts
-var rules6 = [
+var rules7 = [
   accept_flake_config_untrusted_default,
   builtins_fetchurl_unverified_default,
   channel_in_ci_default,
@@ -26980,10 +27096,10 @@ var version_drift_default = defineRule({
 });
 
 // src/lint/rules/packages/index.ts
-var rules7 = [exports_map_default, files_allowlist_default, monolith_default, version_drift_default];
+var rules8 = [exports_map_default, files_allowlist_default, monolith_default, version_drift_default];
 
 // src/lint/rules/redundancy/shared.ts
-var import_yaml15 = __toESM(require_dist(), 1);
+var import_yaml16 = __toESM(require_dist(), 1);
 var SETUP_ACTIONS = {
   "actions/setup-node": { version: "node-version", versionFiles: ["node-version-file"] },
   "actions/setup-python": { version: "python-version", versionFiles: ["python-version-file"] },
@@ -27040,12 +27156,12 @@ function stepSignature(workflow, job, step) {
   ].join("\0");
 }
 function directChild2(node2, key2) {
-  if (!(0, import_yaml15.isMap)(node2)) return void 0;
-  return node2.items.find((item) => (0, import_yaml15.isPair)(item) && (0, import_yaml15.isScalar)(item.key) && String(item.key.value) === key2);
+  if (!(0, import_yaml16.isMap)(node2)) return void 0;
+  return node2.items.find((item) => (0, import_yaml16.isPair)(item) && (0, import_yaml16.isScalar)(item.key) && String(item.key.value) === key2);
 }
 function jobNode(workflow, job) {
   const node2 = directChild2(directChild2(workflow.source.doc.contents, "jobs")?.value, job.id)?.value;
-  return (0, import_yaml15.isMap)(node2) ? node2 : void 0;
+  return (0, import_yaml16.isMap)(node2) ? node2 : void 0;
 }
 function stepNode(workflow, step) {
   const match2 = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -27053,18 +27169,18 @@ function stepNode(workflow, step) {
   const root = workflow.source.doc.contents;
   const parent = match2[1] !== void 0 ? directChild2(directChild2(root, "jobs")?.value, match2[1])?.value : directChild2(root, "runs")?.value;
   const stepsNode = directChild2(parent, "steps")?.value;
-  if (!(0, import_yaml15.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml16.isSeq)(stepsNode)) return void 0;
   const node2 = stepsNode.items[Number(match2[2])];
-  return (0, import_yaml15.isMap)(node2) ? node2 : void 0;
+  return (0, import_yaml16.isMap)(node2) ? node2 : void 0;
 }
 function nestedPair(parent, mapKey, key2) {
   const map2 = directChild2(parent, mapKey)?.value;
-  if (!(0, import_yaml15.isMap)(map2)) return void 0;
+  if (!(0, import_yaml16.isMap)(map2)) return void 0;
   const pair = directChild2(map2, key2);
   return pair ? { map: map2, pair } : void 0;
 }
 function rawScalar(content2, node2) {
-  if (!(0, import_yaml15.isScalar)(node2) || !node2.range) return void 0;
+  if (!(0, import_yaml16.isScalar)(node2) || !node2.range) return void 0;
   const text7 = content2.slice(node2.range[0], node2.range[1]).trim();
   const quoted = /^(["'])([\s\S]*)\1$/.exec(text7);
   return quoted ? quoted[2] : text7;
@@ -27405,19 +27521,19 @@ var repeated_job_setup_default = defineRule({
 });
 
 // src/lint/rules/redundancy/shadowed-env.ts
-var import_yaml16 = __toESM(require_dist(), 1);
+var import_yaml17 = __toESM(require_dist(), 1);
 function entry(workflow, file2, parent, key2) {
   const found = nestedPair(parent, "env", key2);
-  if (!found || !(0, import_yaml16.isScalar)(found.pair.value)) return void 0;
+  if (!found || !(0, import_yaml17.isScalar)(found.pair.value)) return void 0;
   const raw = rawScalar(file2.content, found.pair.value);
   if (raw === void 0) return void 0;
-  const owner = (0, import_yaml16.isMap)(parent) ? parent.items.find((item) => item.value === found.map) : void 0;
+  const owner = (0, import_yaml17.isMap)(parent) ? parent.items.find((item) => item.value === found.map) : void 0;
   return { map: found.map, owner, pair: found.pair, raw, line: lineOfNode(workflow.source, found.pair.key) };
 }
 function removal(workflow, file2, inner) {
   if (inner.map.flow) return void 0;
   const value2 = inner.pair.value;
-  if (!(0, import_yaml16.isScalar)(value2) || !value2.range) return void 0;
+  if (!(0, import_yaml17.isScalar)(value2) || !value2.range) return void 0;
   if (lineOfNode(workflow.source, value2) !== inner.line) return void 0;
   const valueEnd = workflow.source.lineCounter.linePos(value2.range[1]).line;
   if (valueEnd !== inner.line) return void 0;
@@ -27695,7 +27811,7 @@ var toolchain_version_drift_default = defineRule({
 });
 
 // src/lint/rules/redundancy/index.ts
-var rules8 = [
+var rules9 = [
   duplicate_setup_step_default,
   repeated_job_setup_default,
   rebuild_per_job_default,
@@ -28126,10 +28242,10 @@ var github_npm_default = defineRule({
 });
 
 // src/lint/rules/registries/index.ts
-var rules9 = [ghcr_default, github_npm_default];
+var rules10 = [ghcr_default, github_npm_default];
 
 // src/lint/rules/security/shared.ts
-var import_yaml19 = __toESM(require_dist(), 1);
+var import_yaml20 = __toESM(require_dist(), 1);
 var PRIVILEGED_TRIGGERS = ["pull_request_target", "workflow_run", "issue_comment"];
 function isPrivileged(workflow) {
   return workflow.kind === "workflow" && hasTrigger(workflow, ...PRIVILEGED_TRIGGERS);
@@ -28268,9 +28384,9 @@ function executesWorkspace(step) {
   }
 }
 function directChild3(node2, key2) {
-  if (!(0, import_yaml19.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml19.isPair)(item) && (0, import_yaml19.isScalar)(item.key) && String(item.key.value) === key2);
-  return pair && !(0, import_yaml19.isAlias)(pair.value) ? pair.value : void 0;
+  if (!(0, import_yaml20.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml20.isPair)(item) && (0, import_yaml20.isScalar)(item.key) && String(item.key.value) === key2);
+  return pair && !(0, import_yaml20.isAlias)(pair.value) ? pair.value : void 0;
 }
 function directStep(workflow, step) {
   const match2 = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -28278,10 +28394,10 @@ function directStep(workflow, step) {
   const root = rootNode2(workflow);
   const parent = match2[1] !== void 0 ? directChild3(directChild3(root, "jobs"), match2[1]) : directChild3(root, "runs");
   const stepsNode = directChild3(parent, "steps");
-  if (!(0, import_yaml19.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml20.isSeq)(stepsNode)) return void 0;
   const node2 = stepsNode.items[Number(match2[2])];
-  if (!(0, import_yaml19.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
-  if (node2.items.some((pair) => !(0, import_yaml19.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
+  if (!(0, import_yaml20.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
+  if (node2.items.some((pair) => !(0, import_yaml20.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
   return node2;
 }
 
@@ -28647,9 +28763,9 @@ var mutable_remote_ref_default = defineRule({
 });
 
 // src/lint/rules/security/persisted-credentials.ts
-var import_yaml21 = __toESM(require_dist(), 1);
+var import_yaml22 = __toESM(require_dist(), 1);
 var UPLOAD_ACTIONS = ["actions/upload-artifact", "actions/upload-artifact/merge"];
-var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml21.Scalar.PLAIN, import_yaml21.Scalar.QUOTE_DOUBLE, import_yaml21.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml22.Scalar.PLAIN, import_yaml22.Scalar.QUOTE_DOUBLE, import_yaml22.Scalar.QUOTE_SINGLE]);
 var WORKSPACE_ROOT = /^(?:\.\/?|\$\{\{\s*github\.workspace\s*\}\}\/?)$/;
 function uploadsGitDirectory(step, file2) {
   if (!usesAction(step, ...UPLOAD_ACTIONS)) return false;
@@ -28673,7 +28789,7 @@ function addPersistCredentials(file2, workflow, step) {
   const description = "Set persist-credentials: false";
   if (step.with.size > 0 || step.uses?.kind !== "literal") {
     const withNode = directWith(workflow, step);
-    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value !== "<<");
+    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml22.isScalar)(pair.key) && pair.key.value !== "<<");
     const first = pairs[0];
     const last = pairs[pairs.length - 1];
     if (!first || !last) return void 0;
@@ -28681,14 +28797,14 @@ function addPersistCredentials(file2, workflow, step) {
     const indent2 = indentOf(file2.content, firstLine);
     const lastLine = lineOfNode(workflow.source, last.key);
     const value2 = last.value;
-    const endsOnKeyLine = (0, import_yaml21.isScalar)(value2) && SINGLE_LINE.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
+    const endsOnKeyLine = (0, import_yaml22.isScalar)(value2) && SINGLE_LINE.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
     const line = `${indent2}persist-credentials: false`;
     return fix(description, insertLinesAfter(file2, endsOnKeyLine ? lastLine : firstLine - 1, [line]));
   }
   const node2 = directStep(workflow, step);
-  if (!node2 || node2.items.some((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
-  const usesPair = node2.items.find((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value === "uses");
-  if (!usesPair || !(0, import_yaml21.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
+  if (!node2 || node2.items.some((pair) => (0, import_yaml22.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
+  const usesPair = node2.items.find((pair) => (0, import_yaml22.isScalar)(pair.key) && pair.key.value === "uses");
+  if (!usesPair || !(0, import_yaml22.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
   const usesLine = lineOfNode(workflow.source, usesPair.key);
   const text7 = lineText(file2.content, usesLine);
   const match2 = /^(\s*)(-\s+)?uses\s*:/.exec(text7);
@@ -28961,7 +29077,7 @@ var untrusted_checkout_default = defineRule({
 });
 
 // src/lint/rules/security/index.ts
-var rules10 = [
+var rules11 = [
   env_file_injection_default,
   excessive_permissions_default,
   expression_injection_default,
@@ -29160,7 +29276,7 @@ var static_cloud_credentials_default = defineRule({
 });
 
 // src/lint/rules/ssdf/index.ts
-var rules11 = [
+var rules12 = [
   attestation_missing_permissions_default,
   publish_without_provenance_default,
   publish_without_sbom_default,
@@ -29677,7 +29793,7 @@ var tool_incremental_cache_default = defineRule({
 });
 
 // src/lint/rules/testing/unconditional-debug-upload.ts
-var import_yaml24 = __toESM(require_dist(), 1);
+var import_yaml25 = __toESM(require_dist(), 1);
 var DEBUG_PATH = /(^|[/\\])(?:playwright-report|test-results|traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)/i;
 var HEAVY_PATH = /(^|[/\\])(?:traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)|\.(?:zip|webm|mp4|png)$/i;
 var MACHINE_READABLE = /junit|\.(?:xml|json|trx|sarif|lcov)$|coverage/i;
@@ -29751,7 +29867,7 @@ var unconditional_debug_upload_default = defineRule({
         const file2 = project.files.get(workflow.path);
         const first = file2 ? lineText(file2.content, step.line) : "";
         const dash = /^(\s*)-\s+[\w-]+:/.exec(first);
-        if (file2 && dash && (0, import_yaml24.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
+        if (file2 && dash && (0, import_yaml25.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
           applied = fix("Upload only when the job fails", insertLinesAfter(file2, step.line, [`${dash[1] ?? ""}  if: failure()`]));
         }
       }
@@ -29872,7 +29988,7 @@ var watch_mode_in_ci_default = defineRule({
 });
 
 // src/lint/rules/testing/index.ts
-var rules12 = [
+var rules13 = [
   playwright_browser_cache_default,
   tool_incremental_cache_default,
   watch_mode_in_ci_default,
@@ -31629,7 +31745,7 @@ An earlier check does not constrain later commands. On uv >= 0.4.25, \`UV_LOCKED
 });
 
 // src/lint/rules/toolchains/index.ts
-var rules13 = [
+var rules14 = [
   gradle_build_cache_disabled_default,
   gradle_configuration_cache_disabled_default,
   gradle_parallel_disabled_default,
@@ -32108,7 +32224,7 @@ var workflow_run_chain_default = defineRule({
 });
 
 // src/lint/rules/triggers/index.ts
-var rules14 = [
+var rules15 = [
   workflow_run_chain_default,
   serialized_matrix_default,
   draft_pr_gating_default,
@@ -32119,9 +32235,9 @@ var rules14 = [
 ];
 
 // src/lint/rules/workflow/artifact-retention.ts
-var import_yaml31 = __toESM(require_dist(), 1);
+var import_yaml32 = __toESM(require_dist(), 1);
 var UPLOAD_ACTIONS2 = /* @__PURE__ */ new Set(["actions/upload-artifact", "actions/upload-artifact/merge"]);
-var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml31.Scalar.PLAIN, import_yaml31.Scalar.QUOTE_DOUBLE, import_yaml31.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml32.Scalar.PLAIN, import_yaml32.Scalar.QUOTE_DOUBLE, import_yaml32.Scalar.QUOTE_SINGLE]);
 function retentionDays(value2) {
   if (typeof value2 === "number") return value2;
   if (typeof value2 === "string" && /^\s*\d+\s*$/.test(value2)) return Number(value2);
@@ -32129,7 +32245,7 @@ function retentionDays(value2) {
 }
 function addRetention(file2, workflow, step, days) {
   const withNode = directWith(workflow, step);
-  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml31.isScalar)(pair.key) && pair.key.value !== "<<");
+  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml32.isScalar)(pair.key) && pair.key.value !== "<<");
   const first = pairs[0];
   const last = pairs[pairs.length - 1];
   if (!first || !last) return void 0;
@@ -32137,7 +32253,7 @@ function addRetention(file2, workflow, step, days) {
   const indent = indentOf(file2.content, firstLine);
   const lastLine = lineOfNode(workflow.source, last.key);
   const value2 = last.value;
-  const endsOnKeyLine = (0, import_yaml31.isScalar)(value2) && SINGLE_LINE2.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
+  const endsOnKeyLine = (0, import_yaml32.isScalar)(value2) && SINGLE_LINE2.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
   const line = `${indent}retention-days: ${days}`;
   return fix(
     `Set retention-days: ${days}`,
@@ -32586,7 +32702,7 @@ var larger_runner_unjustified_default = defineRule({
 });
 
 // src/lint/rules/workflow/matrix-explosion.ts
-var import_yaml35 = __toESM(require_dist(), 1);
+var import_yaml36 = __toESM(require_dist(), 1);
 var LIMIT = 256;
 var ENUMERATION_CAP = 5e4;
 var isPrimitive2 = (value2) => value2 === null || ["string", "number", "boolean"].includes(typeof value2);
@@ -32598,7 +32714,7 @@ function records2(value2) {
 }
 function scalarTexts(source, content2, node2) {
   const nodes = items(source, node2);
-  const texts = nodes.map((item) => (0, import_yaml35.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
+  const texts = nodes.map((item) => (0, import_yaml36.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
   const flowSafe = (text7) => text7 !== void 0 && !text7.includes("\n") && (/^["']/.test(text7) || !/[,[\]{}]/.test(text7));
   return texts.every(flowSafe) ? texts : void 0;
 }
@@ -33100,7 +33216,7 @@ Inspect ${tool2.rangeFiles.join(" and ")} before reusing them: constraints may a
 });
 
 // src/lint/rules/workflow/unnecessary-needs-serialization.ts
-var import_yaml38 = __toESM(require_dist(), 1);
+var import_yaml39 = __toESM(require_dist(), 1);
 var DEPLOY = /deploy|release|publish|promote|rollout|ship/i;
 var GATE = /test|lint|build|check|verify|validat|typecheck|compile|scan|audit|\bci\b|e2e|smoke|format|fmt|analy|codeql|security|review|approv|gate|guard|preflight|sanity|wait|lock|migrat|provision|setup-env|infra/i;
 var STANDARD_RUNNER = /^(ubuntu|windows|macos)-(latest|\d[\w.]*)(-arm|-intel)?$/;
@@ -33156,7 +33272,7 @@ function needsLine(workflow, job, dependency) {
   const source = workflow.source;
   const needs = field(source, jobNode6(workflow, job), "needs");
   if (!needs) return job.line;
-  const item = items(source, needs.value).find((node2) => (0, import_yaml38.isScalar)(node2) && String(node2.value) === dependency);
+  const item = items(source, needs.value).find((node2) => (0, import_yaml39.isScalar)(node2) && String(node2.value) === dependency);
   return item ? lineOfNode(source, item) : needs.line;
 }
 function standardHosted(job) {
@@ -33222,7 +33338,7 @@ var unnecessary_needs_serialization_default = defineRule({
 });
 
 // src/lint/rules/workflow/index.ts
-var rules15 = [
+var rules16 = [
   artifact_retention_default,
   concurrency_default,
   duplicate_push_pull_request_trigger_default,
@@ -33237,21 +33353,22 @@ var rules15 = [
 
 // src/lint/rules/index.ts
 var allRules = [
-  ...rules15,
+  ...rules16,
   ...rules3,
   ...rules,
   ...rules2,
   ...rules5,
   ...rules4,
-  ...rules7,
-  ...rules9,
+  ...rules8,
   ...rules10,
   ...rules11,
-  ...rules14,
-  ...rules8,
   ...rules12,
-  ...rules6,
-  ...rules13
+  ...rules15,
+  ...rules9,
+  ...rules13,
+  ...rules7,
+  ...rules14,
+  ...rules6
 ];
 
 // src/formal/generated/rule-assurance.ts
@@ -33849,6 +33966,40 @@ var RULE_ASSURANCE = {
         "rationale": "`ubuntu-latest`, `windows-latest` and `macos-latest` move to a new OS image during a gradual multi-week rollout, so identical commits can pass on one run and fail on the next with different toolchains and preinstalled software. `ubuntu-latest` is migrating from Ubuntu 24.04 to 26.04 between Oct 19 and Nov 19, 2026. Pinning makes the upgrade a deliberate, reviewable change."
       },
       "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hooks/install-in-hook",
+      "metadataSha256": "a033236bfd73d9563df2c9ca8e42d486d2c95718514bee66b86a4abe4b50e04d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Git hooks should not reinstall project dependencies on every invocation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A direct package-manager install in a commit/push hook repeats dependency resolution and potentially lifecycle scripts on the interactive path. Provision the same locked dependencies at setup and on lockfile changes, and fail explicitly when dependencies are absent. Do not remove secret scanning, linting or CI installation checks. No latency saving is guaranteed without measuring representative hooks."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hooks/pre-commit-repo-scan",
+      "metadataSha256": "6827c19cc1ec25ad7bce7d2bcd78672c2cd3a87bc5c62fc8778dc263326a86ef",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Explicit whole-repository pre-commit lint entries should not also receive batched filenames."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "pre-commit appends matching filenames by default and may split them across invocations to fit command-line limits. An entry that explicitly scans `.` can consequently repeat a whole-repository scan per batch. For intentionally whole-repository checks, pass_filenames: false avoids redundant arguments and batches without reducing analysis scope. Keep file filters, mandatory checks and CI gates; do not apply this advice to staged-file-only linters."
+      },
+      "autofix": "not-provided",
       "engineContracts": [
         "severity-last-assignment-wins"
       ],
@@ -35519,7 +35670,7 @@ function assuranceText(id2) {
 }
 
 // src/lint/config.ts
-var import_yaml40 = __toESM(require_dist(), 1);
+var import_yaml41 = __toESM(require_dist(), 1);
 
 // node_modules/bignumber.js/bignumber.mjs
 var isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
@@ -40053,11 +40204,11 @@ function migrateLegacyConfig(raw) {
   if (!legacyKeys.some((key2) => key2 in raw)) return void 0;
   const migrated = { ...raw };
   if (Array.isArray(raw.disabledRules)) {
-    const rules16 = isRecord2(raw.rules) ? { ...raw.rules } : {};
+    const rules17 = isRecord2(raw.rules) ? { ...raw.rules } : {};
     for (const id2 of raw.disabledRules) {
-      if (typeof id2 === "string") rules16[DEPRECATED_RULE_IDS[id2] ?? id2] = "off";
+      if (typeof id2 === "string") rules17[DEPRECATED_RULE_IDS[id2] ?? id2] = "off";
     }
-    migrated.rules = rules16;
+    migrated.rules = rules17;
   }
   if ("failOnSeverity" in raw) {
     const map2 = { high: "error", medium: "warn", low: "info", never: "never" };
@@ -40074,7 +40225,7 @@ function migrateLegacyConfig(raw) {
   for (const key2 of legacyKeys) delete migrated[key2];
   return migrated;
 }
-function validateConfig(input3, rules16) {
+function validateConfig(input3, rules17) {
   const v = new Validator();
   if (input3 === void 0 || input3 === null) return { config: structuredClone(DEFAULT_CONFIG), problems: [], migrated: false };
   if (!isRecord2(input3)) {
@@ -40102,8 +40253,8 @@ function validateConfig(input3, rules16) {
   if (raw.schemaVersion !== void 0 && raw.schemaVersion !== 1) {
     v.problem("schemaVersion", `Unsupported schemaVersion ${String(raw.schemaVersion)}; expected 1.`);
   }
-  const ruleIds = rules16.map((rule) => rule.meta.id);
-  const rulesetNames = [...new Set(rules16.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules17.map((rule) => rule.meta.id);
+  const rulesetNames = [...new Set(rules17.map((rule) => rule.meta.ruleset))];
   const config2 = structuredClone(DEFAULT_CONFIG);
   if (raw.localRules !== void 0) {
     if (Array.isArray(raw.localRules) && raw.localRules.every((entry2) => typeof entry2 === "string")) {
@@ -40112,7 +40263,7 @@ function validateConfig(input3, rules16) {
       v.problem("localRules", "Expected a list of repository-relative .js or .mjs paths.");
     }
   }
-  const skipLocal = config2.localRules.length > 0 && !rules16.some((rule) => rule.meta.ruleset === "local");
+  const skipLocal = config2.localRules.length > 0 && !rules17.some((rule) => rule.meta.ruleset === "local");
   const isSkippedLocal = (id2) => skipLocal && id2.startsWith("local/");
   config2.enabled = v.boolean("enabled", raw.enabled, true);
   config2.extends = v.strings("extends", raw.extends, DEFAULT_CONFIG.extends).filter((preset, index) => {
@@ -40132,7 +40283,7 @@ function validateConfig(input3, rules16) {
     const id2 = DEPRECATED_RULE_IDS[rawId] ?? rawId;
     if (isSkippedLocal(id2)) continue;
     if (id2 !== rawId) v.problem(`rules.${rawId}`, `Rule "${rawId}" is deprecated; use "${id2}".`);
-    const rule = rules16.find((candidate) => candidate.meta.id === id2);
+    const rule = rules17.find((candidate) => candidate.meta.id === id2);
     if (!rule) {
       v.problem(`rules.${rawId}`, `Unknown rule "${rawId}".${didYouMean(rawId, ruleIds)}`);
       continue;
@@ -40262,10 +40413,10 @@ function validateConfig(input3, rules16) {
   v.problems.push(...durationPolicyProblems(config2.durations));
   return { config: config2, problems: v.problems, migrated: legacy !== void 0 };
 }
-function parseConfigText(text7, rules16, path = CONFIG_PATHS[0] ?? "config") {
+function parseConfigText(text7, rules17, path = CONFIG_PATHS[0] ?? "config") {
   let raw;
   try {
-    raw = (0, import_yaml40.parse)(text7, { maxAliasCount: 100 });
+    raw = (0, import_yaml41.parse)(text7, { maxAliasCount: 100 });
   } catch (error63) {
     return {
       config: structuredClone(DEFAULT_CONFIG),
@@ -40273,11 +40424,11 @@ function parseConfigText(text7, rules16, path = CONFIG_PATHS[0] ?? "config") {
       migrated: false
     };
   }
-  return validateConfig(raw, rules16);
+  return validateConfig(raw, rules17);
 }
-function resolveRules(config2, rules16, presetOverride) {
+function resolveRules(config2, rules17, presetOverride) {
   const presets = presetOverride ?? config2.extends;
-  return rules16.flatMap((rule) => {
+  return rules17.flatMap((rule) => {
     const setting = config2.rules[rule.meta.id];
     const level = resolveSeverity([
       ...presets.map((preset) => preset === "all" || rule.meta.presets.includes(preset) ? rule.meta.defaultSeverity : void 0),
@@ -40376,6 +40527,7 @@ var LOCKFILES2 = /* @__PURE__ */ new Set(["package-lock.json", "npm-shrinkwrap.j
 var SKIP_DIRS = /* @__PURE__ */ new Set([".git", "node_modules", ".pnpm-store", ".yarn", ".venv", "venv", "__pycache__", ".turbo", ".nx", "target", ".gradle", ".direnv"]);
 function isInventoryPath(path) {
   if (path.split("/").slice(0, -1).some((part2) => SKIP_DIRS.has(part2))) return false;
+  if (isGitHookPath(path) || isPreCommitPath(path)) return true;
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
   if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
   if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;
@@ -40465,9 +40617,9 @@ function suppress(entry2, diagnostic) {
   }
   return hit;
 }
-function unusedDirectives(suppressionsFor, paths, skipped, rules16) {
+function unusedDirectives(suppressionsFor, paths, skipped, rules17) {
   const skippedIds = new Set(skipped.map((skip2) => skip2.ruleId));
-  const skippedRulesets = new Set(rules16.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
+  const skippedRulesets = new Set(rules17.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
   const result = [];
   for (const path of paths) {
     for (const directive of suppressionsFor(path)?.directives ?? []) {
@@ -40633,8 +40785,8 @@ function atLeast(severity, minimum) {
 }
 
 // src/lint/docs.ts
-function renderRulesMarkdown(rules16) {
-  const rulesets = [...new Set(rules16.map((rule) => rule.meta.ruleset))];
+function renderRulesMarkdown(rules17) {
+  const rulesets = [...new Set(rules17.map((rule) => rule.meta.ruleset))];
   const lines = [
     "# Rules",
     "",
@@ -40652,14 +40804,14 @@ function renderRulesMarkdown(rules16) {
     "",
     "| Rule | Kind | Default | Presets | Fixable | Description |",
     "| --- | --- | --- | --- | --- | --- |",
-    ...rules16.map(
+    ...rules17.map(
       (rule) => `| [\`${rule.meta.id}\`](#${ruleAnchor(rule.meta.id)}) | ${rule.meta.kind} | ${rule.meta.defaultSeverity} | ${rule.meta.presets.join(", ")} | ${rule.meta.fixable ? "yes" : ""} | ${rule.meta.description.replace(/\|/g, "\\|")} |`
     ),
     ""
   ];
   for (const ruleset of rulesets) {
     lines.push(`## Ruleset: ${ruleset}`, "");
-    for (const rule of rules16.filter((candidate) => candidate.meta.ruleset === ruleset)) {
+    for (const rule of rules17.filter((candidate) => candidate.meta.ruleset === ruleset)) {
       const meta3 = rule.meta;
       lines.push(`<a id="${ruleAnchor(meta3.id)}"></a>`, "", `### ${meta3.id}`, "", meta3.description, "", `**Why:** ${meta3.rationale}`, "");
       lines.push(
@@ -40689,7 +40841,7 @@ function renderRulesMarkdown(rules16) {
 var VERSION = "0.2.0";
 
 // src/cli/experiments.ts
-var import_yaml46 = __toESM(require_dist(), 1);
+var import_yaml47 = __toESM(require_dist(), 1);
 import { appendFile, readdir as readdir3, readFile as readFile4, stat as stat5 } from "node:fs/promises";
 import { join as join7 } from "node:path";
 import { parseArgs as parseArgs3 } from "node:util";
@@ -41073,7 +41225,7 @@ function decodeCiEvidence(value2) {
 }
 
 // src/experiments/manifest.ts
-var import_yaml42 = __toESM(require_dist(), 1);
+var import_yaml43 = __toESM(require_dist(), 1);
 var EXPERIMENT_PREFIX = "experiments/";
 var TRUNK = "trunk";
 var NAME2 = /^[a-z0-9][a-z0-9-]{1,47}$/;
@@ -41171,13 +41323,13 @@ function validateManifest(input3, options = {}) {
 }
 function parseManifest2(text7, options = {}) {
   try {
-    return validateManifest((0, import_yaml42.parse)(text7), options);
+    return validateManifest((0, import_yaml43.parse)(text7), options);
   } catch (error63) {
     return { problems: [{ path: "experiment.yml", message: error63.message }] };
   }
 }
 function serializeManifest(manifest) {
-  return (0, import_yaml42.stringify)(manifest, { lineWidth: 0 });
+  return (0, import_yaml43.stringify)(manifest, { lineWidth: 0 });
 }
 function scoreRubric(scores, rubric) {
   const total = rubric.criteria.reduce((sum2, criterion) => sum2 + criterion.weight, 0) || 1;
@@ -41265,7 +41417,7 @@ function reduceCandidates(candidates2, minimum, influence, running, expired) {
 }
 
 // src/experiments/config.ts
-var import_yaml43 = __toESM(require_dist(), 1);
+var import_yaml44 = __toESM(require_dist(), 1);
 var HILL_CLIMB_CONFIG_PATH = ".github/hill-climb.yml";
 var CORPUS_METRICS = ["precision", "recall", "f1", "fixRate", "durationMs"];
 var DEFAULT_RUBRIC = {
@@ -41390,7 +41542,7 @@ function validateHillClimbConfig(input3) {
 function parseHillClimbConfig(text7) {
   if (text7 === void 0) return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [] };
   try {
-    const raw = (0, import_yaml43.parse)(text7);
+    const raw = (0, import_yaml44.parse)(text7);
     return validateHillClimbConfig(raw ?? {});
   } catch (error63) {
     return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [{ path: HILL_CLIMB_CONFIG_PATH, message: error63.message }] };
@@ -41724,7 +41876,7 @@ function mergeMeasurement(measurements, update2) {
 }
 
 // src/experiments/corpus.ts
-var import_yaml44 = __toESM(require_dist(), 1);
+var import_yaml45 = __toESM(require_dist(), 1);
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join as join2, relative as relative2, sep } from "node:path";
 var ratio = (numerator, denominator) => denominator === 0 ? 1 : numerator / denominator;
@@ -41832,19 +41984,19 @@ async function walk(root, directory = root) {
   return files.flat().sort();
 }
 function parseCase(id2, text7, files) {
-  const raw = (0, import_yaml44.parse)(text7) ?? {};
+  const raw = (0, import_yaml45.parse)(text7) ?? {};
   const expected = Array.isArray(raw.expected) ? raw.expected.map((entry2) => {
     const item = entry2;
     if (typeof item.rule !== "string" || typeof item.path !== "string") throw new Error(`${id2}: expected entries need rule and path`);
     return { rule: item.rule, path: item.path, ...typeof item.line === "number" ? { line: item.line } : {} };
   }) : [];
   const declared = Array.isArray(raw.rules) ? raw.rules.filter((rule) => typeof rule === "string") : [];
-  const rules16 = [.../* @__PURE__ */ new Set([...declared, ...expected.map((finding4) => finding4.rule)])];
+  const rules17 = [.../* @__PURE__ */ new Set([...declared, ...expected.map((finding4) => finding4.rule)])];
   const change = raw.change;
   return {
     id: id2,
     description: typeof raw.description === "string" ? raw.description : id2,
-    rules: rules16.length > 0 ? rules16 : ["*"],
+    rules: rules17.length > 0 ? rules17 : ["*"],
     expected,
     files,
     inventoryComplete: raw.inventoryComplete !== false,
@@ -42555,7 +42707,7 @@ function parseMeasurements(text7) {
 }
 
 // src/experiments/propose.ts
-var import_yaml45 = __toESM(require_dist(), 1);
+var import_yaml46 = __toESM(require_dist(), 1);
 
 // src/formal/generated/manifest.ts
 var PROOF_BUILD = {
@@ -42567,9 +42719,9 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "6afe44f53111ac1a120dbf97c94a5027d893243d8cfed214c76b523a5504a2f6",
+  "implementationSha256": "c2d3471329b2b35c639280002fda6c2dac5800eac01f02a65920c418609165f1",
   "generatorSha256": "ea737477f2d148397dbd83697441713e2f12a542ce95f706181ff9563fb64699",
-  "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
+  "dependenciesSha256": "f0433ebe4b957a5febea352505afd597c64704414bed7ef9e42458a13b9c1ab0"
 };
 
 // src/experiments/plan.ts
@@ -42729,7 +42881,7 @@ function validateProposal(text7, options) {
   const expiresAt = new Date(now2.getTime() + options.config.selection.maxAgeDays * DAY2).toISOString();
   let raw;
   try {
-    raw = (0, import_yaml45.parse)(text7);
+    raw = (0, import_yaml46.parse)(text7);
   } catch (error63) {
     return { errors: [`manifest: ${error63.message}`] };
   }
@@ -42991,8 +43143,8 @@ function markdown(result, options = {}) {
   }
   return lines.join("\n");
 }
-function sarif(result, rules16, version2 = "0.0.0") {
-  const used = rules16.filter((rule) => result.diagnostics.some((d2) => d2.ruleId === rule.meta.id));
+function sarif(result, rules17, version2 = "0.0.0") {
+  const used = rules17.filter((rule) => result.diagnostics.some((d2) => d2.ruleId === rule.meta.id));
   const index = new Map(used.map((rule, position) => [rule.meta.id, position]));
   const level = { error: "error", warn: "warning", info: "note" };
   const securitySeverity = { high: "7.0", medium: "4.0", low: "2.0" };
@@ -43050,12 +43202,12 @@ ${rule.meta.references.map((ref) => `- ${ref}`).join("\n")}` },
     2
   );
 }
-function format(name, result, rules16, version2) {
+function format(name, result, rules17, version2) {
   switch (name) {
     case "json":
       return json2(result);
     case "sarif":
-      return sarif(result, rules16, version2);
+      return sarif(result, rules17, version2);
     case "markdown":
       return markdown(result);
     case "github":
@@ -43093,16 +43245,16 @@ function withFile(input3, file2, limits, label2 = "--stdin content") {
   const truncated = input3.truncated.filter((path) => path !== file2.path);
   return { ...input3, files, truncated: oversized ? [...truncated, file2.path] : truncated };
 }
-function effectiveSeverities(config2, rules16, presets) {
-  const severities = new Map(rules16.map((rule) => [rule.meta.id, "off"]));
-  for (const { rule, severity } of resolveRules(config2, [...rules16], presets)) severities.set(rule.meta.id, severity);
+function effectiveSeverities(config2, rules17, presets) {
+  const severities = new Map(rules17.map((rule) => [rule.meta.id, "off"]));
+  for (const { rule, severity } of resolveRules(config2, [...rules17], presets)) severities.set(rule.meta.id, severity);
   return severities;
 }
-function unknownRuleMessage(label2, id2, rules16) {
-  return `${label2}: unknown rule "${id2}".${didYouMean(id2, rules16.map((candidate) => candidate.meta.id))}`;
+function unknownRuleMessage(label2, id2, rules17) {
+  return `${label2}: unknown rule "${id2}".${didYouMean(id2, rules17.map((candidate) => candidate.meta.id))}`;
 }
-function explainRuleText(id2, rules16, severities) {
-  const rule = rules16.find((candidate) => candidate.meta.id === id2);
+function explainRuleText(id2, rules17, severities) {
+  const rule = rules17.find((candidate) => candidate.meta.id === id2);
   if (!rule) return void 0;
   const { meta: meta3 } = rule;
   const indent = (text7) => text7.replace(/\n$/, "").split("\n").map((line) => `    ${line}`).join("\n");
@@ -43229,7 +43381,7 @@ async function loadLocalRules(root, entries3, builtins) {
 var LINT_HELP = `Usage: ci-cd-optimizer lint [paths...] [options]
        cicd-lint [paths...] [options]
 
-Lints GitHub Actions workflows, Dockerfiles, Nix expressions/flakes, and package/toolchain configuration.
+Lints GitHub Actions workflows, Dockerfiles, Nix expressions/flakes, Git hooks, pre-commit, and package/toolchain configuration.
 Findings are static recommendations, not proofs of runtime behavior or performance.
 
 With no paths the current directory is the lint root, and a single directory argument becomes the root. Any other
@@ -43356,9 +43508,9 @@ function extractUnusedFlag(args) {
   }
   return { args: rest, severity: severity === "off" ? void 0 : severity };
 }
-function ruleListText(rules16) {
-  const width = Math.max(...rules16.map((rule) => rule.meta.id.length));
-  return rules16.map((rule) => {
+function ruleListText(rules17) {
+  const width = Math.max(...rules17.map((rule) => rule.meta.id.length));
+  return rules17.map((rule) => {
     const builtin = allRules.some((candidate) => candidate.meta.id === rule.meta.id);
     if (builtin) ruleAssurance(rule.meta.id);
     return `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}  [${builtin ? "heuristic" : "local/unreviewed"}]`;
@@ -43383,10 +43535,10 @@ async function loadLintConfig(io, root, explicit, options = {}) {
     if (!options.allowLocalRules) {
       throw new UsageError(`${path} lists localRules, which run JavaScript from the repository. Pass --allow-local-rules to load them (trusted repositories only).`);
     }
-    const rules16 = [...allRules, ...await loadLocalRules(root, parsed.config.localRules, allRules)];
-    const strict = parseConfigText(text7, rules16, path);
+    const rules17 = [...allRules, ...await loadLocalRules(root, parsed.config.localRules, allRules)];
+    const strict = parseConfigText(text7, rules17, path);
     if (strict.problems.length > 0) throw invalidConfig(path, strict.problems);
-    return { config: strict.config, path, rules: rules16 };
+    return { config: strict.config, path, rules: rules17 };
   }
   return { config: structuredClone(DEFAULT_CONFIG), rules: allRules };
 }
@@ -43423,9 +43575,9 @@ async function missReason(root, selector, config2, inventoryComplete) {
   if (config2.ignorePaths.some((glob) => matchesGlob(selector, glob) || matchesGlob(selector, `${glob}/**`))) return "excluded by ignorePaths";
   return inventoryComplete ? "not analyzed (inside a directory the inventory skips, such as node_modules or .git)" : "not analyzed: the inventory hit limits.maxFiles or limits.maxFileBytes";
 }
-function explainRule(id2, rules16, severities) {
-  const text7 = explainRuleText(id2, rules16, severities);
-  if (text7 === void 0) throw new UsageError(unknownRuleMessage("--explain", id2, rules16));
+function explainRule(id2, rules17, severities) {
+  const text7 = explainRuleText(id2, rules17, severities);
+  if (text7 === void 0) throw new UsageError(unknownRuleMessage("--explain", id2, rules17));
   return text7;
 }
 async function initConfig(io, root, explicit) {
@@ -43518,13 +43670,13 @@ async function lintCommand(rawArgs, io) {
   const { root, paths } = await resolveTarget(io, values2.root, positionals3);
   if (values2.init) return await initConfig(io, root, values2.config);
   const loaded = await loadLintConfig(io, root, values2.config, { localRules: true, allowLocalRules: values2["allow-local-rules"] });
-  const { config: config2, rules: rules16 } = loaded;
+  const { config: config2, rules: rules17 } = loaded;
   const presets = values2.preset?.map((preset) => {
     if (!PRESETS.includes(preset)) throw new UsageError(`--preset ${preset}: unknown preset.${didYouMean(preset, PRESETS)}`);
     return preset;
   });
-  const ruleIds = rules16.map((rule) => rule.meta.id);
-  const rulesets = [...new Set(rules16.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules17.map((rule) => rule.meta.id);
+  const rulesets = [...new Set(rules17.map((rule) => rule.meta.ruleset))];
   for (const value2 of values2.ruleset ?? []) {
     const [id2, severity] = parseOverride("ruleset", value2, rulesets);
     config2.rulesets = { ...config2.rulesets, [id2]: severity };
@@ -43538,13 +43690,13 @@ async function lintCommand(rawArgs, io) {
     config2.failOn = values2["fail-on"];
   }
   if (values2["list-rules"]) {
-    await writeText(io, values2.output, ruleListText(rules16));
+    await writeText(io, values2.output, ruleListText(rules17));
     return 0;
   }
-  const severities = effectiveSeverities(config2, rules16, presets);
+  const severities = effectiveSeverities(config2, rules17, presets);
   if (values2.explain !== void 0) {
     const withMeta = new Map(severities).set(UNUSED_DIRECTIVE_RULE_ID, unusedSeverity ?? "off");
-    await writeText(io, values2.output, explainRule(values2.explain, [...rules16, UNUSED_DIRECTIVE_RULE], withMeta));
+    await writeText(io, values2.output, explainRule(values2.explain, [...rules17, UNUSED_DIRECTIVE_RULE], withMeta));
     return 0;
   }
   if (values2["print-config"]) {
@@ -43568,14 +43720,14 @@ async function lintCommand(rawArgs, io) {
     try {
       change = await changedSince(root, values2.base);
       const baseInput = await loadGitRevision(root, change.baseSha ?? values2.base, config2);
-      baseFingerprints = new Set(lint(baseInput, { config: config2, rules: rules16, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
+      baseFingerprints = new Set(lint(baseInput, { config: config2, rules: rules17, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
     } catch (error63) {
       throw new UsageError(`--base ${values2.base}: ${error63.message.split("\n")[0]}`);
     }
   }
   const options = {
     config: config2,
-    rules: rules16,
+    rules: rules17,
     ...presets ? { presets } : {},
     ...baseFingerprints ? { baseFingerprints } : {},
     reportUnusedDirectives: unusedSeverity !== void 0
@@ -43633,7 +43785,7 @@ async function lintCommand(rawArgs, io) {
     ...unusedDirectives2 ? { unusedDirectives: unusedDirectives2 } : {}
   };
   if (!input3.inventoryComplete) io.stderr("Inventory is incomplete; rules requiring complete inventory were skipped.");
-  const reportRules = [...rules16, UNUSED_DIRECTIVE_RULE];
+  const reportRules = [...rules17, UNUSED_DIRECTIVE_RULE];
   await writeText(io, values2.output, format(formatName, shown, reportRules, VERSION));
   if (values2.sarif) await writeText(io, values2.sarif, sarif(shown, reportRules, VERSION));
   const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "warn").length;
@@ -43779,7 +43931,7 @@ function structured(value2) {
   try {
     return JSON.parse(value2);
   } catch {
-    return (0, import_yaml46.parse)(value2);
+    return (0, import_yaml47.parse)(value2);
   }
 }
 async function measurementFiles(io, path) {
@@ -44514,14 +44666,14 @@ async function listManagedPullRequests(client, repo, discovery) {
   return result;
 }
 function dismissalsFrom(prs) {
-  const rules16 = /* @__PURE__ */ new Set();
+  const rules17 = /* @__PURE__ */ new Set();
   const groups = /* @__PURE__ */ new Set();
   for (const pr of prs) {
     if (!pr.labels.includes(IGNORED_LABEL)) continue;
-    for (const rule of pr.ignoredRules) rules16.add(rule);
+    for (const rule of pr.ignoredRules) rules17.add(rule);
     if (pr.ignoredGroup) groups.add(pr.group);
   }
-  return { rules: rules16, groups };
+  return { rules: rules17, groups };
 }
 async function currentFix(client, repo, previous2) {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous2.number });
@@ -45009,7 +45161,7 @@ function classifyIssueOutcome(issue2) {
 }
 
 // src/recipes/recipe.ts
-var import_yaml47 = __toESM(require_dist(), 1);
+var import_yaml48 = __toESM(require_dist(), 1);
 var RECIPES_DIR = "recipes";
 var RECIPE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 var MAX_PATCH_CHARS = 6e4;
@@ -45064,9 +45216,9 @@ function buildRecipe(options) {
   const excludes = options.excludes ?? DEFAULT_PATCH_EXCLUDES;
   const files = options.files.filter((file2) => !excludes.some((glob) => matchesGlob(file2.filename, glob)));
   const patchFiles = files.map((file2) => file2.filename).sort();
-  const rules16 = [...manifest.applicability?.rules ?? []].sort();
+  const rules17 = [...manifest.applicability?.rules ?? []].sort();
   const globs = manifest.applicability?.files ?? [];
-  if (rules16.length === 0 && globs.length === 0 && patchFiles.length === 0) {
+  if (rules17.length === 0 && globs.length === 0 && patchFiles.length === 0) {
     return { error: `Experiment "${manifest.name}" declares no applicability (rules or files) and its winning arm changed no files.` };
   }
   const patch = files.length > 0 ? renderPatch(files) : void 0;
@@ -45077,9 +45229,9 @@ function buildRecipe(options) {
     title: manifest.title,
     summary: manifest.hypothesis,
     risk: classifyRisk(patchFiles),
-    rules: rules16,
+    rules: rules17,
     // Without explicit globs, the files the winner touched decide applicability.
-    files: globs.length > 0 ? [...globs] : rules16.length === 0 ? patchFiles : [],
+    files: globs.length > 0 ? [...globs] : rules17.length === 0 ? patchFiles : [],
     ...manifest.applicability?.description ? { description: manifest.applicability.description } : {},
     instructions: `${arm.title}: ${arm.approach}`,
     evidence: { improvement: manifest.evidence?.improvement ?? 0, metrics: manifest.evidence?.metrics.map((metric) => ({ ...metric })) ?? [] },
@@ -45101,7 +45253,7 @@ function buildRecipe(options) {
   return { recipe, changed: serializeRecipe(recipe) !== serializeRecipe(previous2) };
 }
 function serializeRecipe(recipe) {
-  return (0, import_yaml47.stringify)(recipe, { lineWidth: 0 });
+  return (0, import_yaml48.stringify)(recipe, { lineWidth: 0 });
 }
 var isRecord4 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 var strings2 = (value2) => Array.isArray(value2) ? value2.filter((item) => typeof item === "string") : [];
@@ -45109,7 +45261,7 @@ var num = (value2) => typeof value2 === "number" && Number.isFinite(value2) ? va
 function parseRecipe(text7) {
   let raw;
   try {
-    raw = (0, import_yaml47.parse)(text7, { maxAliasCount: 100 });
+    raw = (0, import_yaml48.parse)(text7, { maxAliasCount: 100 });
   } catch (error63) {
     return { problems: [`Invalid YAML: ${error63.message}`] };
   }
@@ -45124,9 +45276,9 @@ function parseRecipe(text7) {
   if (typeof source.repository !== "string" || typeof source.experiment !== "string" || typeof source.arm !== "string") {
     problems.push("source.repository, source.experiment and source.arm are required.");
   }
-  const rules16 = strings2(raw.rules);
+  const rules17 = strings2(raw.rules);
   const files = strings2(raw.files);
-  if (rules16.length === 0 && files.length === 0) problems.push("A recipe needs rules or files to decide where it applies.");
+  if (rules17.length === 0 && files.length === 0) problems.push("A recipe needs rules or files to decide where it applies.");
   if (problems.length > 0) return { problems };
   const evidence2 = isRecord4(raw.evidence) ? raw.evidence : {};
   const compatibility2 = isRecord4(raw.compatibility) ? raw.compatibility : {};
@@ -45140,7 +45292,7 @@ function parseRecipe(text7) {
       title: raw.title,
       summary: raw.summary,
       risk: raw.risk,
-      rules: rules16,
+      rules: rules17,
       files,
       ...typeof raw.description === "string" ? { description: raw.description } : {},
       instructions: raw.instructions,
@@ -45184,9 +45336,9 @@ function activeRecipeRules(recipe, config2) {
     return !(ruleset !== void 0 && config2.rulesets[ruleset] === "off" && config2.rules[id2] === void 0);
   });
 }
-function recipeLintConfig(rules16, config2) {
+function recipeLintConfig(rules17, config2) {
   const settings = {};
-  for (const id2 of rules16) {
+  for (const id2 of rules17) {
     const current = config2.rules[id2];
     settings[id2] = Array.isArray(current) ? ["warn", current[1]] : "warn";
   }
@@ -45204,24 +45356,24 @@ function planRecipe(options) {
   if (recipe.rules.length === 0) {
     return matchedFiles.length > 0 ? { rules: [], remaining: [], matchedFiles, status: "adapt", reason: `${matchedFiles.length} file(s) match the recipe; the change must be adapted.` } : { ...empty2, status: "not-applicable", reason: "No files match the recipe." };
   }
-  const rules16 = activeRecipeRules(recipe, config2);
-  if (rules16.length === 0) return { ...empty2, status: "ignored", reason: "All of the recipe's rules are turned off in this repository." };
-  const lintConfig = recipeLintConfig(rules16, config2);
+  const rules17 = activeRecipeRules(recipe, config2);
+  if (rules17.length === 0) return { ...empty2, status: "ignored", reason: "All of the recipe's rules are turned off in this repository." };
+  const lintConfig = recipeLintConfig(rules17, config2);
   const run4 = options.lint ?? ((target, effective) => lint2({ input: target, config: effective }));
   const relevant = (result) => ({
     ...result,
-    diagnostics: result.diagnostics.filter((d2) => rules16.includes(d2.ruleId) && !isIgnored(d2, config2.fixes))
+    diagnostics: result.diagnostics.filter((d2) => rules17.includes(d2.ruleId) && !isIgnored(d2, config2.fixes))
   });
   const lint3 = (target) => relevant(run4(target, lintConfig));
   const findings4 = lint3(input3).diagnostics;
-  if (findings4.length === 0) return { rules: rules16, remaining: [], matchedFiles, status: "not-applicable", reason: "No findings for the recipe's rules." };
+  if (findings4.length === 0) return { rules: rules17, remaining: [], matchedFiles, status: "not-applicable", reason: "No findings for the recipe's rules." };
   const group = recipeGroup(recipe);
-  const fixes = { ...config2.fixes, groups: { [group]: { rules: rules16 } } };
+  const fixes = { ...config2.fixes, groups: { [group]: { rules: rules17 } } };
   const change = computeFixChanges({ input: input3, lint: lint3, config: fixes }).find((candidate) => candidate.group === group);
-  if (!change) return { rules: rules16, remaining: findings4, matchedFiles, status: "adapt", reason: `${findings4.length} finding(s) need an adapted change (no autofix applies).` };
+  if (!change) return { rules: rules17, remaining: findings4, matchedFiles, status: "adapt", reason: `${findings4.length} finding(s) need an adapted change (no autofix applies).` };
   const updated = new Map(change.files.map((file2) => [file2.path, file2.content]));
   const remaining = lint3({ ...input3, files: input3.files.map((file2) => ({ path: file2.path, content: updated.get(file2.path) ?? file2.content })) }).diagnostics;
-  return remaining.length === 0 ? { rules: rules16, change, remaining, matchedFiles, status: "autofix", reason: `Autofixes resolve all ${findings4.length} finding(s).` } : { rules: rules16, change, remaining, matchedFiles, status: "partial", reason: `Autofixes resolve ${findings4.length - remaining.length} of ${findings4.length} finding(s).` };
+  return remaining.length === 0 ? { rules: rules17, change, remaining, matchedFiles, status: "autofix", reason: `Autofixes resolve all ${findings4.length} finding(s).` } : { rules: rules17, change, remaining, matchedFiles, status: "partial", reason: `Autofixes resolve ${findings4.length - remaining.length} of ${findings4.length} finding(s).` };
 }
 var pct2 = (value2) => `${value2 >= 0 ? "" : "\u2212"}${Math.abs(Math.round(value2 * 1e3) / 10)}%`;
 function evidenceLines(recipe, context4) {
@@ -45342,7 +45494,7 @@ function recipeIssue(recipe, plan, options) {
 
 // src/knowledge/extract.ts
 init_identity();
-var import_yaml48 = __toESM(require_dist(), 1);
+var import_yaml49 = __toESM(require_dist(), 1);
 var packageName3 = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 var managers = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
 var toolFiles = {
@@ -45473,7 +45625,7 @@ function extractKnowledge(repository, revision, input3, options = {}) {
   if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
   else if (pnpm) {
     try {
-      const parsed = (0, import_yaml48.parseDocument)(pnpm.content, { uniqueKeys: true });
+      const parsed = (0, import_yaml49.parseDocument)(pnpm.content, { uniqueKeys: true });
       if (parsed.errors.length) throw new Error("Invalid workspace YAML");
       const value2 = parsed.toJS();
       addWorkspace(record4(value2) ? value2.packages : void 0, pnpm, "/packages");
@@ -45872,14 +46024,14 @@ async function recipeStatus(client, target, recipe, server = "https://github.com
 }
 
 // src/recipes/rollout.ts
-var import_yaml49 = __toESM(require_dist(), 1);
+var import_yaml50 = __toESM(require_dist(), 1);
 var DEFAULT_ROLLOUT = { waves: [1, 3, "25%", "100%"], minSamples: 5, minCompatibility: 0.7 };
 var REPO_NAME = /^[\w.-]+\/[\w.-]+$/;
 function parseRolloutTargets(text7) {
   const problems = [];
   let raw;
   try {
-    raw = (0, import_yaml49.parse)(text7);
+    raw = (0, import_yaml50.parse)(text7);
   } catch (error63) {
     return { repositories: [], canaries: [], config: DEFAULT_ROLLOUT, problems: [`Invalid YAML: ${error63.message}`] };
   }
@@ -68472,7 +68624,7 @@ function escapeCell(value2) {
 }
 
 // src/telemetry/snapshot.ts
-var import_yaml50 = __toESM(require_dist(), 1);
+var import_yaml51 = __toESM(require_dist(), 1);
 init_history();
 function isExternalCheckRun(job, key2) {
   return key2 === void 0 && !job.runner_id && !job.runner_name && !job.steps?.length && typeof job.html_url === "string" && !/\/actions\/runs\/\d+\/job\/\d+/.test(job.html_url);
@@ -68483,7 +68635,7 @@ function workflowPath(path) {
 function parseJobDefinitions(text7) {
   let document;
   try {
-    document = (0, import_yaml50.parse)(text7);
+    document = (0, import_yaml51.parse)(text7);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -69827,7 +69979,7 @@ function capComment(body, max2 = MAX_COMMENT_LENGTH) {
 }
 
 // src/review/project.ts
-var import_yaml51 = __toESM(require_dist(), 1);
+var import_yaml52 = __toESM(require_dist(), 1);
 var PROJECT_FILE = "project.yaml";
 var PROJECT_MAX_BYTES = 8 * 1024;
 var NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -69843,7 +69995,7 @@ function parseStrictYaml(text7, maxBytes, label2) {
   if (/^%/m.test(text7)) return { problems: [`${label2} must not contain YAML directives (lines starting with %).`] };
   let documents;
   try {
-    documents = (0, import_yaml51.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+    documents = (0, import_yaml52.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
   } catch (error63) {
     return { problems: [`${label2} is not valid YAML (${describeValue(error63 instanceof Error ? error63.message : String(error63))}).`] };
   }
@@ -69856,20 +70008,20 @@ function parseStrictYaml(text7, maxBytes, label2) {
   for (const issue2 of [...document.errors, ...document.warnings]) {
     problems.push(`${label2} is not valid YAML: ${issue2.code} at line ${issue2.linePos?.[0]?.line ?? "?"}.`);
   }
-  if (!(0, import_yaml51.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
-  (0, import_yaml51.visit)(document, {
+  if (!(0, import_yaml52.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
+  (0, import_yaml52.visit)(document, {
     Alias() {
       problems.push(`${label2} must not use YAML aliases (*name).`);
-      return import_yaml51.visit.BREAK;
+      return import_yaml52.visit.BREAK;
     },
     Node(_key, node2) {
       if (node2.anchor) problems.push(`${label2} must not use YAML anchors (&name).`);
       if (node2.tag) problems.push(`${label2} must not use YAML tags (${describeValue(node2.tag)}).`);
     },
     Pair(_key, pair) {
-      if (!(0, import_yaml51.isScalar)(pair.key) || typeof pair.key.value !== "string") {
+      if (!(0, import_yaml52.isScalar)(pair.key) || typeof pair.key.value !== "string") {
         problems.push(`${label2} keys must be plain strings.`);
-        return import_yaml51.visit.SKIP;
+        return import_yaml52.visit.SKIP;
       }
       if (pair.key.value === "<<") problems.push(`${label2} must not use YAML merge keys (<<).`);
       return void 0;
@@ -70860,37 +71012,37 @@ import { readFile as readFile8 } from "node:fs/promises";
 import { parseArgs as parseArgs11 } from "node:util";
 
 // src/formal/cache-key.ts
-var import_yaml52 = __toESM(require_dist(), 1);
+var import_yaml53 = __toESM(require_dist(), 1);
 var CONTEXTS = ["sha", "run_id", "run_number", "run_attempt", "ref", "event_name"];
 function extractCacheKey(source, job, step) {
-  const document = (0, import_yaml52.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
+  const document = (0, import_yaml53.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
   if (document.errors.length || document.warnings.length) throw new Error("Workflow YAML must parse without errors or warnings.");
-  (0, import_yaml52.visit)(document, (_key, node2) => {
-    if ((0, import_yaml52.isAlias)(node2)) throw new Error("YAML aliases are outside the extraction contract.");
-    if ((0, import_yaml52.isMap)(node2) && node2.items.some((pair) => (0, import_yaml52.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
+  (0, import_yaml53.visit)(document, (_key, node2) => {
+    if ((0, import_yaml53.isAlias)(node2)) throw new Error("YAML aliases are outside the extraction contract.");
+    if ((0, import_yaml53.isMap)(node2) && node2.items.some((pair) => (0, import_yaml53.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
   });
   const jobs = document.get("jobs", true);
-  if (!(0, import_yaml52.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
+  if (!(0, import_yaml53.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
   const selected = jobs.get(job, true);
-  if (!(0, import_yaml52.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
+  if (!(0, import_yaml53.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
   const steps2 = selected.get("steps", true);
-  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml52.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
+  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml53.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
   const action = steps2.items[step];
-  if (!(0, import_yaml52.isMap)(action)) throw new Error("Selected step is not a mapping.");
+  if (!(0, import_yaml53.isMap)(action)) throw new Error("Selected step is not a mapping.");
   const uses = action.get("uses", true);
-  if (!(0, import_yaml52.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
+  if (!(0, import_yaml53.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
     throw new Error("Selected step must use a literal actions/cache, actions/cache/restore or actions/cache/save reference.");
   }
   const inputs = action.get("with", true);
-  if (!(0, import_yaml52.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
+  if (!(0, import_yaml53.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
   const inputNames = inputs.items.map((pair) => {
-    if (!(0, import_yaml52.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
+    if (!(0, import_yaml53.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
     return pair.key.value.toLowerCase();
   });
   if (new Set(inputNames).size !== inputNames.length) throw new Error("Case-colliding cache input names are unsupported.");
   if (inputNames.includes("restore-keys") || inputNames.includes("enablecrossosarchive")) throw new Error("restore-keys and cross-OS archive inputs are outside this model.");
   const key2 = inputs.get("key", true);
-  if (!(0, import_yaml52.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
+  if (!(0, import_yaml53.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
   scalarString(key2.value);
   const [start2, end] = key2.range;
   return {

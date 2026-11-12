@@ -1,9 +1,9 @@
-import { lstat, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
+import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { resolve, relative, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { installHooks } from "./install-hooks.mjs";
 
 const root = await realpath(fileURLToPath(new URL("../", import.meta.url)));
 const { values } = parseArgs({
@@ -38,19 +38,6 @@ await writeFile(temporary, JSON.stringify({ version: 1, repo: values.repo.toLowe
 try { await rename(temporary, path); }
 finally { await rm(temporary, { force: true }); }
 if (values["install-hooks"]) {
-  const hook = await stat(join(root, ".githooks", "pre-push"));
-  if (!hook.isFile() || (process.platform !== "win32" && !(hook.mode & 0o111))) throw new Error("The generated-output pre-push hook is missing or not executable.");
-  const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
-  let configured = "";
-  try { configured = git("config", "--get", "core.hooksPath"); }
-  catch (error) { if (error.status !== 1) throw error; }
-  if (configured && configured !== ".githooks") throw new Error("Existing Git hooks configuration was preserved. Review it before installing generated-output checks.");
-  if (!configured) {
-    let existingHook = false;
-    try { await stat(resolve(root, git("rev-parse", "--git-path", "hooks/pre-push"))); existingHook = true; }
-    catch (error) { if (error.code !== "ENOENT") throw error; }
-    if (existingHook) throw new Error("An existing pre-push hook was preserved; install the generated-output check explicitly.");
-    git("config", "--local", "core.hooksPath", ".githooks");
-  }
+  await installHooks(root);
 }
 console.log(`CI feedback configured for ${values.repo} using ${values.auth}. The Copilot extension starts the workspace's stdio MCP server when its harness joins. No credentials were written.`);

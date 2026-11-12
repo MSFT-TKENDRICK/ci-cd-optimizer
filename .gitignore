@@ -9,3 +9,4 @@ coverage/
 .agent-artifacts/
 .proof-tools/
 .proof-build/
+.gitleaks/bin/

@@ -1,0 +1,3 @@
+#!/usr/bin/env node
+// Repository-owned entry point; the scanner is the pinned upstream Gitleaks, not a separate "better-gitleaks" product.
+await import("../scripts/check-secrets.mjs");

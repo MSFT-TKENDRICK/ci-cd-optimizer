@@ -10,7 +10,7 @@ The same built-in rules power [developer-agent skills, MCP, and ACP](agents.md).
 unsaved content and return exact fix previews without writing files or importing repository-local rules.
 The ordinary CLI's `--fix` and `--allow-local-rules` are separate, explicit opt-ins; no protocol write API exists.
 
-It reads GitHub Actions workflows, composite actions, Dockerfiles, Nix expressions/flakes, and package/toolchain
+It reads GitHub Actions workflows, composite actions, Dockerfiles, Nix expressions/flakes, Git hooks, pre-commit, and package/toolchain
 configuration. Findings identify declared practices and potential improvements, not proven speedups or universally
 equivalent rewrites. The [rule catalog](rules.md) lists every rule; the [Nix guide](nix.md) explains its static model.
 
@@ -106,6 +106,7 @@ The CLI, Git-revision baseline, GitHub App/API scan and Action use the same inve
 | Family | Recognized input |
 |---|---|
 | Actions | `.github/workflows/*.yml` / `*.yaml`, composite `action.yml` / `action.yaml`, optimizer/Dependabot/Renovate configuration |
+| Git hooks | Standard hook names in root `.githooks/` and `.husky/`, `.pre-commit-config.yaml` / `.yml`, `.pre-commit-hooks.yaml` / `.yml` |
 | Containers | `Dockerfile` / `Containerfile` and suffixed variants, `*.dockerfile` / `*.containerfile`, `.dockerignore` / `*.dockerignore`, Compose and Bake configuration |
 | Nix | `*.nix` (case-insensitive), `flake.lock`, `.envrc`, `devenv.yaml`, `devenv.lock` |
 | Packages | Supported Node, Python, Cargo, Go and .NET manifests/locks; `pnpm-workspace.yaml`; `requirements*.txt` and `requirements/*.txt` |
@@ -418,6 +419,15 @@ places alerts on the right files.
 
 ## Git hooks
 
+The `hooks` ruleset treats hook scripts and pre-commit definitions as optimization targets, not only an
+integration for running this linter. It inspects literal POSIX-shell commands (including shebang-free Husky
+hooks) and explicitly declared YAML entries. Non-shell shebangs, arbitrary script delegation and remote
+hook behavior without a declared entry remain unknown; custom hooks directories are not inferred.
+It recommends moving repeated dependency installation to setup, with missing-dependency failures, and setting
+`pass_filenames: false` for an explicit whole-repository linter to avoid repeat scans across filename batches.
+Neither rule removes mandatory checks, narrows secret scans, enables skipping or supplies an automatic fix.
+For this repository's mandatory secret/lint/push gates, see [Contributing](../CONTRIBUTING.md).
+
 ### pre-commit
 
 ```yaml
@@ -432,7 +442,7 @@ repos:
 
 The `cicd-lint` hook in [`.pre-commit-hooks.yaml`](../.pre-commit-hooks.yaml) works as follows:
 
-- It runs when a staged file is a workflow, `action.yml`, a Dockerfile or Containerfile, `package.json`,
+- It runs when a staged file is a Git hook, pre-commit config/definition, workflow, `action.yml`, a Dockerfile or Containerfile, `package.json`,
   `package-lock.json`, `pnpm-lock.yaml`, or `yarn.lock`.
 - It lints the whole repository, not just the staged files (`pass_filenames: false`), because rules compare files.
 - It needs Node.js 22 or later on `PATH`. It is a `language: script` hook that runs the committed, self-contained
