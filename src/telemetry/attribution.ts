@@ -26,6 +26,9 @@ const MAX_LISTED = 5;
 
 const INFRA_STEP = /^(?:set up job|complete job|initialize containers|stop containers|post\b)/i;
 const STAGE_INSTRUCTION = /^\[[^\]]+\] [A-Z]+\b/;
+const STAGE_STEP = /^\[([^\]]+?) \d+\/\d+\] /;
+const METADATA_REQUEST = /^\[(?:[^\]\s]+ )?internal\] load metadata for (\S+)$/;
+const RESOLVED_BASE = /^\[([^\]]+?) \d+\/\d+\] FROM (\S+?)@(sha256:[a-f0-9]{64})(?:\s|$)/;
 const CHECKOUT_STEP = /\bactions\/checkout\b/i;
 const SETUP_STEP = /\b(?:set\s*up|setup|install|restore|cache|dependenc|deps|bootstrap|toolchain|prepare)/i;
 const INSTALL_COMMAND =
@@ -370,6 +373,50 @@ function vertexUnionMs(vertices: readonly BuildVertex[]): number {
   return unionMs(vertices.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs] as const));
 }
 
+interface TagRequestedBase { ref: string; digest: string; vertex: number; stages: string[]; missed: number }
+
+/**
+ * Groups missed RUN vertices by the base image their stage was built on, when this build requested that base by mutable
+ * tag (`load metadata for <ref>` without a digest) and logged the digest it resolved to. A stage whose FROM vertex is not
+ * logged (BuildKit prints identical FROMs once) or whose base was also requested by that digest is not attributed.
+ */
+function tagRequestedBases(build: BuildInvocation, missed: readonly BuildVertex[]): { bases: TagRequestedBase[]; attributed: number } {
+  const requested = new Set<string>();
+  for (const vertex of build.vertices) {
+    const ref = METADATA_REQUEST.exec(vertex.name)?.[1];
+    if (ref) requested.add(ref);
+  }
+  const stages = new Map<string, Omit<TagRequestedBase, "stages" | "missed">>();
+  for (const vertex of build.vertices) {
+    const match = vertex.kind === "base-image" ? RESOLVED_BASE.exec(vertex.name) : null;
+    const [, stage, ref, digest] = match ?? [];
+    if (stage && ref && digest && requested.has(ref) && !requested.has(`${ref}@${digest}`)) {
+      stages.set(stage, { ref, digest, vertex: vertex.id });
+    }
+  }
+  const bases = new Map<string, TagRequestedBase>();
+  let attributed = 0;
+  for (const vertex of missed) {
+    const stage = STAGE_STEP.exec(vertex.name)?.[1];
+    const base = stage === undefined ? undefined : stages.get(stage);
+    if (!stage || !base) continue;
+    attributed += 1;
+    const key = `${base.ref}@${base.digest}`;
+    const entry = bases.get(key) ?? { ...base, stages: [], missed: 0 };
+    if (!entry.stages.includes(stage)) entry.stages.push(stage);
+    entry.missed += 1;
+    bases.set(key, entry);
+  }
+  return { bases: [...bases.values()].sort((a, b) => b.missed - a.missed || a.vertex - b.vertex), attributed };
+}
+
+function baseDriftNote(bases: readonly TagRequestedBase[], attributed: number, total: number): string {
+  const listed = bases.slice(0, MAX_LISTED).map((base) =>
+    `stage(s) ${clip(base.stages.join(", "), MAX_LABEL)} on ${clip(base.ref, MAX_LABEL)}, resolved to ${base.digest.slice(0, 19)}…`);
+  const rest = total - attributed;
+  return ` Candidate cause: ${attributed} of these ${total} vertices are in stages built on a base image requested by mutable tag (${listed.join("; ")}${bases.length > MAX_LISTED ? `; ${bases.length - MAX_LISTED} more` : ""}). If the tag resolved to a different digest when the imported cache was written, every layer built on it misses; this log cannot show the digest used then.${rest > 0 ? ` The other ${rest} could not be linked to a tag-requested base and are not attributed.` : ""}`;
+}
+
 function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocation, index: number): Bottleneck[] {
   const findings: Bottleneck[] = [];
   const detail = `s${entry.path}b${index}`;
@@ -448,6 +495,7 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
       const cause = restored === 0
         ? "No RUN or COPY vertex was marked CACHED; this alone does not distinguish changed inputs from missing or inaccessible cache entries."
         : `${restored} other RUN or COPY vertex/vertices were marked CACHED, but that does not prove that matching entries for these vertices were published or accessible.`;
+      const drift = executionOutput ? tagRequestedBases(build, vertices) : { bases: [], attributed: 0 };
       findings.push(finding(ctx, {
         category: executionOutput ? "layer-cache-miss" : "layer-cache-unknown",
         detail,
@@ -455,11 +503,12 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
         observedMs,
         ...(!executionOutput ? { removableMs: 0 } : {}),
         observation: executionOutput
-          ? `${entry.label}: ${vertices.length} RUN vertex/vertices produced timed command output without a CACHED marker, spanning ${formatMs(observedMs)} of vertex time despite cache-from ${source}. Vertex time can include materialization, not just command execution. ${cause} The log alone does not establish the cause.`
+          ? `${entry.label}: ${vertices.length} RUN vertex/vertices produced timed command output without a CACHED marker, spanning ${formatMs(observedMs)} of vertex time despite cache-from ${source}. Vertex time can include materialization, not just command execution. ${cause} The log alone does not establish the cause.${drift.attributed > 0 ? baseDriftNote(drift.bases, drift.attributed, vertices.length) : ""}`
           : `${entry.label}: ${vertices.length} RUN vertex/vertices span ${formatMs(observedMs)} without a CACHED marker or timed command output (cache-from ${source}). They may be materializing cached layers or executing silently; the retained log does not establish a rebuild or removable cost. ${cause}`,
         recommendation: [
           ...(!executionOutput ? ["Inspect the build record's cache status and execution trace before treating these vertices as misses. Missing output is not proof of either a cache hit or a rebuild, and layer-transfer output alone is not command execution. Do not expose credentials or signed URLs from build records."] : []),
           "Compare consecutive runs with identical build inputs, including resolved base-image digests, build arguments and context contents, not just the same commit. Check successful cache publication, matching import/export scopes, branch visibility and eviction.",
+          ...(drift.attributed > 0 ? ["Compare each resolved base digest listed in the evidence with the one logged by the run that published the imported cache. Pinning the base by digest (hermeticity/docker-base-digest with requireDigest: true) turns base updates into explicit, reviewed changes; pair pins with update automation so security fixes still land."] : []),
           ...(access?.entries.length ? ["Use the action's logged runtime cache access as branch-permission evidence only: it does not prove publication, a matching entry or successful restoration. Missing or omitted entries do not prove denied access. Do not broaden permissions merely because a layer missed."] : []),
           "If misses persist, investigate cache lookup and backend behavior before restructuring the Dockerfile or changing permissions.",
         ].join(" "),
@@ -468,6 +517,8 @@ function buildFindings(ctx: JobContext, entry: LocatedStep, build: BuildInvocati
             `Action-reported runtime cache access: ${access.entries.map((entry) => `${entry.scope}: ${entry.permission}`).join("; ")}${access.omittedEntries ? `; ${access.omittedEntries} additional recognized access line(s) not retained` : ""}`,
           ] : []),
           ...[...vertices].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
+          ...drift.bases.slice(0, MAX_LISTED).map((base) =>
+            `#${base.vertex} base for stage(s) ${clip(base.stages.join(", "), MAX_LABEL)}: ${clip(base.ref, MAX_EVIDENCE)} (requested by tag) resolved to ${base.digest}`),
           ...build.vertices.filter((vertex) => vertex.kind === "cache-import").map(describeVertex),
           ...build.cacheFrom.map((spec) => `cache-from: ${spec.raw}`),
         ],
