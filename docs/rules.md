@@ -15,6 +15,7 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `ssdf`, `all`
 | Rule | Kind | Default | Presets | Fixable | Description |
 | --- | --- | --- | --- | --- | --- |
 | [`workflow/artifact-retention`](#workflow-artifact-retention) | practice | info | recommended, agentic | yes | Uploaded artifacts should set a short `retention-days` instead of the repository default. |
+| [`workflow/artifact-success-gating`](#workflow-artifact-success-gating) | practice | warn | recommended, agentic, strict |  | Success-gate same-run artifact consumers on their producer jobs. |
 | [`workflow/concurrency`](#workflow-concurrency) | practice | warn | recommended, agentic, strict | yes | Pull request workflows should cancel superseded runs; deploy workflows must not. |
 | [`workflow/duplicate-push-pull-request-trigger`](#workflow-duplicate-push-pull-request-trigger) | practice | warn | recommended, agentic, strict |  | A workflow accepting both broad `push` and `pull_request` events may repeat overlapping work for same-repository pull requests. |
 | [`workflow/job-timeout`](#workflow-job-timeout) | practice | warn | recommended, agentic, strict | yes | Jobs should set `timeout-minutes` well below the 360 minute default. |
@@ -185,6 +186,63 @@ References:
 
 - <https://github.com/actions/upload-artifact#retention-period>
 - <https://docs.github.com/en/actions/how-tos/manage-workflow-runs/remove-workflow-artifacts#setting-the-retention-period-for-an-artifact>
+
+<a id="workflow-artifact-success-gating"></a>
+
+### workflow/artifact-success-gating
+
+Success-gate same-run artifact consumers on their producer jobs.
+
+**Why:** A literal artifact upload/download pair identifies a data prerequisite, unlike job names. Without a needs path, the consumer can start before the producer finishes, or continue after its failure. An artifact may already exist when a later producer step fails. GitHub needs skips dependent jobs after failure through the dependency chain; it cannot cancel independent work already running. Review the artifact contract before adding a direct needs edge; do not serialize unrelated checks or restrict intentional failure handlers and required-check aggregates. These warnings identify a static gating gap, not measured waste or guaranteed removable runner minutes.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: practice; default severity: warn; impact: high
+- Presets: `recommended`, `agentic`, `strict`
+
+Before:
+
+```yaml
+jobs:
+  producer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+  consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+```
+
+After:
+
+```yaml
+jobs:
+  producer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+  consumer:
+    needs: producer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+```
+
+References:
+
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds>
+- <https://docs.github.com/en/actions/tutorials/store-and-share-data>
+- <https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions>
 
 <a id="workflow-concurrency"></a>
 

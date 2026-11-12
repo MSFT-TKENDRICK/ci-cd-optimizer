@@ -2111,6 +2111,23 @@
       "optionalModelCertificates": []
     },
     {
+      "id": "workflow/artifact-success-gating",
+      "metadataSha256": "a497359a41cb440f09a52fa61a35d23f25fb4efb8c541ce041ef20d0bc20ae05",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Success-gate same-run artifact consumers on their producer jobs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A literal artifact upload/download pair identifies a data prerequisite, unlike job names. Without a needs path, the consumer can start before the producer finishes, or continue after its failure. An artifact may already exist when a later producer step fails. GitHub needs skips dependent jobs after failure through the dependency chain; it cannot cancel independent work already running. Review the artifact contract before adding a direct needs edge; do not serialize unrelated checks or restrict intentional failure handlers and required-check aggregates. These warnings identify a static gating gap, not measured waste or guaranteed removable runner minutes."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
       "id": "workflow/concurrency",
       "metadataSha256": "a936c1f146e39da184e57ebaa76bbe9c79202bc21988104cfe8644d69d41d1b7",
       "detector": {
