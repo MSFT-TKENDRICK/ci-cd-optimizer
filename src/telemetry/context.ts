@@ -9,11 +9,11 @@ export const EXCLUSION_DESCRIPTIONS: Record<BaselineExclusion, string> = {
   provenance: "Collection provenance is unavailable or unsupported.",
   "incomplete-jobs": "Job collection is incomplete.",
   "definition-unknown": "The workflow job definitions are unavailable.",
-  "no-jobs": "No completed jobs were observed.",
-  "job-failed": "Some observed jobs did not complete successfully.",
+  "no-jobs": "No executed jobs were observed.",
+  "job-failed": "Some observed jobs neither succeeded nor were skipped.",
   "labels-missing": "Runner routing labels are unavailable.",
   "context-changed": "The run used a different repository, workflow, branch, or event.",
-  "job-set-changed": "The workflow's job set (names, needs, runner labels, or runner group) differs.",
+  "job-set-changed": "The workflow's job set (names, needs, runner labels, runner group, or skipped jobs) differs.",
 };
 
 /** Why a run cannot anchor or join a run-level comparison, as a stable code. */
@@ -24,9 +24,11 @@ export function comparisonExclusion(snapshot: WorkflowSnapshot): BaselineExclusi
   if (provenance?.version !== 1 || provenance.collector !== "github-actions-rest") return "provenance";
   if (!provenance.jobsComplete) return "incomplete-jobs";
   if (!provenance.definitionKnown) return "definition-unknown";
-  if (snapshot.jobs.length === 0) return "no-jobs";
-  if (snapshot.jobs.some((job) => job.conclusion !== "success")) return "job-failed";
-  if (snapshot.jobs.some((job) => !hasLabels(job))) return "labels-missing";
+  // Skipped jobs never acquire a runner; they join the comparison key but are neither sampled nor label-checked.
+  if (snapshot.jobs.some((job) => job.conclusion !== "success" && job.conclusion !== "skipped")) return "job-failed";
+  const executed = snapshot.jobs.filter((job) => job.conclusion === "success");
+  if (executed.length === 0) return "no-jobs";
+  if (executed.some((job) => !hasLabels(job))) return "labels-missing";
   return undefined;
 }
 
@@ -51,9 +53,15 @@ export function jobComparisonContext(job: JobSnapshot): string {
   ]);
 }
 
+/**
+ * Identical skip patterns are a grouping policy, not proof of identical work. A skipped job contributes only its key,
+ * name and needs: it has no runner group, and its labels do not affect execution. All-executed keys are unchanged.
+ */
 export function comparisonKey(snapshot: WorkflowSnapshot): string | undefined {
   if (comparisonProblem(snapshot)) return undefined;
-  const jobs = snapshot.jobs.map(jobComparisonContext).sort();
+  const jobs = snapshot.jobs.map((job) => job.conclusion === "skipped"
+    ? JSON.stringify(["skipped", job.key, job.name, [...new Set(job.needs)].sort()])
+    : jobComparisonContext(job)).sort();
   return createHash("sha256").update(JSON.stringify([
     "workload-comparison-v1", snapshot.owner, snapshot.repo, snapshot.workflowId, snapshot.branch, snapshot.event, jobs,
   ])).digest("hex");
@@ -118,8 +126,8 @@ const GAP_PHRASES: Record<BaselineExclusion, string> = {
   provenance: "lack supported collection provenance",
   "incomplete-jobs": "have incomplete job evidence",
   "definition-unknown": "have unknown job definitions",
-  "no-jobs": "have no completed jobs",
-  "job-failed": "had failed jobs",
+  "no-jobs": "have no executed jobs",
+  "job-failed": "had jobs that neither succeeded nor were skipped",
   "labels-missing": "lack runner labels",
   "context-changed": "ran in a different context",
   "job-set-changed": "had a different job set",

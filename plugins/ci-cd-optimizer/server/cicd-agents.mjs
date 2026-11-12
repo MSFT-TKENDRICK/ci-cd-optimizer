@@ -71912,11 +71912,11 @@ var EXCLUSION_DESCRIPTIONS = {
   provenance: "Collection provenance is unavailable or unsupported.",
   "incomplete-jobs": "Job collection is incomplete.",
   "definition-unknown": "The workflow job definitions are unavailable.",
-  "no-jobs": "No completed jobs were observed.",
-  "job-failed": "Some observed jobs did not complete successfully.",
+  "no-jobs": "No executed jobs were observed.",
+  "job-failed": "Some observed jobs neither succeeded nor were skipped.",
   "labels-missing": "Runner routing labels are unavailable.",
   "context-changed": "The run used a different repository, workflow, branch, or event.",
-  "job-set-changed": "The workflow's job set (names, needs, runner labels, or runner group) differs."
+  "job-set-changed": "The workflow's job set (names, needs, runner labels, runner group, or skipped jobs) differs."
 };
 function comparisonExclusion(snapshot) {
   if (snapshot.runAttempt !== 1) return "rerun";
@@ -71925,9 +71925,10 @@ function comparisonExclusion(snapshot) {
   if (provenance?.version !== 1 || provenance.collector !== "github-actions-rest") return "provenance";
   if (!provenance.jobsComplete) return "incomplete-jobs";
   if (!provenance.definitionKnown) return "definition-unknown";
-  if (snapshot.jobs.length === 0) return "no-jobs";
-  if (snapshot.jobs.some((job) => job.conclusion !== "success")) return "job-failed";
-  if (snapshot.jobs.some((job) => !hasLabels(job))) return "labels-missing";
+  if (snapshot.jobs.some((job) => job.conclusion !== "success" && job.conclusion !== "skipped")) return "job-failed";
+  const executed = snapshot.jobs.filter((job) => job.conclusion === "success");
+  if (executed.length === 0) return "no-jobs";
+  if (executed.some((job) => !hasLabels(job))) return "labels-missing";
   return void 0;
 }
 function comparisonProblem(snapshot) {
@@ -71951,7 +71952,7 @@ function jobComparisonContext(job) {
 }
 function comparisonKey(snapshot) {
   if (comparisonProblem(snapshot)) return void 0;
-  const jobs = snapshot.jobs.map(jobComparisonContext).sort();
+  const jobs = snapshot.jobs.map((job) => job.conclusion === "skipped" ? JSON.stringify(["skipped", job.key, job.name, [...new Set(job.needs)].sort()]) : jobComparisonContext(job)).sort();
   return createHash4("sha256").update(JSON.stringify([
     "workload-comparison-v1",
     snapshot.owner,
@@ -72005,8 +72006,8 @@ var GAP_PHRASES = {
   provenance: "lack supported collection provenance",
   "incomplete-jobs": "have incomplete job evidence",
   "definition-unknown": "have unknown job definitions",
-  "no-jobs": "have no completed jobs",
-  "job-failed": "had failed jobs",
+  "no-jobs": "have no executed jobs",
+  "job-failed": "had jobs that neither succeeded nor were skipped",
   "labels-missing": "lack runner labels",
   "context-changed": "ran in a different context",
   "job-set-changed": "had a different job set"
@@ -74644,9 +74645,9 @@ function analyzeDurations(reference, window, config2) {
   });
   const objectives = config2.objectives.filter((objective) => objective.workflow === run2.path);
   report.workflow = metric(run2.durationMs, analysis.history.map((snapshot) => snapshot.durationMs), objectives.find((objective) => objective.job === void 0));
-  report.jobs = run2.jobs.map((job) => {
+  report.jobs = run2.jobs.filter((job) => job.conclusion === "success").map((job) => {
     const context2 = jobComparisonContext(job);
-    const values = analysis.history.map((snapshot) => snapshot.jobs.find((other) => jobComparisonContext(other) === context2).durationMs);
+    const values = analysis.history.map((snapshot) => snapshot.jobs.find((other) => other.conclusion === "success" && jobComparisonContext(other) === context2).durationMs);
     return {
       contextKey: identity(["duration-job-v1", context2]),
       key: job.key,
@@ -74654,7 +74655,7 @@ function analyzeDurations(reference, window, config2) {
       metric: metric(job.durationMs, values, objectives.find((objective) => objective.job === job.key))
     };
   }).sort((a, b) => a.contextKey.localeCompare(b.contextKey));
-  report.unmatchedObjectives = objectives.filter((objective) => objective.job !== void 0 && !run2.jobs.some((job) => job.key === objective.job));
+  report.unmatchedObjectives = objectives.filter((objective) => objective.job !== void 0 && !run2.jobs.some((job) => job.conclusion === "success" && job.key === objective.job));
   return structuredClone(analysis);
 }
 function describeDurations(report) {
@@ -74682,7 +74683,7 @@ ${report.jobs.length - 20} additional job distributions are available in JSON.`)
 Exclusions: ${[...counts].map(([reason, count]) => `${reason} (${count})`).join(", ")}.`);
   }
   if (report.unmatchedObjectives.length) lines.push(`
-${report.unmatchedObjectives.length} configured job budgets did not match an observed job; they were not assessed.`);
+${report.unmatchedObjectives.length} configured job budgets did not match an executed job; they were not assessed.`);
   lines.push("\nR7 quantiles describe eligible successful runs, not prediction bounds or guarantees. Budgets are explicit current configuration, not learned targets or historical SLO compliance. Runner labels do not establish identical hardware/cache state; workflow/job durations do not identify executed projects or causal benefits.");
   return lines.join("\n");
 }

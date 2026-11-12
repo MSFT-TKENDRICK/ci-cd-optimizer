@@ -290,12 +290,17 @@ definition at its own `headSha`; it never rewrites historical dependencies using
 arrays fail explicitly; truncated, inconsistent or duplicate pagination is not certified complete.
 
 The comparison policy in `telemetry/context.ts` admits only successful **first attempts**, with complete collection,
-known job definitions, successful observed jobs and nonempty runner labels. Legacy snapshots remain available as
-evidence but cannot establish a new comparison until recollected with provenance. Retries can be partial or warmed;
-even successful retries are excluded, after latest-attempt selection, rather than resurrecting their older successes.
+known job definitions, at least one executed job, and nonempty runner labels on every executed job. Every observed
+job must have succeeded or been skipped: failed, cancelled, timed-out or unfinished jobs exclude the run. Legacy
+snapshots remain available as evidence but cannot establish a new comparison until recollected with provenance.
+Retries can be partial or warmed; even successful retries are excluded, after latest-attempt selection, rather than
+resurrecting their older successes.
 
 A versioned deterministic key groups repository/workflow/branch/trigger, executed job keys and display names
-(including matrix legs), dependency relationships, runner label sets and observed runner-group IDs. Job/label
+(including matrix legs), dependency relationships, runner label sets and observed runner-group IDs. Skipped jobs
+contribute only their key, display name and dependencies (they never acquire a runner), so runs with different skip
+patterns are different contexts; identical skip patterns do not prove identical work. Skipped jobs are never sampled
+as job baselines, budgets or mitigation measurements. Job/label
 ordering, ephemeral runner names and job IDs do not change it. Source SHAs remain provenance, **not** a grouping
 criterion: otherwise every commit would erase the history needed to detect regressions. Exact label equality is
 only an observed-context guard, not proof of identical hardware, tool versions, cache state or work volume.
