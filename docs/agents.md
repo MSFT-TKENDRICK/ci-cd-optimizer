@@ -135,6 +135,70 @@ discarded; a native single-trial smoke with original descriptions missed activat
 catalogue; an explicit-load smoke passed but was excluded from the native-discovery results.
 The small non-interleaved samples do not establish that the revised descriptions alone caused improvement.
 
+### Evolve benchmark feedback as a skill
+
+The broadcast harness now composes its existing immutable evidence/authorization contract with the canonical
+[`benchmark-feedback.md`](../plugins/ci-cd-optimizer/skills/optimize-ci-pipeline/references/benchmark-feedback.md)
+procedure, then the untrusted JSON evidence. A SHA-256 revision identifies the exact contract and procedure;
+payload text cannot choose a procedure or candidate. Native skill mirrors and Vally snapshots include
+references, not just `SKILL.md`. Event validation, repository authorization, receipt-before-ack ordering,
+denial handling and replay-gap behavior remain unchanged. Prompt text is not a security sandbox: existing
+tool approvals and code-level validation remain necessary.
+
+The evolution surfaces are deliberately separate:
+
+| Method | Integration and scope |
+|---|---|
+| [Microsoft SkillOpt](https://github.com/microsoft/SkillOpt) | The pinned `skillopt==0.2.0` package's actual `skillopt.evaluation.gate.evaluate_gate` requires strict validation improvement. This is core-library integration, not the full research trainer. |
+| [SkillOpt-Sleep](https://microsoft.github.io/SkillOpt/docs/sleep/) | Its actual `consolidate` runs replay, train-failure reflection, bounded edits and validation through a repository-owned, tool-disabled Copilot text backend. No broad session harvesting, memory changes, schedules or adoption. |
+| [SkillOpt-Lite](https://github.com/EvolvingLMMs-Lab/SkillOpt-Lite) | Adapted [skill-only loop](../.github/prompts/skillopt-feedback.prompt.md): frozen splits, baseline, bounded edits, validation selection and final test. |
+| HarnessOpt | Adapted [harness-only loop](../.github/prompts/harnessopt-feedback.prompt.md): reproduce a composition failure, restrict edits, preserve security/delivery semantics, smoke-test and review separately from skill text. |
+
+Lite/HarnessOpt are agent-driven workflows in **EvolvingLMMs-Lab**, linked by Microsoft Research, not two
+additional Microsoft-owned Python packages. The upstream examples are adapted rather than executed blindly:
+their reset commands, model choices, large evaluation budgets and tool grants are not inherited.
+
+The optional [evaluator](../evals/feedback/evolve.py) uses ten fixed synthetic decision cases: two train,
+four validation, four test. Expected typed decision objects remain outside rollout prompts; only train
+failures enter reflection. Validation must improve strictly with identical complete case sets and no
+per-case regression; final test failures block review eligibility. Infrastructure errors abort instead of
+becoming successful empty results. All outputs stay under ignored `.agent-artifacts`; even eligible results
+are proposals, never live updates. Its working directory/settings are isolated and tools are disabled.
+Use existing authorized Copilot authentication; do not change credentials to make an experiment pass.
+
+```powershell
+python -m venv .agent-artifacts/skillopt
+.agent-artifacts/skillopt/Scripts/python.exe -m pip install -r evals/feedback/requirements.txt
+.agent-artifacts/skillopt/Scripts/python.exe -m unittest discover -s evals/feedback -p "test_*.py"
+.agent-artifacts/skillopt/Scripts/python.exe evals/feedback/evolve.py --output .agent-artifacts/feedback-evolution/new-round
+```
+
+Use a compatible Python with wheels available for the dependencies (x64 Python 3.12 was used on Windows).
+The evaluator needs a native `copilot` executable; it refuses a Windows shell shim. It never writes maintained
+skills. Review the report and selected snapshot before any manual adoption, then synchronize mirrors.
+After a test split has been inspected, subsequent runs are regression checks; create and freeze a new,
+reviewed holdout before making a new generalization claim.
+
+For native activation, `node evals/feedback/prepare-activation.mjs .agent-artifacts/feedback-activation/new-round`
+creates an inert skill-only snapshot and Vally spec using the **actual production prompt composer**.
+Run `vally eval --eval-spec .agent-artifacts/feedback-activation/new-round/eval.yaml --require-pass`
+with the pinned Vally setup above. Three trials require real activation of both analysis and optimization
+skills, no file changes and no shell/edit/web calls. This does not bypass the earlier fixture/sandbox warning.
+
+On 2026-11-12 the real SkillOpt/Sleep evaluation made 14 Copilot rollouts across the ten unique cases:
+2/2 train, 4/4 validation before and after, and 4/4 final test decisions passed. The CLI was 1.0.109-1;
+its default concrete model was not captured. There were no training failures and no proposed edits;
+both official gates retained the incumbent on the 1.0-to-1.0 tie. **No learned quality improvement is
+claimed and no candidate was adopted.** The manually authored initial procedure is a reviewed integration
+change, not a claim that training discovered it. This small, text-only decision suite does not measure native
+skill activation, actual report pagination/tool execution or CI runtime; retain the separate Vally and
+delivery regressions for those boundaries.
+
+The production-composed broadcast also passed all three native Vally activation trials, loading both
+`analyze-ci-run` and `optimize-ci-pipeline`, with no file changes or shell/edit/web calls. Run ID:
+`0d1a8870-348e-4c07-94fd-2a4d5816f12e`. This is a narrow positive activation check, not a measured improvement
+over the previous broadcast or a universal activation guarantee.
+
 ## Local MCP
 
 Example editor configuration (replace the two filesystem paths with your checkout and workspace):

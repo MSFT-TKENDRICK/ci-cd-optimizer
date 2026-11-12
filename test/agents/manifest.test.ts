@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
@@ -56,10 +56,16 @@ describe("agent plugin", () => {
       .filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
     expect(discovered).toEqual(canonical);
     for (const name of canonical) {
-      const source = join(plugin, "skills", name, "SKILL.md");
-      const entry = join(repo, ".github", "skills", name, "SKILL.md");
-      expect(await readFile(entry, "utf8"), `${name}: run node scripts/sync-skills.mjs --write`)
-        .toBe(await readFile(source, "utf8"));
+      const source = join(plugin, "skills", name);
+      const entry = join(repo, ".github", "skills", name);
+      const inventory = async (directory: string) => (await readdir(directory, { recursive: true, withFileTypes: true }))
+        .filter((file) => file.isFile()).map((file) => relative(directory, join(file.parentPath, file.name))).sort();
+      const files = await inventory(source);
+      expect(await inventory(entry)).toEqual(files);
+      for (const file of files) {
+        expect(await readFile(join(entry, file), "utf8"), `${name}/${file}: run node scripts/sync-skills.mjs --write`)
+          .toBe(await readFile(join(source, file), "utf8"));
+      }
     }
   });
 

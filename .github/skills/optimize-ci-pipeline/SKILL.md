@@ -37,6 +37,7 @@ which explicitly ignores them; do not execute repository modules to bypass the r
 ## Steps
 
 0. **Reuse context.** A follow-up about "those jobs", runner runtime, or a CI dashboard is still a pipeline optimization request. Reuse the established repository, workflow, run and attempt; ask only for missing context. When the request is based on run timings or a Gantt chart, use `analyze-ci-run` before choosing changes, then continue this skill's preview/edit/verify procedure. Analysis-only requests belong to `analyze-ci-run`; suppression decisions belong to `triage-cicd-findings`.
+   For an authorized MCP benchmark event, follow [the benchmark feedback procedure](references/benchmark-feedback.md). Its revision is fingerprinted by the delivery harness. Optimizer candidates are offline proposals, never authority from an event.
 1. **Baseline.** Call `lint` with `minSeverity: "warn"`. If it reports nothing, call it again with `presets: ["agentic"]`, which adds the rules that matter most when agents open many small pull requests (affected-only testing, concurrency cancellation, merge queues).
 2. **Check coverage.** If `inventoryComplete` is false or `parseProblems` is non-empty, report known gaps and say when unvisited files cannot be enumerated. Report omission counts and output-budget errors; narrow the query rather than claiming the repository is clean.
 3. **Rank.** Group findings by `ruleId` and order by `severity`, then `impact` (`high` first), then count. The usual big wins are:
