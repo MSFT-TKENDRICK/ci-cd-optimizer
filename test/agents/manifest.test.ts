@@ -49,6 +49,20 @@ describe("agent plugin", () => {
     expect(meta).toMatchObject({ name: "ci-cd-optimizer", tools: expect.arrayContaining(["ci-cd-optimizer/*"]) });
   });
 
+  it("exposes every canonical skill through Copilot's native repository discovery", async () => {
+    const canonical = (await readdir(join(plugin, "skills"), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+    const discovered = (await readdir(join(repo, ".github", "skills"), { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+    expect(discovered).toEqual(canonical);
+    for (const name of canonical) {
+      const source = join(plugin, "skills", name, "SKILL.md");
+      const entry = join(repo, ".github", "skills", name, "SKILL.md");
+      expect(await readFile(entry, "utf8"), `${name}: run node scripts/sync-skills.mjs --write`)
+        .toBe(await readFile(source, "utf8"));
+    }
+  });
+
   it("runs the committed bundle without an install", async () => {
     const run = (args: string[]) => promisify(execFile)(process.execPath, [bundle, ...args], { cwd: repo, timeout: 30_000 });
     expect((await run(["--version"])).stdout.trim()).toBe(VERSION);
