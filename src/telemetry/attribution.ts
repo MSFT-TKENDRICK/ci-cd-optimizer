@@ -45,6 +45,8 @@ export interface Bottleneck {
   category: BottleneckCategory;
   jobKey: string;
   jobName: string;
+  /** Exact contributing jobs for aggregate findings; the display key can be truncated. */
+  relatedJobIds?: number[];
   step?: string;
   /** Time observed for this cause in the run. */
   observedMs: number;
@@ -898,6 +900,7 @@ function repeatedSetup(shape: RunShape, evidenceById: Map<number, JobLogEvidence
       category: "repeated-setup",
       jobKey: clip([...new Set(list.map((use) => use.timed.job.key))].sort().join(", "), MAX_EVIDENCE),
       jobName: clip(listed, MAX_EVIDENCE),
+      relatedJobIds: [...new Set(list.map((use) => use.timed.job.id))].sort((a, b) => a - b),
       step: label,
       observedMs: Math.round(total),
       elapsedSavingsBoundMs: elapsed,

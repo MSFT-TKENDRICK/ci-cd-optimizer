@@ -5,6 +5,8 @@ import {
 } from "../../src/telemetry/attribution.js";
 import { parseJobLog } from "../../src/telemetry/logs.js";
 import { benchmarkRun } from "../../src/telemetry/benchmark.js";
+import { projectDashboardMetrics } from "../../src/telemetry/dashboard-metrics.js";
+import { dashboardPage } from "../../src/agents/dashboard.js";
 import type { JobSnapshot, StepSnapshot, WorkflowSnapshot } from "../../src/telemetry/types.js";
 import { fakeClient, httpError, repo } from "../experiments/fixtures.js";
 import { callsTo, fakeApi } from "../service/api.js";
@@ -765,8 +767,15 @@ describe("attributeRun repeated setup", () => {
     const jobs = [setupJob(1, "lint", "00:28"), setupJob(2, "types", "00:30"), setupJob(3, "unit", "00:32")];
     const found = attributeRun(snapshot(jobs)).bottlenecks.filter((entry) => entry.category === "repeated-setup");
     expect(found).toHaveLength(1);
-    expect(found[0]).toMatchObject({ jobKey: "lint, types, unit", observedMs: 42_000, runnerSavingsBoundMs: 26_000 });
+    expect(found[0]).toMatchObject({ jobKey: "lint, types, unit", relatedJobIds: [1, 2, 3], observedMs: 42_000, runnerSavingsBoundMs: 26_000 });
     expect(found[0]?.summary).toMatch(/3 jobs/);
+    const run = { ...snapshot(jobs), provenance: { version: 1 as const, collector: "github-actions-rest" as const,
+      collectedAt: at("40:00"), jobsComplete: true, definitionKnown: true } };
+    const projection = projectDashboardMetrics({ snapshot: run, attribution: attributeRun(run) });
+    for (const jobId of [1, 2, 3]) {
+      expect(dashboardPage(projection, { jobId }).metrics.attribution.findings)
+        .toEqual(expect.arrayContaining([expect.objectContaining({ category: "repeated-setup", scope: "multiple-jobs" })]));
+    }
   });
 
   it("ignores checkout and setup that repeats too little", () => {

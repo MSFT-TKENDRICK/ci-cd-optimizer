@@ -88,7 +88,9 @@ Agent exposure/authentication is **process configuration**, not repository-contr
 `--enable-remote`, explicit `--repo` allowlists, and a provisioned token. Hosted ACP requires
 `CICD_OPTIMIZER_ACP=true`, `CICD_OPTIMIZER_ACP_AUTH=github-user`, and
 `CICD_OPTIMIZER_ACP_REPOSITORIES=owner/repo:numeric-id`; see [hosted setup](agents.md#hosted-acp-on-your-own-app-deployment)
-for authentication, transport, limits, and deployment requirements. Repository settings cannot enable writes or
+for authentication, transport, limits, and deployment requirements. Hosted MCP has separate
+`CICD_OPTIMIZER_MCP`, `CICD_OPTIMIZER_MCP_AUTH`, and `CICD_OPTIMIZER_MCP_REPOSITORIES` settings; see
+[hosted MCP](agents.md#hosted-mcp-on-your-own-app-deployment). Repository settings cannot enable writes or
 raise agent transport quotas.
 
 ### Legacy keys

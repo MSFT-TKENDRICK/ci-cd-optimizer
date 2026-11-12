@@ -139,6 +139,7 @@ export async function startDurableServer(
   const path = probot.webhookPath.replace(/\/+$/, "") || "/";
   if (path === "/ping" || path === "/ready") throw new Error("Durable webhook paths /ping and /ready are reserved for health probes");
   if (agentHandler && path === "/acp") throw new Error("The webhook path must not conflict with /acp.");
+  if (agentHandler && path === "/mcp") throw new Error("The webhook path must not conflict with /mcp.");
   const checkReadiness = createReadinessCheck(queue, probot.log);
   let stopping = false;
   let closed: Promise<void> | undefined;

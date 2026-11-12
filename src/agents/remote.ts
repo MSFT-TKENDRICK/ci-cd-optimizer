@@ -3,6 +3,7 @@ import { describeScan, scanRepository } from "../service/scan.js";
 import { processWorkflowRun } from "../service/workflow-run.js";
 import type { RunAttribution } from "../telemetry/attribution.js";
 import { calculateCriticalPath } from "../telemetry/report.js";
+import { projectDashboardMetrics, type DashboardMetricsProjection } from "../telemetry/dashboard-metrics.js";
 import type { WorkflowRunPayload } from "../telemetry/snapshot.js";
 import type { WorkflowBaseline, WorkflowSnapshot } from "../telemetry/types.js";
 import type { ActiveSeverity, ParseProblem } from "../lint/types.js";
@@ -252,12 +253,14 @@ export interface RunReport {
   markdownOmittedCharacters?: number;
   omittedBaselineJobs?: number;
   dryRun: true;
+  dashboard?: DashboardMetricsProjection;
 }
 
 /** Builds the timeline, critical path, and baseline comparison for one completed workflow run, without writing. */
 export async function remoteRunReport(access: RemoteAccess, request: {
   repo: string; runId: number; runAttempt?: number; markdown?: boolean;
   jobOffset?: number; stepOffset?: number; findingOffset?: number; gapOffset?: number; evidenceOffset?: number;
+  dashboard?: boolean;
 }): Promise<RunReport> {
   if (!Number.isSafeInteger(request.runId) || request.runId <= 0) throw new AgentError("runId must be a positive integer.");
   if (request.runAttempt !== undefined && (!Number.isSafeInteger(request.runAttempt) || request.runAttempt <= 0)) throw new AgentError("runAttempt must be a positive integer.");
@@ -315,7 +318,7 @@ export async function remoteRunReport(access: RemoteAccess, request: {
       return response;
     },
   };
-  const result = await processWorkflowRun(client, target.repo, run, { dryRun: true, check: false, alerts: false, expectedRepositoryId: target.id });
+  const result = await processWorkflowRun(client, target.repo, run, { dryRun: true, check: false, alerts: false, expectedRepositoryId: target.id, ...(request.dashboard ? { dashboardHistory: true } : {}) });
   const report: RunReport = { repo: target.fullName, status: result.status, ...(result.reason ? { reason: result.reason } : {}), dryRun: true };
   const snapshot = result.snapshot;
   if (!snapshot) return report;
@@ -324,6 +327,16 @@ export async function remoteRunReport(access: RemoteAccess, request: {
     snapshot.jobs.length + (snapshot.provenance.externalChecks?.length ?? 0) === fetchedJobs.size &&
     (jobsTotal === null || jobsTotal === fetchedJobs.size);
   const definitionKnown = snapshot.provenance?.definitionKnown === true;
+  if (request.dashboard && result.status === "processed") {
+    const dashboardSnapshot = snapshot.provenance
+      ? { ...snapshot, provenance: { ...snapshot.provenance, jobsComplete } }
+      : snapshot;
+    report.dashboard = projectDashboardMetrics({
+      snapshot: dashboardSnapshot,
+      ...(jobsComplete && result.attribution ? { attribution: result.attribution } : {}),
+      ...(result.dashboardHistory ? { history: result.dashboardHistory } : {}),
+    });
+  }
   const critical = jobsComplete && definitionKnown ? calculateCriticalPath(snapshot.jobs) : undefined;
   const onPath = new Set(critical?.jobKeys);
   report.analysisStatus = jobsComplete && definitionKnown ? "complete" : "partial";

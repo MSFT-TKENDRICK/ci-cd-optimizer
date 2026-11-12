@@ -1,6 +1,8 @@
 The generated formal kernel includes the Dafny JavaScript runtime. The Action
-bundle also includes bignumber.js. Their notices follow; other dependencies
-retain their notices in their respective packages.
+bundle also includes bignumber.js. Their notices follow. The self-contained
+MCP dashboard HTML embeds its bundled dependencies' license and notice files
+in the dashboard-third-party-licenses template. Other dependencies retain
+their notices in their respective packages.
 
 Dafny 4.11.0
 https://github.com/dafny-lang/dafny/blob/v4.11.0/LICENSE.txt

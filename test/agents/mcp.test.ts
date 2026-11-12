@@ -315,6 +315,60 @@ describe("MCP server GitHub tools", () => {
     expect(report.markdown).not.toContain("Estimated critical path: 60000");
   });
 
+  it("exposes an MCP App with scoped, paginated run evidence and a structured fallback", async () => {
+    const api = remoteFixture({ jobs: cappedJobs().slice(0, 7) });
+    const client = await connect({ fallbackRoot: repo, remote: {
+      allow: ["acme/widgets"], createClient: (signal) => githubReader("test-token", { signal, fetch: api.fetcher }),
+    } });
+    const tool = (await client.listTools()).tools.find((item) => item.name === MCP_TOOLS.dashboardMetrics);
+    expect(tool?._meta?.ui).toEqual({ resourceUri: "ui://ci-cd-optimizer/dashboard.html" });
+    const resource = await client.readResource({ uri: "ui://ci-cd-optimizer/dashboard.html" });
+    expect(resource.contents[0]).toMatchObject({ mimeType: "text/html;profile=mcp-app", text: expect.stringContaining("<html") });
+    const first = await data<{ metrics: { provenance: { runAttempt: number }; jobs: { id: number }[] }; pages: { jobs: { nextOffset: number } } }>(
+      client, MCP_TOOLS.dashboardMetrics, { repo: "acme/widgets", runId: 2000, layout: { sections: ["jobs", "overview"] } },
+    );
+    expect(first.metrics.provenance.runAttempt).toBe(1);
+    expect(first.metrics.jobs.map((job) => job.id)).toEqual([1, 2, 3]);
+    const next = await data<typeof first>(client, MCP_TOOLS.dashboardMetrics, {
+      repo: "acme/widgets", runId: 2000, runAttempt: 1, jobOffset: first.pages.jobs.nextOffset,
+    });
+    expect(next.metrics.jobs.map((job) => job.id)).toEqual([4, 5, 6]);
+    const selected = await data<typeof first>(client, MCP_TOOLS.dashboardMetrics, {
+      repo: "acme/widgets", runId: 2000, runAttempt: 1, jobId: 7,
+    });
+    expect(selected.metrics.jobs.map((job) => job.id)).toEqual([7]);
+    expect(await failure(client, MCP_TOOLS.dashboardMetrics, { repo: "acme/widgets", runId: 2000, jobId: 99 })).toContain("not present");
+    expect(await failure(client, MCP_TOOLS.dashboardMetrics, {
+      repo: "acme/widgets", runId: 2000, layout: { sections: ["<script>alert(1)</script>"] },
+    })).toMatch(/invalid|sections/i);
+    expect(await failure(client, MCP_TOOLS.dashboardMetrics, { repo: "other/repo", runId: 2000 })).toMatch(/allow/i);
+  });
+
+  it("bounds hostile dashboard labels while keeping later steps reachable", async () => {
+    const hostile = "<script>" + "😀".repeat(1000);
+    const jobs = cappedJobs().slice(0, 3).map((job) => ({
+      ...job, name: hostile, labels: Array(12).fill(hostile),
+      steps: Array.from({ length: 6 }, (_, index) => ({
+        number: index + 1, name: hostile, conclusion: "success",
+        started_at: job.started_at, completed_at: job.completed_at,
+      })),
+    }));
+    const api = remoteFixture({ jobs });
+    const client = await connect({ fallbackRoot: repo, remote: {
+      allow: ["acme/widgets"], createClient: (signal) => githubReader("test-token", { signal, fetch: api.fetcher }),
+    } });
+    const result = await call(client, MCP_TOOLS.dashboardMetrics, { repo: "acme/widgets", runId: 2000, jobId: 1 });
+    expect(result.isError).not.toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThan(LIMITS.outputBytes);
+    expect(JSON.stringify(result)).toContain("characters omitted");
+    const selected = result.structuredContent as { metrics: { jobs: Array<{ nextStepOffset: number; omittedLabels: number }> } };
+    expect(selected.metrics.jobs[0]).toMatchObject({ nextStepOffset: 5, omittedLabels: 7 });
+    const next = await data<{ metrics: { jobs: Array<{ steps: Array<{ number: number }> }> } }>(client, MCP_TOOLS.dashboardMetrics, {
+      repo: "acme/widgets", runId: 2000, runAttempt: 1, jobId: 1, stepOffset: 5,
+    });
+    expect(next.metrics.jobs[0]?.steps.map((step) => step.number)).toEqual([6]);
+  });
+
   it.each(["missing", "inconsistent"] as const)("keeps %s upstream totals unknown rather than substituting fetched counts", async (mode) => {
     const jobs = cappedJobs().slice(0, 200);
     const api = remoteFixture({ jobs, total: (page) => mode === "missing" ? undefined : page === 1 ? 201 : 200 });

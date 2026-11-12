@@ -34,7 +34,7 @@ async function protocol(args, cwd, run) {
   child.stdout.setEncoding("utf8").on("data", (chunk) => {
     try {
       buffer += chunk;
-      assert.ok(Buffer.byteLength(buffer) <= 1024 * 1024, "Unbounded stdout");
+      assert.ok(Buffer.byteLength(buffer) <= 4 * 1024 * 1024, "Unbounded stdout");
       for (let newline; (newline = buffer.indexOf("\n")) !== -1;) {
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
@@ -100,6 +100,24 @@ async function mcp(args, cwd) {
   });
 }
 
+async function mcpApp(args, cwd) {
+  await protocol(args, cwd, async ({ request, notify }) => {
+    await request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "package-app-smoke", version: "1" } });
+    notify("notifications/initialized", {});
+    const { tools } = await request("tools/list", {});
+    const dashboard = tools.find((tool) => tool.name === "dashboard_metrics");
+    assert.equal(dashboard?._meta?.ui?.resourceUri, "ui://ci-cd-optimizer/dashboard.html");
+    const resource = await request("resources/read", { uri: dashboard._meta.ui.resourceUri });
+    assert.equal(resource.contents[0].mimeType, "text/html;profile=mcp-app");
+    assert.match(resource.contents[0].text, /<html/i);
+    assert.match(resource.contents[0].text, /dashboard-third-party-licenses/);
+    assert.match(resource.contents[0].text, /@openuidev\/react-lang@.*LICENSE/);
+    assert.match(resource.contents[0].text, /@modelcontextprotocol\/ext-apps@.*LICENSE/);
+    const denied = await request("tools/call", { name: "dashboard_metrics", arguments: { repo: "other/repo", runId: 1 } });
+    assert.equal(denied.isError, true);
+  });
+}
+
 async function acp(args, cwd) {
   await protocol(args, cwd, async ({ request, notifications }) => {
     const initialized = await request("initialize", { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
@@ -147,16 +165,18 @@ try {
   await writeFile(join(fixture, "forbidden.mjs"), 'import { writeFileSync } from "node:fs";\nwriteFileSync(new URL("./executed", import.meta.url), "unsafe");\nthrow new Error("Forbidden import");\n');
   const before = await stat(target, { bigint: true });
   await mcp([join(pkg, "dist", "mcp-bin.js"), "--root", fixture], fixture);
+  await mcpApp([join(pkg, "dist", "mcp-bin.js"), "--root", fixture, "--enable-remote", "--repo", "acme/widgets"], fixture);
   await acp([join(pkg, "dist", "acp-bin.js")], fixture);
   // The committed plugin bundle must work as a single file, without adjacent dist/ modules or a build.
   const standalone = join(work, "standalone.mjs");
   await copyFile(join(pkg, "plugins", "ci-cd-optimizer", "server", "cicd-agents.mjs"), standalone);
   await mcp([standalone, "mcp", "--root", fixture], fixture);
+  await mcpApp([standalone, "mcp", "--root", fixture, "--enable-remote", "--repo", "acme/widgets"], fixture);
   await acp([standalone, "acp"], fixture);
   assert.equal(await readFile(target, "utf8"), workflow);
   assert.equal((await stat(target, { bigint: true })).mtimeNs, before.mtimeNs);
   await assert.rejects(stat(join(fixture, "executed")), { code: "ENOENT" });
-  console.log("Package verified: four bins, canonical plugin/skills/docs, packed MCP/ACP and standalone bundle roundtrips; no writes or local-rule imports.");
+  console.log("Package verified: four bins, canonical plugin/skills/docs, packed MCP/ACP, MCP App resources and standalone bundle roundtrips; no writes or local-rule imports.");
 } finally {
   await rm(work, { recursive: true, force: true });
 }

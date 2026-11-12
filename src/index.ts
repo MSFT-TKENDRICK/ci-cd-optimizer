@@ -6,18 +6,23 @@ import { startDurableServer } from "./webhooks/ingress.js";
 import { PostgresWebhookQueue } from "./webhooks/postgres-queue.js";
 import { startWorkers } from "./webhooks/worker.js";
 import { hostedAcpFromEnv } from "./agents/hosted.js";
+import { hostedMcpFromEnv } from "./agents/hosted-mcp.js";
 
 const WORKER_DRAIN_MS = 20_000;
 
 let queue: PostgresWebhookQueue | undefined;
 let workers: ReturnType<typeof startWorkers> | undefined;
 let hosted: ReturnType<typeof hostedAcpFromEnv>;
+let hostedMcp: ReturnType<typeof hostedMcpFromEnv>;
 try {
   // Select the transport after loading .env, with the same precedence as Probot's run().
   try { Object.assign(process.env, parseEnv(readFileSync(".env", "utf8"))); }
   catch (error) { if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error; }
   validateProductionConfiguration();
   hosted = hostedAcpFromEnv();
+  hostedMcp = hostedMcpFromEnv();
+  const agents = hosted || hostedMcp ? async (request: Parameters<NonNullable<typeof hosted>["handle"]>[0], response: Parameters<NonNullable<typeof hosted>["handle"]>[1]) =>
+    await hosted?.handle(request, response) || await hostedMcp?.handle(request, response) || false : undefined;
   const mode = process.env.WEBHOOK_QUEUE ?? "direct";
   if (mode !== "direct" && mode !== "postgres") throw new Error("WEBHOOK_QUEUE must be direct or postgres");
   let server: { stop(): Promise<void> };
@@ -25,8 +30,9 @@ try {
     server = await run((probot, options) => {
       if (hosted) {
         if (probot.webhookPath.replace(/\/+$/, "") === "/acp") throw new Error("The webhook path must not conflict with /acp.");
-        options.addHandler(hosted.handle);
       }
+      if (hostedMcp && probot.webhookPath.replace(/\/+$/, "") === "/mcp") throw new Error("The webhook path must not conflict with /mcp.");
+      if (agents) options.addHandler(agents);
       createApp()(probot);
     });
   } else {
@@ -40,13 +46,13 @@ try {
     server = await startDurableServer(probot, queue, {
       host: process.env.HOST || "localhost",
       port: Number(process.env.PORT) || 3000,
-      ...(hosted ? { agentHandler: hosted.handle } : {}),
+      ...(agents ? { agentHandler: agents } : {}),
     });
     workers = startWorkers(queue, (delivery) => consumer.receive(delivery), probot.log);
   }
   // Probot's direct-mode SIGINT handler also calls this method; close SSE before HTTP stop can wait on it.
   const stopServer = server.stop.bind(server);
-  server.stop = async () => { await hosted?.close(); await stopServer(); };
+  server.stop = async () => { await hosted?.close(); await hostedMcp?.close(); await stopServer(); };
   let stopping = false;
   const shutdown = () => {
     if (stopping) return;
@@ -69,6 +75,7 @@ try {
   if (mode === "postgres") process.once("SIGINT", shutdown);
 } catch (error) {
   await hosted?.close();
+  await hostedMcp?.close();
   await workers?.stop();
   await queue?.close();
   throw error;

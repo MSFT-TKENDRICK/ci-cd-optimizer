@@ -32,6 +32,8 @@ export interface WorkflowRunOptions {
   knowledge?: boolean;
   knowledgeStore?: () => Promise<KnowledgeStore | undefined>;
   expectedRepositoryId?: number;
+  /** Include bounded snapshots for the read-only dashboard projection. */
+  dashboardHistory?: boolean;
 }
 
 export interface WorkflowRunResult {
@@ -52,6 +54,7 @@ export interface WorkflowRunResult {
   jobBaselines?: JobBaseline[];
   attribution?: RunAttribution;
   attributionUnavailable?: string;
+  dashboardHistory?: WorkflowSnapshot[];
   benchmark?: Omit<RunBenchmark, "schema" | "repositoryId" | "collectedAt">;
 }
 
@@ -137,6 +140,7 @@ export async function processWorkflowRun(client: GitHubClient, repo: RepoRef, ru
     status: "processed", snapshot, samples: prior.length, report, ...(baseline ? { baseline } : {}),
     ...(diagnostic ? { baselineDiagnostic: diagnostic } : {}), ...(jobs.length ? { jobBaselines: jobs } : {}),
     ...(attribution ? { attribution } : {}), ...(attributionUnavailable ? { attributionUnavailable } : {}),
+    ...(options.dashboardHistory ? { dashboardHistory: history } : {}),
     benchmark: benchmarkRun(snapshot, attribution, prior.at(-1), history),
     ...(knowledge ? { knowledge } : {}), ...(knowledgeSkipped ? { knowledgeSkipped } : {}),
   };
