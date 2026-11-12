@@ -514,6 +514,23 @@ export const RULE_ASSURANCE = {
       "optionalModelCertificates": []
     },
     {
+      "id": "hermeticity/actions-lock",
+      "metadataSha256": "efd22beb8a127a67ccfc99acab8e3854f55f6524dd761f040a0f79f97217afbf",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Use a verified workflow dependency lockfile as an alternative to SHA-pinning mutable action refs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "GitHub's generated actions.lock records commits for direct and transitive action dependencies and can replace mutable refs; full SHA pins remain a valid alternative. This rule checks direct workflow action refs against declared entries, not transitive closure, commit provenance, or runtime enforcement. Use the networked `gh actions-lock --verify` check and review lockfile diffs. The lockfile does not cover remote reusable workflows or container images."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
       "id": "hermeticity/docker-base-digest",
       "metadataSha256": "0315481c809df21356dd5fd7985c1b56c16e05d813979912cab7ed7247adf3a7",
       "detector": {
@@ -549,14 +566,14 @@ export const RULE_ASSURANCE = {
     },
     {
       "id": "hermeticity/pin-actions",
-      "metadataSha256": "428a509988c70abef3b8ea941952d3929df6d906cae55412ee2e4a8a0a1c22ac",
+      "metadataSha256": "c57bea354d3c12551f1a8c9ff2ac7d9bc7573ea65a1a31a8b4d3ab94f22c719e",
       "detector": {
         "assurance": "heuristic-not-formally-proved",
-        "claim": "Third-party actions and reusable workflows should be pinned to a full commit SHA."
+        "claim": "Third-party actions and reusable workflows should use immutable references or a workflow dependency lockfile."
       },
       "recommendation": {
         "assurance": "conditional-not-universally-proved",
-        "rationale": "Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)"
+        "rationale": "Tags and branches can be moved, so `@v4` may run different code tomorrow than today. Use a full-length commit SHA, or cover direct and transitive action dependencies in GitHub's workflow dependency lockfile. The lockfile does not cover reusable workflow calls or container images, and static analysis cannot verify provenance or reachability."
       },
       "autofix": "not-provided",
       "engineContracts": [

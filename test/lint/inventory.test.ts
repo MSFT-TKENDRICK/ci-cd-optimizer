@@ -19,6 +19,7 @@ const paths = [
   ".sdkmanrc", "gradle.properties", "gradle/wrapper/gradle-wrapper.properties", "go.work", "uv.lock",
   "requirements/ci.txt", "requirements-extra.txt", "docker/app.containerfile", "docker/app.dockerignore",
   ".github/renovate.json5", ".renovaterc.json", ".renovaterc.json5", "pnpm-workspace.yaml",
+  ".github/workflows/actions.lock",
 ];
 const contents: Record<string, string> = Object.fromEntries(paths.map((path) => [path, "\n"]));
 Object.assign(contents, {
