@@ -501,11 +501,32 @@ Reload restarts the existing session-scoped MCP server with the current bundle a
 it never re-enables a disabled server.
 The distroless production App image is not the development container and does not run this editor harness.
 
-The bridge queues fixed remediation guidance plus explicitly untrusted benchmark evidence into its own conversation.
-It persists an accepted-message receipt before invoking the native `feedback_ack` tool. Acknowledgement changes only
-the MCP process outbox; it never writes to GitHub. Native denial stops delivery retries, not the permission boundary.
-Receipt storage is per workspace/session, bounded to 5,000 recent entries. This is **at-least-once**, not exactly-once:
-a crash between accepting a message and persisting its receipt can replay the message.
+The bridge queues fixed remediation guidance plus explicitly untrusted benchmark evidence into its own conversation
+as **digests, not one chat turn per run**. It collects unseen events for 60 seconds after first discovering them,
+without extending that window on each arrival, and accepts at most one digest every ten minutes. Resource-change
+notifications are debounced and a 60-second polling fallback remains. The cooldown is persisted across reconnects.
+These are delivery-noise defaults, not changes to benchmarking, finding detection or replay coverage.
+
+Each digest retains complete bounded event payloads, including exact run/attempt identifiers, evidence, rollups
+and omissions. The JSON array is capped at 112 KiB plus its two brackets; overflow remains unacknowledged for later
+intervals rather than being dropped or summarized away. Trusted guidance groups related workflow/branch/trigger
+series without conflating incomparable runs and requests at most one eighty-word user-facing rollup for the entire
+digest. It suppresses routine receipt/status narration and repeated analysis of unchanged findings, not new actionable
+outcomes or blocking evidence gaps. Digests enqueue behind current work rather than interrupting it.
+
+The bridge checks receipt storage before sending, then persists the accepted message ID for every included event
+before invoking the native `feedback_ack` tool for any of them. Acknowledgement changes only the MCP process outbox;
+it never writes to GitHub. Acknowledgement retries do not wait for the next digest, and native denial stops the remaining
+batch and timers, not the permission boundary. Receipt storage is per workspace/session, bounded to 5,000 recent entries.
+This is **at-least-once**, not exactly-once: a crash between accepting a message and persisting its receipt can replay
+the message. A receipt-write failure pauses further delivery without acknowledging pending evidence.
+
+Repeated identical errors are logged once while unresolved; different error updates are coalesced to at most one log
+every ten minutes. `ci_feedback_connection_status` still exposes the latest `lastError`, sticky `replayGap` and
+`suppressedErrorUpdates`, plus `pending`, `nextDeliveryAt`, `coalesceMs` and `deliveryIntervalMs`.
+`accepted` counts events and `digests` counts queued messages in this connection; `receipts` counts retained
+session receipts, including any awaiting a failed persistence retry. Missing storage or incomplete collection is
+an explicit delivery gap, never evidence of no findings.
 
 The watcher polls every 60 seconds per allowlisted repository (maximum five), replays at most seven days/1,000
 producer runs per repository, and holds 50 unacknowledged events without silently evicting them. Each poll fetches
