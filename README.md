@@ -232,12 +232,12 @@ registers itself as the reference example in [projects/ci-cd-optimizer](projects
 
 ## What it finds
 
-131 rules in 15 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
+132 rules in 15 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
 suppressions.
 
 | Ruleset | Examples |
 |---|---|
-| `workflow` | Concurrency cancellation, job timeouts, merge queue support, matrix coverage/budgets, duplicate triggers, setup version files |
+| `workflow` | Artifact-backed job success gates, concurrency cancellation, job timeouts, merge queue support, matrix coverage/budgets, duplicate triggers, setup version files |
 | `checkout` | Sparse checkout, partial clone (`filter: blob:none`), correct base refs for affected detection |
 | `affected` | Change detection, affected-only test selection instead of `nx run-many`, `turbo run`, `lerna run`, `pnpm -r`, workspace-wide npm/Yarn, or `bazel test //...`, path-filtered required checks |
 | `caching` | setup-* dependency caches, build-tool caches, matrix platform compatibility, artifact compression, redundant installs |
@@ -256,6 +256,10 @@ Presets are `recommended` (default), `strict`, `agentic`, `github`, `insights`, 
 rationale, examples, and references is in [docs/rules.md](docs/rules.md). Configuration is covered in
 [docs/configuration.md](docs/configuration.md), and suppressions and custom local rules in
 [docs/linter.md](docs/linter.md#suppressions).
+
+The [job dependency check](docs/linter.md#job-dependency-success-gates) links literal same-run artifact transfers
+to missing `needs` paths without serializing independent jobs. It excludes intentional failure handlers and
+aggregates, offers no autofix, and does not claim measured runner-minute savings.
 
 The directory, Git-revision, and GitHub API loaders share an inventory of workflows/composite actions, Dockerfiles
 and containerfiles, package manifests/locks, `*.nix`, `flake.lock`, devenv files, `.cargo/config[.toml]`, Gradle

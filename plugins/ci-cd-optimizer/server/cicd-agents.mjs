@@ -68906,6 +68906,102 @@ var artifact_retention_default = defineRule({
   }
 });
 
+// src/lint/rules/workflow/artifact-success-gating.ts
+function successOnly(condition) {
+  const expression = condition?.trim().replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/, "$1").replace(/\s+/g, "");
+  return expression === void 0 || expression === "success()" || expression === "true";
+}
+function allowsFailure(workflow, job, step) {
+  const entry2 = field(workflow.source, step ? stepNode2(workflow.source, step) : jobNode3(workflow.source, job), "continue-on-error");
+  return entry2 !== void 0 && scalarValue(entry2.value) !== false;
+}
+function artifactName(step, upload) {
+  const name = step.with.get("name");
+  if (!name) return upload ? "artifact" : void 0;
+  return name.kind === "literal" && typeof name.value === "string" && name.value.trim() !== "" ? name.value : void 0;
+}
+function handlesOutcomes(workflow, job) {
+  const seen = /* @__PURE__ */ new Set();
+  function inspect2(value) {
+    if (typeof value === "string") {
+      return /\bneeds\s*(?:\.|\[)|\btoJSON\s*\(\s*needs\b|\b(?:always|failure|cancelled)\s*\(/i.test(value);
+    }
+    if (value === null || typeof value !== "object" || seen.has(value)) return false;
+    seen.add(value);
+    return Object.values(value).some(inspect2);
+  }
+  return inspect2(toJS(workflow.source, jobNode3(workflow.source, job)));
+}
+var artifact_success_gating_default = defineRule({
+  meta: {
+    id: "workflow/artifact-success-gating",
+    ruleset: "workflow",
+    description: "Success-gate same-run artifact consumers on their producer jobs.",
+    rationale: "A literal artifact upload/download pair identifies a data prerequisite, unlike job names. Without a needs path, the consumer can start before the producer finishes, or continue after its failure. An artifact may already exist when a later producer step fails. GitHub needs skips dependent jobs after failure through the dependency chain; it cannot cancel independent work already running. Review the artifact contract before adding a direct needs edge; do not serialize unrelated checks or restrict intentional failure handlers and required-check aggregates. These warnings identify a static gating gap, not measured waste or guaranteed removable runner minutes.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    fixable: false,
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds",
+      "https://docs.github.com/en/actions/tutorials/store-and-share-data",
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions"
+    ],
+    impact: "high",
+    example: {
+      bad: "jobs:\n  producer:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact@v4\n        with:\n          name: dist\n          path: dist\n  consumer:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          name: dist",
+      good: "jobs:\n  producer:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact@v4\n        with:\n          name: dist\n          path: dist\n  consumer:\n    needs: producer\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          name: dist"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow") continue;
+      const producers = /* @__PURE__ */ new Map();
+      let unknownUpload = false;
+      for (const job of workflow.jobs) {
+        for (const step of job.steps) {
+          if (step.uses?.action.name !== "actions/upload-artifact") continue;
+          const name = artifactName(step, true);
+          if (name === void 0) unknownUpload = true;
+          else producers.set(name, [...producers.get(name) ?? [], { job, step }]);
+        }
+      }
+      if (unknownUpload) continue;
+      for (const job of workflow.jobs) {
+        if (!successOnly(job.if) || handlesOutcomes(workflow, job) || allowsFailure(workflow, job)) continue;
+        const dependencies = ancestors(workflow, job);
+        const reported = /* @__PURE__ */ new Set();
+        for (const step of job.steps) {
+          if (step.uses?.action.name !== "actions/download-artifact" || !successOnly(step.if)) continue;
+          if (allowsFailure(workflow, job, step)) continue;
+          if (["run-id", "repository", "github-token", "artifact-ids", "pattern"].some((key) => step.with.has(key))) continue;
+          const name = artifactName(step, false);
+          if (name === void 0) continue;
+          const candidates2 = producers.get(name);
+          if (candidates2?.length !== 1) continue;
+          const producer = candidates2[0];
+          if (!producer || producer.job === job || producer.job.matrix || producer.job.uses) continue;
+          if (!successOnly(producer.job.if) || !successOnly(producer.step.if)) continue;
+          if (allowsFailure(workflow, producer.job) || allowsFailure(workflow, producer.job, producer.step)) continue;
+          if (dependencies.includes(producer.job) || ancestors(workflow, producer.job).includes(job) || reported.has(producer.job.id)) continue;
+          reported.add(producer.job.id);
+          report({
+            path: workflow.path,
+            line: step.uses.line,
+            key: `${job.key}.artifact-success-gating.${producer.job.id}`,
+            message: `Job \`${job.id}\` downloads artifact \`${name}\` uploaded by \`${producer.job.id}\`, but has no needs path to that producer. It can run without waiting for producer success, including after a producer failure.`,
+            suggestion: `If this artifact is required success-path input, add \`${producer.job.id}\` to \`${job.id}\`'s direct needs (preserve existing dependencies). Verify all triggers, failure/skip paths and artifact availability first. Keep cleanup, diagnostics and required-check aggregation able to run and propagate failures; do not apply this gate to intentional failure handlers. No autofix or runner-minute savings estimate is provided.`,
+            related: [{ path: workflow.path, line: producer.step.uses?.line ?? producer.step.line }],
+            confidence: "high"
+          });
+        }
+      }
+    }
+  }
+});
+
 // src/lint/rules/workflow/concurrency.ts
 var GROUP = "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}";
 var CANCEL = "${{ github.event_name == 'pull_request' }}";
@@ -69282,7 +69378,7 @@ var larger_runner_unjustified_default = defineRule({
 });
 
 // src/lint/rules/workflow/matrix-explosion.ts
-var import_yaml36 = __toESM(require_dist2(), 1);
+var import_yaml37 = __toESM(require_dist2(), 1);
 var LIMIT = 256;
 var ENUMERATION_CAP = 5e4;
 var isPrimitive2 = (value) => value === null || ["string", "number", "boolean"].includes(typeof value);
@@ -69294,7 +69390,7 @@ function records2(value) {
 }
 function scalarTexts(source, content3, node2) {
   const nodes = items(source, node2);
-  const texts = nodes.map((item) => (0, import_yaml36.isScalar)(item) && item.range ? content3.slice(item.range[0], item.range[1]) : void 0);
+  const texts = nodes.map((item) => (0, import_yaml37.isScalar)(item) && item.range ? content3.slice(item.range[0], item.range[1]) : void 0);
   const flowSafe = (text4) => text4 !== void 0 && !text4.includes("\n") && (/^["']/.test(text4) || !/[,[\]{}]/.test(text4));
   return texts.every(flowSafe) ? texts : void 0;
 }
@@ -69796,7 +69892,7 @@ Inspect ${tool2.rangeFiles.join(" and ")} before reusing them: constraints may a
 });
 
 // src/lint/rules/workflow/unnecessary-needs-serialization.ts
-var import_yaml39 = __toESM(require_dist2(), 1);
+var import_yaml40 = __toESM(require_dist2(), 1);
 var DEPLOY = /deploy|release|publish|promote|rollout|ship/i;
 var GATE = /test|lint|build|check|verify|validat|typecheck|compile|scan|audit|\bci\b|e2e|smoke|format|fmt|analy|codeql|security|review|approv|gate|guard|preflight|sanity|wait|lock|migrat|provision|setup-env|infra/i;
 var STANDARD_RUNNER = /^(ubuntu|windows|macos)-(latest|\d[\w.]*)(-arm|-intel)?$/;
@@ -69852,7 +69948,7 @@ function needsLine(workflow, job, dependency) {
   const source = workflow.source;
   const needs = field(source, jobNode6(workflow, job), "needs");
   if (!needs) return job.line;
-  const item = items(source, needs.value).find((node2) => (0, import_yaml39.isScalar)(node2) && String(node2.value) === dependency);
+  const item = items(source, needs.value).find((node2) => (0, import_yaml40.isScalar)(node2) && String(node2.value) === dependency);
   return item ? lineOfNode(source, item) : needs.line;
 }
 function standardHosted(job) {
@@ -69920,6 +70016,7 @@ var unnecessary_needs_serialization_default = defineRule({
 // src/lint/rules/workflow/index.ts
 var rules15 = [
   artifact_retention_default,
+  artifact_success_gating_default,
   concurrency_default,
   duplicate_push_pull_request_trigger_default,
   job_timeout_default,
@@ -71447,7 +71544,7 @@ function snapshotIdentity(snapshot) {
 }
 
 // src/knowledge/extract.ts
-var import_yaml42 = __toESM(require_dist2(), 1);
+var import_yaml43 = __toESM(require_dist2(), 1);
 var packageName3 = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 var managers = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
 var toolFiles = {
@@ -71578,7 +71675,7 @@ function extractKnowledge(repository, revision, input3, options = {}) {
   if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
   else if (pnpm) {
     try {
-      const parsed = (0, import_yaml42.parseDocument)(pnpm.content, { uniqueKeys: true });
+      const parsed = (0, import_yaml43.parseDocument)(pnpm.content, { uniqueKeys: true });
       if (parsed.errors.length) throw new Error("Invalid workspace YAML");
       const value = parsed.toJS();
       addWorkspace(record5(value) ? value.packages : void 0, pnpm, "/packages");
@@ -74127,7 +74224,7 @@ function escapeCell(value) {
 }
 
 // src/telemetry/snapshot.ts
-var import_yaml43 = __toESM(require_dist2(), 1);
+var import_yaml44 = __toESM(require_dist2(), 1);
 function isExternalCheckRun(job, key) {
   return key === void 0 && !job.runner_id && !job.runner_name && !job.steps?.length && typeof job.html_url === "string" && !/\/actions\/runs\/\d+\/job\/\d+/.test(job.html_url);
 }
@@ -74137,7 +74234,7 @@ function workflowPath(path) {
 function parseJobDefinitions(text4) {
   let document;
   try {
-    document = (0, import_yaml43.parse)(text4);
+    document = (0, import_yaml44.parse)(text4);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -74631,7 +74728,7 @@ function validateMitigationApplicationEvent(event) {
 }
 
 // src/recipes/recipe.ts
-var import_yaml44 = __toESM(require_dist2(), 1);
+var import_yaml45 = __toESM(require_dist2(), 1);
 
 // src/service/recipe-knowledge.ts
 function time3(value) {
@@ -77050,6 +77147,23 @@ var RULE_ASSURANCE = {
       "optionalModelCertificates": []
     },
     {
+      "id": "workflow/artifact-success-gating",
+      "metadataSha256": "a497359a41cb440f09a52fa61a35d23f25fb4efb8c541ce041ef20d0bc20ae05",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Success-gate same-run artifact consumers on their producer jobs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A literal artifact upload/download pair identifies a data prerequisite, unlike job names. Without a needs path, the consumer can start before the producer finishes, or continue after its failure. An artifact may already exist when a later producer step fails. GitHub needs skips dependent jobs after failure through the dependency chain; it cannot cancel independent work already running. Review the artifact contract before adding a direct needs edge; do not serialize unrelated checks or restrict intentional failure handlers and required-check aggregates. These warnings identify a static gating gap, not measured waste or guaranteed removable runner minutes."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
       "id": "workflow/concurrency",
       "metadataSha256": "a936c1f146e39da184e57ebaa76bbe9c79202bc21988104cfe8644d69d41d1b7",
       "detector": {
@@ -77280,7 +77394,7 @@ function explainRuleText(id2, rules16, severities) {
 }
 
 // src/review/project.ts
-var import_yaml45 = __toESM(require_dist2(), 1);
+var import_yaml46 = __toESM(require_dist2(), 1);
 
 // src/review/escape.ts
 var LINE_BREAKS = /[\r\n\t\v\f\u0085\u2028\u2029]+/g;
@@ -77315,7 +77429,7 @@ function parseStrictYaml(text4, maxBytes, label2) {
   if (/^%/m.test(text4)) return { problems: [`${label2} must not contain YAML directives (lines starting with %).`] };
   let documents;
   try {
-    documents = (0, import_yaml45.parseAllDocuments)(text4, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+    documents = (0, import_yaml46.parseAllDocuments)(text4, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
   } catch (error62) {
     return { problems: [`${label2} is not valid YAML (${describeValue(error62 instanceof Error ? error62.message : String(error62))}).`] };
   }
@@ -77328,20 +77442,20 @@ function parseStrictYaml(text4, maxBytes, label2) {
   for (const issue2 of [...document.errors, ...document.warnings]) {
     problems.push(`${label2} is not valid YAML: ${issue2.code} at line ${issue2.linePos?.[0]?.line ?? "?"}.`);
   }
-  if (!(0, import_yaml45.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
-  (0, import_yaml45.visit)(document, {
+  if (!(0, import_yaml46.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
+  (0, import_yaml46.visit)(document, {
     Alias() {
       problems.push(`${label2} must not use YAML aliases (*name).`);
-      return import_yaml45.visit.BREAK;
+      return import_yaml46.visit.BREAK;
     },
     Node(_key, node2) {
       if (node2.anchor) problems.push(`${label2} must not use YAML anchors (&name).`);
       if (node2.tag) problems.push(`${label2} must not use YAML tags (${describeValue(node2.tag)}).`);
     },
     Pair(_key, pair) {
-      if (!(0, import_yaml45.isScalar)(pair.key) || typeof pair.key.value !== "string") {
+      if (!(0, import_yaml46.isScalar)(pair.key) || typeof pair.key.value !== "string") {
         problems.push(`${label2} keys must be plain strings.`);
-        return import_yaml45.visit.SKIP;
+        return import_yaml46.visit.SKIP;
       }
       if (pair.key.value === "<<") problems.push(`${label2} must not use YAML merge keys (<<).`);
       return void 0;

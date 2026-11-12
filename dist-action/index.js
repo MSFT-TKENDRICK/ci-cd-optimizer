@@ -32210,6 +32210,102 @@ var artifact_retention_default = defineRule({
   }
 });
 
+// src/lint/rules/workflow/artifact-success-gating.ts
+function successOnly(condition) {
+  const expression2 = condition?.trim().replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/, "$1").replace(/\s+/g, "");
+  return expression2 === void 0 || expression2 === "success()" || expression2 === "true";
+}
+function allowsFailure(workflow, job, step) {
+  const entry2 = field(workflow.source, step ? stepNode2(workflow.source, step) : jobNode3(workflow.source, job), "continue-on-error");
+  return entry2 !== void 0 && scalarValue(entry2.value) !== false;
+}
+function artifactName(step, upload) {
+  const name = step.with.get("name");
+  if (!name) return upload ? "artifact" : void 0;
+  return name.kind === "literal" && typeof name.value === "string" && name.value.trim() !== "" ? name.value : void 0;
+}
+function handlesOutcomes(workflow, job) {
+  const seen = /* @__PURE__ */ new Set();
+  function inspect2(value2) {
+    if (typeof value2 === "string") {
+      return /\bneeds\s*(?:\.|\[)|\btoJSON\s*\(\s*needs\b|\b(?:always|failure|cancelled)\s*\(/i.test(value2);
+    }
+    if (value2 === null || typeof value2 !== "object" || seen.has(value2)) return false;
+    seen.add(value2);
+    return Object.values(value2).some(inspect2);
+  }
+  return inspect2(toJS(workflow.source, jobNode3(workflow.source, job)));
+}
+var artifact_success_gating_default = defineRule({
+  meta: {
+    id: "workflow/artifact-success-gating",
+    ruleset: "workflow",
+    description: "Success-gate same-run artifact consumers on their producer jobs.",
+    rationale: "A literal artifact upload/download pair identifies a data prerequisite, unlike job names. Without a needs path, the consumer can start before the producer finishes, or continue after its failure. An artifact may already exist when a later producer step fails. GitHub needs skips dependent jobs after failure through the dependency chain; it cannot cancel independent work already running. Review the artifact contract before adding a direct needs edge; do not serialize unrelated checks or restrict intentional failure handlers and required-check aggregates. These warnings identify a static gating gap, not measured waste or guaranteed removable runner minutes.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    fixable: false,
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds",
+      "https://docs.github.com/en/actions/tutorials/store-and-share-data",
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions"
+    ],
+    impact: "high",
+    example: {
+      bad: "jobs:\n  producer:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact@v4\n        with:\n          name: dist\n          path: dist\n  consumer:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          name: dist",
+      good: "jobs:\n  producer:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact@v4\n        with:\n          name: dist\n          path: dist\n  consumer:\n    needs: producer\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          name: dist"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow") continue;
+      const producers = /* @__PURE__ */ new Map();
+      let unknownUpload = false;
+      for (const job of workflow.jobs) {
+        for (const step of job.steps) {
+          if (step.uses?.action.name !== "actions/upload-artifact") continue;
+          const name = artifactName(step, true);
+          if (name === void 0) unknownUpload = true;
+          else producers.set(name, [...producers.get(name) ?? [], { job, step }]);
+        }
+      }
+      if (unknownUpload) continue;
+      for (const job of workflow.jobs) {
+        if (!successOnly(job.if) || handlesOutcomes(workflow, job) || allowsFailure(workflow, job)) continue;
+        const dependencies = ancestors(workflow, job);
+        const reported = /* @__PURE__ */ new Set();
+        for (const step of job.steps) {
+          if (step.uses?.action.name !== "actions/download-artifact" || !successOnly(step.if)) continue;
+          if (allowsFailure(workflow, job, step)) continue;
+          if (["run-id", "repository", "github-token", "artifact-ids", "pattern"].some((key2) => step.with.has(key2))) continue;
+          const name = artifactName(step, false);
+          if (name === void 0) continue;
+          const candidates2 = producers.get(name);
+          if (candidates2?.length !== 1) continue;
+          const producer = candidates2[0];
+          if (!producer || producer.job === job || producer.job.matrix || producer.job.uses) continue;
+          if (!successOnly(producer.job.if) || !successOnly(producer.step.if)) continue;
+          if (allowsFailure(workflow, producer.job) || allowsFailure(workflow, producer.job, producer.step)) continue;
+          if (dependencies.includes(producer.job) || ancestors(workflow, producer.job).includes(job) || reported.has(producer.job.id)) continue;
+          reported.add(producer.job.id);
+          report({
+            path: workflow.path,
+            line: step.uses.line,
+            key: `${job.key}.artifact-success-gating.${producer.job.id}`,
+            message: `Job \`${job.id}\` downloads artifact \`${name}\` uploaded by \`${producer.job.id}\`, but has no needs path to that producer. It can run without waiting for producer success, including after a producer failure.`,
+            suggestion: `If this artifact is required success-path input, add \`${producer.job.id}\` to \`${job.id}\`'s direct needs (preserve existing dependencies). Verify all triggers, failure/skip paths and artifact availability first. Keep cleanup, diagnostics and required-check aggregation able to run and propagate failures; do not apply this gate to intentional failure handlers. No autofix or runner-minute savings estimate is provided.`,
+            related: [{ path: workflow.path, line: producer.step.uses?.line ?? producer.step.line }],
+            confidence: "high"
+          });
+        }
+      }
+    }
+  }
+});
+
 // src/lint/rules/workflow/concurrency.ts
 var GROUP = "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}";
 var CANCEL = "${{ github.event_name == 'pull_request' }}";
@@ -32586,7 +32682,7 @@ var larger_runner_unjustified_default = defineRule({
 });
 
 // src/lint/rules/workflow/matrix-explosion.ts
-var import_yaml35 = __toESM(require_dist(), 1);
+var import_yaml36 = __toESM(require_dist(), 1);
 var LIMIT = 256;
 var ENUMERATION_CAP = 5e4;
 var isPrimitive2 = (value2) => value2 === null || ["string", "number", "boolean"].includes(typeof value2);
@@ -32598,7 +32694,7 @@ function records2(value2) {
 }
 function scalarTexts(source, content2, node2) {
   const nodes = items(source, node2);
-  const texts = nodes.map((item) => (0, import_yaml35.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
+  const texts = nodes.map((item) => (0, import_yaml36.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
   const flowSafe = (text7) => text7 !== void 0 && !text7.includes("\n") && (/^["']/.test(text7) || !/[,[\]{}]/.test(text7));
   return texts.every(flowSafe) ? texts : void 0;
 }
@@ -33100,7 +33196,7 @@ Inspect ${tool2.rangeFiles.join(" and ")} before reusing them: constraints may a
 });
 
 // src/lint/rules/workflow/unnecessary-needs-serialization.ts
-var import_yaml38 = __toESM(require_dist(), 1);
+var import_yaml39 = __toESM(require_dist(), 1);
 var DEPLOY = /deploy|release|publish|promote|rollout|ship/i;
 var GATE = /test|lint|build|check|verify|validat|typecheck|compile|scan|audit|\bci\b|e2e|smoke|format|fmt|analy|codeql|security|review|approv|gate|guard|preflight|sanity|wait|lock|migrat|provision|setup-env|infra/i;
 var STANDARD_RUNNER = /^(ubuntu|windows|macos)-(latest|\d[\w.]*)(-arm|-intel)?$/;
@@ -33156,7 +33252,7 @@ function needsLine(workflow, job, dependency) {
   const source = workflow.source;
   const needs = field(source, jobNode6(workflow, job), "needs");
   if (!needs) return job.line;
-  const item = items(source, needs.value).find((node2) => (0, import_yaml38.isScalar)(node2) && String(node2.value) === dependency);
+  const item = items(source, needs.value).find((node2) => (0, import_yaml39.isScalar)(node2) && String(node2.value) === dependency);
   return item ? lineOfNode(source, item) : needs.line;
 }
 function standardHosted(job) {
@@ -33224,6 +33320,7 @@ var unnecessary_needs_serialization_default = defineRule({
 // src/lint/rules/workflow/index.ts
 var rules15 = [
   artifact_retention_default,
+  artifact_success_gating_default,
   concurrency_default,
   duplicate_push_pull_request_trigger_default,
   job_timeout_default,
@@ -35351,6 +35448,23 @@ var RULE_ASSURANCE = {
       "optionalModelCertificates": []
     },
     {
+      "id": "workflow/artifact-success-gating",
+      "metadataSha256": "a497359a41cb440f09a52fa61a35d23f25fb4efb8c541ce041ef20d0bc20ae05",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Success-gate same-run artifact consumers on their producer jobs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A literal artifact upload/download pair identifies a data prerequisite, unlike job names. Without a needs path, the consumer can start before the producer finishes, or continue after its failure. An artifact may already exist when a later producer step fails. GitHub needs skips dependent jobs after failure through the dependency chain; it cannot cancel independent work already running. Review the artifact contract before adding a direct needs edge; do not serialize unrelated checks or restrict intentional failure handlers and required-check aggregates. These warnings identify a static gating gap, not measured waste or guaranteed removable runner minutes."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
       "id": "workflow/concurrency",
       "metadataSha256": "a936c1f146e39da184e57ebaa76bbe9c79202bc21988104cfe8644d69d41d1b7",
       "detector": {
@@ -35519,7 +35633,7 @@ function assuranceText(id2) {
 }
 
 // src/lint/config.ts
-var import_yaml40 = __toESM(require_dist(), 1);
+var import_yaml41 = __toESM(require_dist(), 1);
 
 // node_modules/bignumber.js/bignumber.mjs
 var isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
@@ -40265,7 +40379,7 @@ function validateConfig(input3, rules16) {
 function parseConfigText(text7, rules16, path = CONFIG_PATHS[0] ?? "config") {
   let raw;
   try {
-    raw = (0, import_yaml40.parse)(text7, { maxAliasCount: 100 });
+    raw = (0, import_yaml41.parse)(text7, { maxAliasCount: 100 });
   } catch (error63) {
     return {
       config: structuredClone(DEFAULT_CONFIG),
@@ -40689,7 +40803,7 @@ function renderRulesMarkdown(rules16) {
 var VERSION = "0.2.0";
 
 // src/cli/experiments.ts
-var import_yaml46 = __toESM(require_dist(), 1);
+var import_yaml47 = __toESM(require_dist(), 1);
 import { appendFile, readdir as readdir3, readFile as readFile4, stat as stat5 } from "node:fs/promises";
 import { join as join7 } from "node:path";
 import { parseArgs as parseArgs3 } from "node:util";
@@ -41073,7 +41187,7 @@ function decodeCiEvidence(value2) {
 }
 
 // src/experiments/manifest.ts
-var import_yaml42 = __toESM(require_dist(), 1);
+var import_yaml43 = __toESM(require_dist(), 1);
 var EXPERIMENT_PREFIX = "experiments/";
 var TRUNK = "trunk";
 var NAME2 = /^[a-z0-9][a-z0-9-]{1,47}$/;
@@ -41171,13 +41285,13 @@ function validateManifest(input3, options = {}) {
 }
 function parseManifest2(text7, options = {}) {
   try {
-    return validateManifest((0, import_yaml42.parse)(text7), options);
+    return validateManifest((0, import_yaml43.parse)(text7), options);
   } catch (error63) {
     return { problems: [{ path: "experiment.yml", message: error63.message }] };
   }
 }
 function serializeManifest(manifest) {
-  return (0, import_yaml42.stringify)(manifest, { lineWidth: 0 });
+  return (0, import_yaml43.stringify)(manifest, { lineWidth: 0 });
 }
 function scoreRubric(scores, rubric) {
   const total = rubric.criteria.reduce((sum2, criterion) => sum2 + criterion.weight, 0) || 1;
@@ -41265,7 +41379,7 @@ function reduceCandidates(candidates2, minimum, influence, running, expired) {
 }
 
 // src/experiments/config.ts
-var import_yaml43 = __toESM(require_dist(), 1);
+var import_yaml44 = __toESM(require_dist(), 1);
 var HILL_CLIMB_CONFIG_PATH = ".github/hill-climb.yml";
 var CORPUS_METRICS = ["precision", "recall", "f1", "fixRate", "durationMs"];
 var DEFAULT_RUBRIC = {
@@ -41390,7 +41504,7 @@ function validateHillClimbConfig(input3) {
 function parseHillClimbConfig(text7) {
   if (text7 === void 0) return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [] };
   try {
-    const raw = (0, import_yaml43.parse)(text7);
+    const raw = (0, import_yaml44.parse)(text7);
     return validateHillClimbConfig(raw ?? {});
   } catch (error63) {
     return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [{ path: HILL_CLIMB_CONFIG_PATH, message: error63.message }] };
@@ -41724,7 +41838,7 @@ function mergeMeasurement(measurements, update2) {
 }
 
 // src/experiments/corpus.ts
-var import_yaml44 = __toESM(require_dist(), 1);
+var import_yaml45 = __toESM(require_dist(), 1);
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join as join2, relative as relative2, sep } from "node:path";
 var ratio = (numerator, denominator) => denominator === 0 ? 1 : numerator / denominator;
@@ -41832,7 +41946,7 @@ async function walk(root, directory = root) {
   return files.flat().sort();
 }
 function parseCase(id2, text7, files) {
-  const raw = (0, import_yaml44.parse)(text7) ?? {};
+  const raw = (0, import_yaml45.parse)(text7) ?? {};
   const expected = Array.isArray(raw.expected) ? raw.expected.map((entry2) => {
     const item = entry2;
     if (typeof item.rule !== "string" || typeof item.path !== "string") throw new Error(`${id2}: expected entries need rule and path`);
@@ -42555,7 +42669,7 @@ function parseMeasurements(text7) {
 }
 
 // src/experiments/propose.ts
-var import_yaml45 = __toESM(require_dist(), 1);
+var import_yaml46 = __toESM(require_dist(), 1);
 
 // src/formal/generated/manifest.ts
 var PROOF_BUILD = {
@@ -42567,7 +42681,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "6afe44f53111ac1a120dbf97c94a5027d893243d8cfed214c76b523a5504a2f6",
+  "implementationSha256": "1e483772ccd5d9d4bbafe0e2451b78ebe65ef8936a0b9befaf84d9ab4039edb2",
   "generatorSha256": "ea737477f2d148397dbd83697441713e2f12a542ce95f706181ff9563fb64699",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -42729,7 +42843,7 @@ function validateProposal(text7, options) {
   const expiresAt = new Date(now2.getTime() + options.config.selection.maxAgeDays * DAY2).toISOString();
   let raw;
   try {
-    raw = (0, import_yaml45.parse)(text7);
+    raw = (0, import_yaml46.parse)(text7);
   } catch (error63) {
     return { errors: [`manifest: ${error63.message}`] };
   }
@@ -43779,7 +43893,7 @@ function structured(value2) {
   try {
     return JSON.parse(value2);
   } catch {
-    return (0, import_yaml46.parse)(value2);
+    return (0, import_yaml47.parse)(value2);
   }
 }
 async function measurementFiles(io, path) {
@@ -45009,7 +45123,7 @@ function classifyIssueOutcome(issue2) {
 }
 
 // src/recipes/recipe.ts
-var import_yaml47 = __toESM(require_dist(), 1);
+var import_yaml48 = __toESM(require_dist(), 1);
 var RECIPES_DIR = "recipes";
 var RECIPE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 var MAX_PATCH_CHARS = 6e4;
@@ -45101,7 +45215,7 @@ function buildRecipe(options) {
   return { recipe, changed: serializeRecipe(recipe) !== serializeRecipe(previous2) };
 }
 function serializeRecipe(recipe) {
-  return (0, import_yaml47.stringify)(recipe, { lineWidth: 0 });
+  return (0, import_yaml48.stringify)(recipe, { lineWidth: 0 });
 }
 var isRecord4 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 var strings2 = (value2) => Array.isArray(value2) ? value2.filter((item) => typeof item === "string") : [];
@@ -45109,7 +45223,7 @@ var num = (value2) => typeof value2 === "number" && Number.isFinite(value2) ? va
 function parseRecipe(text7) {
   let raw;
   try {
-    raw = (0, import_yaml47.parse)(text7, { maxAliasCount: 100 });
+    raw = (0, import_yaml48.parse)(text7, { maxAliasCount: 100 });
   } catch (error63) {
     return { problems: [`Invalid YAML: ${error63.message}`] };
   }
@@ -45342,7 +45456,7 @@ function recipeIssue(recipe, plan, options) {
 
 // src/knowledge/extract.ts
 init_identity();
-var import_yaml48 = __toESM(require_dist(), 1);
+var import_yaml49 = __toESM(require_dist(), 1);
 var packageName3 = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 var managers = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
 var toolFiles = {
@@ -45473,7 +45587,7 @@ function extractKnowledge(repository, revision, input3, options = {}) {
   if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
   else if (pnpm) {
     try {
-      const parsed = (0, import_yaml48.parseDocument)(pnpm.content, { uniqueKeys: true });
+      const parsed = (0, import_yaml49.parseDocument)(pnpm.content, { uniqueKeys: true });
       if (parsed.errors.length) throw new Error("Invalid workspace YAML");
       const value2 = parsed.toJS();
       addWorkspace(record4(value2) ? value2.packages : void 0, pnpm, "/packages");
@@ -45872,14 +45986,14 @@ async function recipeStatus(client, target, recipe, server = "https://github.com
 }
 
 // src/recipes/rollout.ts
-var import_yaml49 = __toESM(require_dist(), 1);
+var import_yaml50 = __toESM(require_dist(), 1);
 var DEFAULT_ROLLOUT = { waves: [1, 3, "25%", "100%"], minSamples: 5, minCompatibility: 0.7 };
 var REPO_NAME = /^[\w.-]+\/[\w.-]+$/;
 function parseRolloutTargets(text7) {
   const problems = [];
   let raw;
   try {
-    raw = (0, import_yaml49.parse)(text7);
+    raw = (0, import_yaml50.parse)(text7);
   } catch (error63) {
     return { repositories: [], canaries: [], config: DEFAULT_ROLLOUT, problems: [`Invalid YAML: ${error63.message}`] };
   }
@@ -68472,7 +68586,7 @@ function escapeCell(value2) {
 }
 
 // src/telemetry/snapshot.ts
-var import_yaml50 = __toESM(require_dist(), 1);
+var import_yaml51 = __toESM(require_dist(), 1);
 init_history();
 function isExternalCheckRun(job, key2) {
   return key2 === void 0 && !job.runner_id && !job.runner_name && !job.steps?.length && typeof job.html_url === "string" && !/\/actions\/runs\/\d+\/job\/\d+/.test(job.html_url);
@@ -68483,7 +68597,7 @@ function workflowPath(path) {
 function parseJobDefinitions(text7) {
   let document;
   try {
-    document = (0, import_yaml50.parse)(text7);
+    document = (0, import_yaml51.parse)(text7);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -69827,7 +69941,7 @@ function capComment(body, max2 = MAX_COMMENT_LENGTH) {
 }
 
 // src/review/project.ts
-var import_yaml51 = __toESM(require_dist(), 1);
+var import_yaml52 = __toESM(require_dist(), 1);
 var PROJECT_FILE = "project.yaml";
 var PROJECT_MAX_BYTES = 8 * 1024;
 var NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -69843,7 +69957,7 @@ function parseStrictYaml(text7, maxBytes, label2) {
   if (/^%/m.test(text7)) return { problems: [`${label2} must not contain YAML directives (lines starting with %).`] };
   let documents;
   try {
-    documents = (0, import_yaml51.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+    documents = (0, import_yaml52.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
   } catch (error63) {
     return { problems: [`${label2} is not valid YAML (${describeValue(error63 instanceof Error ? error63.message : String(error63))}).`] };
   }
@@ -69856,20 +69970,20 @@ function parseStrictYaml(text7, maxBytes, label2) {
   for (const issue2 of [...document.errors, ...document.warnings]) {
     problems.push(`${label2} is not valid YAML: ${issue2.code} at line ${issue2.linePos?.[0]?.line ?? "?"}.`);
   }
-  if (!(0, import_yaml51.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
-  (0, import_yaml51.visit)(document, {
+  if (!(0, import_yaml52.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
+  (0, import_yaml52.visit)(document, {
     Alias() {
       problems.push(`${label2} must not use YAML aliases (*name).`);
-      return import_yaml51.visit.BREAK;
+      return import_yaml52.visit.BREAK;
     },
     Node(_key, node2) {
       if (node2.anchor) problems.push(`${label2} must not use YAML anchors (&name).`);
       if (node2.tag) problems.push(`${label2} must not use YAML tags (${describeValue(node2.tag)}).`);
     },
     Pair(_key, pair) {
-      if (!(0, import_yaml51.isScalar)(pair.key) || typeof pair.key.value !== "string") {
+      if (!(0, import_yaml52.isScalar)(pair.key) || typeof pair.key.value !== "string") {
         problems.push(`${label2} keys must be plain strings.`);
-        return import_yaml51.visit.SKIP;
+        return import_yaml52.visit.SKIP;
       }
       if (pair.key.value === "<<") problems.push(`${label2} must not use YAML merge keys (<<).`);
       return void 0;
@@ -70860,37 +70974,37 @@ import { readFile as readFile8 } from "node:fs/promises";
 import { parseArgs as parseArgs11 } from "node:util";
 
 // src/formal/cache-key.ts
-var import_yaml52 = __toESM(require_dist(), 1);
+var import_yaml53 = __toESM(require_dist(), 1);
 var CONTEXTS = ["sha", "run_id", "run_number", "run_attempt", "ref", "event_name"];
 function extractCacheKey(source, job, step) {
-  const document = (0, import_yaml52.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
+  const document = (0, import_yaml53.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
   if (document.errors.length || document.warnings.length) throw new Error("Workflow YAML must parse without errors or warnings.");
-  (0, import_yaml52.visit)(document, (_key, node2) => {
-    if ((0, import_yaml52.isAlias)(node2)) throw new Error("YAML aliases are outside the extraction contract.");
-    if ((0, import_yaml52.isMap)(node2) && node2.items.some((pair) => (0, import_yaml52.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
+  (0, import_yaml53.visit)(document, (_key, node2) => {
+    if ((0, import_yaml53.isAlias)(node2)) throw new Error("YAML aliases are outside the extraction contract.");
+    if ((0, import_yaml53.isMap)(node2) && node2.items.some((pair) => (0, import_yaml53.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
   });
   const jobs = document.get("jobs", true);
-  if (!(0, import_yaml52.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
+  if (!(0, import_yaml53.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
   const selected = jobs.get(job, true);
-  if (!(0, import_yaml52.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
+  if (!(0, import_yaml53.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
   const steps2 = selected.get("steps", true);
-  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml52.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
+  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml53.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
   const action = steps2.items[step];
-  if (!(0, import_yaml52.isMap)(action)) throw new Error("Selected step is not a mapping.");
+  if (!(0, import_yaml53.isMap)(action)) throw new Error("Selected step is not a mapping.");
   const uses = action.get("uses", true);
-  if (!(0, import_yaml52.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
+  if (!(0, import_yaml53.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
     throw new Error("Selected step must use a literal actions/cache, actions/cache/restore or actions/cache/save reference.");
   }
   const inputs = action.get("with", true);
-  if (!(0, import_yaml52.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
+  if (!(0, import_yaml53.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
   const inputNames = inputs.items.map((pair) => {
-    if (!(0, import_yaml52.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
+    if (!(0, import_yaml53.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
     return pair.key.value.toLowerCase();
   });
   if (new Set(inputNames).size !== inputNames.length) throw new Error("Case-colliding cache input names are unsupported.");
   if (inputNames.includes("restore-keys") || inputNames.includes("enablecrossosarchive")) throw new Error("restore-keys and cross-OS archive inputs are outside this model.");
   const key2 = inputs.get("key", true);
-  if (!(0, import_yaml52.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
+  if (!(0, import_yaml53.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
   scalarString(key2.value);
   const [start2, end] = key2.range;
   return {

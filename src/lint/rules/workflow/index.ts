@@ -1,5 +1,6 @@
 import type { AnyRule } from "../../types.js";
 import artifactRetention from "./artifact-retention.js";
+import artifactSuccessGating from "./artifact-success-gating.js";
 import concurrency from "./concurrency.js";
 import duplicatePushPullRequestTrigger from "./duplicate-push-pull-request-trigger.js";
 import jobTimeout from "./job-timeout.js";
@@ -12,6 +13,7 @@ import unnecessaryNeedsSerialization from "./unnecessary-needs-serialization.js"
 
 export const rules: AnyRule[] = [
   artifactRetention,
+  artifactSuccessGating,
   concurrency,
   duplicatePushPullRequestTrigger,
   jobTimeout,
