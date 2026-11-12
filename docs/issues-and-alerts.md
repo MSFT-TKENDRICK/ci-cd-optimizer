@@ -120,9 +120,10 @@ duration, the statistic behind it, a duration chart, and links to the runs invol
   Missing jobs/series or a different context do not prove recovery.
 - **Snooze:** closing an alert as **not planned** silences that workflow/context for `snoozeDays` (14).
 
-Contexts distinguish branches, trigger events, executed job/matrix sets, dependencies and observed runner labels/groups.
-Only successful first attempts with complete, versioned collection provenance are eligible. Partial/warmed retries,
-legacy or incomplete collection, missing runner information and failed jobs cannot open, refresh or close these alerts.
+Contexts distinguish branches, trigger events, executed job/matrix sets, skipped-job sets, dependencies and observed
+runner labels/groups. Only successful first attempts with complete, versioned collection provenance are eligible.
+Partial/warmed retries, legacy or incomplete collection, missing runner information and failed, cancelled or unfinished
+jobs cannot open, refresh or close these alerts. Skipped jobs do not disqualify a run but are never sampled.
 Changed contexts have separate issue identities. A qualified replacement supersedes legacy workflow-only alerts and
 same-branch contexts proven absent from the bounded active-context window; unknown or still-active contexts are
 preserved. Existing dismissals continue to suppress replacement alerts during the snooze period.

@@ -7,6 +7,7 @@ import { createRunObservation } from "../../src/knowledge/run-observation.js";
 import { identity } from "../../src/knowledge/identity.js";
 import type { Recipe } from "../../src/recipes/recipe.js";
 import type { KnowledgeStore, MitigationDefinition, RunObservation } from "../../src/knowledge/types.js";
+import { jobComparisonContext } from "../../src/telemetry/context.js";
 import { snapshot as workflow } from "../alerts/fixtures.js";
 import { now, repository, revision, snapshot } from "./fixtures.js";
 
@@ -26,9 +27,11 @@ const application = (topology = snapshot(), definitionId = definition().id) => c
   projectIds: [topology.projects.find((project) => project.kind === "npm-package")!.id],
   change: { kind: "pull-request", number: 81, headSha: "b".repeat(40) }, createdAt: applicationTime,
 });
-const observation = (runId: number, seconds: number, start: string, headSha = revision): RunObservation => {
+const observation = (
+  runId: number, seconds: number, start: string, headSha = revision, jobs: Array<[string, number, string?]> = [["build", seconds]],
+): RunObservation => {
   const finished = new Date(Date.parse(start) + 60_000).toISOString();
-  const base = workflow(runId, seconds, [["build", seconds]]);
+  const base = workflow(runId, seconds, jobs);
   const run = {
     ...base, path: ".github/workflows/ci.yml", headSha, createdAt: start, startedAt: start, completedAt: finished,
     jobs: base.jobs.map((job) => ({ ...job, startedAt: start, completedAt: finished })),
@@ -223,6 +226,19 @@ export function mitigationCases(getStore: () => KnowledgeStore): void {
     expect(evaluation.controlMedianMs).toBe(evaluation.treatmentMedianMs);
     expect(evaluation.pValue).toBeLessThan(1);
     expect(evaluation.outcome).toBe("no-detected-difference");
+  });
+
+  it("assesses skip-gated runs but never measures a skipped job", () => {
+    const jobs = (seconds: number): Array<[string, number, string?]> => [["build", seconds], ["deploy", 0, "skipped"]];
+    const control = [1, 2, 3, 4].map((id) => observation(id, 60 + id, `2026-10-${20 + id}T00:00:00.000Z`, revision, jobs(60 + id)));
+    const treatment = [11, 12, 13, 14].map((id) =>
+      observation(id, 30 + id, `2026-11-0${id - 9}T00:00:00.000Z`, "b".repeat(40), jobs(30 + id)));
+    const [build, skipped] = ["build", "deploy"].map((key) => jobComparisonContext(control[0]!.run.jobs.find((job) => job.key === key)!));
+    const assess = (key: string) => assessMitigation({
+      application: application(), control, treatment, metric: { kind: "job-duration", key }, evaluatedAt: evaluationTime,
+    });
+    expect(assess(build!)).toMatchObject({ outcome: "observed-faster", controlMedianMs: 62_500, treatmentMedianMs: 42_500 });
+    expect(() => assess(skipped!)).toThrow("exactly one comparable job");
   });
 
   it("rejects retries, different contexts, unbracketed runs and application events without scoped records", async () => {

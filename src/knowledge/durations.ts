@@ -133,13 +133,15 @@ export function analyzeDurations(reference: RunObservation, window: RunEvidenceW
   });
   const objectives = config.objectives.filter((objective) => objective.workflow === run.path);
   report.workflow = metric(run.durationMs, analysis.history.map((snapshot) => snapshot.durationMs), objectives.find((objective) => objective.job === undefined));
-  report.jobs = run.jobs.map((job) => {
+  report.jobs = run.jobs.filter((job) => job.conclusion === "success").map((job) => {
     const context = jobComparisonContext(job);
-    const values = analysis.history.map((snapshot) => snapshot.jobs.find((other) => jobComparisonContext(other) === context)!.durationMs);
+    const values = analysis.history.map((snapshot) => snapshot.jobs.find((other) =>
+      other.conclusion === "success" && jobComparisonContext(other) === context)!.durationMs);
     return { contextKey: identity(["duration-job-v1", context]), key: job.key, name: job.name,
       metric: metric(job.durationMs, values, objectives.find((objective) => objective.job === job.key)) };
   }).sort((a, b) => a.contextKey.localeCompare(b.contextKey));
-  report.unmatchedObjectives = objectives.filter((objective) => objective.job !== undefined && !run.jobs.some((job) => job.key === objective.job));
+  report.unmatchedObjectives = objectives.filter((objective) => objective.job !== undefined &&
+    !run.jobs.some((job) => job.conclusion === "success" && job.key === objective.job));
   return structuredClone(analysis);
 }
 
@@ -166,7 +168,7 @@ export function describeDurations(report: DurationReport): string {
     for (const { reason } of report.excluded) counts.set(reason, (counts.get(reason) ?? 0) + 1);
     lines.push(`\nExclusions: ${[...counts].map(([reason, count]) => `${reason} (${count})`).join(", ")}.`);
   }
-  if (report.unmatchedObjectives.length) lines.push(`\n${report.unmatchedObjectives.length} configured job budgets did not match an observed job; they were not assessed.`);
+  if (report.unmatchedObjectives.length) lines.push(`\n${report.unmatchedObjectives.length} configured job budgets did not match an executed job; they were not assessed.`);
   lines.push("\nR7 quantiles describe eligible successful runs, not prediction bounds or guarantees. Budgets are explicit current configuration, not learned targets or historical SLO compliance. Runner labels do not establish identical hardware/cache state; workflow/job durations do not identify executed projects or causal benefits.");
   return lines.join("\n");
 }

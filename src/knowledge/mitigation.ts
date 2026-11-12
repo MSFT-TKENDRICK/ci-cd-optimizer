@@ -269,7 +269,7 @@ export function assessMitigation(input: {
       return observation.run.durationMs;
     }
     if (input.metric.kind !== "job-duration") throw new Error("Mitigation duration metric is invalid");
-    const jobs = observation.run.jobs.filter((job) => jobComparisonContext(job) === input.metric.key);
+    const jobs = observation.run.jobs.filter((job) => job.conclusion === "success" && jobComparisonContext(job) === input.metric.key);
     if (jobs.length !== 1) throw new Error("Mitigation job metric must identify exactly one comparable job");
     return jobs[0]!.durationMs;
   };

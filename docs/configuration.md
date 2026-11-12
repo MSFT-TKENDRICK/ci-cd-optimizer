@@ -231,7 +231,8 @@ Workflow paths are exact, not globs. Budgets must be positive safe integers in m
 budget. Missing job selectors are reported as unassessed, not passed. Ambiguous display-name mappings (including
 collisions with matrix prefixes or name templates) withhold comparison/budget assessment rather than selecting the
 first matching job. Objectives apply to eligible successful
-first attempts, not shortened failed/cancelled runs. Current configuration is compared with the current run and
+first attempts, not shortened failed/cancelled runs. Skipped jobs are neither sampled nor budgeted; an objective whose
+job was skipped in the current run is reported as unmatched. Current configuration is compared with the current run and
 eligible history; this is **not** a record of which objective applied when a historical run executed, nor SLO
 compliance or a deployment gate. The definition digest changes when the budget/selector changes; raw measurements
 and sample quantiles do not. Configuration remains versioned in Git.

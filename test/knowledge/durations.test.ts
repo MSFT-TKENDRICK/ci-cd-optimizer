@@ -3,6 +3,7 @@ import { analyzeDurations, describeDurations } from "../../src/knowledge/duratio
 import { createRunObservation } from "../../src/knowledge/run-observation.js";
 import { MemoryKnowledgeStore } from "../../src/knowledge/store.js";
 import type { RunEvidenceWindow, RunObservation } from "../../src/knowledge/types.js";
+import { snapshot as workflow } from "../alerts/fixtures.js";
 import { now, repository } from "./fixtures.js";
 import { observation, runWindowCases } from "./run-window-cases.js";
 
@@ -38,6 +39,25 @@ describe("immutable duration distributions", () => {
     expect(changed.report.workflow?.distribution).toEqual(result.report.workflow?.distribution);
     expect(changed.report.workflow?.objective?.definitionId).not.toBe(result.report.workflow?.objective?.definitionId);
     expect(describeDurations(result.report)).toContain("not prediction bounds");
+  });
+
+  it("compares skip-gated runs without sampling or budgeting a skipped job", () => {
+    const gated = (id: number, seconds: number) =>
+      observation(id, seconds, { jobs: workflow(id, seconds, [["build", seconds], ["deploy", 0, "skipped"]]).jobs });
+    const reference = gated(10, 25);
+    const config = { minSamples: 2, objectives: [
+      { workflow: ".github/workflows/ci.yml", job: "build", maxDurationMs: 20_000 },
+      { workflow: ".github/workflows/ci.yml", job: "deploy", maxDurationMs: 1000 },
+    ] };
+    const result = analyzeDurations(reference, window(gated(1, 10), gated(2, 30), observation(3, 20), reference), config);
+    expect(result.report.status).toBe("ready");
+    expect(result.report.samples.map((sample) => sample.runId)).toEqual([1, 2]);
+    expect(result.report.excluded).toEqual([{ runId: 3, reason: "different-workload-context" }]);
+    expect(result.report.jobs.map((job) => [job.key, job.metric.distribution?.sampleCount, job.metric.objective?.currentStatus])).toEqual([
+      ["build", 2, "over-budget"],
+    ]);
+    expect(result.report.unmatchedObjectives).toEqual([config.objectives[1]]);
+    expect(describeDurations(result.report)).toContain("1 configured job budgets did not match an executed job; they were not assessed.");
   });
 
   it("does not inflate samples for source-context changes or input ordering", () => {
