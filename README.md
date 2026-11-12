@@ -233,7 +233,7 @@ registers itself as the reference example in [projects/ci-cd-optimizer](projects
 
 ## What it finds
 
-133 rules in 16 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
+135 rules in 16 rulesets, configurable like ESLint: presets, per-rule severity and options, path ignores, and inline
 suppressions.
 
 | Ruleset | Examples |
@@ -242,7 +242,7 @@ suppressions.
 | `checkout` | Sparse checkout, partial clone (`filter: blob:none`), correct base refs for affected detection |
 | `affected` | Change detection, affected-only test selection instead of `nx run-many`, `turbo run`, `lerna run`, `pnpm -r`, workspace-wide npm/Yarn, or `bazel test //...`, path-filtered required checks |
 | `caching` | setup-* dependency caches, build-tool caches, matrix platform compatibility, artifact compression, redundant installs |
-| `hermeticity` | Frozen lockfiles, pinned actions, runners, container images, and base image digests |
+| `hermeticity` | Frozen lockfiles, pinned actions or a verified actions lockfile, runners, container images, and base image digests |
 | `containers` | Dependency layers, multi-stage builds, BuildKit cache scope/mode and mounts, context size, QEMU, verified script downloads |
 | `packages` | Monolith decomposition signals, `exports` maps, `files` allowlists, version drift across a monorepo |
 | `registries` | Publishing images to GHCR and packages to the GitHub npm registry for org-wide reuse |
@@ -250,10 +250,12 @@ suppressions.
 | `redundancy` | Duplicate setup steps and commands, the same build repeated per job, toolchain version drift, shadowed `env` |
 | `testing` | Playwright browser caching, incremental tool caches, watch mode in CI, masked failures, fixed sleeps |
 | `security` | Expression injection, untrusted checkouts in privileged triggers, cache poisoning, excessive token permissions, persisted credentials |
+| `ssdf` | Publishing without SBOM or provenance evidence, attestation token permissions, static cloud credentials instead of workload identity |
+| `hooks` | Git hooks that reinstall dependencies on every run, whole-repository pre-commit scans that also receive batched filenames |
 | `nix` | 37 rules for CI configuration, evaluation inputs, flake locks, cache/trust boundaries, fetchers, derivations and image layers |
 | `toolchains` | 10 rules for Gradle cache/parallel settings, Cargo locking/incremental builds and Rust selection, Bazel, pip, uv and Go |
 
-Presets are `recommended` (default), `strict`, `agentic`, `github`, `insights`, and `all`. The full catalog with
+Presets are `recommended` (default), `strict`, `agentic`, `github`, `insights`, `ssdf`, and `all`. The full catalog with
 rationale, examples, and references is in [docs/rules.md](docs/rules.md). Configuration is covered in
 [docs/configuration.md](docs/configuration.md), and suppressions and custom local rules in
 [docs/linter.md](docs/linter.md#suppressions).

@@ -60,10 +60,10 @@ var require_identity = __commonJS({
     var NODE_TYPE = /* @__PURE__ */ Symbol.for("yaml.node.type");
     var isAlias6 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === ALIAS;
     var isDocument = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === DOC;
-    var isMap11 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === MAP;
+    var isMap12 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === MAP;
     var isPair6 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === PAIR;
     var isScalar15 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SCALAR;
-    var isSeq8 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SEQ;
+    var isSeq9 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SEQ;
     function isCollection(node2) {
       if (node2 && typeof node2 === "object")
         switch (node2[NODE_TYPE]) {
@@ -96,11 +96,11 @@ var require_identity = __commonJS({
     exports.isAlias = isAlias6;
     exports.isCollection = isCollection;
     exports.isDocument = isDocument;
-    exports.isMap = isMap11;
+    exports.isMap = isMap12;
     exports.isNode = isNode;
     exports.isPair = isPair6;
     exports.isScalar = isScalar15;
-    exports.isSeq = isSeq8;
+    exports.isSeq = isSeq9;
   }
 });
 
@@ -112,7 +112,7 @@ var require_visit = __commonJS({
     var BREAK = /* @__PURE__ */ Symbol("break visit");
     var SKIP2 = /* @__PURE__ */ Symbol("skip children");
     var REMOVE = /* @__PURE__ */ Symbol("remove node");
-    function visit5(node2, visitor) {
+    function visit6(node2, visitor) {
       const visitor_ = initVisitor(visitor);
       if (identity3.isDocument(node2)) {
         const cd = visit_(null, node2.contents, visitor_, Object.freeze([node2]));
@@ -121,9 +121,9 @@ var require_visit = __commonJS({
       } else
         visit_(null, node2, visitor_, Object.freeze([]));
     }
-    visit5.BREAK = BREAK;
-    visit5.SKIP = SKIP2;
-    visit5.REMOVE = REMOVE;
+    visit6.BREAK = BREAK;
+    visit6.SKIP = SKIP2;
+    visit6.REMOVE = REMOVE;
     function visit_(key2, node2, visitor, path) {
       const ctrl = callVisitor(key2, node2, visitor, path);
       if (identity3.isNode(ctrl) || identity3.isPair(ctrl)) {
@@ -257,7 +257,7 @@ var require_visit = __commonJS({
         throw new Error(`Cannot replace node with ${pt} parent`);
       }
     }
-    exports.visit = visit5;
+    exports.visit = visit6;
     exports.visitAsync = visitAsync;
   }
 });
@@ -267,7 +267,7 @@ var require_directives = __commonJS({
   "node_modules/yaml/dist/doc/directives.js"(exports) {
     "use strict";
     var identity3 = require_identity();
-    var visit5 = require_visit();
+    var visit6 = require_visit();
     var escapeChars = {
       "!": "%21",
       ",": "%2C",
@@ -411,7 +411,7 @@ var require_directives = __commonJS({
         let tagNames;
         if (doc && tagEntries.length > 0 && identity3.isNode(doc.contents)) {
           const tags = {};
-          visit5.visit(doc.contents, (_key, node2) => {
+          visit6.visit(doc.contents, (_key, node2) => {
             if (identity3.isNode(node2) && node2.tag)
               tags[node2.tag] = true;
           });
@@ -438,7 +438,7 @@ var require_anchors = __commonJS({
   "node_modules/yaml/dist/doc/anchors.js"(exports) {
     "use strict";
     var identity3 = require_identity();
-    var visit5 = require_visit();
+    var visit6 = require_visit();
     function anchorIsValid(anchor2) {
       if (/[\x00-\x19\s,[\]{}]/.test(anchor2)) {
         const sa = JSON.stringify(anchor2);
@@ -449,7 +449,7 @@ var require_anchors = __commonJS({
     }
     function anchorNames(root) {
       const anchors = /* @__PURE__ */ new Set();
-      visit5.visit(root, {
+      visit6.visit(root, {
         Value(_key, node2) {
           if (node2.anchor)
             anchors.add(node2.anchor);
@@ -629,7 +629,7 @@ var require_Alias = __commonJS({
   "node_modules/yaml/dist/nodes/Alias.js"(exports) {
     "use strict";
     var anchors = require_anchors();
-    var visit5 = require_visit();
+    var visit6 = require_visit();
     var identity3 = require_identity();
     var Node = require_Node();
     var toJS2 = require_toJS();
@@ -655,7 +655,7 @@ var require_Alias = __commonJS({
           nodes = ctx.aliasResolveCache;
         } else {
           nodes = [];
-          visit5.visit(doc, {
+          visit6.visit(doc, {
             Node: (_key, node2) => {
               if (identity3.isAlias(node2) || identity3.hasAnchor(node2))
                 nodes.push(node2);
@@ -4208,9 +4208,9 @@ var require_resolve_flow_collection = __commonJS({
     var blockMsg = "Block collections are not allowed within flow collections";
     var isBlock = (token) => token && (token.type === "block-map" || token.type === "block-seq");
     function resolveFlowCollection({ composeNode, composeEmptyNode }, ctx, fc, onError, tag) {
-      const isMap11 = fc.start.source === "{";
-      const fcName = isMap11 ? "flow map" : "flow sequence";
-      const NodeClass = tag?.nodeClass ?? (isMap11 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
+      const isMap12 = fc.start.source === "{";
+      const fcName = isMap12 ? "flow map" : "flow sequence";
+      const NodeClass = tag?.nodeClass ?? (isMap12 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
       const coll = new NodeClass(ctx.schema);
       coll.flow = true;
       const atRoot = ctx.atRoot;
@@ -4246,7 +4246,7 @@ var require_resolve_flow_collection = __commonJS({
             offset = props.end;
             continue;
           }
-          if (!isMap11 && ctx.options.strict && utilContainsNewline.containsNewline(key2))
+          if (!isMap12 && ctx.options.strict && utilContainsNewline.containsNewline(key2))
             onError(
               key2,
               // checked by containsNewline()
@@ -4286,7 +4286,7 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap11 && !sep3 && !props.found) {
+        if (!isMap12 && !sep3 && !props.found) {
           const valueNode = value2 ? composeNode(ctx, value2, props, onError) : composeEmptyNode(ctx, props.end, sep3, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
@@ -4309,7 +4309,7 @@ var require_resolve_flow_collection = __commonJS({
             startOnNewline: false
           });
           if (valueProps.found) {
-            if (!isMap11 && !props.found && ctx.options.strict) {
+            if (!isMap12 && !props.found && ctx.options.strict) {
               if (sep3)
                 for (const st of sep3) {
                   if (st === valueProps.found)
@@ -4341,7 +4341,7 @@ var require_resolve_flow_collection = __commonJS({
           const pair = new Pair.Pair(keyNode, valueNode);
           if (ctx.options.keepSourceTokens)
             pair.srcToken = collItem;
-          if (isMap11) {
+          if (isMap12) {
             const map2 = coll;
             if (utilMapIncludes.mapIncludes(ctx, map2.items, keyNode))
               onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
@@ -4357,7 +4357,7 @@ var require_resolve_flow_collection = __commonJS({
           offset = valueNode ? valueNode.range[2] : valueProps.end;
         }
       }
-      const expectedEnd = isMap11 ? "}" : "]";
+      const expectedEnd = isMap12 ? "}" : "]";
       const [ce, ...ee] = fc.end;
       let cePos = offset;
       if (ce?.source === expectedEnd)
@@ -5577,15 +5577,15 @@ var require_cst_visit = __commonJS({
     var BREAK = /* @__PURE__ */ Symbol("break visit");
     var SKIP2 = /* @__PURE__ */ Symbol("skip children");
     var REMOVE = /* @__PURE__ */ Symbol("remove item");
-    function visit5(cst, visitor) {
+    function visit6(cst, visitor) {
       if ("type" in cst && cst.type === "document")
         cst = { start: cst.start, value: cst.value };
       _visit(Object.freeze([]), cst, visitor);
     }
-    visit5.BREAK = BREAK;
-    visit5.SKIP = SKIP2;
-    visit5.REMOVE = REMOVE;
-    visit5.itemAtPath = (cst, path) => {
+    visit6.BREAK = BREAK;
+    visit6.SKIP = SKIP2;
+    visit6.REMOVE = REMOVE;
+    visit6.itemAtPath = (cst, path) => {
       let item = cst;
       for (const [field3, index] of path) {
         const tok = item?.[field3];
@@ -5596,8 +5596,8 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit5.parentCollection = (cst, path) => {
-      const parent = visit5.itemAtPath(cst, path.slice(0, -1));
+    visit6.parentCollection = (cst, path) => {
+      const parent = visit6.itemAtPath(cst, path.slice(0, -1));
       const field3 = path[path.length - 1][0];
       const coll = parent?.[field3];
       if (coll && "items" in coll)
@@ -5628,7 +5628,7 @@ var require_cst_visit = __commonJS({
       }
       return typeof ctrl === "function" ? ctrl(item, path) : ctrl;
     }
-    exports.visit = visit5;
+    exports.visit = visit6;
   }
 });
 
@@ -7258,7 +7258,7 @@ var require_public_api = __commonJS({
         return docs;
       return Object.assign([], { empty: true }, composer$1.streamInfo());
     }
-    function parseDocument4(source, options = {}) {
+    function parseDocument5(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions2(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -7284,7 +7284,7 @@ var require_public_api = __commonJS({
       } else if (options === void 0 && reviver && typeof reviver === "object") {
         options = reviver;
       }
-      const doc = parseDocument4(src, options);
+      const doc = parseDocument5(src, options);
       if (!doc)
         return null;
       doc.warnings.forEach((warning) => log.warn(doc.options.logLevel, warning));
@@ -7320,7 +7320,7 @@ var require_public_api = __commonJS({
     }
     exports.parse = parse14;
     exports.parseAllDocuments = parseAllDocuments2;
-    exports.parseDocument = parseDocument4;
+    exports.parseDocument = parseDocument5;
     exports.stringify = stringify4;
   }
 });
@@ -7344,7 +7344,7 @@ var require_dist = __commonJS({
     var lineCounter = require_line_counter();
     var parser = require_parser();
     var publicApi = require_public_api();
-    var visit5 = require_visit();
+    var visit6 = require_visit();
     exports.Composer = composer.Composer;
     exports.Document = Document.Document;
     exports.Schema = Schema.Schema;
@@ -7372,8 +7372,8 @@ var require_dist = __commonJS({
     exports.parseAllDocuments = publicApi.parseAllDocuments;
     exports.parseDocument = publicApi.parseDocument;
     exports.stringify = publicApi.stringify;
-    exports.visit = visit5.visit;
-    exports.visitAsync = visit5.visitAsync;
+    exports.visit = visit6.visit;
+    exports.visitAsync = visit6.visitAsync;
   }
 });
 
@@ -7537,9 +7537,10 @@ function comparisonExclusion(snapshot) {
   if (provenance?.version !== 1 || provenance.collector !== "github-actions-rest") return "provenance";
   if (!provenance.jobsComplete) return "incomplete-jobs";
   if (!provenance.definitionKnown) return "definition-unknown";
-  if (snapshot.jobs.length === 0) return "no-jobs";
-  if (snapshot.jobs.some((job) => job.conclusion !== "success")) return "job-failed";
-  if (snapshot.jobs.some((job) => !hasLabels(job))) return "labels-missing";
+  if (snapshot.jobs.some((job) => job.conclusion !== "success" && job.conclusion !== "skipped")) return "job-failed";
+  const executed = snapshot.jobs.filter((job) => job.conclusion === "success");
+  if (executed.length === 0) return "no-jobs";
+  if (executed.some((job) => !hasLabels(job))) return "labels-missing";
   return void 0;
 }
 function comparisonProblem(snapshot) {
@@ -7563,7 +7564,7 @@ function jobComparisonContext(job) {
 }
 function comparisonKey(snapshot) {
   if (comparisonProblem(snapshot)) return void 0;
-  const jobs = snapshot.jobs.map(jobComparisonContext).sort();
+  const jobs = snapshot.jobs.map((job) => job.conclusion === "skipped" ? JSON.stringify(["skipped", job.key, job.name, [...new Set(job.needs)].sort()]) : jobComparisonContext(job)).sort();
   return createHash5("sha256").update(JSON.stringify([
     "workload-comparison-v1",
     snapshot.owner,
@@ -7648,11 +7649,11 @@ var init_context = __esm({
       provenance: "Collection provenance is unavailable or unsupported.",
       "incomplete-jobs": "Job collection is incomplete.",
       "definition-unknown": "The workflow job definitions are unavailable.",
-      "no-jobs": "No completed jobs were observed.",
-      "job-failed": "Some observed jobs did not complete successfully.",
+      "no-jobs": "No executed jobs were observed.",
+      "job-failed": "Some observed jobs neither succeeded nor were skipped.",
       "labels-missing": "Runner routing labels are unavailable.",
       "context-changed": "The run used a different repository, workflow, branch, or event.",
-      "job-set-changed": "The workflow's job set (names, needs, runner labels, or runner group) differs."
+      "job-set-changed": "The workflow's job set (names, needs, runner labels, runner group, or skipped jobs) differs."
     };
     GAP_PHRASES = {
       rerun: "were reruns",
@@ -7660,8 +7661,8 @@ var init_context = __esm({
       provenance: "lack supported collection provenance",
       "incomplete-jobs": "have incomplete job evidence",
       "definition-unknown": "have unknown job definitions",
-      "no-jobs": "have no completed jobs",
-      "job-failed": "had failed jobs",
+      "no-jobs": "have no executed jobs",
+      "job-failed": "had jobs that neither succeeded nor were skipped",
       "labels-missing": "lack runner labels",
       "context-changed": "ran in a different context",
       "job-set-changed": "had a different job set"
@@ -7769,7 +7770,7 @@ var init_run_observation = __esm({
 
 // src/knowledge/mitigation.ts
 function definitionContent(definition) {
-  const { version: version2, source, key: key2, revision, title, summary: summary3, instructions, risk, rules: rules16, files, technologies, contraindications, provenance } = definition;
+  const { version: version2, source, key: key2, revision, title, summary: summary3, instructions, risk, rules: rules17, files, technologies, contraindications, provenance } = definition;
   return {
     version: version2,
     source: version2 === 1 ? source : { host: source.host, repositoryId: source.repositoryId },
@@ -7779,7 +7780,7 @@ function definitionContent(definition) {
     summary: summary3,
     instructions,
     risk,
-    rules: rules16,
+    rules: rules17,
     files,
     technologies,
     contraindications,
@@ -8002,7 +8003,7 @@ function assessMitigation(input3) {
       return observation2.run.durationMs;
     }
     if (input3.metric.kind !== "job-duration") throw new Error("Mitigation duration metric is invalid");
-    const jobs = observation2.run.jobs.filter((job) => jobComparisonContext(job) === input3.metric.key);
+    const jobs = observation2.run.jobs.filter((job) => job.conclusion === "success" && jobComparisonContext(job) === input3.metric.key);
     if (jobs.length !== 1) throw new Error("Mitigation job metric must identify exactly one comparable job");
     return jobs[0].durationMs;
   };
@@ -8262,8 +8263,8 @@ function Types(options = {}) {
   const custom2 = Object.values(options.types || {}), named = custom2.filter((x) => [x.to].concat(x.from || []).some((y) => typeof y === "string")), oids = {};
   register(custom2.filter((x) => !named.includes(x)));
   const bases = {};
-  return { parser, decoder, serializer, load, infer, resolve: resolve5, named: named.length > 0, parsers, serializers };
-  function resolve5(type) {
+  return { parser, decoder, serializer, load, infer, resolve: resolve6, named: named.length > 0, parsers, serializers };
+  function resolve6(type) {
     return typeof type === "string" ? oids[type] || 0 : type;
   }
   function decoder(oid, parse14) {
@@ -8315,7 +8316,7 @@ function Types(options = {}) {
     if (missing.length) {
       throw Errors.generic("TYPE_NOT_FOUND", missing.length > 1 ? "The types " + missing.join(", ") + " do not exist" : "The type " + missing[0] + " does not exist");
     }
-    register(named.map((x) => ({ ...x, to: resolve5(x.to), from: [].concat(x.from || []).map(resolve5) })));
+    register(named.map((x) => ({ ...x, to: resolve6(x.to), from: [].concat(x.from || []).map(resolve6) })));
   }
   function fetched(run4) {
     return run4(
@@ -8579,10 +8580,10 @@ function part(before, x, o, after2 = "") {
     o.dynamic = true;
   return isFragment(x) && x.strings === joinStrings ? joined(x.args[0], o, before, after2) : x instanceof Join ? joined(x, o, "", "") : x instanceof Builder ? helper(before, x, o) : isFragment(x) ? fragment2(x, o) : x instanceof Identifier ? x.value : Array.isArray(x) && isFragment(x[0]) ? x.reduce((acc, x2) => acc + " " + fragment2(x2, o), "") : value(x, o);
 }
-function joined(join9, o, before, after2) {
+function joined(join10, o, before, after2) {
   let text7 = "";
-  join9.items.forEach((item, i) => {
-    i > 0 && (text7 = spaced(text7, fragment2(join9.separator, o)));
+  join10.items.forEach((item, i) => {
+    i > 0 && (text7 = spaced(text7, fragment2(join10.separator, o)));
     text7 = spaced(text7, part("", item, o));
   });
   before && text7 && !/\s$/.test(before) && !/^\s/.test(text7) && (text7 = " " + text7);
@@ -9022,12 +9023,12 @@ var init_query = __esm({
     CLOSE = {};
     Query = class _Query extends Promise {
       constructor(strings3, args, handler, options = {}) {
-        let resolve5, reject;
+        let resolve6, reject;
         super((a, b) => {
-          resolve5 = a;
+          resolve6 = a;
           reject = b;
         });
-        this.fulfil = resolve5;
+        this.fulfil = resolve6;
         this.fail = reject;
         this[isQuery] = true;
         this.tagged = Array.isArray(strings3.raw);
@@ -9138,12 +9139,12 @@ var init_query = __esm({
               if (this.executed && !this.active)
                 return { done: true };
               prev && prev();
-              const promise2 = new Promise((resolve5, reject) => {
+              const promise2 = new Promise((resolve6, reject) => {
                 this.cursorFn = (value2) => {
-                  resolve5({ value: value2, done: false });
+                  resolve6({ value: value2, done: false });
                   return new Promise((r) => prev = r);
                 };
-                this.resolve = (x) => (this.active = false, this.settled = true, this.trace && traced(this, null, x), resolve5({ done: true }));
+                this.resolve = (x) => (this.active = false, this.settled = true, this.trace && traced(this, null, x), resolve6({ done: true }));
                 this.reject = (x) => (this.active = false, this.settled = true, this.trace && traced(this, x), reject(x));
               });
               this.execute();
@@ -9612,7 +9613,7 @@ function secureOptions(ssl) {
   return ssl === "require" || ssl === "allow" || ssl === "prefer" ? workers ? {} : { rejectUnauthorized: false } : typeof ssl === "object" ? ssl : {};
 }
 function connect(options, host, port, track) {
-  return new Promise((resolve5, reject) => {
+  return new Promise((resolve6, reject) => {
     const tlsNow = direct(options), plain3 = !secured(options), reads = (plain3 || tlsNow) && onreadSafe && options.onread !== false && {
       buffer: Buffer.allocUnsafe(65536),
       callback: (n, b) => socket.ondata(b.subarray(0, n))
@@ -9631,7 +9632,7 @@ function connect(options, host, port, track) {
     socket.once(tlsNow ? "secureConnect" : "connect", () => {
       socket.off("error", reject);
       socket.setNoDelay(true);
-      resolve5(socket);
+      resolve6(socket);
     });
   });
 }
@@ -9707,7 +9708,7 @@ function wrap(socket, host) {
     x.onclose(failure2);
   }
   function upgrade(options = {}) {
-    return new Promise((resolve5, reject) => {
+    return new Promise((resolve6, reject) => {
       unlisten();
       const secure = tls.connect({
         socket,
@@ -9722,7 +9723,7 @@ function wrap(socket, host) {
         secure.off("error", fail);
         socket = secure;
         listen();
-        resolve5(x);
+        resolve6(x);
       }
       secure.once("secureConnect", ready);
       secure.once("error", fail);
@@ -9793,7 +9794,7 @@ function fits(want, { readOnly, standby }) {
 }
 function attempt(options, host, port, signal) {
   const { setTimeout: setTimeout2, clearTimeout: clearTimeout2 } = options.timers, fail = (code3) => Errors.connection(code3, options, host, port);
-  return new Promise((resolve5, reject) => {
+  return new Promise((resolve6, reject) => {
     const timer = options.connect_timeout && setTimeout2(() => done2(true, fail("CONNECT_TIMEOUT")), options.connect_timeout * 1e3);
     let socket = null, raw = null, settled = false;
     session().then((x) => done2(false, null, x), (e) => done2(true, e));
@@ -9810,7 +9811,7 @@ function attempt(options, host, port, signal) {
       }
       ready.socket.onclose = () => {
       };
-      resolve5(ready);
+      resolve6(ready);
     }
     async function session() {
       socket = await Socket(options, host, port, (x) => raw = x);
@@ -9824,7 +9825,7 @@ function attempt(options, host, port, signal) {
       return startup2(user, options.database || user);
     }
     function startup2(user, database) {
-      return new Promise((resolve6, reject2) => {
+      return new Promise((resolve7, reject2) => {
         const stored = () => pgpass(options.passfile, options.path ? "localhost" : host, port, database, user) || "", auth = Auth({ user, pass: options.pass || stored, binding: options.channel_binding, socket }), parameters = {}, backend = { pid: null, secret: null }, frames = Frames(frame, false, (error63) => (reject2(error63), socket.destroy())), rows = [];
         let probing = false, status = null, authing = Promise.resolve();
         socket.ondata = (x) => frames.push(x);
@@ -9864,7 +9865,7 @@ function attempt(options, host, port, signal) {
           socket.ondata = () => {
           };
           socket.pause();
-          resolve6({
+          resolve7({
             socket,
             rest,
             backend,
@@ -9904,8 +9905,8 @@ async function cancel2(options, host, port, { pid, secret }) {
     socket.destroy();
     throw error63;
   }
-  return new Promise((resolve5) => {
-    socket.onclose = () => resolve5();
+  return new Promise((resolve6) => {
+    socket.onclose = () => resolve6();
     socket.end(Cancel(pid, secret));
   });
 }
@@ -10095,7 +10096,7 @@ var init_startup = __esm({
 // node_modules/postgres/src/connection.js
 import Stream from "stream";
 function Connection(ready, options, events) {
-  const { socket } = ready, timers = options.timers, defer = timers.nextTick || process.nextTick, { transform: transform2 } = options, sent = [], pending = [], running = /* @__PURE__ */ new Set(), open5 = /* @__PURE__ */ new Set(), prepared = /* @__PURE__ */ new Map(), out = Writer(), frames = Frames(frame, socket.shared, (error63) => (connection2.fatal = error63, socket.destroy()));
+  const { socket } = ready, timers = options.timers, defer = timers.nextTick || process.nextTick, { transform: transform2 } = options, sent = [], pending = [], running = /* @__PURE__ */ new Set(), open6 = /* @__PURE__ */ new Set(), prepared = /* @__PURE__ */ new Map(), out = Writer(), frames = Frames(frame, socket.shared, (error63) => (connection2.fatal = error63, socket.destroy()));
   let blocker = null, rolling = false, fence = null, drained = null, status = ready.status, flushing = false, closed = null, closing = null, portals = 0, traced3 = 0, epoch2 = 0, headSince = 0, notables = 0;
   const connection2 = {
     id: ids++,
@@ -10179,7 +10180,7 @@ function Connection(ready, options, events) {
     x.query && (x.query.state = connection2.backend);
     if (fence)
       pending.splice(pending.indexOf(fence), 0, x);
-    else if (x.ends && open5.size)
+    else if (x.ends && open6.size)
       pending.push(fence = x);
     else if (blocker || pending.length)
       pending.push(x);
@@ -10222,7 +10223,7 @@ function Connection(ready, options, events) {
       sync2(x, true);
     }
     x.fresh && register(x.fresh);
-    x.portal && x.kind === "query" && open5.add(x);
+    x.portal && x.kind === "query" && open6.add(x);
     x.query && (x.query.active = sent.length === 0);
     x.ends && epoch2++;
     x.epoch = epoch2;
@@ -10419,13 +10420,13 @@ function Connection(ready, options, events) {
     return !!b && a.length === params.length && params.every((x, i) => x === a[i]) && b.length === columns2.length && columns2.every((x, i) => x.type === b[i].type);
   }
   function describe12(statement2, oids) {
-    return new Promise((resolve5, reject) => {
+    return new Promise((resolve6, reject) => {
       const x = Exchange("describe", null, connection2.lease, (x2) => {
         parse9(out, "", statement2.text, oids);
         describe9(out, "S", "");
         sync2(x2);
       });
-      x.resolve = resolve5;
+      x.resolve = resolve6;
       x.reject = reject;
       queue(x);
     });
@@ -10463,7 +10464,7 @@ function Connection(ready, options, events) {
     const x = sent.find((x2) => x2.query === query2);
     if (!x)
       return Promise.resolve();
-    return x === sent[0] && query2.active ? ready.cancel() : new Promise((resolve5, reject) => x.cancel = { resolve: resolve5, reject });
+    return x === sent[0] && query2.active ? ready.cancel() : new Promise((resolve6, reject) => x.cancel = { resolve: resolve6, reject });
   }
   function close2() {
     closing || (closing = new Promise((r) => {
@@ -10502,7 +10503,7 @@ function Connection(ready, options, events) {
     pending.splice(0).forEach((x) => x.own ? settle2(x) : settleError(x, closed));
     running.forEach((query2) => query2.settled || query2.reject(decorate(query2, closed)));
     running.clear();
-    open5.clear();
+    open6.clear();
     connection2.onended && connection2.onended();
     events.onclose(connection2, closed);
   }
@@ -10719,7 +10720,7 @@ function Connection(ready, options, events) {
     x.last ? x.last.then(() => query2.settled || finish2(x), (error63) => query2.settled || query2.reject(decorate(query2, error63))) : query2.settled || finish2(x);
   }
   function unfence(cursor) {
-    if (!open5.delete(cursor) || open5.size || !fence)
+    if (!open6.delete(cursor) || open6.size || !fence)
       return;
     fence = null;
     release2();
@@ -11335,11 +11336,11 @@ function Pool(options, types2) {
     hold(c2);
     typesLoading = true;
     c2.loading = true;
-    types2.load((text7) => new Promise((resolve5, reject2) => {
+    types2.load((text7) => new Promise((resolve6, reject2) => {
       const q = new Query([text7], [], Object.assign(() => {
       }, { options }), { simple: true });
       q.executed = true;
-      q.then(resolve5, reject2);
+      q.then(resolve6, reject2);
       c2.simple(q, text7);
     })).then(
       () => typesLoaded = true,
@@ -11455,8 +11456,8 @@ function Pool(options, types2) {
     const missing = retype();
     if (missing)
       throw missing;
-    return new Promise((resolve5, reject2) => {
-      waiting.push(wait({ lease: true, kind, resolve: resolve5, reject: reject2, queued: listened(channels.pool) ? now2() : 0 }));
+    return new Promise((resolve6, reject2) => {
+      waiting.push(wait({ lease: true, kind, resolve: resolve6, reject: reject2, queued: listened(channels.pool) ? now2() : 0 }));
       drain();
     });
   }
@@ -11480,9 +11481,9 @@ function Pool(options, types2) {
           return q.reject(queryError(c2.closed, q, options.debug));
         if (released)
           return q.reject(queryError(ended(x), q, options.debug));
-        chain = chain.then(() => new Promise((resolve5) => {
-          q.onwrite = resolve5;
-          q.then(resolve5, resolve5);
+        chain = chain.then(() => new Promise((resolve6) => {
+          q.onwrite = resolve6;
+          q.then(resolve6, resolve6);
           query2(q, x);
         }));
       },
@@ -11522,8 +11523,8 @@ function Pool(options, types2) {
   function end({ timeout = null } = {}) {
     if (ending2)
       return ending2;
-    ending2 = new Promise((resolve5) => {
-      pool.ended = resolve5;
+    ending2 = new Promise((resolve6) => {
+      pool.ended = resolve6;
       timeout !== null && (endTimer = setTimeout2(destroy, timeout * 1e3));
       retryTimer && (clearTimeout2(retryTimer), retryTimer = null);
       Promise.resolve().then(finishing);
@@ -11542,9 +11543,9 @@ function Pool(options, types2) {
     if (connections.size === 0 && (opening === 0 || signal.aborted) && waiting.length === 0) {
       endTimer && clearTimeout2(endTimer);
       retryTimer && clearTimeout2(retryTimer);
-      const resolve5 = pool.ended;
+      const resolve6 = pool.ended;
       pool.ended = null;
-      resolve5();
+      resolve6();
     }
   }
   function destroy() {
@@ -12024,7 +12025,7 @@ var init_subscribe = __esm({
 // node_modules/postgres/src/large.js
 import Stream2 from "stream";
 function largeObject(sql, oid, mode = 131072 | 262144) {
-  return new Promise(async (resolve5, reject) => {
+  return new Promise(async (resolve6, reject) => {
     await sql.begin(async (sql2) => {
       let finish2;
       !oid && ([{ oid }] = await sql2`select lo_creat(-1) as oid`);
@@ -12050,7 +12051,7 @@ function largeObject(sql, oid, mode = 131072 | 262144) {
           ) seek
         `
       };
-      resolve5(lo);
+      resolve6(lo);
       return new Promise(async (r) => finish2 = r);
       async function readable({
         highWaterMark = 2048 * 8,
@@ -12243,9 +12244,9 @@ function Postgres(a, b) {
       };
       name && await control(lease, "savepoint " + identifier2(name));
       try {
-        result = await new Promise((resolve5, reject) => {
+        result = await new Promise((resolve6, reject) => {
           const x = fn2(scoped);
-          Promise.resolve(Array.isArray(x) ? Promise.all(x) : x).then(resolve5, reject);
+          Promise.resolve(Array.isArray(x) ? Promise.all(x) : x).then(resolve6, reject);
         });
         if (uncaught && !stopped())
           throw uncaught;
@@ -13786,7 +13787,7 @@ function actionInvocation(argv, env, processCwd) {
 }
 
 // src/cli/index.ts
-import { parseArgs as parseArgs13 } from "node:util";
+import { parseArgs as parseArgs14 } from "node:util";
 
 // src/lint/parsers/workflow.ts
 var import_yaml2 = __toESM(require_dist(), 1);
@@ -13906,6 +13907,9 @@ function classify(value2) {
   const trimmed = value2.trim();
   if (/^\$\{\{[\s\S]*\}\}$/.test(trimmed) && trimmed.indexOf("${{", 3) === -1) return "expression";
   return trimmed.includes("${{") ? "interpolated" : "literal";
+}
+function isMapNode(node2) {
+  return (0, import_yaml.isMap)(node2);
 }
 function parseErrors(source) {
   return source.doc.errors.map((error63) => ({
@@ -14399,6 +14403,17 @@ function commandsOf(step) {
   const script = step.run?.value;
   if (!script) return [];
   return splitShellCommands(script).map(({ command, offset }) => ({ command, line: runLine(step, offset) }));
+}
+function* runCommands(workflows) {
+  for (const workflow of workflows) {
+    for (const job of workflow.jobs) {
+      for (const step of job.steps) {
+        for (const { command, line } of commandsOf(step)) {
+          yield { workflow, job, step, command, line };
+        }
+      }
+    }
+  }
 }
 function* steps(workflows) {
   for (const workflow of workflows) {
@@ -19139,6 +19154,228 @@ var rules4 = [
   sleep_polling_health_check_default
 ];
 
+// src/lint/parsers/actions-lock.ts
+var import_yaml9 = __toESM(require_dist(), 1);
+var ACTIONS_LOCK_PATH = ".github/workflows/actions.lock";
+function isPositiveId(value2) {
+  if (typeof value2 === "number") return Number.isSafeInteger(value2) && value2 > 0;
+  return typeof value2 === "string" && /^[1-9]\d*$/.test(value2);
+}
+function normalizeActionRef(value2) {
+  const separator = value2.lastIndexOf("@");
+  if (separator < 0) return value2.toLowerCase();
+  return `${value2.slice(0, separator).toLowerCase()}@${value2.slice(separator + 1)}`;
+}
+function parseActionsLock(file2) {
+  const source = parseYaml(file2.path, file2.content);
+  const issues = parseErrors(source);
+  const workflows = /* @__PURE__ */ new Map();
+  const dependencies = /* @__PURE__ */ new Set();
+  const root = source.doc.contents;
+  if (issues.length > 0) return { issues, workflows, dependencies };
+  if (!isMapNode(root)) {
+    issues.push({ line: 1, message: "The actions lockfile must be a YAML mapping." });
+    return { issues, workflows, dependencies };
+  }
+  if (!stringValue(field(source, root, "version")?.value)) {
+    issues.push({ line: 1, message: "The actions lockfile must declare a non-empty `version`." });
+  }
+  const workflowField = field(source, root, "workflows");
+  if (!workflowField || !isMapNode(workflowField.value)) {
+    issues.push({ line: workflowField?.line ?? 1, message: "The actions lockfile must contain a `workflows` mapping." });
+  } else {
+    for (const entry2 of entries(source, workflowField.value)) {
+      const sequence = resolveNode(source, entry2.value).node;
+      if (!(0, import_yaml9.isSeq)(sequence)) {
+        issues.push({ line: entry2.line, message: `Lock entry for workflow \`${entry2.key}\` must be a list of action references.` });
+        continue;
+      }
+      const refs = /* @__PURE__ */ new Set();
+      for (const item of items(source, sequence)) {
+        const ref = stringValue(item);
+        if (!ref) {
+          issues.push({ line: entry2.line, message: `Lock entry for workflow \`${entry2.key}\` contains a non-string action reference.` });
+          continue;
+        }
+        refs.add(normalizeActionRef(ref));
+      }
+      workflows.set(entry2.key, { line: entry2.line, dependencies: refs });
+    }
+  }
+  const dependencyField = field(source, root, "dependencies");
+  if (!dependencyField || !isMapNode(dependencyField.value)) {
+    issues.push({ line: dependencyField?.line ?? 1, message: "The actions lockfile must contain a `dependencies` mapping." });
+  } else {
+    for (const entry2 of entries(source, dependencyField.value)) {
+      if (!isMapNode(entry2.value)) {
+        issues.push({ line: entry2.line, message: `Dependency \`${entry2.key}\` must have a metadata mapping.` });
+        continue;
+      }
+      const ref = stringValue(field(source, entry2.value, "ref")?.value);
+      const commit = stringValue(field(source, entry2.value, "commit")?.value);
+      const ownerId = scalarValue(field(source, entry2.value, "owner_id")?.value);
+      const repoId = scalarValue(field(source, entry2.value, "repo_id")?.value);
+      const separator = entry2.key.lastIndexOf("@");
+      if (separator <= 0 || !ref || entry2.key.slice(separator + 1) !== ref || !commit || !/^sha1-[0-9a-f]{40}$/i.test(commit) || !isPositiveId(ownerId) || !isPositiveId(repoId)) {
+        issues.push({
+          line: entry2.line,
+          message: `Dependency \`${entry2.key}\` must include a ref, a sha1 commit, and positive owner_id/repo_id values.`
+        });
+        continue;
+      }
+      dependencies.add(normalizeActionRef(entry2.key));
+    }
+  }
+  return { issues, workflows, dependencies };
+}
+function isActionLockCovered(lock, workflowPath2, actionRef) {
+  if (!lock || lock.issues.length > 0) return false;
+  const workflow = lock.workflows.get(workflowPath2);
+  const normalizedRef = normalizeActionRef(actionRef);
+  return workflow?.dependencies.has(normalizedRef) === true && lock.dependencies.has(normalizedRef);
+}
+
+// src/lint/rules/hermeticity/actions-lock.ts
+var VERIFY_SUGGESTION = "Run `gh actions-lock --verify` in a pull-request or push workflow; `--verify-local` checks coverage only, not provenance.";
+var UPDATE_SUGGESTION = "Run `gh actions-lock` from the repository root to update the generated lockfile, then review and commit it. Do not edit the file by hand.";
+function remoteActionSteps(workflow) {
+  return workflow.jobs.flatMap(
+    (job) => job.steps.flatMap((step) => {
+      const uses = step.uses;
+      return uses?.kind === "literal" && uses.action.kind === "remote" ? [{ step, ref: uses.value, shaPinned: uses.action.shaPinned }] : [];
+    })
+  );
+}
+function hasNetworkedVerification(workflows) {
+  for (const { workflow, command } of runCommands(workflows)) {
+    if (!hasTrigger(workflow, "pull_request", "pull_request_target", "merge_group", "push")) continue;
+    const normalized = command.trim().replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+)+/, "");
+    if (/^gh\s+actions-lock\s+--verify(?:\s|$)/i.test(normalized)) return true;
+  }
+  return false;
+}
+var actions_lock_default = defineRule({
+  meta: {
+    id: "hermeticity/actions-lock",
+    ruleset: "hermeticity",
+    description: "Use a verified workflow dependency lockfile as an alternative to SHA-pinning mutable action refs.",
+    rationale: "GitHub's generated actions.lock records commits for direct and transitive action dependencies and can replace mutable refs; full SHA pins remain a valid alternative. This rule checks direct workflow action refs against declared entries, not transitive closure, commit provenance, or runtime enforcement. Use the networked `gh actions-lock --verify` check and review lockfile diffs. The lockfile does not cover remote reusable workflows or container images.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/concepts/security/workflow-dependency-lockfiles",
+      "https://docs.github.com/en/actions/how-tos/secure-your-work/lock-workflow-dependencies",
+      "https://github.com/github/gh-actions-lock"
+    ],
+    impact: "low",
+    example: {
+      bad: "on: pull_request\njobs:\n  build:\n    steps:\n      - uses: actions/checkout@v7",
+      good: "Run `gh actions-lock` to generate `.github/workflows/actions.lock`, then run `gh actions-lock --verify` in CI."
+    }
+  },
+  check({ project, input: input3, isPathIgnored, report }) {
+    const completeInventory = input3.mode === "repository" && input3.inventoryComplete;
+    const lockFile = project.files.get(ACTIONS_LOCK_PATH);
+    for (const { workflow, command, line } of runCommands(project.workflows)) {
+      if (/\bgh\s+actions-lock\b/i.test(command) && /(?:^|\s)--accept-moved(?:\s|$)/i.test(command)) {
+        report({
+          path: workflow.path,
+          line,
+          key: "actions-lock.accept-moved",
+          message: "`gh actions-lock --accept-moved` can accept a moved or downgraded pin; do not use it in automation.",
+          suggestion: "Investigate the upstream ref movement and review the lockfile diff before updating it with the normal `gh actions-lock` command."
+        });
+      }
+    }
+    if (!lockFile) {
+      if (!completeInventory || isPathIgnored?.(ACTIONS_LOCK_PATH)) return;
+      for (const workflow of project.workflows) {
+        for (const { step, ref, shaPinned } of remoteActionSteps(workflow)) {
+          if (shaPinned) continue;
+          report({
+            path: workflow.path,
+            line: step.uses?.line ?? step.line,
+            key: `${step.key}.actions-lock`,
+            message: `Action \`${ref}\` is not covered by GitHub's workflow dependency lockfile.`,
+            suggestion: `${UPDATE_SUGGESTION} ${VERIFY_SUGGESTION}`
+          });
+        }
+      }
+      return;
+    }
+    const lock = parseActionsLock(lockFile);
+    for (const [index, issue2] of lock.issues.entries()) {
+      report({
+        path: ACTIONS_LOCK_PATH,
+        line: issue2.line,
+        key: `actions-lock.schema.${index}`,
+        message: issue2.message,
+        suggestion: UPDATE_SUGGESTION
+      });
+    }
+    if (lock.issues.length > 0) return;
+    for (const workflow of project.workflows) {
+      const actions = remoteActionSteps(workflow);
+      if (actions.length === 0) continue;
+      const lockedWorkflow = lock.workflows.get(workflow.path);
+      for (const { step, ref, shaPinned } of actions) {
+        if (shaPinned) continue;
+        const line = step.uses?.line ?? step.line;
+        if (!lockedWorkflow) {
+          report({
+            path: workflow.path,
+            line,
+            key: `${step.key}.actions-lock`,
+            message: `Workflow \`${workflow.path}\` is not onboarded in \`${ACTIONS_LOCK_PATH}\`; action \`${ref}\` is not locked.`,
+            suggestion: UPDATE_SUGGESTION
+          });
+        } else if (!lockedWorkflow.dependencies.has(normalizeActionRef(ref))) {
+          report({
+            path: workflow.path,
+            line,
+            key: `${step.key}.actions-lock`,
+            message: `Action \`${ref}\` is missing from this workflow's lockfile entry.`,
+            suggestion: UPDATE_SUGGESTION
+          });
+        } else if (!lock.dependencies.has(normalizeActionRef(ref))) {
+          report({
+            path: ACTIONS_LOCK_PATH,
+            line: lockedWorkflow.line,
+            key: `${step.key}.actions-lock-metadata`,
+            message: `Action \`${ref}\` has no valid dependency metadata in the lockfile.`,
+            suggestion: UPDATE_SUGGESTION
+          });
+        }
+      }
+    }
+    if (completeInventory) {
+      for (const [path, entry2] of lock.workflows) {
+        if (!project.files.has(path) && !isPathIgnored?.(path)) {
+          report({
+            path: ACTIONS_LOCK_PATH,
+            line: entry2.line,
+            key: `actions-lock.stale.${path}`,
+            message: `Lockfile entry refers to missing workflow \`${path}\`.`,
+            suggestion: "Run `gh actions-lock` without workflow path arguments so deleted workflow entries are pruned."
+          });
+        }
+      }
+      if (lock.workflows.size > 0 && !hasNetworkedVerification(project.workflows)) {
+        report({
+          path: ACTIONS_LOCK_PATH,
+          line: 1,
+          key: "actions-lock.verify",
+          message: "No pull-request or push workflow was found declaring the networked `gh actions-lock --verify` check.",
+          suggestion: VERIFY_SUGGESTION
+        });
+      }
+    }
+  }
+});
+
 // src/lint/parsers/dockerfile.ts
 function isDockerfilePath(path) {
   const name = path.split("/").pop() ?? path;
@@ -19400,7 +19637,7 @@ var frozen_lockfile_default = defineRule({
 });
 
 // src/lint/rules/hermeticity/pin-actions.ts
-var SUGGESTION2 = "Pin to the full 40-character commit SHA with a version comment, e.g. `uses: owner/repo@<sha> # v1.2.3`; Dependabot and Renovate keep SHA pins and their comments up to date.";
+var SUGGESTION2 = "Pin to the full 40-character commit SHA with a version comment, e.g. `uses: owner/repo@<sha> # v1.2.3`, or cover the action in `.github/workflows/actions.lock` and run `gh actions-lock --verify` in CI.";
 function describeRef(ref) {
   if (ref === void 0) return "has no ref";
   if (/^[0-9a-f]{7,39}$/i.test(ref)) return `uses a short SHA (\`${ref}\`) that can collide`;
@@ -19410,8 +19647,8 @@ var pin_actions_default = defineRule({
   meta: {
     id: "hermeticity/pin-actions",
     ruleset: "hermeticity",
-    description: "Third-party actions and reusable workflows should be pinned to a full commit SHA.",
-    rationale: "Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)",
+    description: "Third-party actions and reusable workflows should use immutable references or a workflow dependency lockfile.",
+    rationale: "Tags and branches can be moved, so `@v4` may run different code tomorrow than today. Use a full-length commit SHA, or cover direct and transitive action dependencies in GitHub's workflow dependency lockfile. The lockfile does not cover reusable workflow calls or container images, and static analysis cannot verify provenance or reachability.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["strict"],
@@ -19420,6 +19657,8 @@ var pin_actions_default = defineRule({
     validateOptions: (options) => "ignoreOwners" in options && (!Array.isArray(options.ignoreOwners) || !options.ignoreOwners.every((owner) => typeof owner === "string")) ? ["ignoreOwners must be an array of strings"] : [],
     references: [
       "https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions",
+      "https://docs.github.com/en/actions/concepts/security/workflow-dependency-lockfiles",
+      "https://github.com/github/gh-actions-lock",
       "https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned-dependencies",
       "https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot"
     ],
@@ -19430,6 +19669,8 @@ var pin_actions_default = defineRule({
     }
   },
   check({ project, options, report }) {
+    const lockFile = project.files.get(ACTIONS_LOCK_PATH);
+    const actionsLock = lockFile ? parseActionsLock(lockFile) : void 0;
     const ignored2 = new Set(options.ignoreOwners.map((owner) => owner.toLowerCase()));
     const skip2 = (owner) => owner !== void 0 && ignored2.has(owner);
     for (const workflow of [...project.workflows, ...project.actions]) {
@@ -19458,7 +19699,7 @@ var pin_actions_default = defineRule({
               message: `Docker action image \`${action.raw}\` is not pinned to an \`@sha256:\` digest.`,
               suggestion: "Pin the image by digest, e.g. `docker://alpine:3.22@sha256:<digest>`."
             });
-          } else if (action.kind === "remote" && !action.shaPinned && !skip2(action.owner)) {
+          } else if (action.kind === "remote" && !action.shaPinned && !isActionLockCovered(actionsLock, workflow.path, action.raw) && !skip2(action.owner)) {
             report({
               path: workflow.path,
               line: uses.line,
@@ -19522,7 +19763,7 @@ var pin_container_images_default = defineRule({
 });
 
 // src/lint/rules/hermeticity/pin-runner.ts
-var import_yaml9 = __toESM(require_dist(), 1);
+var import_yaml11 = __toESM(require_dist(), 1);
 var LATEST = /^(ubuntu|windows|macos)-latest$/i;
 var MATRIX_REF = /^\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}$/;
 function escapeRegExp(text7) {
@@ -19540,7 +19781,7 @@ function runsOnLabels(source, jobNode7, job) {
   let node2 = runsOn.value;
   let key2 = `${job.key}.runs-on`;
   let direct2 = runsOn.origin === "direct";
-  if ((0, import_yaml9.isMap)(node2)) {
+  if ((0, import_yaml11.isMap)(node2)) {
     if (field(source, node2, "group")) return void 0;
     const labels = field(source, node2, "labels");
     if (!labels?.value) return [];
@@ -19548,29 +19789,29 @@ function runsOnLabels(source, jobNode7, job) {
     key2 += ".labels";
     direct2 &&= labels.origin === "direct";
   }
-  if ((0, import_yaml9.isScalar)(node2)) {
+  if ((0, import_yaml11.isScalar)(node2)) {
     const value2 = stringValue(node2);
     return value2 === void 0 ? [] : [{ node: node2, value: value2, key: key2, direct: direct2 }];
   }
-  if (!(0, import_yaml9.isSeq)(node2)) return [];
+  if (!(0, import_yaml11.isSeq)(node2)) return [];
   return node2.items.flatMap((raw, index) => {
     const resolved = resolveNode(source, raw).node;
-    const value2 = (0, import_yaml9.isScalar)(resolved) ? stringValue(resolved) : void 0;
-    return resolved && value2 !== void 0 ? [{ node: resolved, value: value2, key: `${key2}[${index}]`, direct: direct2 && !(0, import_yaml9.isAlias)(raw) }] : [];
+    const value2 = (0, import_yaml11.isScalar)(resolved) ? stringValue(resolved) : void 0;
+    return resolved && value2 !== void 0 ? [{ node: resolved, value: value2, key: `${key2}[${index}]`, direct: direct2 && !(0, import_yaml11.isAlias)(raw) }] : [];
   });
 }
 function matrixValues(source, jobNode7, job, name) {
   const matrix = field(source, field(source, jobNode7, "strategy")?.value, "matrix")?.value;
   const result = [];
   const axis = field(source, matrix, name)?.value;
-  const axisNodes = (0, import_yaml9.isSeq)(resolveNode(source, axis).node) ? items(source, axis) : axis ? [axis] : [];
+  const axisNodes = (0, import_yaml11.isSeq)(resolveNode(source, axis).node) ? items(source, axis) : axis ? [axis] : [];
   axisNodes.forEach((node2, index) => {
-    const value2 = (0, import_yaml9.isScalar)(node2) ? stringValue(node2) : void 0;
+    const value2 = (0, import_yaml11.isScalar)(node2) ? stringValue(node2) : void 0;
     if (value2 !== void 0) result.push({ node: node2, value: value2, key: `${job.key}.strategy.matrix.${name}[${index}]`, direct: false });
   });
   items(source, field(source, matrix, "include")?.value).forEach((entry2, index) => {
     const node2 = field(source, entry2, name)?.value;
-    const value2 = (0, import_yaml9.isScalar)(node2) ? stringValue(node2) : void 0;
+    const value2 = (0, import_yaml11.isScalar)(node2) ? stringValue(node2) : void 0;
     if (node2 && value2 !== void 0) result.push({ node: node2, value: value2, key: `${job.key}.strategy.matrix.include[${index}].${name}`, direct: false });
   });
   return result;
@@ -19646,7 +19887,78 @@ var pin_runner_default = defineRule({
 });
 
 // src/lint/rules/hermeticity/index.ts
-var rules5 = [docker_base_digest_default, frozen_lockfile_default, pin_actions_default, pin_container_images_default, pin_runner_default];
+var rules5 = [actions_lock_default, docker_base_digest_default, frozen_lockfile_default, pin_actions_default, pin_container_images_default, pin_runner_default];
+
+// src/lint/rules/hooks/install-in-hook.ts
+var install_in_hook_default = defineRule({
+  meta: {
+    id: "hooks/install-in-hook",
+    ruleset: "hooks",
+    description: "Git hooks should not reinstall project dependencies on every invocation.",
+    rationale: "A direct package-manager install in a commit/push hook repeats dependency resolution and potentially lifecycle scripts on the interactive path. Provision the same locked dependencies at setup and on lockfile changes, and fail explicitly when dependencies are absent. Do not remove secret scanning, linting or CI installation checks. No latency saving is guaranteed without measuring representative hooks.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://git-scm.com/docs/githooks", "https://docs.npmjs.com/cli/commands/npm-ci", "https://pre-commit.com/#new-hooks"],
+    impact: "medium",
+    fixable: false
+  },
+  check({ project, report }) {
+    for (const hook of project.hooks) {
+      const [tool2, subcommand] = hook.words;
+      if (!tool2 || !subcommand || !["npm", "pnpm", "yarn", "bun"].includes(tool2)) continue;
+      if (!["install", "ci"].includes(subcommand)) continue;
+      if (hook.words.some((word) => ["-g", "--global", "--package-lock-only", "--lockfile-only"].includes(word))) continue;
+      report({
+        path: hook.path,
+        line: hook.line,
+        key: `install:${hook.line}`,
+        message: `Hook command \`${hook.command}\` installs dependencies on the interactive Git path.`,
+        suggestion: "Move this locked installation to documented developer setup and lockfile-change provisioning. Keep every mandatory hook check and make missing dependencies a blocking error; retain the clean install in CI."
+      });
+    }
+  }
+});
+
+// src/lint/rules/hooks/pre-commit-repo-scan.ts
+var pre_commit_repo_scan_default = defineRule({
+  meta: {
+    id: "hooks/pre-commit-repo-scan",
+    ruleset: "hooks",
+    description: "Explicit whole-repository pre-commit lint entries should not also receive batched filenames.",
+    rationale: "pre-commit appends matching filenames by default and may split them across invocations to fit command-line limits. An entry that explicitly scans `.` can consequently repeat a whole-repository scan per batch. For intentionally whole-repository checks, pass_filenames: false avoids redundant arguments and batches without reducing analysis scope. Keep file filters, mandatory checks and CI gates; do not apply this advice to staged-file-only linters.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended"],
+    requires: [],
+    defaultOptions: {},
+    references: ["https://pre-commit.com/#hooks-pass_filenames", "https://pre-commit.com/#creating-new-hooks"],
+    impact: "medium",
+    fixable: false
+  },
+  check({ project, report }) {
+    for (const hook of project.hooks) {
+      if (hook.passFilenames !== true) continue;
+      const [tool2, ...args] = hook.words;
+      if (!["eslint", "prettier", "cicd-lint"].includes(tool2 ?? "")) continue;
+      const flags = /* @__PURE__ */ new Set(["--check", "--write", "--fix", "--quiet", "--cache"]);
+      if (args.filter((arg) => !flags.has(arg)).join("\0") !== ".") continue;
+      if (/[;&|$`]/.test(hook.command) || args.includes("--")) continue;
+      report({
+        path: hook.path,
+        line: hook.line,
+        key: `repo-scan:${hook.line}`,
+        message: `Pre-commit entry \`${hook.command}\` explicitly scans \`.\` and also receives filenames by default; filename batches can repeat the repository scan.`,
+        suggestion: "Set pass_filenames: false for this whole-repository entry. Preserve its files/types filters and all mandatory checks. Do not replace repository-wide analysis with staged-only analysis."
+      });
+    }
+  }
+});
+
+// src/lint/rules/hooks/index.ts
+var rules6 = [install_in_hook_default, pre_commit_repo_scan_default];
 
 // src/utils.ts
 function matchesGlob(path, glob) {
@@ -19704,6 +20016,48 @@ async function mapLimit(items2, limit3, fn) {
   };
   await Promise.all(Array.from({ length: Math.min(limit3, items2.length) }, worker));
   return results;
+}
+
+// src/lint/parsers/hooks.ts
+var EVENTS = "applypatch-msg|pre-applypatch|post-applypatch|pre-commit|pre-merge-commit|prepare-commit-msg|commit-msg|post-commit|pre-rebase|post-checkout|post-merge|pre-push|post-rewrite|sendemail-validate|push-to-checkout|pre-receive|update|post-receive|post-update|reference-transaction";
+var SCRIPT_PATH = new RegExp(`^(?:\\.githooks|\\.husky)/(${EVENTS})$`);
+var isGitHookPath = (path) => SCRIPT_PATH.test(path);
+var isPreCommitPath = (path) => /^\.pre-commit-(?:config|hooks)\.ya?ml$/.test(path);
+function parseHooks(files) {
+  const commands = [];
+  const problems = [];
+  for (const file2 of files) {
+    if (isGitHookPath(file2.path)) {
+      if (file2.content.startsWith("#!") && !/^#![^\r\n]*\b(?:sh|bash|dash)\r?\n/.test(file2.content)) continue;
+      for (const { command, offset } of splitShellCommands(file2.content)) {
+        commands.push({
+          path: file2.path,
+          line: file2.content.slice(0, offset).split("\n").length,
+          command,
+          words: commandTokens(command).map((token) => token.value)
+        });
+      }
+    } else if (isPreCommitPath(file2.path)) {
+      const source = parseYaml(file2.path, file2.content);
+      const errors = parseErrors(source);
+      problems.push(...errors.map((error63) => ({ path: file2.path, ...error63 })));
+      if (errors.length) continue;
+      const definitions = file2.path.includes("-hooks.") ? items(source, source.doc.contents) : items(source, field(source, source.doc.contents, "repos")?.value).flatMap((repo) => items(source, field(source, repo, "hooks")?.value));
+      for (const hook of definitions) {
+        const entry2 = field(source, hook, "entry");
+        const command = stringValue(entry2?.value);
+        if (!command) continue;
+        commands.push({
+          path: file2.path,
+          line: entry2?.line ?? lineOfNode(source, hook),
+          command,
+          words: commandTokens(command).map((token) => token.value),
+          passFilenames: scalarValue(field(source, hook, "pass_filenames")?.value) !== false
+        });
+      }
+    }
+  }
+  return { commands, problems };
 }
 
 // src/lint/parsers/manifest.ts
@@ -19931,10 +20285,10 @@ function nixStructure(file2) {
     const char = masked[index];
     if (char === "{" || char === "(" || char === "[") stack.push({ offset: index, epoch: epoch2 });
     else if (char === "}" || char === ")" || char === "]") {
-      const open5 = stack.pop();
+      const open6 = stack.pop();
       const expected = char === "}" ? "{" : char === ")" ? "(" : "[";
-      if (!open5 || masked[open5.offset] !== expected) epoch2 += 1;
-      else if (open5.epoch === epoch2) closes[open5.offset] = index;
+      if (!open6 || masked[open6.offset] !== expected) epoch2 += 1;
+      else if (open6.epoch === epoch2) closes[open6.offset] = index;
     }
   }
   enclosing[masked.length] = stack.at(-1)?.offset ?? -1;
@@ -19942,13 +20296,13 @@ function nixStructure(file2) {
   structureCache.set(file2, structure);
   return structure;
 }
-function matchingClose(source, open5) {
-  if (typeof source !== "string") return nixStructure(source).closes[open5] ?? -1;
+function matchingClose(source, open6) {
+  if (typeof source !== "string") return nixStructure(source).closes[open6] ?? -1;
   const masked = source;
-  if (!"{([".includes(masked[open5] ?? "\0")) return -1;
+  if (!"{([".includes(masked[open6] ?? "\0")) return -1;
   const stack = [];
   const pairs = { "}": "{", ")": "(", "]": "[" };
-  for (let index = open5; index < masked.length; index += 1) {
+  for (let index = open6; index < masked.length; index += 1) {
     const char = masked[index];
     if (char === "{" || char === "(" || char === "[") stack.push(char);
     else if (char === "}" || char === ")" || char === "]") {
@@ -19992,7 +20346,7 @@ function collectScopeEnds(ends) {
     }
     return entries3;
   };
-  const resolve5 = (entries3, end) => {
+  const resolve6 = (entries3, end) => {
     if (!entries3) return;
     for (const body of entries3) {
       active2.delete(body);
@@ -20012,16 +20366,16 @@ function collectScopeEnds(ends) {
       group(bindings, lets).add(body);
     },
     statement(lets, separators, end) {
-      resolve5(statements.get(`${lets}:${separators}`), end);
+      resolve6(statements.get(`${lets}:${separators}`), end);
     },
     branch(conditional, end) {
-      resolve5(branches.get(conditional), end);
+      resolve6(branches.get(conditional), end);
     },
     leaveBindings(lets) {
-      resolve5(bindings.get(lets));
+      resolve6(bindings.get(lets));
     },
     finish(end) {
-      resolve5(active2, end);
+      resolve6(active2, end);
       return end;
     }
   };
@@ -20148,25 +20502,25 @@ function readAttrPath(file2, start2) {
     return { segments, end: next };
   }
 }
-function nixBindings(file2, open5, prefix = []) {
+function nixBindings(file2, open6, prefix = []) {
   let cache = bindingsCache.get(file2);
   if (!cache) {
     cache = /* @__PURE__ */ new Map();
     bindingsCache.set(file2, cache);
   }
-  let bindings = cache.get(open5);
+  let bindings = cache.get(open6);
   if (!bindings) {
-    bindings = readBindings(file2, open5);
-    cache.set(open5, bindings);
+    bindings = readBindings(file2, open6);
+    cache.set(open6, bindings);
   }
   return prefix.length === 0 ? bindings : bindings.map((binding2) => ({ ...binding2, path: [...prefix, ...binding2.path] }));
 }
-function readBindings(file2, open5) {
+function readBindings(file2, open6) {
   const { masked } = file2;
-  const close2 = matchingClose(file2, open5);
+  const close2 = matchingClose(file2, open6);
   if (close2 < 0) return [];
   const bindings = [];
-  let index = open5 + 1;
+  let index = open6 + 1;
   while (index < close2) {
     index = skipSpace(masked, index);
     if (index >= close2) break;
@@ -20195,13 +20549,13 @@ function readBindings(file2, open5) {
   return bindings;
 }
 function topLevelAttrset(file2) {
-  const open5 = skipSpace(file2.masked, 0);
-  if (file2.masked[open5] !== "{") return void 0;
-  const close2 = matchingClose(file2, open5);
+  const open6 = skipSpace(file2.masked, 0);
+  if (file2.masked[open6] !== "{") return void 0;
+  const close2 = matchingClose(file2, open6);
   if (close2 < 0) return void 0;
   const after2 = skipSpace(file2.masked, close2 + 1);
   if (after2 < file2.masked.length) return void 0;
-  return open5;
+  return open6;
 }
 function bindingString(file2, binding2) {
   const string7 = stringAt(file2, binding2.valueStart);
@@ -20297,9 +20651,9 @@ function functionPatternArgs(file2, valueStart, valueEnd) {
   const close2 = matchingClose(masked, cursor);
   if (close2 < 0) return void 0;
   let after2 = skipSpace(masked, close2 + 1);
-  let open5 = Boolean(bound?.[2]);
+  let open6 = Boolean(bound?.[2]);
   if (masked[after2] === "@") {
-    open5 = true;
+    open6 = true;
     after2 = skipSpace(masked, after2 + 1);
     const name = /[A-Za-z_][A-Za-z0-9_'-]*/y;
     name.lastIndex = after2;
@@ -20322,16 +20676,16 @@ function functionPatternArgs(file2, valueStart, valueEnd) {
   const names = [];
   for (const arg of args) {
     const trimmed = arg.trim();
-    if (trimmed === "...") open5 = true;
+    if (trimmed === "...") open6 = true;
     const name = /^([A-Za-z_][A-Za-z0-9_'-]*)/.exec(trimmed)?.[1];
     if (name) names.push(name);
   }
-  return { line, args: names, open: open5 };
+  return { line, args: names, open: open6 };
 }
 function flakeInfo(file2) {
-  const open5 = topLevelAttrset(file2);
-  if (open5 === void 0) return void 0;
-  const bindings = nixBindings(file2, open5);
+  const open6 = topLevelAttrset(file2);
+  if (open6 === void 0) return void 0;
+  const bindings = nixBindings(file2, open6);
   const inputs = /* @__PURE__ */ new Map();
   const nixConfig = /* @__PURE__ */ new Map();
   let description;
@@ -20455,7 +20809,7 @@ function parseFlakeLock(path, content2) {
   };
 }
 function resolveLockInput(lock, reference) {
-  const resolve5 = (ref, active2) => {
+  const resolve6 = (ref, active2) => {
     if (typeof ref === "string") return lock.nodes.get(ref);
     const key2 = JSON.stringify(ref);
     if (active2.has(key2) || active2.size >= 128) return void 0;
@@ -20464,12 +20818,12 @@ function resolveLockInput(lock, reference) {
     for (const segment of ref) {
       const next = node2?.inputs[segment];
       if (next === void 0) return void 0;
-      node2 = resolve5(next, nextActive);
+      node2 = resolve6(next, nextActive);
       if (!node2) return void 0;
     }
     return node2;
   };
-  return resolve5(reference, /* @__PURE__ */ new Set());
+  return resolve6(reference, /* @__PURE__ */ new Set());
 }
 
 // src/lint/project.ts
@@ -20542,6 +20896,8 @@ function workspaceGlobsFrom(root, files) {
 function buildProject(input3) {
   const files = new Map(input3.files.map((file2) => [file2.path, file2]));
   const parseProblems = [];
+  const hooks = parseHooks(input3.files);
+  parseProblems.push(...hooks.problems);
   const workflows = [];
   const actions = [];
   const dockerfiles = [];
@@ -20643,6 +20999,7 @@ function buildProject(input3) {
     actions,
     dockerfiles,
     manifests,
+    hooks: hooks.commands,
     ...rootManifest ? { rootManifest } : {},
     nix,
     facts: {
@@ -21518,7 +21875,7 @@ function enclosingOpen(source, offset) {
   return -1;
 }
 var lambdaPatternCache = /* @__PURE__ */ new WeakMap();
-function isLambdaPattern(source, open5) {
+function isLambdaPattern(source, open6) {
   let cache;
   if (typeof source !== "string") {
     cache = lambdaPatternCache.get(source);
@@ -21526,13 +21883,13 @@ function isLambdaPattern(source, open5) {
       cache = /* @__PURE__ */ new Map();
       lambdaPatternCache.set(source, cache);
     }
-    if (cache.has(open5)) return cache.get(open5);
+    if (cache.has(open6)) return cache.get(open6);
   }
   const masked = typeof source === "string" ? source : source.masked;
-  const close2 = masked[open5] === "{" ? matchingClose(source, open5) : -1;
+  const close2 = masked[open6] === "{" ? matchingClose(source, open6) : -1;
   const after2 = close2 < 0 ? void 0 : masked[skipSpace2(masked, close2 + 1)];
   const result = after2 === ":" || after2 === "@";
-  cache?.set(open5, result);
+  cache?.set(open6, result);
   return result;
 }
 function inInherit(masked, offset) {
@@ -21564,8 +21921,8 @@ function isValueUse(file2, ident) {
   const next = masked[after2];
   if (next === "=" && masked[after2 + 1] !== "=") return false;
   if (next === ":" || next === "@") return false;
-  const open5 = enclosingOpen(file2, ident.offset);
-  if (open5 >= 0 && isLambdaPattern(file2, open5)) {
+  const open6 = enclosingOpen(file2, ident.offset);
+  if (open6 >= 0 && isLambdaPattern(file2, open6)) {
     const before = masked[previousNonSpace(masked, ident.offset)];
     if (before === "{" || before === ",") return false;
   }
@@ -21654,7 +22011,7 @@ function inheritStatements(file2) {
   inheritCache.set(file2, found);
   return found;
 }
-function inheritStatementsAt(file2, open5) {
+function inheritStatementsAt(file2, open6) {
   let scopes2 = inheritScopeCache.get(file2);
   if (!scopes2) {
     scopes2 = /* @__PURE__ */ new Map();
@@ -21666,10 +22023,10 @@ function inheritStatementsAt(file2, open5) {
     }
     inheritScopeCache.set(file2, scopes2);
   }
-  let statements = scopes2.get(open5);
+  let statements = scopes2.get(open6);
   if (!statements) {
     statements = [];
-    scopes2.set(open5, statements);
+    scopes2.set(open6, statements);
   }
   return statements;
 }
@@ -21681,19 +22038,19 @@ function inheritedFromBuiltins(file2) {
   }
   return names;
 }
-function attrKeys(file2, open5) {
+function attrKeys(file2, open6) {
   const keys = /* @__PURE__ */ new Set();
-  for (const binding2 of nixBindings(file2, open5)) {
+  for (const binding2 of nixBindings(file2, open6)) {
     const first = binding2.path[0];
     if (first) keys.add(first);
   }
-  for (const statement2 of inheritStatementsAt(file2, open5)) {
+  for (const statement2 of inheritStatementsAt(file2, open6)) {
     for (const { name } of statement2.names) keys.add(name);
   }
   return keys;
 }
-function bindingNamed(file2, open5, name) {
-  return nixBindings(file2, open5).find((binding2) => binding2.path.length === 1 && binding2.path[0] === name);
+function bindingNamed(file2, open6, name) {
+  return nixBindings(file2, open6).find((binding2) => binding2.path.length === 1 && binding2.path[0] === name);
 }
 function wordOffsets(file2, word) {
   const offsets = [];
@@ -21725,10 +22082,10 @@ function readShadowed(file2, name) {
   return file2.idents.some((ident) => ident.segments[0] === name && !inInherit(file2.masked, ident.offset) && !isValueUse(file2, ident));
 }
 function inLambdaDefault(source, offset) {
-  let open5 = enclosingOpen(source, offset);
-  while (open5 >= 0) {
-    if (isLambdaPattern(source, open5)) return true;
-    open5 = enclosingOpen(source, open5);
+  let open6 = enclosingOpen(source, offset);
+  while (open6 >= 0) {
+    if (isLambdaPattern(source, open6)) return true;
+    open6 = enclosingOpen(source, open6);
   }
   return false;
 }
@@ -21738,16 +22095,16 @@ function assignedKey(masked, offset) {
   return previousWord(masked, equals);
 }
 function enclosingBindingPath(file2, offset) {
-  let open5 = enclosingOpen(file2, offset);
-  while (open5 >= 0) {
-    if (file2.masked[open5] === "{" && !isLambdaPattern(file2, open5)) {
+  let open6 = enclosingOpen(file2, offset);
+  while (open6 >= 0) {
+    if (file2.masked[open6] === "{" && !isLambdaPattern(file2, open6)) {
       let best;
-      for (const binding2 of nixBindings(file2, open5)) {
+      for (const binding2 of nixBindings(file2, open6)) {
         if (binding2.valueStart <= offset && offset <= binding2.valueEnd && (!best || binding2.valueStart >= best.valueStart)) best = binding2;
       }
       if (best) return best.path;
     }
-    open5 = enclosingOpen(file2, open5);
+    open6 = enclosingOpen(file2, open6);
   }
   return void 0;
 }
@@ -21799,19 +22156,19 @@ function unverified(file2, arg) {
   const shown = snippet(file2, arg.start, arg.end);
   const literal5 = leadingString(file2, arg);
   if (literal5) return { url: literal5, shown };
-  const open5 = attrsetOf(file2, unwrapParens(file2, arg));
-  if (open5 === void 0) return void 0;
-  const keys = attrKeys(file2, open5);
+  const open6 = attrsetOf(file2, unwrapParens(file2, arg));
+  if (open6 === void 0) return void 0;
+  const keys = attrKeys(file2, open6);
   if (keys.has("sha256") || keys.has("hash")) return void 0;
-  if (nixBindings(file2, open5).some((binding2) => binding2.path[0] === "${}")) return void 0;
-  const urlBinding = bindingNamed(file2, open5, "url");
+  if (nixBindings(file2, open6).some((binding2) => binding2.path[0] === "${}")) return void 0;
+  const urlBinding = bindingNamed(file2, open6, "url");
   const url2 = urlBinding ? stringAt2(file2, urlBinding.valueStart) : void 0;
   return { ...url2 ? { url: url2 } : {}, shown };
 }
 function importer(file2, ident) {
-  const open5 = enclosingOpen(file2, ident.offset);
-  if (open5 < 0 || file2.masked[open5] !== "(") return void 0;
-  const word = previousWord(file2.masked, open5);
+  const open6 = enclosingOpen(file2, ident.offset);
+  if (open6 < 0 || file2.masked[open6] !== "(") return void 0;
+  const word = previousWord(file2.masked, open6);
   return word && IMPORTERS.has(word) ? word : void 0;
 }
 var builtins_fetchurl_unverified_default = defineRule({
@@ -22171,8 +22528,8 @@ function isDockerToolsBuildImage(ident, bareAllowed) {
   if (ident.segments.length === 1) return bareAllowed;
   return ident.segments.at(-2) === "dockerTools";
 }
-function literal(file2, open5, key2) {
-  const binding2 = bindingNamed(file2, open5, key2);
+function literal(file2, open6, key2) {
+  const binding2 = bindingNamed(file2, open6, key2);
   if (!binding2) return void 0;
   const string7 = stringAt2(file2, binding2.valueStart);
   return string7 && !string7.interpolated ? string7.value : void 0;
@@ -22210,10 +22567,10 @@ var dockertools_single_layer_image_default = defineRule({
       for (const ident of file2.idents) {
         if (!isDockerToolsBuildImage(ident, bareAllowed)) continue;
         const arg = callArgument(file2, ident);
-        const open5 = arg ? attrsetOf(file2, arg) : void 0;
-        if (open5 === void 0) continue;
-        const keys = attrKeys(file2, open5);
-        const name = literal(file2, open5, "name");
+        const open6 = arg ? attrsetOf(file2, arg) : void 0;
+        if (open6 === void 0) continue;
+        const keys = attrKeys(file2, open6);
+        const name = literal(file2, open6, "name");
         if (name !== void 0 && allowed2.has(name)) continue;
         const notes = [];
         if (keys.has("fromImage")) notes.push("the `fromImage` layers are reused, but everything this call adds is still one layer");
@@ -22300,9 +22657,9 @@ function githubSource(input3) {
     return { owner: ref.owner, repo: ref.repo, ...ref.ref ? { ref: ref.ref } : {}, ...ref.rev ? { rev: ref.rev } : {} };
   }
   if (ref.type === "git") {
-    const git2 = input3.url !== void 0 ? parseGitHubGitUrl(input3.url) : void 0;
+    const git3 = input3.url !== void 0 ? parseGitHubGitUrl(input3.url) : void 0;
     const url2 = input3.attrs.get("url");
-    const parsed = git2 ?? (url2 ? parseGitHubGitUrl(`git+${url2}`) : void 0);
+    const parsed = git3 ?? (url2 ? parseGitHubGitUrl(`git+${url2}`) : void 0);
     if (!parsed) return void 0;
     const gitRef = parsed.params.get("ref") ?? input3.attrs.get("ref");
     const gitRev = parsed.params.get("rev") ?? input3.attrs.get("rev");
@@ -22314,8 +22671,8 @@ function implicitInputs(info) {
   return (info.outputs?.args ?? []).filter((name) => name !== "self" && !info.inputs.has(name));
 }
 function flakeBindings(file2) {
-  const open5 = topLevelAttrset(file2);
-  return open5 === void 0 ? [] : nixBindings(file2, open5);
+  const open6 = topLevelAttrset(file2);
+  return open6 === void 0 ? [] : nixBindings(file2, open6);
 }
 function hasExplicitSource(file2, bindings, name) {
   return bindings.some((binding2) => {
@@ -22326,9 +22683,9 @@ function hasExplicitSource(file2, bindings, name) {
   });
 }
 function inputsFullyKnown(file2, bindings) {
-  const open5 = topLevelAttrset(file2);
-  if (open5 === void 0) return false;
-  const scopes2 = [open5];
+  const open6 = topLevelAttrset(file2);
+  if (open6 === void 0) return false;
+  const scopes2 = [open6];
   for (const binding2 of bindings) {
     const brace = attrsetLiteral(file2, binding2);
     if (brace !== void 0) scopes2.push(brace);
@@ -22343,9 +22700,9 @@ function inputsFullyKnown(file2, bindings) {
   });
 }
 function attrsetLiteral(file2, binding2) {
-  const open5 = /^(?:rec\s+)?\{/.exec(file2.masked.slice(binding2.valueStart, binding2.valueStart + 8));
-  if (!open5) return void 0;
-  const brace = binding2.valueStart + open5[0].length - 1;
+  const open6 = /^(?:rec\s+)?\{/.exec(file2.masked.slice(binding2.valueStart, binding2.valueStart + 8));
+  if (!open6) return void 0;
+  const brace = binding2.valueStart + open6[0].length - 1;
   const close2 = matchingClose(file2, brace);
   return close2 >= 0 && file2.masked.slice(close2 + 1, binding2.valueEnd).trim() === "" ? brace : void 0;
 }
@@ -22691,15 +23048,15 @@ function unlocked(file2, arg) {
     const url3 = remoteUrl(literal5);
     return url3 ? { url: url3, shown } : void 0;
   }
-  const open5 = attrsetOf(file2, unwrapParens(file2, arg));
-  if (open5 === void 0) return void 0;
-  const keys = attrKeys(file2, open5);
+  const open6 = attrsetOf(file2, unwrapParens(file2, arg));
+  if (open6 === void 0) return void 0;
+  const keys = attrKeys(file2, open6);
   if (keys.has("rev") || keys.has("narHash")) return void 0;
-  if (nixBindings(file2, open5).some((binding2) => binding2.path[0] === "${}")) return void 0;
-  const urlBinding = bindingNamed(file2, open5, "url");
+  if (nixBindings(file2, open6).some((binding2) => binding2.path[0] === "${}")) return void 0;
+  const urlBinding = bindingNamed(file2, open6, "url");
   const url2 = urlBinding ? remoteUrl(stringAt2(file2, urlBinding.valueStart)) : void 0;
   if (!url2) return void 0;
-  const refBinding = bindingNamed(file2, open5, "ref");
+  const refBinding = bindingNamed(file2, open6, "ref");
   const ref = refBinding ? stringAt2(file2, refBinding.valueStart) : void 0;
   return { url: url2, ...ref && !ref.interpolated ? { ref: ref.value } : {}, shown };
 }
@@ -22769,12 +23126,12 @@ var CHANNEL = /^https:\/\/(?:channels|nixos)\.nixos\.org\/|^channel:/;
 function unpinned(file2, arg) {
   const literal5 = leadingString(file2, arg);
   if (literal5) return { url: literal5, shown: snippet(file2, arg.start, arg.end) };
-  const open5 = attrsetOf(file2, unwrapParens(file2, arg));
-  if (open5 === void 0) return void 0;
-  const keys = attrKeys(file2, open5);
+  const open6 = attrsetOf(file2, unwrapParens(file2, arg));
+  if (open6 === void 0) return void 0;
+  const keys = attrKeys(file2, open6);
   if (keys.has("sha256") || keys.has("hash")) return void 0;
-  if (nixBindings(file2, open5).some((binding2) => binding2.path[0] === "${}")) return void 0;
-  const urlBinding = bindingNamed(file2, open5, "url");
+  if (nixBindings(file2, open6).some((binding2) => binding2.path[0] === "${}")) return void 0;
+  const urlBinding = bindingNamed(file2, open6, "url");
   const url2 = urlBinding ? stringAt2(file2, urlBinding.valueStart) : void 0;
   return { ...url2 ? { url: url2 } : {}, shown: snippet(file2, arg.start, arg.end) };
 }
@@ -22849,7 +23206,7 @@ var fetchtarball_no_hash_default = defineRule({
 import { posix as posix3 } from "node:path";
 
 // src/lint/rules/toolchains/shared.ts
-var import_yaml12 = __toESM(require_dist(), 1);
+var import_yaml15 = __toESM(require_dist(), 1);
 function context(project, workflow, job) {
   const entries3 = expandedJobSteps(project, workflow, job);
   const commands = entries3.flatMap(
@@ -22977,13 +23334,13 @@ function effectiveEnv(ctx, entry2, command) {
   return env;
 }
 function child(node2, key2) {
-  if (!(0, import_yaml12.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml12.isPair)(item) && (0, import_yaml12.isScalar)(item.key) && String(item.key.value) === key2);
+  if (!(0, import_yaml15.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml15.isPair)(item) && (0, import_yaml15.isScalar)(item.key) && String(item.key.value) === key2);
   return pair?.value;
 }
 function keyLine(workflow, map2, key2) {
-  if (!(0, import_yaml12.isMap)(map2)) return void 0;
-  const pair = map2.items.find((item) => (0, import_yaml12.isPair)(item) && (0, import_yaml12.isScalar)(item.key) && String(item.key.value) === key2);
+  if (!(0, import_yaml15.isMap)(map2)) return void 0;
+  const pair = map2.items.find((item) => (0, import_yaml15.isPair)(item) && (0, import_yaml15.isScalar)(item.key) && String(item.key.value) === key2);
   return pair ? lineOfNode(workflow.source, pair.key) : void 0;
 }
 function envKeyLine(workflow, scope2, key2) {
@@ -22994,7 +23351,7 @@ function envKeyLine(workflow, scope2, key2) {
   if (!match2) return void 0;
   const parent = match2[1] !== void 0 ? child(child(root, "jobs"), match2[1]) : child(root, "runs");
   const stepsNode = child(parent, "steps");
-  if (!(0, import_yaml12.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml15.isSeq)(stepsNode)) return void 0;
   return keyLine(workflow, child(stepsNode.items[Number(match2[2])], "env"), key2);
 }
 function envSource(project, ctx, command, name) {
@@ -23201,10 +23558,10 @@ function atBindingStart(masked, index) {
   if (char === "{" || char === ";") return true;
   return masked.slice(Math.max(0, cursor - 2), cursor + 1) === "let" && !/[\w'-]/.test(masked[cursor - 3] ?? "");
 }
-function inheritedNames(masked, open5, close2) {
+function inheritedNames(masked, open6, close2) {
   const names = [];
   let depth = 0;
-  for (let index = open5 + 1; index < close2; index += 1) {
+  for (let index = open6 + 1; index < close2; index += 1) {
     const char = masked[index] ?? "";
     if (char === "{" || char === "(" || char === "[") depth += 1;
     else if (char === "}" || char === ")" || char === "]") depth -= 1;
@@ -23222,22 +23579,22 @@ function inheritedNames(masked, open5, close2) {
 }
 function valueNames(file2, valueStart, valueEnd) {
   const { masked } = file2;
-  let open5 = -1;
+  let open6 = -1;
   const literal5 = /^(?:rec\s+)?\{/.exec(masked.slice(valueStart, valueStart + 8));
-  if (literal5) open5 = valueStart + literal5[0].length - 1;
+  if (literal5) open6 = valueStart + literal5[0].length - 1;
   else {
     let cursor = valueEnd - 1;
     while (cursor > valueStart && /[\s)]/.test(masked[cursor] ?? "")) cursor -= 1;
-    if (masked[cursor] === "}") open5 = matchingOpen(masked, cursor);
-    let before = open5 - 1;
+    if (masked[cursor] === "}") open6 = matchingOpen(masked, cursor);
+    let before = open6 - 1;
     while (before > valueStart && /\s/.test(masked[before] ?? "")) before -= 1;
     const lambdaBody = masked[before] === ":" || masked.slice(before - 1, before + 1) === "in" && !/[\w'-]/.test(masked[before - 2] ?? "");
     if (!lambdaBody) return [];
   }
-  if (open5 < valueStart || masked[open5 - 1] === "$") return [];
-  const close2 = matchingClose(masked, open5);
-  const names = inheritedNames(masked, open5, close2);
-  for (const binding2 of nixBindings(file2, open5)) {
+  if (open6 < valueStart || masked[open6 - 1] === "$") return [];
+  const close2 = matchingClose(masked, open6);
+  const names = inheritedNames(masked, open6, close2);
+  for (const binding2 of nixBindings(file2, open6)) {
     const name = binding2.path.find((segment) => !SYSTEM.test(segment));
     if (name) names.push(name);
   }
@@ -23858,18 +24215,18 @@ var get_env_builtin_default = defineRule({
 // src/lint/rules/nix/git-input-for-github.ts
 var CONVERTIBLE = /* @__PURE__ */ new Set(["ref", "rev", "dir", "shallow", "allRefs"]);
 var REV = /^[0-9a-f]{40}$/i;
-function convert(git2) {
-  if ([...git2.params.keys()].some((key2) => !CONVERTIBLE.has(key2))) return void 0;
-  const rawRef = git2.params.get("ref");
-  const rev = git2.params.get("rev");
+function convert(git3) {
+  if ([...git3.params.keys()].some((key2) => !CONVERTIBLE.has(key2))) return void 0;
+  const rawRef = git3.params.get("ref");
+  const rev = git3.params.get("rev");
   if (rev !== void 0 && !REV.test(rev)) return void 0;
   if (rawRef !== void 0 && /^refs\//.test(rawRef) && !/^refs\/(?:heads|tags)\//.test(rawRef)) return void 0;
   const stripped = rawRef?.replace(/^refs\/(?:heads|tags)\//, "");
   const ref = stripped === "HEAD" ? void 0 : stripped;
   if (ref === "") return void 0;
-  const dir = git2.params.get("dir");
+  const dir = git3.params.get("dir");
   const query2 = [];
-  let path = `github:${git2.owner}/${git2.repo}`;
+  let path = `github:${git3.owner}/${git3.repo}`;
   if (rev !== void 0) path += `/${rev}`;
   else if (ref !== void 0 && !ref.includes("/")) path += `/${ref}`;
   else if (ref !== void 0) query2.push(`ref=${encode(ref)}`);
@@ -23913,10 +24270,10 @@ var git_input_for_github_default = defineRule({
       for (const input3 of flake.info.inputs.values()) {
         const url2 = declaredUrl(input3);
         if (url2 === void 0 || input3.flakeRef?.type !== "git" || input3.urlLine === void 0) continue;
-        const git2 = parseGitHubGitUrl(url2);
-        const conversion = git2 ? convert(git2) : void 0;
-        if (!git2 || !conversion) continue;
-        const ssh = git2.scheme === "ssh";
+        const git3 = parseGitHubGitUrl(url2);
+        const conversion = git3 ? convert(git3) : void 0;
+        if (!git3 || !conversion) continue;
+        const ssh = git3.scheme === "ssh";
         const caveats = [
           ssh ? "Over SSH this input is probably private: `github:` authenticates with a token instead of an SSH key, so give Nix one with `access-tokens = github.com=<token>` (cachix/install-nix-action's `github_access_token` input); the default `GITHUB_TOKEN` only reaches the workflow's own repository." : "If the repository is private, Nix needs `access-tokens = github.com=<token>` (cachix/install-nix-action's `github_access_token` input) to download it.",
           usesRevCount ? "flake.nix reads `revCount`, which `github:` inputs do not provide; make sure it is not read from this input." : void 0
@@ -24301,8 +24658,8 @@ function helperFindings(file2) {
     const qualified = qualifiedName(file2, offset, "developPackage");
     if (!/haskell/i.test(qualified) || isShadowed(file2, "developPackage")) continue;
     const arg = wordCall(file2, offset, "developPackage");
-    const open5 = arg ? attrsetOf(file2, arg) : void 0;
-    if (open5 === void 0 || !attrKeys(file2, open5).has("root")) continue;
+    const open6 = arg ? attrsetOf(file2, arg) : void 0;
+    if (open6 === void 0 || !attrKeys(file2, open6).has("root")) continue;
     findings4.push({
       offset,
       line: file2.lineOf(offset),
@@ -24328,9 +24685,9 @@ function helperFindings(file2) {
     for (const offset of wordOffsets(file2, name)) {
       if (isShadowed(file2, name)) continue;
       const arg = wordCall(file2, offset, name);
-      const open5 = arg ? attrsetOf(file2, arg) : void 0;
-      if (open5 === void 0) continue;
-      const keys = attrKeys(file2, open5);
+      const open6 = arg ? attrsetOf(file2, arg) : void 0;
+      if (open6 === void 0) continue;
+      const keys = attrKeys(file2, open6);
       if (keys.has("offlineCache") || keys.has("yarnNix")) continue;
       findings4.push({
         offset,
@@ -24346,11 +24703,11 @@ function helperFindings(file2) {
     if (file2.masked[offset - 1] === "." || !isBindingKey(file2.masked, offset, "autoPubspecLock".length)) continue;
     const value2 = skipSpace2(file2.masked, skipSpace2(file2.masked, offset + "autoPubspecLock".length) + 1);
     if (/^(?:true|false|null)\b/.test(file2.masked.slice(value2))) continue;
-    const open5 = enclosingOpen(file2, offset);
+    const open6 = enclosingOpen(file2, offset);
     const builder = file2.idents.some((ident) => {
       if (!["buildDartApplication", "buildFlutterApplication"].includes(ident.segments.at(-1) ?? "")) return false;
       const arg = callArgument(file2, ident);
-      return arg !== void 0 && attrsetOf(file2, arg) === open5;
+      return arg !== void 0 && attrsetOf(file2, arg) === open6;
     });
     if (!builder) continue;
     findings4.push({
@@ -25334,7 +25691,7 @@ A restored store is another option; include platform and Nix compatibility in it
 });
 
 // src/lint/rules/nix/no-lock-update-automation.ts
-var import_yaml14 = __toESM(require_dist(), 1);
+var import_yaml17 = __toESM(require_dist(), 1);
 var DEPENDABOT = /^\.github\/dependabot\.ya?ml$/;
 var RENOVATE_CONFIG = /^(?:\.github\/|\.gitlab\/)?(?:renovate\.json5?|\.renovaterc(?:\.json5?)?)$/;
 var BUILT_IN_PRESETS = /* @__PURE__ */ new Set([
@@ -25477,7 +25834,7 @@ function manualUpdateWorkflow(workflows) {
 function dependabotNixCoverage(content2) {
   let config2;
   try {
-    config2 = (0, import_yaml14.parse)(content2);
+    config2 = (0, import_yaml17.parse)(content2);
   } catch {
     return "unknown";
   }
@@ -25599,23 +25956,23 @@ var BOOTSTRAP = /* @__PURE__ */ new Set(["glibc", "gcc", "binutils", "coreutils"
 var OVERLAY_LAMBDA = /(?<![A-Za-z0-9_'.-])(final|self|_final|_self|_)\s*:\s*(prev|super|_prev|_super|_)\s*:/g;
 var PACKAGE_SETS = /* @__PURE__ */ new Set(["prev", "super", "final", "self"]);
 var NON_OVERLAY_KEY = /^(?:packageOverrides|overrides|overrideScope'?|.*Extensions|.*Packages)$/;
-function callHead(masked, open5) {
-  return masked.slice(0, open5).match(/([A-Za-z_][A-Za-z0-9_'.-]*)\s*$/)?.[1];
+function callHead(masked, open6) {
+  return masked.slice(0, open6).match(/([A-Za-z_][A-Za-z0-9_'.-]*)\s*$/)?.[1];
 }
 function isOverlayContext(file2, lambda) {
   const { masked } = file2;
   const key2 = assignedKey(masked, lambda);
   if (key2 !== void 0 && NON_OVERLAY_KEY.test(key2)) return false;
   if (key2 !== void 0 && /overlay/i.test(key2)) return true;
-  const open5 = enclosingOpen(file2, lambda);
-  if (open5 < 0) {
+  const open6 = enclosingOpen(file2, lambda);
+  if (open6 < 0) {
     const before = previousNonSpace(masked, lambda);
     const topLevel = before < 0 || masked[before] === ":" || previousWord(masked, lambda) === "in";
     return topLevel && /overlay/i.test(file2.path);
   }
-  if (masked[open5] === "(") {
-    if (/(?:^|\.)(?:extend|composeExtensions)$/.test(callHead(masked, open5) ?? "")) return true;
-    const list3 = enclosingOpen(file2, open5);
+  if (masked[open6] === "(") {
+    if (/(?:^|\.)(?:extend|composeExtensions)$/.test(callHead(masked, open6) ?? "")) return true;
+    const list3 = enclosingOpen(file2, open6);
     if (list3 >= 0 && masked[list3] === "[" && /(?:^|\.)(?:appendOverlays|composeManyExtensions)$/.test(callHead(masked, list3) ?? "")) return true;
   }
   const path = enclosingBindingPath(file2, lambda);
@@ -25630,9 +25987,9 @@ function overlayBody(masked, afterLambda) {
   if (/^rec(?![A-Za-z0-9_'-])/.test(masked.slice(cursor))) cursor = skipSpace2(masked, cursor + 3);
   return masked[cursor] === "{" ? cursor : void 0;
 }
-function rebindings(file2, open5, watched) {
+function rebindings(file2, open6, watched) {
   const found = [];
-  for (const binding2 of nixBindings(file2, open5)) {
+  for (const binding2 of nixBindings(file2, open6)) {
     const name = binding2.path[0];
     if (binding2.path.length !== 1 || name === void 0 || !watched.has(name)) continue;
     const value2 = file2.masked.slice(binding2.valueStart, binding2.valueEnd).trim().replace(/;$/, "").trim();
@@ -25641,7 +25998,7 @@ function rebindings(file2, open5, watched) {
     found.push({ name, offset: binding2.keyStart, shown: `${name} = ${snippet(file2, binding2.valueStart, binding2.valueEnd, 50).replace(/;$/, "")}` });
   }
   for (const statement2 of inheritStatements(file2)) {
-    if (statement2.source === void 0 || PACKAGE_SETS.has(statement2.source) || enclosingOpen(file2, statement2.offset) !== open5) continue;
+    if (statement2.source === void 0 || PACKAGE_SETS.has(statement2.source) || enclosingOpen(file2, statement2.offset) !== open6) continue;
     for (const entry2 of statement2.names) {
       if (watched.has(entry2.name)) found.push({ name: entry2.name, offset: entry2.offset, shown: `inherit (${statement2.source}) ${entry2.name}` });
     }
@@ -25711,9 +26068,9 @@ var overlay_overrides_foundational_package_default = defineRule({
       const reported = /* @__PURE__ */ new Set();
       for (const match2 of file2.masked.matchAll(OVERLAY_LAMBDA)) {
         if (!isOverlayContext(file2, match2.index)) continue;
-        const open5 = overlayBody(file2.masked, match2.index + match2[0].length);
-        if (open5 === void 0) continue;
-        const findings4 = rebindings(file2, open5, watched).sort((a, b) => a.offset - b.offset);
+        const open6 = overlayBody(file2.masked, match2.index + match2[0].length);
+        if (open6 === void 0) continue;
+        const findings4 = rebindings(file2, open6, watched).sort((a, b) => a.offset - b.offset);
         for (const finding4 of findings4) {
           if (reported.has(finding4.offset)) continue;
           reported.add(finding4.offset);
@@ -25880,9 +26237,9 @@ function isLocalSource(file2, start2, end) {
   if (ident.segments.includes("fileset") || LOCAL_SOURCE_HELPERS.has(last) || ident.text === "nix-gitignore.gitignoreSource" || ident.text === "builtins.path") {
     const argument = callArgument(file2, ident);
     if (!argument) return false;
-    const open5 = attrsetOf(file2, argument);
-    if (open5 !== void 0) {
-      const source = bindingNamed(file2, open5, "src") ?? bindingNamed(file2, open5, "root") ?? bindingNamed(file2, open5, "path");
+    const open6 = attrsetOf(file2, argument);
+    if (open6 !== void 0) {
+      const source = bindingNamed(file2, open6, "src") ?? bindingNamed(file2, open6, "root") ?? bindingNamed(file2, open6, "path");
       return source !== void 0 && isLocalSource(file2, source.valueStart, source.valueEnd);
     }
     return argument.start > ident.offset && isPathLiteral(file2.masked.slice(argument.start, argument.end).trim());
@@ -25900,23 +26257,23 @@ function uniqueSrcBinding(file2) {
   }
   return found.length === 1 ? found[0] : void 0;
 }
-function localSource(file2, open5) {
-  const binding2 = bindingNamed(file2, open5, "src");
+function localSource(file2, open6) {
+  const binding2 = bindingNamed(file2, open6, "src");
   if (binding2) {
     if (!isLocalSource(file2, binding2.valueStart, binding2.valueEnd)) return void 0;
     return { text: snippet(file2, binding2.valueStart, binding2.valueEnd, 50), line: binding2.line };
   }
   const inheritsSrc = inheritStatements(file2).some(
-    (statement2) => statement2.source === void 0 && enclosingOpen(file2, statement2.offset) === open5 && statement2.names.some(({ name }) => name === "src")
+    (statement2) => statement2.source === void 0 && enclosingOpen(file2, statement2.offset) === open6 && statement2.names.some(({ name }) => name === "src")
   );
   if (!inheritsSrc) return void 0;
   const outer = uniqueSrcBinding(file2);
-  if (!outer || outer.start > open5 || !isLocalSource(file2, outer.start, outer.end)) return void 0;
+  if (!outer || outer.start > open6 || !isLocalSource(file2, outer.start, outer.end)) return void 0;
   return { text: snippet(file2, outer.start, outer.end, 50), line: file2.lineOf(outer.start) };
 }
-function packageName2(file2, open5) {
+function packageName2(file2, open6) {
   for (const key2 of ["pname", "name"]) {
-    const binding2 = bindingNamed(file2, open5, key2);
+    const binding2 = bindingNamed(file2, open6, key2);
     if (!binding2) continue;
     const string7 = stringAt2(file2, binding2.valueStart);
     if (string7 && !string7.interpolated) return string7.value;
@@ -25955,11 +26312,11 @@ var rust_two_phase_build_default = defineRule({
       for (const ident of file2.idents) {
         if (ident.segments.at(-1) !== "buildRustPackage" || !isValueUse(file2, ident)) continue;
         const arg = callArgument(file2, ident);
-        const open5 = arg ? attrsetOf(file2, arg) : void 0;
-        if (open5 === void 0) continue;
-        const source = localSource(file2, open5);
+        const open6 = arg ? attrsetOf(file2, arg) : void 0;
+        if (open6 === void 0) continue;
+        const source = localSource(file2, open6);
         if (!source) continue;
-        const name = packageName2(file2, open5);
+        const name = packageName2(file2, open6);
         count += 1;
         report({
           path: file2.path,
@@ -26134,8 +26491,8 @@ var NO_CHROOT = /(?<![\w'-])__noChroot\s*=\s*true\s*;/g;
 function noChrootReports(project) {
   return lintableNixFiles(project).flatMap((file2) => {
     const derivations = new Set(file2.idents.filter((ident) => /(?:^|\.)(?:mkDerivation|derivation)$/.test(ident.text)).flatMap((ident) => {
-      const open5 = calledAttrset(file2, ident);
-      return open5 === void 0 ? [] : [open5];
+      const open6 = calledAttrset(file2, ident);
+      return open6 === void 0 ? [] : [open6];
     }));
     return [...file2.masked.matchAll(NO_CHROOT)].filter((match2) => derivations.has(enclosingOpen(file2, match2.index))).map((match2) => ({
       path: file2.path,
@@ -26413,8 +26770,8 @@ function builderCalls(file2) {
   for (const ident of file2.idents) {
     const last = ident.segments.at(-1) ?? "";
     if (!BUILDERS.has(last) && !(QUALIFIED_BUILDERS.has(last) && ident.segments.length >= 2)) continue;
-    const open5 = calledAttrset(file2, ident);
-    if (open5 !== void 0) calls.push({ builder: last, open: open5 });
+    const open6 = calledAttrset(file2, ident);
+    if (open6 !== void 0) calls.push({ builder: last, open: open6 });
   }
   return calls.sort((a, b) => a.open - b.open);
 }
@@ -26514,8 +26871,8 @@ function inheritedLiteralLookup(file2) {
   ]).sort((a, b) => a.offset - b.offset);
   const active2 = /* @__PURE__ */ new Map();
   let next = 0;
-  return (open5) => {
-    while (next < events.length && events[next].offset <= open5) {
+  return (open6) => {
+    while (next < events.length && events[next].offset <= open6) {
       const event = events[next++];
       const count = (active2.get(event.literal) ?? 0) + event.delta;
       if (count === 0) active2.delete(event.literal);
@@ -26529,8 +26886,8 @@ function findings3(project, file2) {
   const calls = builderCalls(file2);
   const isFlake = file2.path === "flake.nix" || file2.path.endsWith("/flake.nix");
   let inheritedLiteral;
-  for (const { builder, open: open5 } of calls) {
-    const binding2 = bindingNamed(file2, open5, "src");
+  for (const { builder, open: open6 } of calls) {
+    const binding2 = bindingNamed(file2, open6, "src");
     if (binding2) {
       const value2 = file2.masked.slice(binding2.valueStart, binding2.valueEnd).trim();
       if (DIR_LITERAL.test(value2)) {
@@ -26547,12 +26904,12 @@ function findings3(project, file2) {
       }
       continue;
     }
-    const inherited = inheritStatementsAt(file2, open5).find(
+    const inherited = inheritStatementsAt(file2, open6).find(
       (statement2) => statement2.source === void 0 && statement2.names.some((entry3) => entry3.name === "src")
     );
     if (!inherited) continue;
     inheritedLiteral ??= inheritedLiteralLookup(file2);
-    const literal5 = inheritedLiteral(open5);
+    const literal5 = inheritedLiteral(open6);
     if (literal5 === void 0) continue;
     const dir = resolveDir(file2, literal5);
     const where = dir === void 0 ? void 0 : describeDir(project, dir);
@@ -26608,7 +26965,7 @@ var src_whole_repo_default = defineRule({
 });
 
 // src/lint/rules/nix/index.ts
-var rules6 = [
+var rules7 = [
   accept_flake_config_untrusted_default,
   builtins_fetchurl_unverified_default,
   channel_in_ci_default,
@@ -26980,10 +27337,10 @@ var version_drift_default = defineRule({
 });
 
 // src/lint/rules/packages/index.ts
-var rules7 = [exports_map_default, files_allowlist_default, monolith_default, version_drift_default];
+var rules8 = [exports_map_default, files_allowlist_default, monolith_default, version_drift_default];
 
 // src/lint/rules/redundancy/shared.ts
-var import_yaml15 = __toESM(require_dist(), 1);
+var import_yaml18 = __toESM(require_dist(), 1);
 var SETUP_ACTIONS = {
   "actions/setup-node": { version: "node-version", versionFiles: ["node-version-file"] },
   "actions/setup-python": { version: "python-version", versionFiles: ["python-version-file"] },
@@ -27040,12 +27397,12 @@ function stepSignature(workflow, job, step) {
   ].join("\0");
 }
 function directChild2(node2, key2) {
-  if (!(0, import_yaml15.isMap)(node2)) return void 0;
-  return node2.items.find((item) => (0, import_yaml15.isPair)(item) && (0, import_yaml15.isScalar)(item.key) && String(item.key.value) === key2);
+  if (!(0, import_yaml18.isMap)(node2)) return void 0;
+  return node2.items.find((item) => (0, import_yaml18.isPair)(item) && (0, import_yaml18.isScalar)(item.key) && String(item.key.value) === key2);
 }
 function jobNode(workflow, job) {
   const node2 = directChild2(directChild2(workflow.source.doc.contents, "jobs")?.value, job.id)?.value;
-  return (0, import_yaml15.isMap)(node2) ? node2 : void 0;
+  return (0, import_yaml18.isMap)(node2) ? node2 : void 0;
 }
 function stepNode(workflow, step) {
   const match2 = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -27053,18 +27410,18 @@ function stepNode(workflow, step) {
   const root = workflow.source.doc.contents;
   const parent = match2[1] !== void 0 ? directChild2(directChild2(root, "jobs")?.value, match2[1])?.value : directChild2(root, "runs")?.value;
   const stepsNode = directChild2(parent, "steps")?.value;
-  if (!(0, import_yaml15.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml18.isSeq)(stepsNode)) return void 0;
   const node2 = stepsNode.items[Number(match2[2])];
-  return (0, import_yaml15.isMap)(node2) ? node2 : void 0;
+  return (0, import_yaml18.isMap)(node2) ? node2 : void 0;
 }
 function nestedPair(parent, mapKey, key2) {
   const map2 = directChild2(parent, mapKey)?.value;
-  if (!(0, import_yaml15.isMap)(map2)) return void 0;
+  if (!(0, import_yaml18.isMap)(map2)) return void 0;
   const pair = directChild2(map2, key2);
   return pair ? { map: map2, pair } : void 0;
 }
 function rawScalar(content2, node2) {
-  if (!(0, import_yaml15.isScalar)(node2) || !node2.range) return void 0;
+  if (!(0, import_yaml18.isScalar)(node2) || !node2.range) return void 0;
   const text7 = content2.slice(node2.range[0], node2.range[1]).trim();
   const quoted = /^(["'])([\s\S]*)\1$/.exec(text7);
   return quoted ? quoted[2] : text7;
@@ -27405,19 +27762,19 @@ var repeated_job_setup_default = defineRule({
 });
 
 // src/lint/rules/redundancy/shadowed-env.ts
-var import_yaml16 = __toESM(require_dist(), 1);
+var import_yaml19 = __toESM(require_dist(), 1);
 function entry(workflow, file2, parent, key2) {
   const found = nestedPair(parent, "env", key2);
-  if (!found || !(0, import_yaml16.isScalar)(found.pair.value)) return void 0;
+  if (!found || !(0, import_yaml19.isScalar)(found.pair.value)) return void 0;
   const raw = rawScalar(file2.content, found.pair.value);
   if (raw === void 0) return void 0;
-  const owner = (0, import_yaml16.isMap)(parent) ? parent.items.find((item) => item.value === found.map) : void 0;
+  const owner = (0, import_yaml19.isMap)(parent) ? parent.items.find((item) => item.value === found.map) : void 0;
   return { map: found.map, owner, pair: found.pair, raw, line: lineOfNode(workflow.source, found.pair.key) };
 }
 function removal(workflow, file2, inner) {
   if (inner.map.flow) return void 0;
   const value2 = inner.pair.value;
-  if (!(0, import_yaml16.isScalar)(value2) || !value2.range) return void 0;
+  if (!(0, import_yaml19.isScalar)(value2) || !value2.range) return void 0;
   if (lineOfNode(workflow.source, value2) !== inner.line) return void 0;
   const valueEnd = workflow.source.lineCounter.linePos(value2.range[1]).line;
   if (valueEnd !== inner.line) return void 0;
@@ -27695,7 +28052,7 @@ var toolchain_version_drift_default = defineRule({
 });
 
 // src/lint/rules/redundancy/index.ts
-var rules8 = [
+var rules9 = [
   duplicate_setup_step_default,
   repeated_job_setup_default,
   rebuild_per_job_default,
@@ -28126,10 +28483,10 @@ var github_npm_default = defineRule({
 });
 
 // src/lint/rules/registries/index.ts
-var rules9 = [ghcr_default, github_npm_default];
+var rules10 = [ghcr_default, github_npm_default];
 
 // src/lint/rules/security/shared.ts
-var import_yaml19 = __toESM(require_dist(), 1);
+var import_yaml22 = __toESM(require_dist(), 1);
 var PRIVILEGED_TRIGGERS = ["pull_request_target", "workflow_run", "issue_comment"];
 function isPrivileged(workflow) {
   return workflow.kind === "workflow" && hasTrigger(workflow, ...PRIVILEGED_TRIGGERS);
@@ -28268,9 +28625,9 @@ function executesWorkspace(step) {
   }
 }
 function directChild3(node2, key2) {
-  if (!(0, import_yaml19.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml19.isPair)(item) && (0, import_yaml19.isScalar)(item.key) && String(item.key.value) === key2);
-  return pair && !(0, import_yaml19.isAlias)(pair.value) ? pair.value : void 0;
+  if (!(0, import_yaml22.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml22.isPair)(item) && (0, import_yaml22.isScalar)(item.key) && String(item.key.value) === key2);
+  return pair && !(0, import_yaml22.isAlias)(pair.value) ? pair.value : void 0;
 }
 function directStep(workflow, step) {
   const match2 = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -28278,10 +28635,10 @@ function directStep(workflow, step) {
   const root = rootNode2(workflow);
   const parent = match2[1] !== void 0 ? directChild3(directChild3(root, "jobs"), match2[1]) : directChild3(root, "runs");
   const stepsNode = directChild3(parent, "steps");
-  if (!(0, import_yaml19.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml22.isSeq)(stepsNode)) return void 0;
   const node2 = stepsNode.items[Number(match2[2])];
-  if (!(0, import_yaml19.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
-  if (node2.items.some((pair) => !(0, import_yaml19.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
+  if (!(0, import_yaml22.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
+  if (node2.items.some((pair) => !(0, import_yaml22.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
   return node2;
 }
 
@@ -28597,11 +28954,11 @@ function goIssue(words6) {
 }
 function cargoIssue(words6) {
   if (words6[0] !== "cargo" || words6[1] !== "install") return void 0;
-  const git2 = words6.findIndex((word) => word === "--git" || word.startsWith("--git="));
-  if (git2 < 0) return void 0;
+  const git3 = words6.findIndex((word) => word === "--git" || word.startsWith("--git="));
+  if (git3 < 0) return void 0;
   const pinned = words6.some((word) => /^--(?:rev|tag)(?:=|$)/.test(word));
   if (pinned) return void 0;
-  const url2 = words6[git2]?.startsWith("--git=") ? words6[git2]?.slice(6) : words6[git2 + 1];
+  const url2 = words6[git3]?.startsWith("--git=") ? words6[git3]?.slice(6) : words6[git3 + 1];
   return `\`cargo install --git ${url2 ?? ""}\` builds whatever the branch points at`;
 }
 var mutable_remote_ref_default = defineRule({
@@ -28647,9 +29004,9 @@ var mutable_remote_ref_default = defineRule({
 });
 
 // src/lint/rules/security/persisted-credentials.ts
-var import_yaml21 = __toESM(require_dist(), 1);
+var import_yaml24 = __toESM(require_dist(), 1);
 var UPLOAD_ACTIONS = ["actions/upload-artifact", "actions/upload-artifact/merge"];
-var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml21.Scalar.PLAIN, import_yaml21.Scalar.QUOTE_DOUBLE, import_yaml21.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml24.Scalar.PLAIN, import_yaml24.Scalar.QUOTE_DOUBLE, import_yaml24.Scalar.QUOTE_SINGLE]);
 var WORKSPACE_ROOT = /^(?:\.\/?|\$\{\{\s*github\.workspace\s*\}\}\/?)$/;
 function uploadsGitDirectory(step, file2) {
   if (!usesAction(step, ...UPLOAD_ACTIONS)) return false;
@@ -28673,7 +29030,7 @@ function addPersistCredentials(file2, workflow, step) {
   const description = "Set persist-credentials: false";
   if (step.with.size > 0 || step.uses?.kind !== "literal") {
     const withNode = directWith(workflow, step);
-    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value !== "<<");
+    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml24.isScalar)(pair.key) && pair.key.value !== "<<");
     const first = pairs[0];
     const last = pairs[pairs.length - 1];
     if (!first || !last) return void 0;
@@ -28681,14 +29038,14 @@ function addPersistCredentials(file2, workflow, step) {
     const indent2 = indentOf(file2.content, firstLine);
     const lastLine = lineOfNode(workflow.source, last.key);
     const value2 = last.value;
-    const endsOnKeyLine = (0, import_yaml21.isScalar)(value2) && SINGLE_LINE.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
+    const endsOnKeyLine = (0, import_yaml24.isScalar)(value2) && SINGLE_LINE.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
     const line = `${indent2}persist-credentials: false`;
     return fix(description, insertLinesAfter(file2, endsOnKeyLine ? lastLine : firstLine - 1, [line]));
   }
   const node2 = directStep(workflow, step);
-  if (!node2 || node2.items.some((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
-  const usesPair = node2.items.find((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value === "uses");
-  if (!usesPair || !(0, import_yaml21.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
+  if (!node2 || node2.items.some((pair) => (0, import_yaml24.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
+  const usesPair = node2.items.find((pair) => (0, import_yaml24.isScalar)(pair.key) && pair.key.value === "uses");
+  if (!usesPair || !(0, import_yaml24.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
   const usesLine = lineOfNode(workflow.source, usesPair.key);
   const text7 = lineText(file2.content, usesLine);
   const match2 = /^(\s*)(-\s+)?uses\s*:/.exec(text7);
@@ -28731,14 +29088,14 @@ var persisted_credentials_default = defineRule({
         if (reason === void 0) continue;
         for (const step of checkouts) {
           if (step.with.get("persist-credentials")?.kind === "expression") continue;
-          const repair = file2 ? addPersistCredentials(file2, workflow, step) : void 0;
+          const repair2 = file2 ? addPersistCredentials(file2, workflow, step) : void 0;
           report({
             path: workflow.path,
             line: stepLine(step),
             key: `${step.key}.with.persist-credentials`,
             message: `Checkout leaves the job token in \`.git/config\` and ${reason}.`,
             suggestion: "Add `persist-credentials: false` under `with:`. If a later step must push, pass the token to that step explicitly instead.",
-            ...repair ? { fix: repair } : {}
+            ...repair2 ? { fix: repair2 } : {}
           });
         }
       }
@@ -28961,7 +29318,7 @@ var untrusted_checkout_default = defineRule({
 });
 
 // src/lint/rules/security/index.ts
-var rules10 = [
+var rules11 = [
   env_file_injection_default,
   excessive_permissions_default,
   expression_injection_default,
@@ -29160,7 +29517,7 @@ var static_cloud_credentials_default = defineRule({
 });
 
 // src/lint/rules/ssdf/index.ts
-var rules11 = [
+var rules12 = [
   attestation_missing_permissions_default,
   publish_without_provenance_default,
   publish_without_sbom_default,
@@ -29677,7 +30034,7 @@ var tool_incremental_cache_default = defineRule({
 });
 
 // src/lint/rules/testing/unconditional-debug-upload.ts
-var import_yaml24 = __toESM(require_dist(), 1);
+var import_yaml27 = __toESM(require_dist(), 1);
 var DEBUG_PATH = /(^|[/\\])(?:playwright-report|test-results|traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)/i;
 var HEAVY_PATH = /(^|[/\\])(?:traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)|\.(?:zip|webm|mp4|png)$/i;
 var MACHINE_READABLE = /junit|\.(?:xml|json|trx|sarif|lcov)$|coverage/i;
@@ -29751,7 +30108,7 @@ var unconditional_debug_upload_default = defineRule({
         const file2 = project.files.get(workflow.path);
         const first = file2 ? lineText(file2.content, step.line) : "";
         const dash = /^(\s*)-\s+[\w-]+:/.exec(first);
-        if (file2 && dash && (0, import_yaml24.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
+        if (file2 && dash && (0, import_yaml27.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
           applied = fix("Upload only when the job fails", insertLinesAfter(file2, step.line, [`${dash[1] ?? ""}  if: failure()`]));
         }
       }
@@ -29872,7 +30229,7 @@ var watch_mode_in_ci_default = defineRule({
 });
 
 // src/lint/rules/testing/index.ts
-var rules12 = [
+var rules13 = [
   playwright_browser_cache_default,
   tool_incremental_cache_default,
   watch_mode_in_ci_default,
@@ -31629,7 +31986,7 @@ An earlier check does not constrain later commands. On uv >= 0.4.25, \`UV_LOCKED
 });
 
 // src/lint/rules/toolchains/index.ts
-var rules13 = [
+var rules14 = [
   gradle_build_cache_disabled_default,
   gradle_configuration_cache_disabled_default,
   gradle_parallel_disabled_default,
@@ -32108,7 +32465,7 @@ var workflow_run_chain_default = defineRule({
 });
 
 // src/lint/rules/triggers/index.ts
-var rules14 = [
+var rules15 = [
   workflow_run_chain_default,
   serialized_matrix_default,
   draft_pr_gating_default,
@@ -32119,9 +32476,9 @@ var rules14 = [
 ];
 
 // src/lint/rules/workflow/artifact-retention.ts
-var import_yaml31 = __toESM(require_dist(), 1);
+var import_yaml34 = __toESM(require_dist(), 1);
 var UPLOAD_ACTIONS2 = /* @__PURE__ */ new Set(["actions/upload-artifact", "actions/upload-artifact/merge"]);
-var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml31.Scalar.PLAIN, import_yaml31.Scalar.QUOTE_DOUBLE, import_yaml31.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml34.Scalar.PLAIN, import_yaml34.Scalar.QUOTE_DOUBLE, import_yaml34.Scalar.QUOTE_SINGLE]);
 function retentionDays(value2) {
   if (typeof value2 === "number") return value2;
   if (typeof value2 === "string" && /^\s*\d+\s*$/.test(value2)) return Number(value2);
@@ -32129,7 +32486,7 @@ function retentionDays(value2) {
 }
 function addRetention(file2, workflow, step, days) {
   const withNode = directWith(workflow, step);
-  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml31.isScalar)(pair.key) && pair.key.value !== "<<");
+  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml34.isScalar)(pair.key) && pair.key.value !== "<<");
   const first = pairs[0];
   const last = pairs[pairs.length - 1];
   if (!first || !last) return void 0;
@@ -32137,7 +32494,7 @@ function addRetention(file2, workflow, step, days) {
   const indent = indentOf(file2.content, firstLine);
   const lastLine = lineOfNode(workflow.source, last.key);
   const value2 = last.value;
-  const endsOnKeyLine = (0, import_yaml31.isScalar)(value2) && SINGLE_LINE2.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
+  const endsOnKeyLine = (0, import_yaml34.isScalar)(value2) && SINGLE_LINE2.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
   const line = `${indent}retention-days: ${days}`;
   return fix(
     `Set retention-days: ${days}`,
@@ -32175,14 +32532,14 @@ var artifact_retention_default = defineRule({
       const retention = step.with.get("retention-days");
       if (!retention) {
         const file2 = project.files.get(workflow.path);
-        const repair = file2 ? addRetention(file2, workflow, step, maxDays) : void 0;
+        const repair2 = file2 ? addRetention(file2, workflow, step, maxDays) : void 0;
         report({
           path: workflow.path,
           line: stepLine(step),
           key: `${step.key}.with.retention-days`,
           message: "Artifact upload has no retention-days, so it is kept for the repository default (up to 90 days).",
           suggestion: `Add \`retention-days: ${maxDays}\` to the step's \`with:\` block; artifacts passed between jobs or kept for debugging rarely need more.`,
-          ...repair ? { fix: repair } : {}
+          ...repair2 ? { fix: repair2 } : {}
         });
         continue;
       }
@@ -32205,6 +32562,102 @@ var artifact_retention_default = defineRule({
           message: `Artifact is kept for ${days} days, above the configured maximum of ${maxDays}.`,
           suggestion: `Lower \`retention-days\` to ${maxDays} or less unless this artifact is a release deliverable that must outlive the run.`
         });
+      }
+    }
+  }
+});
+
+// src/lint/rules/workflow/artifact-success-gating.ts
+function successOnly(condition) {
+  const expression2 = condition?.trim().replace(/^\$\{\{\s*([\s\S]*?)\s*\}\}$/, "$1").replace(/\s+/g, "");
+  return expression2 === void 0 || expression2 === "success()" || expression2 === "true";
+}
+function allowsFailure(workflow, job, step) {
+  const entry2 = field(workflow.source, step ? stepNode2(workflow.source, step) : jobNode3(workflow.source, job), "continue-on-error");
+  return entry2 !== void 0 && scalarValue(entry2.value) !== false;
+}
+function artifactName(step, upload) {
+  const name = step.with.get("name");
+  if (!name) return upload ? "artifact" : void 0;
+  return name.kind === "literal" && typeof name.value === "string" && name.value.trim() !== "" ? name.value : void 0;
+}
+function handlesOutcomes(workflow, job) {
+  const seen = /* @__PURE__ */ new Set();
+  function inspect2(value2) {
+    if (typeof value2 === "string") {
+      return /\bneeds\s*(?:\.|\[)|\btoJSON\s*\(\s*needs\b|\b(?:always|failure|cancelled)\s*\(/i.test(value2);
+    }
+    if (value2 === null || typeof value2 !== "object" || seen.has(value2)) return false;
+    seen.add(value2);
+    return Object.values(value2).some(inspect2);
+  }
+  return inspect2(toJS(workflow.source, jobNode3(workflow.source, job)));
+}
+var artifact_success_gating_default = defineRule({
+  meta: {
+    id: "workflow/artifact-success-gating",
+    ruleset: "workflow",
+    description: "Success-gate same-run artifact consumers on their producer jobs.",
+    rationale: "A literal artifact upload/download pair identifies a data prerequisite, unlike job names. Without a needs path, the consumer can start before the producer finishes, or continue after its failure. An artifact may already exist when a later producer step fails. GitHub needs skips dependent jobs after failure through the dependency chain; it cannot cancel independent work already running. Review the artifact contract before adding a direct needs edge; do not serialize unrelated checks or restrict intentional failure handlers and required-check aggregates. These warnings identify a static gating gap, not measured waste or guaranteed removable runner minutes.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["recommended", "agentic", "strict"],
+    requires: [],
+    defaultOptions: {},
+    fixable: false,
+    references: [
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds",
+      "https://docs.github.com/en/actions/tutorials/store-and-share-data",
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions"
+    ],
+    impact: "high",
+    example: {
+      bad: "jobs:\n  producer:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact@v4\n        with:\n          name: dist\n          path: dist\n  consumer:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          name: dist",
+      good: "jobs:\n  producer:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact@v4\n        with:\n          name: dist\n          path: dist\n  consumer:\n    needs: producer\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          name: dist"
+    }
+  },
+  check({ project, report }) {
+    for (const workflow of project.workflows) {
+      if (workflow.kind !== "workflow") continue;
+      const producers = /* @__PURE__ */ new Map();
+      let unknownUpload = false;
+      for (const job of workflow.jobs) {
+        for (const step of job.steps) {
+          if (step.uses?.action.name !== "actions/upload-artifact") continue;
+          const name = artifactName(step, true);
+          if (name === void 0) unknownUpload = true;
+          else producers.set(name, [...producers.get(name) ?? [], { job, step }]);
+        }
+      }
+      if (unknownUpload) continue;
+      for (const job of workflow.jobs) {
+        if (!successOnly(job.if) || handlesOutcomes(workflow, job) || allowsFailure(workflow, job)) continue;
+        const dependencies = ancestors(workflow, job);
+        const reported = /* @__PURE__ */ new Set();
+        for (const step of job.steps) {
+          if (step.uses?.action.name !== "actions/download-artifact" || !successOnly(step.if)) continue;
+          if (allowsFailure(workflow, job, step)) continue;
+          if (["run-id", "repository", "github-token", "artifact-ids", "pattern"].some((key2) => step.with.has(key2))) continue;
+          const name = artifactName(step, false);
+          if (name === void 0) continue;
+          const candidates2 = producers.get(name);
+          if (candidates2?.length !== 1) continue;
+          const producer = candidates2[0];
+          if (!producer || producer.job === job || producer.job.matrix || producer.job.uses) continue;
+          if (!successOnly(producer.job.if) || !successOnly(producer.step.if)) continue;
+          if (allowsFailure(workflow, producer.job) || allowsFailure(workflow, producer.job, producer.step)) continue;
+          if (dependencies.includes(producer.job) || ancestors(workflow, producer.job).includes(job) || reported.has(producer.job.id)) continue;
+          reported.add(producer.job.id);
+          report({
+            path: workflow.path,
+            line: step.uses.line,
+            key: `${job.key}.artifact-success-gating.${producer.job.id}`,
+            message: `Job \`${job.id}\` downloads artifact \`${name}\` uploaded by \`${producer.job.id}\`, but has no needs path to that producer. It can run without waiting for producer success, including after a producer failure.`,
+            suggestion: `If this artifact is required success-path input, add \`${producer.job.id}\` to \`${job.id}\`'s direct needs (preserve existing dependencies). Verify all triggers, failure/skip paths and artifact availability first. Keep cleanup, diagnostics and required-check aggregation able to run and propagate failures; do not apply this gate to intentional failure handlers. No autofix or runner-minute savings estimate is provided.`,
+            related: [{ path: workflow.path, line: producer.step.uses?.line ?? producer.step.line }],
+            confidence: "high"
+          });
+        }
       }
     }
   }
@@ -32586,7 +33039,7 @@ var larger_runner_unjustified_default = defineRule({
 });
 
 // src/lint/rules/workflow/matrix-explosion.ts
-var import_yaml35 = __toESM(require_dist(), 1);
+var import_yaml39 = __toESM(require_dist(), 1);
 var LIMIT = 256;
 var ENUMERATION_CAP = 5e4;
 var isPrimitive2 = (value2) => value2 === null || ["string", "number", "boolean"].includes(typeof value2);
@@ -32598,7 +33051,7 @@ function records2(value2) {
 }
 function scalarTexts(source, content2, node2) {
   const nodes = items(source, node2);
-  const texts = nodes.map((item) => (0, import_yaml35.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
+  const texts = nodes.map((item) => (0, import_yaml39.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
   const flowSafe = (text7) => text7 !== void 0 && !text7.includes("\n") && (/^["']/.test(text7) || !/[,[\]{}]/.test(text7));
   return texts.every(flowSafe) ? texts : void 0;
 }
@@ -33100,7 +33553,7 @@ Inspect ${tool2.rangeFiles.join(" and ")} before reusing them: constraints may a
 });
 
 // src/lint/rules/workflow/unnecessary-needs-serialization.ts
-var import_yaml38 = __toESM(require_dist(), 1);
+var import_yaml42 = __toESM(require_dist(), 1);
 var DEPLOY = /deploy|release|publish|promote|rollout|ship/i;
 var GATE = /test|lint|build|check|verify|validat|typecheck|compile|scan|audit|\bci\b|e2e|smoke|format|fmt|analy|codeql|security|review|approv|gate|guard|preflight|sanity|wait|lock|migrat|provision|setup-env|infra/i;
 var STANDARD_RUNNER = /^(ubuntu|windows|macos)-(latest|\d[\w.]*)(-arm|-intel)?$/;
@@ -33156,7 +33609,7 @@ function needsLine(workflow, job, dependency) {
   const source = workflow.source;
   const needs = field(source, jobNode6(workflow, job), "needs");
   if (!needs) return job.line;
-  const item = items(source, needs.value).find((node2) => (0, import_yaml38.isScalar)(node2) && String(node2.value) === dependency);
+  const item = items(source, needs.value).find((node2) => (0, import_yaml42.isScalar)(node2) && String(node2.value) === dependency);
   return item ? lineOfNode(source, item) : needs.line;
 }
 function standardHosted(job) {
@@ -33222,8 +33675,9 @@ var unnecessary_needs_serialization_default = defineRule({
 });
 
 // src/lint/rules/workflow/index.ts
-var rules15 = [
+var rules16 = [
   artifact_retention_default,
+  artifact_success_gating_default,
   concurrency_default,
   duplicate_push_pull_request_trigger_default,
   job_timeout_default,
@@ -33237,21 +33691,22 @@ var rules15 = [
 
 // src/lint/rules/index.ts
 var allRules = [
-  ...rules15,
+  ...rules16,
   ...rules3,
   ...rules,
   ...rules2,
   ...rules5,
   ...rules4,
-  ...rules7,
-  ...rules9,
+  ...rules8,
   ...rules10,
   ...rules11,
-  ...rules14,
-  ...rules8,
   ...rules12,
-  ...rules6,
-  ...rules13
+  ...rules15,
+  ...rules9,
+  ...rules13,
+  ...rules7,
+  ...rules14,
+  ...rules6
 ];
 
 // src/formal/generated/rule-assurance.ts
@@ -33770,6 +34225,23 @@ var RULE_ASSURANCE = {
       "optionalModelCertificates": []
     },
     {
+      "id": "hermeticity/actions-lock",
+      "metadataSha256": "efd22beb8a127a67ccfc99acab8e3854f55f6524dd761f040a0f79f97217afbf",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Use a verified workflow dependency lockfile as an alternative to SHA-pinning mutable action refs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "GitHub's generated actions.lock records commits for direct and transitive action dependencies and can replace mutable refs; full SHA pins remain a valid alternative. This rule checks direct workflow action refs against declared entries, not transitive closure, commit provenance, or runtime enforcement. Use the networked `gh actions-lock --verify` check and review lockfile diffs. The lockfile does not cover remote reusable workflows or container images."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
       "id": "hermeticity/docker-base-digest",
       "metadataSha256": "0315481c809df21356dd5fd7985c1b56c16e05d813979912cab7ed7247adf3a7",
       "detector": {
@@ -33805,14 +34277,14 @@ var RULE_ASSURANCE = {
     },
     {
       "id": "hermeticity/pin-actions",
-      "metadataSha256": "428a509988c70abef3b8ea941952d3929df6d906cae55412ee2e4a8a0a1c22ac",
+      "metadataSha256": "c57bea354d3c12551f1a8c9ff2ac7d9bc7573ea65a1a31a8b4d3ab94f22c719e",
       "detector": {
         "assurance": "heuristic-not-formally-proved",
-        "claim": "Third-party actions and reusable workflows should be pinned to a full commit SHA."
+        "claim": "Third-party actions and reusable workflows should use immutable references or a workflow dependency lockfile."
       },
       "recommendation": {
         "assurance": "conditional-not-universally-proved",
-        "rationale": "Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)"
+        "rationale": "Tags and branches can be moved, so `@v4` may run different code tomorrow than today. Use a full-length commit SHA, or cover direct and transitive action dependencies in GitHub's workflow dependency lockfile. The lockfile does not cover reusable workflow calls or container images, and static analysis cannot verify provenance or reachability."
       },
       "autofix": "not-provided",
       "engineContracts": [
@@ -33849,6 +34321,40 @@ var RULE_ASSURANCE = {
         "rationale": "`ubuntu-latest`, `windows-latest` and `macos-latest` move to a new OS image during a gradual multi-week rollout, so identical commits can pass on one run and fail on the next with different toolchains and preinstalled software. `ubuntu-latest` is migrating from Ubuntu 24.04 to 26.04 between Oct 19 and Nov 19, 2026. Pinning makes the upgrade a deliberate, reviewable change."
       },
       "autofix": "not-formally-proved",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hooks/install-in-hook",
+      "metadataSha256": "a033236bfd73d9563df2c9ca8e42d486d2c95718514bee66b86a4abe4b50e04d",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Git hooks should not reinstall project dependencies on every invocation."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A direct package-manager install in a commit/push hook repeats dependency resolution and potentially lifecycle scripts on the interactive path. Provision the same locked dependencies at setup and on lockfile changes, and fail explicitly when dependencies are absent. Do not remove secret scanning, linting or CI installation checks. No latency saving is guaranteed without measuring representative hooks."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
+      "id": "hooks/pre-commit-repo-scan",
+      "metadataSha256": "6827c19cc1ec25ad7bce7d2bcd78672c2cd3a87bc5c62fc8778dc263326a86ef",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Explicit whole-repository pre-commit lint entries should not also receive batched filenames."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "pre-commit appends matching filenames by default and may split them across invocations to fit command-line limits. An entry that explicitly scans `.` can consequently repeat a whole-repository scan per batch. For intentionally whole-repository checks, pass_filenames: false avoids redundant arguments and batches without reducing analysis scope. Keep file filters, mandatory checks and CI gates; do not apply this advice to staged-file-only linters."
+      },
+      "autofix": "not-provided",
       "engineContracts": [
         "severity-last-assignment-wins"
       ],
@@ -35351,6 +35857,23 @@ var RULE_ASSURANCE = {
       "optionalModelCertificates": []
     },
     {
+      "id": "workflow/artifact-success-gating",
+      "metadataSha256": "a497359a41cb440f09a52fa61a35d23f25fb4efb8c541ce041ef20d0bc20ae05",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Success-gate same-run artifact consumers on their producer jobs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "A literal artifact upload/download pair identifies a data prerequisite, unlike job names. Without a needs path, the consumer can start before the producer finishes, or continue after its failure. An artifact may already exist when a later producer step fails. GitHub needs skips dependent jobs after failure through the dependency chain; it cannot cancel independent work already running. Review the artifact contract before adding a direct needs edge; do not serialize unrelated checks or restrict intentional failure handlers and required-check aggregates. These warnings identify a static gating gap, not measured waste or guaranteed removable runner minutes."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
       "id": "workflow/concurrency",
       "metadataSha256": "a936c1f146e39da184e57ebaa76bbe9c79202bc21988104cfe8644d69d41d1b7",
       "detector": {
@@ -35519,7 +36042,7 @@ function assuranceText(id2) {
 }
 
 // src/lint/config.ts
-var import_yaml40 = __toESM(require_dist(), 1);
+var import_yaml44 = __toESM(require_dist(), 1);
 
 // node_modules/bignumber.js/bignumber.mjs
 var isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
@@ -40053,11 +40576,11 @@ function migrateLegacyConfig(raw) {
   if (!legacyKeys.some((key2) => key2 in raw)) return void 0;
   const migrated = { ...raw };
   if (Array.isArray(raw.disabledRules)) {
-    const rules16 = isRecord2(raw.rules) ? { ...raw.rules } : {};
+    const rules17 = isRecord2(raw.rules) ? { ...raw.rules } : {};
     for (const id2 of raw.disabledRules) {
-      if (typeof id2 === "string") rules16[DEPRECATED_RULE_IDS[id2] ?? id2] = "off";
+      if (typeof id2 === "string") rules17[DEPRECATED_RULE_IDS[id2] ?? id2] = "off";
     }
-    migrated.rules = rules16;
+    migrated.rules = rules17;
   }
   if ("failOnSeverity" in raw) {
     const map2 = { high: "error", medium: "warn", low: "info", never: "never" };
@@ -40074,7 +40597,7 @@ function migrateLegacyConfig(raw) {
   for (const key2 of legacyKeys) delete migrated[key2];
   return migrated;
 }
-function validateConfig(input3, rules16) {
+function validateConfig(input3, rules17) {
   const v = new Validator();
   if (input3 === void 0 || input3 === null) return { config: structuredClone(DEFAULT_CONFIG), problems: [], migrated: false };
   if (!isRecord2(input3)) {
@@ -40102,8 +40625,8 @@ function validateConfig(input3, rules16) {
   if (raw.schemaVersion !== void 0 && raw.schemaVersion !== 1) {
     v.problem("schemaVersion", `Unsupported schemaVersion ${String(raw.schemaVersion)}; expected 1.`);
   }
-  const ruleIds = rules16.map((rule) => rule.meta.id);
-  const rulesetNames = [...new Set(rules16.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules17.map((rule) => rule.meta.id);
+  const rulesetNames = [...new Set(rules17.map((rule) => rule.meta.ruleset))];
   const config2 = structuredClone(DEFAULT_CONFIG);
   if (raw.localRules !== void 0) {
     if (Array.isArray(raw.localRules) && raw.localRules.every((entry2) => typeof entry2 === "string")) {
@@ -40112,7 +40635,7 @@ function validateConfig(input3, rules16) {
       v.problem("localRules", "Expected a list of repository-relative .js or .mjs paths.");
     }
   }
-  const skipLocal = config2.localRules.length > 0 && !rules16.some((rule) => rule.meta.ruleset === "local");
+  const skipLocal = config2.localRules.length > 0 && !rules17.some((rule) => rule.meta.ruleset === "local");
   const isSkippedLocal = (id2) => skipLocal && id2.startsWith("local/");
   config2.enabled = v.boolean("enabled", raw.enabled, true);
   config2.extends = v.strings("extends", raw.extends, DEFAULT_CONFIG.extends).filter((preset, index) => {
@@ -40132,7 +40655,7 @@ function validateConfig(input3, rules16) {
     const id2 = DEPRECATED_RULE_IDS[rawId] ?? rawId;
     if (isSkippedLocal(id2)) continue;
     if (id2 !== rawId) v.problem(`rules.${rawId}`, `Rule "${rawId}" is deprecated; use "${id2}".`);
-    const rule = rules16.find((candidate) => candidate.meta.id === id2);
+    const rule = rules17.find((candidate) => candidate.meta.id === id2);
     if (!rule) {
       v.problem(`rules.${rawId}`, `Unknown rule "${rawId}".${didYouMean(rawId, ruleIds)}`);
       continue;
@@ -40262,10 +40785,10 @@ function validateConfig(input3, rules16) {
   v.problems.push(...durationPolicyProblems(config2.durations));
   return { config: config2, problems: v.problems, migrated: legacy !== void 0 };
 }
-function parseConfigText(text7, rules16, path = CONFIG_PATHS[0] ?? "config") {
+function parseConfigText(text7, rules17, path = CONFIG_PATHS[0] ?? "config") {
   let raw;
   try {
-    raw = (0, import_yaml40.parse)(text7, { maxAliasCount: 100 });
+    raw = (0, import_yaml44.parse)(text7, { maxAliasCount: 100 });
   } catch (error63) {
     return {
       config: structuredClone(DEFAULT_CONFIG),
@@ -40273,11 +40796,11 @@ function parseConfigText(text7, rules16, path = CONFIG_PATHS[0] ?? "config") {
       migrated: false
     };
   }
-  return validateConfig(raw, rules16);
+  return validateConfig(raw, rules17);
 }
-function resolveRules(config2, rules16, presetOverride) {
+function resolveRules(config2, rules17, presetOverride) {
   const presets = presetOverride ?? config2.extends;
-  return rules16.flatMap((rule) => {
+  return rules17.flatMap((rule) => {
     const setting = config2.rules[rule.meta.id];
     const level = resolveSeverity([
       ...presets.map((preset) => preset === "all" || rule.meta.presets.includes(preset) ? rule.meta.defaultSeverity : void 0),
@@ -40376,7 +40899,9 @@ var LOCKFILES2 = /* @__PURE__ */ new Set(["package-lock.json", "npm-shrinkwrap.j
 var SKIP_DIRS = /* @__PURE__ */ new Set([".git", "node_modules", ".pnpm-store", ".yarn", ".venv", "venv", "__pycache__", ".turbo", ".nx", "target", ".gradle", ".direnv"]);
 function isInventoryPath(path) {
   if (path.split("/").slice(0, -1).some((part2) => SKIP_DIRS.has(part2))) return false;
+  if (isGitHookPath(path) || isPreCommitPath(path)) return true;
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
+  if (path === ".github/workflows/actions.lock") return true;
   if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
   if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;
   if (/^(?:\.github\/|docs\/)?CODEOWNERS$/.test(path)) return true;
@@ -40465,9 +40990,9 @@ function suppress(entry2, diagnostic) {
   }
   return hit;
 }
-function unusedDirectives(suppressionsFor, paths, skipped, rules16) {
+function unusedDirectives(suppressionsFor, paths, skipped, rules17) {
   const skippedIds = new Set(skipped.map((skip2) => skip2.ruleId));
-  const skippedRulesets = new Set(rules16.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
+  const skippedRulesets = new Set(rules17.filter((rule) => skippedIds.has(rule.meta.id)).map((rule) => rule.meta.ruleset));
   const result = [];
   for (const path of paths) {
     for (const directive of suppressionsFor(path)?.directives ?? []) {
@@ -40633,8 +41158,8 @@ function atLeast(severity, minimum) {
 }
 
 // src/lint/docs.ts
-function renderRulesMarkdown(rules16) {
-  const rulesets = [...new Set(rules16.map((rule) => rule.meta.ruleset))];
+function renderRulesMarkdown(rules17) {
+  const rulesets = [...new Set(rules17.map((rule) => rule.meta.ruleset))];
   const lines = [
     "# Rules",
     "",
@@ -40652,14 +41177,14 @@ function renderRulesMarkdown(rules16) {
     "",
     "| Rule | Kind | Default | Presets | Fixable | Description |",
     "| --- | --- | --- | --- | --- | --- |",
-    ...rules16.map(
+    ...rules17.map(
       (rule) => `| [\`${rule.meta.id}\`](#${ruleAnchor(rule.meta.id)}) | ${rule.meta.kind} | ${rule.meta.defaultSeverity} | ${rule.meta.presets.join(", ")} | ${rule.meta.fixable ? "yes" : ""} | ${rule.meta.description.replace(/\|/g, "\\|")} |`
     ),
     ""
   ];
   for (const ruleset of rulesets) {
     lines.push(`## Ruleset: ${ruleset}`, "");
-    for (const rule of rules16.filter((candidate) => candidate.meta.ruleset === ruleset)) {
+    for (const rule of rules17.filter((candidate) => candidate.meta.ruleset === ruleset)) {
       const meta3 = rule.meta;
       lines.push(`<a id="${ruleAnchor(meta3.id)}"></a>`, "", `### ${meta3.id}`, "", meta3.description, "", `**Why:** ${meta3.rationale}`, "");
       lines.push(
@@ -40689,7 +41214,7 @@ function renderRulesMarkdown(rules16) {
 var VERSION = "0.2.0";
 
 // src/cli/experiments.ts
-var import_yaml46 = __toESM(require_dist(), 1);
+var import_yaml50 = __toESM(require_dist(), 1);
 import { appendFile, readdir as readdir3, readFile as readFile4, stat as stat5 } from "node:fs/promises";
 import { join as join7 } from "node:path";
 import { parseArgs as parseArgs3 } from "node:util";
@@ -40910,7 +41435,7 @@ function parseStrictJson(text7, fractions = false) {
 }
 function canonicalJson(input3) {
   const ancestors2 = /* @__PURE__ */ new Set();
-  const visit5 = (value2, depth) => {
+  const visit6 = (value2, depth) => {
     if (depth > 64) throw new Error("Canonical JSON nesting exceeds 64 levels.");
     if (value2 === null) return "null";
     if (typeof value2 === "boolean") return value2 ? "true" : "false";
@@ -40929,7 +41454,7 @@ function canonicalJson(input3) {
       for (let i = 0; i < value2.length; i += 1) {
         const descriptor = descriptors[String(i)];
         if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) throw new Error("Sparse or accessor array.");
-        items2.push(visit5(descriptor.value, depth + 1));
+        items2.push(visit6(descriptor.value, depth + 1));
       }
       result = `[${items2.join(",")}]`;
     } else {
@@ -40939,13 +41464,13 @@ function canonicalJson(input3) {
       result = `{${Object.keys(descriptors).sort().map((key2) => {
         const descriptor = descriptors[key2];
         if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) throw new Error("Accessors and hidden keys are not JSON.");
-        return `${JSON.stringify(scalarString(key2))}:${visit5(descriptor.value, depth + 1)}`;
+        return `${JSON.stringify(scalarString(key2))}:${visit6(descriptor.value, depth + 1)}`;
       }).join(",")}}`;
     }
     ancestors2.delete(value2);
     return result;
   };
-  return visit5(input3, 0);
+  return visit6(input3, 0);
 }
 var sha256 = (text7) => createHash2("sha256").update(text7).digest("hex");
 var certificateDigest = (unsigned) => sha256(`cicd-optimizer/cert-v1\0${canonicalJson(unsigned)}`);
@@ -41073,7 +41598,7 @@ function decodeCiEvidence(value2) {
 }
 
 // src/experiments/manifest.ts
-var import_yaml42 = __toESM(require_dist(), 1);
+var import_yaml46 = __toESM(require_dist(), 1);
 var EXPERIMENT_PREFIX = "experiments/";
 var TRUNK = "trunk";
 var NAME2 = /^[a-z0-9][a-z0-9-]{1,47}$/;
@@ -41171,13 +41696,13 @@ function validateManifest(input3, options = {}) {
 }
 function parseManifest2(text7, options = {}) {
   try {
-    return validateManifest((0, import_yaml42.parse)(text7), options);
+    return validateManifest((0, import_yaml46.parse)(text7), options);
   } catch (error63) {
     return { problems: [{ path: "experiment.yml", message: error63.message }] };
   }
 }
 function serializeManifest(manifest) {
-  return (0, import_yaml42.stringify)(manifest, { lineWidth: 0 });
+  return (0, import_yaml46.stringify)(manifest, { lineWidth: 0 });
 }
 function scoreRubric(scores, rubric) {
   const total = rubric.criteria.reduce((sum2, criterion) => sum2 + criterion.weight, 0) || 1;
@@ -41265,7 +41790,7 @@ function reduceCandidates(candidates2, minimum, influence, running, expired) {
 }
 
 // src/experiments/config.ts
-var import_yaml43 = __toESM(require_dist(), 1);
+var import_yaml47 = __toESM(require_dist(), 1);
 var HILL_CLIMB_CONFIG_PATH = ".github/hill-climb.yml";
 var CORPUS_METRICS = ["precision", "recall", "f1", "fixRate", "durationMs"];
 var DEFAULT_RUBRIC = {
@@ -41390,7 +41915,7 @@ function validateHillClimbConfig(input3) {
 function parseHillClimbConfig(text7) {
   if (text7 === void 0) return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [] };
   try {
-    const raw = (0, import_yaml43.parse)(text7);
+    const raw = (0, import_yaml47.parse)(text7);
     return validateHillClimbConfig(raw ?? {});
   } catch (error63) {
     return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [{ path: HILL_CLIMB_CONFIG_PATH, message: error63.message }] };
@@ -41724,7 +42249,7 @@ function mergeMeasurement(measurements, update2) {
 }
 
 // src/experiments/corpus.ts
-var import_yaml44 = __toESM(require_dist(), 1);
+var import_yaml48 = __toESM(require_dist(), 1);
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join as join2, relative as relative2, sep } from "node:path";
 var ratio = (numerator, denominator) => denominator === 0 ? 1 : numerator / denominator;
@@ -41832,19 +42357,19 @@ async function walk(root, directory = root) {
   return files.flat().sort();
 }
 function parseCase(id2, text7, files) {
-  const raw = (0, import_yaml44.parse)(text7) ?? {};
+  const raw = (0, import_yaml48.parse)(text7) ?? {};
   const expected = Array.isArray(raw.expected) ? raw.expected.map((entry2) => {
     const item = entry2;
     if (typeof item.rule !== "string" || typeof item.path !== "string") throw new Error(`${id2}: expected entries need rule and path`);
     return { rule: item.rule, path: item.path, ...typeof item.line === "number" ? { line: item.line } : {} };
   }) : [];
   const declared = Array.isArray(raw.rules) ? raw.rules.filter((rule) => typeof rule === "string") : [];
-  const rules16 = [.../* @__PURE__ */ new Set([...declared, ...expected.map((finding4) => finding4.rule)])];
+  const rules17 = [.../* @__PURE__ */ new Set([...declared, ...expected.map((finding4) => finding4.rule)])];
   const change = raw.change;
   return {
     id: id2,
     description: typeof raw.description === "string" ? raw.description : id2,
-    rules: rules16.length > 0 ? rules16 : ["*"],
+    rules: rules17.length > 0 ? rules17 : ["*"],
     expected,
     files,
     inventoryComplete: raw.inventoryComplete !== false,
@@ -41987,11 +42512,11 @@ import { join as join3 } from "node:path";
 var quote = (value2) => `"${value2.replace(/(["\\$`])/g, "\\$1")}"`;
 var tail = (text7, lines = 20) => text7.trim().split("\n").slice(-lines).join("\n");
 async function evaluateBranches(options) {
-  const { root, config: config2, exec: exec3 } = options;
+  const { root, config: config2, exec: exec4 } = options;
   const log = options.log ?? (() => void 0);
   const load = options.loadEngine ?? loadEngine;
   const workdir = options.workdir ?? await mkdtemp(join3(tmpdir(), "cicd-eval-"));
-  const git2 = (args) => exec3(`git ${args}`, { cwd: root });
+  const git3 = (args) => exec4(`git ${args}`, { cwd: root });
   const evaluations = [];
   let cases;
   let corpusError;
@@ -42005,12 +42530,12 @@ async function evaluateBranches(options) {
     }
     const dir = join3(workdir, branch2.arm);
     try {
-      if ((await git2(`cat-file -e ${branch2.headSha}^{commit}`)).code !== 0) {
-        const fetched = await git2(`fetch --no-tags origin ${branch2.headSha}`);
+      if ((await git3(`cat-file -e ${branch2.headSha}^{commit}`)).code !== 0) {
+        const fetched = await git3(`fetch --no-tags origin ${branch2.headSha}`);
         if (fetched.code !== 0) throw new Error(`git fetch failed:
 ${tail(fetched.output)}`);
       }
-      const added = await git2(`worktree add --force --detach ${quote(dir)} ${branch2.headSha}`);
+      const added = await git3(`worktree add --force --detach ${quote(dir)} ${branch2.headSha}`);
       if (added.code !== 0) throw new Error(`git worktree add failed:
 ${tail(added.output)}`);
       if (branch2.arm === "trunk") {
@@ -42027,13 +42552,13 @@ ${tail(added.output)}`);
       ]) {
         if (!command) continue;
         log(`[${branch2.arm}] ${step}: ${command}`);
-        const result = await exec3(command, { cwd: dir });
+        const result = await exec4(command, { cwd: dir });
         if (result.code !== 0) throw new Error(`${step} failed (exit ${result.code}):
 ${tail(result.output)}`);
       }
       if (config2.evaluation.test) {
         log(`[${branch2.arm}] test: ${config2.evaluation.test}`);
-        const result = await exec3(config2.evaluation.test, { cwd: dir });
+        const result = await exec4(config2.evaluation.test, { cwd: dir });
         evaluation.testsPassed = result.code === 0;
         if (!evaluation.testsPassed) log(`[${branch2.arm}] tests failed:
 ${tail(result.output)}`);
@@ -42047,7 +42572,7 @@ ${tail(result.output)}`);
       evaluation.error = error63.message;
       log(`[${branch2.arm}] ${evaluation.error}`);
     } finally {
-      await git2(`worktree remove --force ${quote(dir)}`).catch(() => void 0);
+      await git3(`worktree remove --force ${quote(dir)}`).catch(() => void 0);
     }
   }
   if (!options.workdir) await rm(workdir, { recursive: true, force: true }).catch(() => void 0);
@@ -42269,8 +42794,8 @@ async function resumeExperiment(client, repo, options) {
     }
     number6 = existing.number;
   } else {
-    const open5 = groupExperiments(await listExperimentPullRequests(client, repo));
-    if (open5.filter((experiment) => experiment.trunk?.state === "open").length >= config2.selection.maxConcurrent) {
+    const open6 = groupExperiments(await listExperimentPullRequests(client, repo));
+    if (open6.filter((experiment) => experiment.trunk?.state === "open").length >= config2.selection.maxConcurrent) {
       throw new Error("The concurrent experiment budget is already full.");
     }
   }
@@ -42318,14 +42843,14 @@ async function cleanupBranch(client, repo, pull, notes) {
     return;
   }
   if (pull.head === pull.base) throw new Error("Refusing cleanup of an experiment's base branch.");
-  const open5 = await client.request("GET /repos/{owner}/{repo}/pulls", {
+  const open6 = await client.request("GET /repos/{owner}/{repo}/pulls", {
     ...repo,
     state: "open",
     head: `${repo.owner}:${pull.head}`,
     per_page: 1
   });
-  if (!Array.isArray(open5.data)) throw new Error("GitHub did not return the open PRs required for experiment cleanup.");
-  if (open5.data.length > 0) {
+  if (!Array.isArray(open6.data)) throw new Error("GitHub did not return the open PRs required for experiment cleanup.");
+  if (open6.data.length > 0) {
     notes.push(`Branch ${pull.head} retained because an open PR uses it.`);
     return;
   }
@@ -42555,7 +43080,7 @@ function parseMeasurements(text7) {
 }
 
 // src/experiments/propose.ts
-var import_yaml45 = __toESM(require_dist(), 1);
+var import_yaml49 = __toESM(require_dist(), 1);
 
 // src/formal/generated/manifest.ts
 var PROOF_BUILD = {
@@ -42567,9 +43092,9 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "7f3fa6d25aec0f360354aaf0a88f1e41cf7afd9db271acc067d2a2563b26a900",
+  "implementationSha256": "8450b3c13a48c35bacff2ed53f4e1e0cb61e6d040d07ad81eadc0bdedb4824f3",
   "generatorSha256": "ea737477f2d148397dbd83697441713e2f12a542ce95f706181ff9563fb64699",
-  "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
+  "dependenciesSha256": "1966691821ed3e02a0637ba7ffc208bca17f928e22c6de943cbbb222ac04f1ea"
 };
 
 // src/experiments/plan.ts
@@ -42729,7 +43254,7 @@ function validateProposal(text7, options) {
   const expiresAt = new Date(now2.getTime() + options.config.selection.maxAgeDays * DAY2).toISOString();
   let raw;
   try {
-    raw = (0, import_yaml45.parse)(text7);
+    raw = (0, import_yaml49.parse)(text7);
   } catch (error63) {
     return { errors: [`manifest: ${error63.message}`] };
   }
@@ -42991,8 +43516,8 @@ function markdown(result, options = {}) {
   }
   return lines.join("\n");
 }
-function sarif(result, rules16, version2 = "0.0.0") {
-  const used = rules16.filter((rule) => result.diagnostics.some((d2) => d2.ruleId === rule.meta.id));
+function sarif(result, rules17, version2 = "0.0.0") {
+  const used = rules17.filter((rule) => result.diagnostics.some((d2) => d2.ruleId === rule.meta.id));
   const index = new Map(used.map((rule, position) => [rule.meta.id, position]));
   const level = { error: "error", warn: "warning", info: "note" };
   const securitySeverity = { high: "7.0", medium: "4.0", low: "2.0" };
@@ -43050,12 +43575,12 @@ ${rule.meta.references.map((ref) => `- ${ref}`).join("\n")}` },
     2
   );
 }
-function format(name, result, rules16, version2) {
+function format(name, result, rules17, version2) {
   switch (name) {
     case "json":
       return json2(result);
     case "sarif":
-      return sarif(result, rules16, version2);
+      return sarif(result, rules17, version2);
     case "markdown":
       return markdown(result);
     case "github":
@@ -43093,16 +43618,16 @@ function withFile(input3, file2, limits, label2 = "--stdin content") {
   const truncated = input3.truncated.filter((path) => path !== file2.path);
   return { ...input3, files, truncated: oversized ? [...truncated, file2.path] : truncated };
 }
-function effectiveSeverities(config2, rules16, presets) {
-  const severities = new Map(rules16.map((rule) => [rule.meta.id, "off"]));
-  for (const { rule, severity } of resolveRules(config2, [...rules16], presets)) severities.set(rule.meta.id, severity);
+function effectiveSeverities(config2, rules17, presets) {
+  const severities = new Map(rules17.map((rule) => [rule.meta.id, "off"]));
+  for (const { rule, severity } of resolveRules(config2, [...rules17], presets)) severities.set(rule.meta.id, severity);
   return severities;
 }
-function unknownRuleMessage(label2, id2, rules16) {
-  return `${label2}: unknown rule "${id2}".${didYouMean(id2, rules16.map((candidate) => candidate.meta.id))}`;
+function unknownRuleMessage(label2, id2, rules17) {
+  return `${label2}: unknown rule "${id2}".${didYouMean(id2, rules17.map((candidate) => candidate.meta.id))}`;
 }
-function explainRuleText(id2, rules16, severities) {
-  const rule = rules16.find((candidate) => candidate.meta.id === id2);
+function explainRuleText(id2, rules17, severities) {
+  const rule = rules17.find((candidate) => candidate.meta.id === id2);
   if (!rule) return void 0;
   const { meta: meta3 } = rule;
   const indent = (text7) => text7.replace(/\n$/, "").split("\n").map((line) => `    ${line}`).join("\n");
@@ -43229,7 +43754,7 @@ async function loadLocalRules(root, entries3, builtins) {
 var LINT_HELP = `Usage: ci-cd-optimizer lint [paths...] [options]
        cicd-lint [paths...] [options]
 
-Lints GitHub Actions workflows, Dockerfiles, Nix expressions/flakes, and package/toolchain configuration.
+Lints GitHub Actions workflows, Dockerfiles, Nix expressions/flakes, Git hooks, pre-commit, and package/toolchain configuration.
 Findings are static recommendations, not proofs of runtime behavior or performance.
 
 With no paths the current directory is the lint root, and a single directory argument becomes the root. Any other
@@ -43356,9 +43881,9 @@ function extractUnusedFlag(args) {
   }
   return { args: rest, severity: severity === "off" ? void 0 : severity };
 }
-function ruleListText(rules16) {
-  const width = Math.max(...rules16.map((rule) => rule.meta.id.length));
-  return rules16.map((rule) => {
+function ruleListText(rules17) {
+  const width = Math.max(...rules17.map((rule) => rule.meta.id.length));
+  return rules17.map((rule) => {
     const builtin = allRules.some((candidate) => candidate.meta.id === rule.meta.id);
     if (builtin) ruleAssurance(rule.meta.id);
     return `${rule.meta.id.padEnd(width)}  ${rule.meta.defaultSeverity.padEnd(5)}  ${rule.meta.fixable ? "fix" : "   "}  ${rule.meta.description}  [${builtin ? "heuristic" : "local/unreviewed"}]`;
@@ -43383,10 +43908,10 @@ async function loadLintConfig(io, root, explicit, options = {}) {
     if (!options.allowLocalRules) {
       throw new UsageError(`${path} lists localRules, which run JavaScript from the repository. Pass --allow-local-rules to load them (trusted repositories only).`);
     }
-    const rules16 = [...allRules, ...await loadLocalRules(root, parsed.config.localRules, allRules)];
-    const strict = parseConfigText(text7, rules16, path);
+    const rules17 = [...allRules, ...await loadLocalRules(root, parsed.config.localRules, allRules)];
+    const strict = parseConfigText(text7, rules17, path);
     if (strict.problems.length > 0) throw invalidConfig(path, strict.problems);
-    return { config: strict.config, path, rules: rules16 };
+    return { config: strict.config, path, rules: rules17 };
   }
   return { config: structuredClone(DEFAULT_CONFIG), rules: allRules };
 }
@@ -43423,9 +43948,9 @@ async function missReason(root, selector, config2, inventoryComplete) {
   if (config2.ignorePaths.some((glob) => matchesGlob(selector, glob) || matchesGlob(selector, `${glob}/**`))) return "excluded by ignorePaths";
   return inventoryComplete ? "not analyzed (inside a directory the inventory skips, such as node_modules or .git)" : "not analyzed: the inventory hit limits.maxFiles or limits.maxFileBytes";
 }
-function explainRule(id2, rules16, severities) {
-  const text7 = explainRuleText(id2, rules16, severities);
-  if (text7 === void 0) throw new UsageError(unknownRuleMessage("--explain", id2, rules16));
+function explainRule(id2, rules17, severities) {
+  const text7 = explainRuleText(id2, rules17, severities);
+  if (text7 === void 0) throw new UsageError(unknownRuleMessage("--explain", id2, rules17));
   return text7;
 }
 async function initConfig(io, root, explicit) {
@@ -43518,13 +44043,13 @@ async function lintCommand(rawArgs, io) {
   const { root, paths } = await resolveTarget(io, values2.root, positionals3);
   if (values2.init) return await initConfig(io, root, values2.config);
   const loaded = await loadLintConfig(io, root, values2.config, { localRules: true, allowLocalRules: values2["allow-local-rules"] });
-  const { config: config2, rules: rules16 } = loaded;
+  const { config: config2, rules: rules17 } = loaded;
   const presets = values2.preset?.map((preset) => {
     if (!PRESETS.includes(preset)) throw new UsageError(`--preset ${preset}: unknown preset.${didYouMean(preset, PRESETS)}`);
     return preset;
   });
-  const ruleIds = rules16.map((rule) => rule.meta.id);
-  const rulesets = [...new Set(rules16.map((rule) => rule.meta.ruleset))];
+  const ruleIds = rules17.map((rule) => rule.meta.id);
+  const rulesets = [...new Set(rules17.map((rule) => rule.meta.ruleset))];
   for (const value2 of values2.ruleset ?? []) {
     const [id2, severity] = parseOverride("ruleset", value2, rulesets);
     config2.rulesets = { ...config2.rulesets, [id2]: severity };
@@ -43538,13 +44063,13 @@ async function lintCommand(rawArgs, io) {
     config2.failOn = values2["fail-on"];
   }
   if (values2["list-rules"]) {
-    await writeText(io, values2.output, ruleListText(rules16));
+    await writeText(io, values2.output, ruleListText(rules17));
     return 0;
   }
-  const severities = effectiveSeverities(config2, rules16, presets);
+  const severities = effectiveSeverities(config2, rules17, presets);
   if (values2.explain !== void 0) {
     const withMeta = new Map(severities).set(UNUSED_DIRECTIVE_RULE_ID, unusedSeverity ?? "off");
-    await writeText(io, values2.output, explainRule(values2.explain, [...rules16, UNUSED_DIRECTIVE_RULE], withMeta));
+    await writeText(io, values2.output, explainRule(values2.explain, [...rules17, UNUSED_DIRECTIVE_RULE], withMeta));
     return 0;
   }
   if (values2["print-config"]) {
@@ -43568,14 +44093,14 @@ async function lintCommand(rawArgs, io) {
     try {
       change = await changedSince(root, values2.base);
       const baseInput = await loadGitRevision(root, change.baseSha ?? values2.base, config2);
-      baseFingerprints = new Set(lint(baseInput, { config: config2, rules: rules16, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
+      baseFingerprints = new Set(lint(baseInput, { config: config2, rules: rules17, ...presets ? { presets } : {} }).diagnostics.map((diagnostic) => diagnostic.fingerprint));
     } catch (error63) {
       throw new UsageError(`--base ${values2.base}: ${error63.message.split("\n")[0]}`);
     }
   }
   const options = {
     config: config2,
-    rules: rules16,
+    rules: rules17,
     ...presets ? { presets } : {},
     ...baseFingerprints ? { baseFingerprints } : {},
     reportUnusedDirectives: unusedSeverity !== void 0
@@ -43633,7 +44158,7 @@ async function lintCommand(rawArgs, io) {
     ...unusedDirectives2 ? { unusedDirectives: unusedDirectives2 } : {}
   };
   if (!input3.inventoryComplete) io.stderr("Inventory is incomplete; rules requiring complete inventory were skipped.");
-  const reportRules = [...rules16, UNUSED_DIRECTIVE_RULE];
+  const reportRules = [...rules17, UNUSED_DIRECTIVE_RULE];
   await writeText(io, values2.output, format(formatName, shown, reportRules, VERSION));
   if (values2.sarif) await writeText(io, values2.sarif, sarif(shown, reportRules, VERSION));
   const warnings = diagnostics.filter((diagnostic) => diagnostic.severity === "warn").length;
@@ -43779,7 +44304,7 @@ function structured(value2) {
   try {
     return JSON.parse(value2);
   } catch {
-    return (0, import_yaml46.parse)(value2);
+    return (0, import_yaml50.parse)(value2);
   }
 }
 async function measurementFiles(io, path) {
@@ -44246,7 +44771,7 @@ function planFixPullRequests(changes, existing, options) {
   const skipped = [];
   const newestFirst = existing.map((pr) => pr.pendingUpdate && pr.headSha === pr.pendingUpdate.commitSha ? { ...pr, commitSha: pr.pendingUpdate.commitSha, signature: pr.pendingUpdate.signature } : pr).sort((a, b) => b.number - a.number);
   const wanted = new Set(changes.map((change) => change.group));
-  let open5 = existing.filter((pr) => pr.state === "open").length;
+  let open6 = existing.filter((pr) => pr.state === "open").length;
   for (const pr of newestFirst) {
     if (pr.state !== "open" || wanted.has(pr.group)) continue;
     if (pr.cleanup && !options.rebase?.has(pr.group) && !options.recreate?.has(pr.group)) {
@@ -44264,7 +44789,7 @@ function planFixPullRequests(changes, existing, options) {
       ...pr.branch !== void 0 ? { branch: pr.branch } : {},
       comment: "These fixes are no longer needed: the base branch already contains them, or the rules no longer apply. Closing."
     });
-    open5 -= 1;
+    open6 -= 1;
   }
   for (const change of changes) {
     const current = newestFirst.find((pr) => pr.group === change.group && pr.state === "open");
@@ -44288,12 +44813,12 @@ function planFixPullRequests(changes, existing, options) {
       skipped.push({ group: change.group, reason: "declined", number: latest2.number });
       continue;
     }
-    if (open5 >= options.openPullRequestsLimit) {
+    if (open6 >= options.openPullRequestsLimit) {
       skipped.push({ group: change.group, reason: "limit" });
       continue;
     }
     actions.push({ type: "create", change });
-    open5 += 1;
+    open6 += 1;
   }
   const metadata = [];
   for (const pr of newestFirst) {
@@ -44514,14 +45039,14 @@ async function listManagedPullRequests(client, repo, discovery) {
   return result;
 }
 function dismissalsFrom(prs) {
-  const rules16 = /* @__PURE__ */ new Set();
+  const rules17 = /* @__PURE__ */ new Set();
   const groups = /* @__PURE__ */ new Set();
   for (const pr of prs) {
     if (!pr.labels.includes(IGNORED_LABEL)) continue;
-    for (const rule of pr.ignoredRules) rules16.add(rule);
+    for (const rule of pr.ignoredRules) rules17.add(rule);
     if (pr.ignoredGroup) groups.add(pr.group);
   }
-  return { rules: rules16, groups };
+  return { rules: rules17, groups };
 }
 async function currentFix(client, repo, previous2) {
   const response = await client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { ...repo, pull_number: previous2.number });
@@ -44603,9 +45128,9 @@ async function finishBranchCleanup(client, repo, previous2) {
   } else if (pull.head.ref !== cleanup.branch) status = "changed";
   else {
     if (cleanup.branch === pull.base?.ref) throw new Error("Refusing cleanup of a PR's base branch.");
-    const open5 = await client.request("GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open", head: `${repo.owner}:${cleanup.branch}`, per_page: 1 });
-    if (!Array.isArray(open5.data)) throw new Error("GitHub did not return the open PRs required for branch cleanup.");
-    status = open5.data.length > 0 ? "in-use" : await deleteBranch(client, repo, cleanup.branch, cleanup.headSha);
+    const open6 = await client.request("GET /repos/{owner}/{repo}/pulls", { ...repo, state: "open", head: `${repo.owner}:${cleanup.branch}`, per_page: 1 });
+    if (!Array.isArray(open6.data)) throw new Error("GitHub did not return the open PRs required for branch cleanup.");
+    status = open6.data.length > 0 ? "in-use" : await deleteBranch(client, repo, cleanup.branch, cleanup.headSha);
   }
   const latest2 = await read2();
   if (latest2.cleanup.status !== "pending") return { ...previous2, body: latest2.pull.body ?? "", cleanup: latest2.cleanup };
@@ -44933,7 +45458,7 @@ function planIssueSync(existing, desired, options) {
     byFingerprint.set(issue2.fingerprint, [...byFingerprint.get(issue2.fingerprint) ?? [], issue2]);
   }
   const wanted = new Set(desired.map((issue2) => issue2.fingerprint));
-  let open5 = existing.filter((issue2) => issue2.state === "open").length;
+  let open6 = existing.filter((issue2) => issue2.state === "open").length;
   if (options.closeResolved) {
     for (const issue2 of existing) {
       if (issue2.state !== "open" || wanted.has(issue2.fingerprint)) continue;
@@ -44943,7 +45468,7 @@ function planIssueSync(existing, desired, options) {
         fingerprint: issue2.fingerprint,
         comment: options.resolvedComment ?? "CI/CD Optimizer no longer detects this finding, so this issue is resolved. :tada:"
       });
-      open5 -= 1;
+      open6 -= 1;
     }
   }
   const pending = [];
@@ -44966,13 +45491,13 @@ function planIssueSync(existing, desired, options) {
     pending.push(issue2);
   }
   for (const issue2 of pending.sort((a, b) => b.priority - a.priority || a.fingerprint.localeCompare(b.fingerprint))) {
-    if (open5 >= options.maxOpen) {
+    if (open6 >= options.maxOpen) {
       skipped.push({ fingerprint: issue2.fingerprint, reason: "limit" });
       continue;
     }
     const latest2 = byFingerprint.get(issue2.fingerprint)?.[0];
     actions.push(latest2 ? { type: "reopen", number: latest2.number, desired: issue2 } : { type: "create", desired: issue2 });
-    open5 += 1;
+    open6 += 1;
   }
   return { actions, skipped, ...awaiting.length > 0 ? { awaitingCopilot: awaiting } : {} };
 }
@@ -45009,7 +45534,7 @@ function classifyIssueOutcome(issue2) {
 }
 
 // src/recipes/recipe.ts
-var import_yaml47 = __toESM(require_dist(), 1);
+var import_yaml51 = __toESM(require_dist(), 1);
 var RECIPES_DIR = "recipes";
 var RECIPE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 var MAX_PATCH_CHARS = 6e4;
@@ -45064,9 +45589,9 @@ function buildRecipe(options) {
   const excludes = options.excludes ?? DEFAULT_PATCH_EXCLUDES;
   const files = options.files.filter((file2) => !excludes.some((glob) => matchesGlob(file2.filename, glob)));
   const patchFiles = files.map((file2) => file2.filename).sort();
-  const rules16 = [...manifest.applicability?.rules ?? []].sort();
+  const rules17 = [...manifest.applicability?.rules ?? []].sort();
   const globs = manifest.applicability?.files ?? [];
-  if (rules16.length === 0 && globs.length === 0 && patchFiles.length === 0) {
+  if (rules17.length === 0 && globs.length === 0 && patchFiles.length === 0) {
     return { error: `Experiment "${manifest.name}" declares no applicability (rules or files) and its winning arm changed no files.` };
   }
   const patch = files.length > 0 ? renderPatch(files) : void 0;
@@ -45077,9 +45602,9 @@ function buildRecipe(options) {
     title: manifest.title,
     summary: manifest.hypothesis,
     risk: classifyRisk(patchFiles),
-    rules: rules16,
+    rules: rules17,
     // Without explicit globs, the files the winner touched decide applicability.
-    files: globs.length > 0 ? [...globs] : rules16.length === 0 ? patchFiles : [],
+    files: globs.length > 0 ? [...globs] : rules17.length === 0 ? patchFiles : [],
     ...manifest.applicability?.description ? { description: manifest.applicability.description } : {},
     instructions: `${arm.title}: ${arm.approach}`,
     evidence: { improvement: manifest.evidence?.improvement ?? 0, metrics: manifest.evidence?.metrics.map((metric) => ({ ...metric })) ?? [] },
@@ -45101,7 +45626,7 @@ function buildRecipe(options) {
   return { recipe, changed: serializeRecipe(recipe) !== serializeRecipe(previous2) };
 }
 function serializeRecipe(recipe) {
-  return (0, import_yaml47.stringify)(recipe, { lineWidth: 0 });
+  return (0, import_yaml51.stringify)(recipe, { lineWidth: 0 });
 }
 var isRecord4 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 var strings2 = (value2) => Array.isArray(value2) ? value2.filter((item) => typeof item === "string") : [];
@@ -45109,7 +45634,7 @@ var num = (value2) => typeof value2 === "number" && Number.isFinite(value2) ? va
 function parseRecipe(text7) {
   let raw;
   try {
-    raw = (0, import_yaml47.parse)(text7, { maxAliasCount: 100 });
+    raw = (0, import_yaml51.parse)(text7, { maxAliasCount: 100 });
   } catch (error63) {
     return { problems: [`Invalid YAML: ${error63.message}`] };
   }
@@ -45124,9 +45649,9 @@ function parseRecipe(text7) {
   if (typeof source.repository !== "string" || typeof source.experiment !== "string" || typeof source.arm !== "string") {
     problems.push("source.repository, source.experiment and source.arm are required.");
   }
-  const rules16 = strings2(raw.rules);
+  const rules17 = strings2(raw.rules);
   const files = strings2(raw.files);
-  if (rules16.length === 0 && files.length === 0) problems.push("A recipe needs rules or files to decide where it applies.");
+  if (rules17.length === 0 && files.length === 0) problems.push("A recipe needs rules or files to decide where it applies.");
   if (problems.length > 0) return { problems };
   const evidence2 = isRecord4(raw.evidence) ? raw.evidence : {};
   const compatibility2 = isRecord4(raw.compatibility) ? raw.compatibility : {};
@@ -45140,7 +45665,7 @@ function parseRecipe(text7) {
       title: raw.title,
       summary: raw.summary,
       risk: raw.risk,
-      rules: rules16,
+      rules: rules17,
       files,
       ...typeof raw.description === "string" ? { description: raw.description } : {},
       instructions: raw.instructions,
@@ -45184,9 +45709,9 @@ function activeRecipeRules(recipe, config2) {
     return !(ruleset !== void 0 && config2.rulesets[ruleset] === "off" && config2.rules[id2] === void 0);
   });
 }
-function recipeLintConfig(rules16, config2) {
+function recipeLintConfig(rules17, config2) {
   const settings = {};
-  for (const id2 of rules16) {
+  for (const id2 of rules17) {
     const current = config2.rules[id2];
     settings[id2] = Array.isArray(current) ? ["warn", current[1]] : "warn";
   }
@@ -45204,24 +45729,24 @@ function planRecipe(options) {
   if (recipe.rules.length === 0) {
     return matchedFiles.length > 0 ? { rules: [], remaining: [], matchedFiles, status: "adapt", reason: `${matchedFiles.length} file(s) match the recipe; the change must be adapted.` } : { ...empty2, status: "not-applicable", reason: "No files match the recipe." };
   }
-  const rules16 = activeRecipeRules(recipe, config2);
-  if (rules16.length === 0) return { ...empty2, status: "ignored", reason: "All of the recipe's rules are turned off in this repository." };
-  const lintConfig = recipeLintConfig(rules16, config2);
+  const rules17 = activeRecipeRules(recipe, config2);
+  if (rules17.length === 0) return { ...empty2, status: "ignored", reason: "All of the recipe's rules are turned off in this repository." };
+  const lintConfig = recipeLintConfig(rules17, config2);
   const run4 = options.lint ?? ((target, effective) => lint2({ input: target, config: effective }));
   const relevant = (result) => ({
     ...result,
-    diagnostics: result.diagnostics.filter((d2) => rules16.includes(d2.ruleId) && !isIgnored(d2, config2.fixes))
+    diagnostics: result.diagnostics.filter((d2) => rules17.includes(d2.ruleId) && !isIgnored(d2, config2.fixes))
   });
   const lint3 = (target) => relevant(run4(target, lintConfig));
   const findings4 = lint3(input3).diagnostics;
-  if (findings4.length === 0) return { rules: rules16, remaining: [], matchedFiles, status: "not-applicable", reason: "No findings for the recipe's rules." };
+  if (findings4.length === 0) return { rules: rules17, remaining: [], matchedFiles, status: "not-applicable", reason: "No findings for the recipe's rules." };
   const group = recipeGroup(recipe);
-  const fixes = { ...config2.fixes, groups: { [group]: { rules: rules16 } } };
+  const fixes = { ...config2.fixes, groups: { [group]: { rules: rules17 } } };
   const change = computeFixChanges({ input: input3, lint: lint3, config: fixes }).find((candidate) => candidate.group === group);
-  if (!change) return { rules: rules16, remaining: findings4, matchedFiles, status: "adapt", reason: `${findings4.length} finding(s) need an adapted change (no autofix applies).` };
+  if (!change) return { rules: rules17, remaining: findings4, matchedFiles, status: "adapt", reason: `${findings4.length} finding(s) need an adapted change (no autofix applies).` };
   const updated = new Map(change.files.map((file2) => [file2.path, file2.content]));
   const remaining = lint3({ ...input3, files: input3.files.map((file2) => ({ path: file2.path, content: updated.get(file2.path) ?? file2.content })) }).diagnostics;
-  return remaining.length === 0 ? { rules: rules16, change, remaining, matchedFiles, status: "autofix", reason: `Autofixes resolve all ${findings4.length} finding(s).` } : { rules: rules16, change, remaining, matchedFiles, status: "partial", reason: `Autofixes resolve ${findings4.length - remaining.length} of ${findings4.length} finding(s).` };
+  return remaining.length === 0 ? { rules: rules17, change, remaining, matchedFiles, status: "autofix", reason: `Autofixes resolve all ${findings4.length} finding(s).` } : { rules: rules17, change, remaining, matchedFiles, status: "partial", reason: `Autofixes resolve ${findings4.length - remaining.length} of ${findings4.length} finding(s).` };
 }
 var pct2 = (value2) => `${value2 >= 0 ? "" : "\u2212"}${Math.abs(Math.round(value2 * 1e3) / 10)}%`;
 function evidenceLines(recipe, context4) {
@@ -45342,7 +45867,7 @@ function recipeIssue(recipe, plan, options) {
 
 // src/knowledge/extract.ts
 init_identity();
-var import_yaml48 = __toESM(require_dist(), 1);
+var import_yaml52 = __toESM(require_dist(), 1);
 var packageName3 = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 var managers = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
 var toolFiles = {
@@ -45473,7 +45998,7 @@ function extractKnowledge(repository, revision, input3, options = {}) {
   if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
   else if (pnpm) {
     try {
-      const parsed = (0, import_yaml48.parseDocument)(pnpm.content, { uniqueKeys: true });
+      const parsed = (0, import_yaml52.parseDocument)(pnpm.content, { uniqueKeys: true });
       if (parsed.errors.length) throw new Error("Invalid workspace YAML");
       const value2 = parsed.toJS();
       addWorkspace(record4(value2) ? value2.packages : void 0, pnpm, "/packages");
@@ -45834,10 +46359,10 @@ async function applyRecipe(client, target, recipe, options = {}) {
     result.issue = issue2.number;
     if (issue2.copilot) result.copilot = issue2.copilot;
   } else if (wantsIssue) {
-    const open5 = existingIssues.find((candidate) => candidate.state === "open");
-    if (open5) {
-      result.issue = open5.number;
-      if (issuePlan.awaitingCopilot?.includes(open5.number)) result.copilot = "labeled";
+    const open6 = existingIssues.find((candidate) => candidate.state === "open");
+    if (open6) {
+      result.issue = open6.number;
+      if (issuePlan.awaitingCopilot?.includes(open6.number)) result.copilot = "labeled";
     }
   }
   result.attempted = result.pullRequest !== void 0 || result.issue !== void 0;
@@ -45872,14 +46397,14 @@ async function recipeStatus(client, target, recipe, server = "https://github.com
 }
 
 // src/recipes/rollout.ts
-var import_yaml49 = __toESM(require_dist(), 1);
+var import_yaml53 = __toESM(require_dist(), 1);
 var DEFAULT_ROLLOUT = { waves: [1, 3, "25%", "100%"], minSamples: 5, minCompatibility: 0.7 };
 var REPO_NAME = /^[\w.-]+\/[\w.-]+$/;
 function parseRolloutTargets(text7) {
   const problems = [];
   let raw;
   try {
-    raw = (0, import_yaml49.parse)(text7);
+    raw = (0, import_yaml53.parse)(text7);
   } catch (error63) {
     return { repositories: [], canaries: [], config: DEFAULT_ROLLOUT, problems: [`Invalid YAML: ${error63.message}`] };
   }
@@ -46922,7 +47447,7 @@ function planAlertSync(input3) {
   const seriesMap = new Map(scopedSeries.map((series) => [seriesFingerprint(series), series]));
   const alerts = detectAnomalies(scopedSeries, input3.config);
   const history = input3.existing.filter((issue2) => issue2.fingerprint === fingerprint2).sort((a, b) => b.number - a.number);
-  const open5 = history.find((issue2) => issue2.state === "open");
+  const open6 = history.find((issue2) => issue2.state === "open");
   const legacy = alertIssueFingerprint(input3.workflowId);
   const related2 = input3.contextKey === void 0 ? [] : input3.existing.filter((issue2) => issue2.fingerprint === legacy || issue2.fingerprint.startsWith(`${legacy}/`) && issue2.fingerprint !== fingerprint2 && issue2.attributes.branch === (input3.branch ?? ""));
   const latestClosed = [...history, ...related2].sort((a, b) => b.number - a.number).find((issue2) => issue2.state === "closed");
@@ -46940,8 +47465,8 @@ function planAlertSync(input3) {
     });
   }
   if (alerts.length === 0) {
-    if (!open5) return plan;
-    const baselines2 = readBaselines(open5);
+    if (!open6) return plan;
+    const baselines2 = readBaselines(open6);
     const keys = Object.keys(baselines2);
     const recovered = keys.length > 0 && keys.every((key2) => {
       const series = seriesMap.get(seriesFingerprint({
@@ -46954,21 +47479,21 @@ function planAlertSync(input3) {
     if (recovered) {
       actions.push({
         type: "close",
-        number: open5.number,
+        number: open6.number,
         fingerprint: fingerprint2,
         comment: `Durations are back within the baseline for the last ${input3.config.recoveryRuns} runs (${keys.map((key2) => `${key2 === "*" ? "workflow" : `\`${key2}\``} \u2264 ${formatDuration(baselines2[key2])} + tolerance`).join(", ")}). Closing this alert. :tada:`
       });
     }
     return plan;
   }
-  if (!open5 && latestClosed?.stateReason === "not_planned" && latestClosed.closedAt) {
+  if (!open6 && latestClosed?.stateReason === "not_planned" && latestClosed.closedAt) {
     const snoozedUntil = Date.parse(latestClosed.closedAt) + input3.config.snoozeDays * 864e5;
     if (input3.now.getTime() < snoozedUntil) {
       plan.skipped.push({ fingerprint: fingerprint2, reason: "dismissed", number: latestClosed.number });
       return plan;
     }
   }
-  const baselines = readBaselines(open5);
+  const baselines = readBaselines(open6);
   for (const alert of alerts) baselines[seriesKey(alert)] ??= Math.round(alert.baselineMedianMs);
   const shape = shapeOf(alerts);
   const latestRun = Math.max(...alerts.map((alert) => alert.runId));
@@ -46980,7 +47505,7 @@ function planAlertSync(input3) {
     recoveryRuns: input3.config.recoveryRuns,
     snoozeDays: input3.config.snoozeDays,
     baselines,
-    ...!open5 && latestClosed ? { previousIssue: latestClosed.number } : {}
+    ...!open6 && latestClosed ? { previousIssue: latestClosed.number } : {}
   });
   const signature2 = signatureOf([shape, String(latestRun)]);
   const critical = alerts.some((alert) => alert.severity === "critical");
@@ -46995,22 +47520,22 @@ ${rendered.body}`,
     assignCopilot: input3.config.assignCopilot,
     priority: critical ? 2 : 1
   };
-  if (!open5) {
+  if (!open6) {
     actions.push({ type: "create", desired });
     return plan;
   }
-  if (open5.signature === signature2) {
+  if (open6.signature === signature2) {
     const awaiting = [];
-    planQueuedHandoff(open5, desired, input3.copilotAssignable, actions, awaiting);
+    planQueuedHandoff(open6, desired, input3.copilotAssignable, actions, awaiting);
     if (awaiting.length > 0) plan.awaitingCopilot = awaiting;
     return plan;
   }
-  const changed = open5.attributes.shape !== shape;
+  const changed = open6.attributes.shape !== shape;
   actions.push({
     type: "update",
-    number: open5.number,
+    number: open6.number,
     desired,
-    ...open5.copilotPending ? { retryCopilot: true } : {},
+    ...open6.copilotPending ? { retryCopilot: true } : {},
     ...changed ? {
       comment: `The anomaly changed on run [#${latestRun}](https://github.com/${input3.owner}/${input3.repo}/actions/runs/${latestRun}): ${alerts.map((alert) => `${alert.jobKey === void 0 ? "workflow" : `\`${alert.jobName ?? alert.jobKey}\``} ${alert.kind} +${Math.round(alert.increasePercent)}% (${alert.severity})`).join("; ")}.`
     } : {}
@@ -52110,7 +52635,7 @@ var recursive = /* @__PURE__ */ new WeakMap();
 var NONE = 0;
 var ASSUMED = 1;
 var PROVEN = 2;
-function isRecursive(inst, stack, resolve5) {
+function isRecursive(inst, stack, resolve6) {
   const cached2 = recursive.get(inst);
   if (cached2 !== void 0)
     return cached2 ? PROVEN : NONE;
@@ -52120,7 +52645,7 @@ function isRecursive(inst, stack, resolve5) {
   let result = NONE;
   const check2 = (child2) => {
     if (result !== PROVEN && child2?._zod) {
-      const answer = isRecursive(child2, stack, resolve5);
+      const answer = isRecursive(child2, stack, resolve6);
       if (answer > result)
         result = answer;
     }
@@ -52131,7 +52656,7 @@ function isRecursive(inst, stack, resolve5) {
       const desc = Object.getOwnPropertyDescriptor(sh, key2);
       if (spread && !desc.enumerable)
         continue;
-      const child2 = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve5) : NONE;
+      const child2 = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve6) : NONE;
       if (child2 > answer)
         answer = child2;
     }
@@ -52195,7 +52720,7 @@ function isRecursive(inst, stack, resolve5) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve5 ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve6 ? inst._zod.innerType : void 0);
       merge4(inner ? isRecursive(inner, stack, false) : ASSUMED);
       break;
     }
@@ -67035,12 +67560,19 @@ function parseJobLog(text7, options = {}) {
   const declaredOnly = /* @__PURE__ */ new Set();
   const pendingTests = /* @__PURE__ */ new WeakMap();
   const pendingTransfers = /* @__PURE__ */ new WeakMap();
+  const toolMarks = /* @__PURE__ */ new WeakMap();
+  let openCacheAdd;
   let waitStartMs;
   const innermost = () => {
     for (let index = actions.length - 1; index >= 0; index -= 1) if (actions[index]?.step) return actions[index]?.step;
     return top;
   };
   for (const { ms, text: line } of lines) {
+    if (openCacheAdd && !line.startsWith("##[debug]")) {
+      const phases = openCacheAdd.step.toolPhases ??= {};
+      phases.cacheAddMs = (phases.cacheAddMs ?? 0) + ms - openCacheAdd.startMs;
+      openCacheAdd = void 0;
+    }
     if (line.startsWith("##[start-action ")) {
       const id2 = /;id=([^;\]]+)/.exec(line)?.[1] ?? "";
       const display4 = /display=(.*?);id=/.exec(line)?.[1] ?? "";
@@ -67066,13 +67598,13 @@ function parseJobLog(text7, options = {}) {
     if (line.startsWith("##[group]")) {
       const title = line.slice("##[group]".length);
       if (phase !== "post" && title.startsWith("Run ")) {
-        const open5 = actions.at(-1);
+        const open6 = actions.at(-1);
         let step2;
-        if (open5 && !open5.step) {
-          const parent = open5.parent;
+        if (open6 && !open6.step) {
+          const parent = open6.parent;
           step2 = newStep(parent?.children.length ?? 0, title, ms);
           parent?.children.push(step2);
-          open5.step = step2;
+          open6.step = step2;
         } else {
           if (top) finishStep(top, ms);
           step2 = newStep(evidence2.steps.length, title, ms);
@@ -67207,10 +67739,32 @@ ${line.trim()}`);
       continue;
     }
     if (line.startsWith("Found in cache @ ") || /^Reusing verified (?:[\w-]+ )?toolchain at \S/.test(line)) step.toolCache = "hit";
-    else if (/^(?:Attempting to download|Acquiring) \S/.test(line)) step.toolCache ??= "download";
-    else if (/^Downloading https:\/\/\S+\/releases\/download\/\S+\.(?:zip|tar\.gz|tgz|tar\.xz)$/.test(line)) {
+    else if (/^(?:Attempting to download|Acquiring) \S/.test(line)) {
+      step.toolCache ??= "download";
+      if (step.toolCache === "download") {
+        const marks = toolMarks.get(step) ?? {};
+        if (line.startsWith("Acquiring ")) marks.downloadStartMs = ms;
+        else marks.downloadStartMs ??= ms;
+        toolMarks.set(step, marks);
+      }
+    } else if (/^Downloading https:\/\/\S+\/releases\/download\/\S+\.(?:zip|tar\.gz|tgz|tar\.xz)$/.test(line)) {
       step.toolCache ??= "download";
       if (step.toolCache === "download") step.toolSource = "release";
+    } else if (step.toolCache === "download" && step.toolSource !== "release" && /^Extracting\b/.test(line)) {
+      const marks = toolMarks.get(step) ?? {};
+      if (marks.downloadStartMs !== void 0) {
+        const phases = step.toolPhases ??= {};
+        phases.downloadMs = (phases.downloadMs ?? 0) + ms - marks.downloadStartMs;
+      }
+      toolMarks.set(step, { extractStartMs: ms });
+    } else if (step.toolCache === "download" && step.toolSource !== "release" && /^Adding to the cache\b/.test(line)) {
+      const extractStartMs = toolMarks.get(step)?.extractStartMs;
+      if (extractStartMs !== void 0) {
+        const phases = step.toolPhases ??= {};
+        phases.extractMs = (phases.extractMs ?? 0) + ms - extractStartMs;
+      }
+      toolMarks.delete(step);
+      openCacheAdd = { step, startMs: ms };
     } else if (/^Cache restored from key: |^Cache hit for: |^Cache restored successfully/.test(line)) step.packageCache = "hit";
     else if (/^(?:\S+ )?cache is not found$|^Cache not found for (?:input )?keys?:/i.test(line)) step.packageCache = "miss";
     else {
@@ -67266,6 +67820,10 @@ var MAX_LABEL = 80;
 var MAX_EVIDENCE = 200;
 var MAX_LISTED = 5;
 var INFRA_STEP = /^(?:set up job|complete job|initialize containers|stop containers|post\b)/i;
+var STAGE_INSTRUCTION = /^\[[^\]]+\] [A-Z]+\b/;
+var STAGE_STEP = /^\[([^\]]+?) \d+\/\d+\] /;
+var METADATA_REQUEST = /^\[(?:[^\]\s]+ )?internal\] load metadata for (\S+)$/;
+var RESOLVED_BASE = /^\[([^\]]+?) \d+\/\d+\] FROM (\S+?)@(sha256:[a-f0-9]{64})(?:\s|$)/;
 var CHECKOUT_STEP = /\bactions\/checkout\b/i;
 var SETUP_STEP = /\b(?:set\s*up|setup|install|restore|cache|dependenc|deps|bootstrap|toolchain|prepare)/i;
 var INSTALL_COMMAND2 = /\b(?:npm\s+(?:ci|install|i)|pnpm\s+(?:install|i)|yarn\s+install|pip3?\s+install|poetry\s+install|bundle\s+install|composer\s+install|go\s+mod\s+download|dotnet\s+restore)\b/i;
@@ -67436,6 +67994,40 @@ function describeVertex(vertex) {
 function vertexUnionMs(vertices) {
   return unionMs(vertices.map((vertex) => [vertex.lastMs - vertexMs(vertex), vertex.lastMs]));
 }
+function tagRequestedBases(build2, missed) {
+  const requested = /* @__PURE__ */ new Set();
+  for (const vertex of build2.vertices) {
+    const ref = METADATA_REQUEST.exec(vertex.name)?.[1];
+    if (ref) requested.add(ref);
+  }
+  const stages = /* @__PURE__ */ new Map();
+  for (const vertex of build2.vertices) {
+    const match2 = vertex.kind === "base-image" ? RESOLVED_BASE.exec(vertex.name) : null;
+    const [, stage, ref, digest] = match2 ?? [];
+    if (stage && ref && digest && requested.has(ref) && !requested.has(`${ref}@${digest}`)) {
+      stages.set(stage, { ref, digest, vertex: vertex.id });
+    }
+  }
+  const bases = /* @__PURE__ */ new Map();
+  let attributed = 0;
+  for (const vertex of missed) {
+    const stage = STAGE_STEP.exec(vertex.name)?.[1];
+    const base2 = stage === void 0 ? void 0 : stages.get(stage);
+    if (!stage || !base2) continue;
+    attributed += 1;
+    const key2 = `${base2.ref}@${base2.digest}`;
+    const entry2 = bases.get(key2) ?? { ...base2, stages: [], missed: 0 };
+    if (!entry2.stages.includes(stage)) entry2.stages.push(stage);
+    entry2.missed += 1;
+    bases.set(key2, entry2);
+  }
+  return { bases: [...bases.values()].sort((a, b) => b.missed - a.missed || a.vertex - b.vertex), attributed };
+}
+function baseDriftNote(bases, attributed, total) {
+  const listed = bases.slice(0, MAX_LISTED).map((base2) => `stage(s) ${clip2(base2.stages.join(", "), MAX_LABEL)} on ${clip2(base2.ref, MAX_LABEL)}, resolved to ${base2.digest.slice(0, 19)}\u2026`);
+  const rest = total - attributed;
+  return ` Candidate cause: ${attributed} of these ${total} vertices are in stages built on a base image requested by mutable tag (${listed.join("; ")}${bases.length > MAX_LISTED ? `; ${bases.length - MAX_LISTED} more` : ""}). If the tag resolved to a different digest when the imported cache was written, every layer built on it misses; this log cannot show the digest used then.${rest > 0 ? ` The other ${rest} could not be linked to a tag-requested base and are not attributed.` : ""}`;
+}
 function buildFindings(ctx, entry2, build2, index) {
   const findings4 = [];
   const detail = `s${entry2.path}b${index}`;
@@ -67501,16 +68093,18 @@ function buildFindings(ctx, entry2, build2, index) {
       const source = build2.cacheFrom.map((spec2) => spec2.raw).join("; ");
       const access = build2.cacheFrom.some((spec2) => spec2.type === "gha") ? entry2.step.cacheAccess : void 0;
       const cause = restored === 0 ? "No RUN or COPY vertex was marked CACHED; this alone does not distinguish changed inputs from missing or inaccessible cache entries." : `${restored} other RUN or COPY vertex/vertices were marked CACHED, but that does not prove that matching entries for these vertices were published or accessible.`;
+      const drift = executionOutput ? tagRequestedBases(build2, vertices) : { bases: [], attributed: 0 };
       findings4.push(finding2(ctx, {
         category: executionOutput ? "layer-cache-miss" : "layer-cache-unknown",
         detail,
         step: entry2.label,
         observedMs,
         ...!executionOutput ? { removableMs: 0 } : {},
-        observation: executionOutput ? `${entry2.label}: ${vertices.length} RUN vertex/vertices produced timed command output without a CACHED marker, spanning ${formatMs(observedMs)} of vertex time despite cache-from ${source}. Vertex time can include materialization, not just command execution. ${cause} The log alone does not establish the cause.` : `${entry2.label}: ${vertices.length} RUN vertex/vertices span ${formatMs(observedMs)} without a CACHED marker or timed command output (cache-from ${source}). They may be materializing cached layers or executing silently; the retained log does not establish a rebuild or removable cost. ${cause}`,
+        observation: executionOutput ? `${entry2.label}: ${vertices.length} RUN vertex/vertices produced timed command output without a CACHED marker, spanning ${formatMs(observedMs)} of vertex time despite cache-from ${source}. Vertex time can include materialization, not just command execution. ${cause} The log alone does not establish the cause.${drift.attributed > 0 ? baseDriftNote(drift.bases, drift.attributed, vertices.length) : ""}` : `${entry2.label}: ${vertices.length} RUN vertex/vertices span ${formatMs(observedMs)} without a CACHED marker or timed command output (cache-from ${source}). They may be materializing cached layers or executing silently; the retained log does not establish a rebuild or removable cost. ${cause}`,
         recommendation: [
           ...!executionOutput ? ["Inspect the build record's cache status and execution trace before treating these vertices as misses. Missing output is not proof of either a cache hit or a rebuild, and layer-transfer output alone is not command execution. Do not expose credentials or signed URLs from build records."] : [],
           "Compare consecutive runs with identical build inputs, including resolved base-image digests, build arguments and context contents, not just the same commit. Check successful cache publication, matching import/export scopes, branch visibility and eviction.",
+          ...drift.attributed > 0 ? ["Compare each resolved base digest listed in the evidence with the one logged by the run that published the imported cache. Pinning the base by digest (hermeticity/docker-base-digest with requireDigest: true) turns base updates into explicit, reviewed changes; pair pins with update automation so security fixes still land."] : [],
           ...access?.entries.length ? ["Use the action's logged runtime cache access as branch-permission evidence only: it does not prove publication, a matching entry or successful restoration. Missing or omitted entries do not prove denied access. Do not broaden permissions merely because a layer missed."] : [],
           "If misses persist, investigate cache lookup and backend behavior before restructuring the Dockerfile or changing permissions."
         ].join(" "),
@@ -67519,12 +68113,40 @@ function buildFindings(ctx, entry2, build2, index) {
             `Action-reported runtime cache access: ${access.entries.map((entry3) => `${entry3.scope}: ${entry3.permission}`).join("; ")}${access.omittedEntries ? `; ${access.omittedEntries} additional recognized access line(s) not retained` : ""}`
           ] : [],
           ...[...vertices].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id).slice(0, MAX_LISTED).map(describeVertex),
+          ...drift.bases.slice(0, MAX_LISTED).map((base2) => `#${base2.vertex} base for stage(s) ${clip2(base2.stages.join(", "), MAX_LABEL)}: ${clip2(base2.ref, MAX_EVIDENCE)} (requested by tag) resolved to ${base2.digest}`),
           ...build2.vertices.filter((vertex) => vertex.kind === "cache-import").map(describeVertex),
           ...build2.cacheFrom.map((spec2) => `cache-from: ${spec2.raw}`)
         ],
         covers: covers2
       }));
     }
+  }
+  const reused = build2.vertices.filter((vertex) => vertex.cached && vertex.durationMs !== void 0 && !vertex.error && (vertex.kind === "run" || vertex.kind === "copy" || vertex.kind === "other" && STAGE_INSTRUCTION.test(vertex.name)));
+  const copied = build2.vertices.filter((vertex) => vertex.kind === "copy" && !vertex.cached && vertex.durationMs !== void 0 && !vertex.error);
+  const materialized = [...reused, ...copied];
+  const materializedMs = vertexUnionMs(materialized);
+  if (build2.cacheFrom.length > 0 && materializedMs >= MIN_FINDING_MS) {
+    const source = build2.cacheFrom.map((spec2) => spec2.raw).join("; ");
+    const parts2 = [
+      ...reused.length > 0 ? [`${reused.length} vertex/vertices reported CACHED and a completion time (${formatMs(vertexUnionMs(reused))})`] : [],
+      ...copied.length > 0 ? [`${copied.length} COPY/ADD vertex/vertices completed without a CACHED marker (${formatMs(vertexUnionMs(copied))})`] : []
+    ];
+    const listed = [...materialized].sort((a, b) => vertexMs(b) - vertexMs(a) || a.id - b.id);
+    findings4.push(finding2(ctx, {
+      category: "layer-materialization",
+      detail,
+      step: entry2.label,
+      observedMs: materializedMs,
+      removableMs: 0,
+      observation: `${entry2.label}: ${parts2.join(" and ")}, spanning ${formatMs(materializedMs)} of non-overlapping vertex time despite cache-from ${source}. A CACHED marker does not mean zero transfer or unpacking cost: on a fresh builder, reused layers may still be fetched and unpacked before a later vertex can build on them. Completed copies without a CACHED marker are not evidence of a cache failure or changed inputs; a matching entry may be absent. The log does not separate fetch, unpack and copy time or establish removable cost.`,
+      recommendation: "Measure before restructuring: use the build record or trace to split fetch, unpack and copy time per vertex. Order Dockerfile instructions so frequently changing inputs (source, build configuration) are copied after heavy, stable dependency layers and only into the stages that need them, and keep copied contexts and cross-stage copies small. Compare a registry cache (for example GHCR with type=registry) or a persistent builder only in an interleaved experiment with identical build inputs, counting fetch, unpack and export cost. Preserve hermetic in-container builds, image contents and smoke/parity checks.",
+      evidence: [
+        ...listed.slice(0, MAX_LISTED).map((vertex) => `${describeVertex(vertex)}${vertex.cached ? " (CACHED; timed completion)" : ""}`),
+        ...listed.length > MAX_LISTED ? [`${listed.length - MAX_LISTED} more vertex/vertices not listed; their intervals are included.`] : [],
+        ...build2.cacheFrom.map((spec2) => `cache-from: ${spec2.raw}`)
+      ],
+      covers: covers2
+    }));
   }
   return findings4;
 }
@@ -67541,6 +68163,15 @@ function cacheSaveFailure(evidence2) {
     recommendation: conflicts.length > 0 ? "Check for shared-key contention; if confirmed, have one job (or a default-branch run) save the cache and let parallel jobs only restore it. Investigate any other save errors separately." : "Investigate the cache service and the logged save error before changing cache keys or job structure.",
     evidence: failures.map((failure2) => `post-job cache save: ${failure2}`)
   };
+}
+function toolPhaseParts(step) {
+  const phases = step.toolPhases;
+  if (!phases) return [];
+  return [
+    ...phases.downloadMs === void 0 ? [] : [`download ${formatMs(phases.downloadMs)}`],
+    ...phases.extractMs === void 0 ? [] : [`extract ${formatMs(phases.extractMs)}`],
+    ...phases.cacheAddMs === void 0 ? [] : [`adding to the tool cache ${formatMs(phases.cacheAddMs)}`]
+  ];
 }
 function stepFindings(ctx, entry2) {
   const { step, label: label2 } = entry2;
@@ -67569,14 +68200,20 @@ function stepFindings(ctx, entry2) {
   }
   if (step.toolCache === "download" && step.durationMs >= MIN_FINDING_MS) {
     const release2 = step.toolSource === "release";
+    const phases = release2 ? [] : toolPhaseParts(step);
+    const runnerLabels2 = (ctx.job.labels ?? []).map((runnerLabel) => runnerLabel.trim().toLowerCase());
+    const slim = !release2 && runnerLabels2.includes("ubuntu-slim") && !runnerLabels2.includes("self-hosted");
     findings4.push(finding2(ctx, {
       category: "toolchain-download",
       detail: `s${entry2.path}`,
       step: label2,
       observedMs: step.durationMs,
       observation: release2 ? `${label2} downloaded and unpacked a pinned release archive with no reused install (${formatMs(step.durationMs)}).` : `${label2} downloaded its toolchain instead of finding it in the runner's tool cache (${formatMs(step.durationMs)}).`,
-      recommendation: release2 ? "Cache the extracted toolchain directory keyed by its version pin or lock file plus runner OS and architecture, and keep integrity verification before reusing it; a cache restore also takes time, so measure before and after." : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
-      evidence: [release2 ? `${label2}: release archive download with no reused install, ${formatMs(step.durationMs)}` : `${label2}: tool cache miss, ${formatMs(step.durationMs)}`],
+      recommendation: release2 ? "Cache the extracted toolchain directory keyed by its version pin or lock file plus runner OS and architecture, and keep integrity verification before reusing it; a cache restore also takes time, so measure before and after." : slim ? "The ubuntu-slim image has no hosted tool cache, so every run downloads, extracts and copies the toolchain, and choosing another version cannot produce a hit. Where the job's code supports a runtime the image preinstalls (see the image's software list), a version check can skip the setup action when it passes; a check looser than the setup action's version spec gives up that pin, so the runtime then changes with image updates. Where the job must stay pinned, measure a standard hosted runner (including its startup and queue time) or a toolchain cache (a restore also writes to disk) before and after." : "Use a version the hosted runner image already caches, or cache the toolchain directory; a cache restore also takes time, so measure before and after.",
+      evidence: [
+        release2 ? `${label2}: release archive download with no reused install, ${formatMs(step.durationMs)}` : `${label2}: tool cache miss, ${formatMs(step.durationMs)}`,
+        ...phases.length > 0 ? [`${label2}: ${phases.join(", ")}`] : []
+      ],
       covers: [entry2.top]
     }));
   }
@@ -67795,6 +68432,7 @@ function repeatedSetup(shape, evidenceById) {
       category: "repeated-setup",
       jobKey: clip2([...new Set(list3.map((use) => use.timed.job.key))].sort().join(", "), MAX_EVIDENCE),
       jobName: clip2(listed, MAX_EVIDENCE),
+      relatedJobIds: [...new Set(list3.map((use) => use.timed.job.id))].sort((a, b) => a - b),
       step: label2,
       observedMs: Math.round(total),
       elapsedSavingsBoundMs: elapsed2,
@@ -68271,13 +68909,13 @@ function calculateCriticalPath(jobs) {
   const byKey = new Map(jobs.map((job) => [job.key, job]));
   const memo2 = /* @__PURE__ */ new Map();
   const visiting = /* @__PURE__ */ new Set();
-  function visit5(key2) {
+  function visit6(key2) {
     const cached2 = memo2.get(key2);
     if (cached2) return cached2;
     const job = byKey.get(key2);
     if (!job || visiting.has(key2)) return { durationMs: 0, jobKeys: [] };
     visiting.add(key2);
-    const parentPaths = job.needs.map(visit5);
+    const parentPaths = job.needs.map(visit6);
     const longestParent = parentPaths.reduce(
       (longest, candidate) => candidate.durationMs > longest.durationMs ? candidate : longest,
       { durationMs: 0, jobKeys: [] }
@@ -68292,7 +68930,7 @@ function calculateCriticalPath(jobs) {
   }
   return jobs.reduce(
     (longest, job) => {
-      const candidate = visit5(job.key);
+      const candidate = visit6(job.key);
       return candidate.durationMs > longest.durationMs ? candidate : longest;
     },
     { durationMs: 0, jobKeys: [] }
@@ -68472,7 +69110,7 @@ function escapeCell(value2) {
 }
 
 // src/telemetry/snapshot.ts
-var import_yaml50 = __toESM(require_dist(), 1);
+var import_yaml54 = __toESM(require_dist(), 1);
 init_history();
 function isExternalCheckRun(job, key2) {
   return key2 === void 0 && !job.runner_id && !job.runner_name && !job.steps?.length && typeof job.html_url === "string" && !/\/actions\/runs\/\d+\/job\/\d+/.test(job.html_url);
@@ -68483,7 +69121,7 @@ function workflowPath(path) {
 function parseJobDefinitions(text7) {
   let document;
   try {
-    document = (0, import_yaml50.parse)(text7);
+    document = (0, import_yaml54.parse)(text7);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -68814,9 +69452,9 @@ function analyzeDurations(reference, window, config2) {
   });
   const objectives = config2.objectives.filter((objective) => objective.workflow === run4.path);
   report.workflow = metric(run4.durationMs, analysis.history.map((snapshot) => snapshot.durationMs), objectives.find((objective) => objective.job === void 0));
-  report.jobs = run4.jobs.map((job) => {
+  report.jobs = run4.jobs.filter((job) => job.conclusion === "success").map((job) => {
     const context4 = jobComparisonContext(job);
-    const values2 = analysis.history.map((snapshot) => snapshot.jobs.find((other) => jobComparisonContext(other) === context4).durationMs);
+    const values2 = analysis.history.map((snapshot) => snapshot.jobs.find((other) => other.conclusion === "success" && jobComparisonContext(other) === context4).durationMs);
     return {
       contextKey: identity(["duration-job-v1", context4]),
       key: job.key,
@@ -68824,7 +69462,7 @@ function analyzeDurations(reference, window, config2) {
       metric: metric(job.durationMs, values2, objectives.find((objective) => objective.job === job.key))
     };
   }).sort((a, b) => a.contextKey.localeCompare(b.contextKey));
-  report.unmatchedObjectives = objectives.filter((objective) => objective.job !== void 0 && !run4.jobs.some((job) => job.key === objective.job));
+  report.unmatchedObjectives = objectives.filter((objective) => objective.job !== void 0 && !run4.jobs.some((job) => job.conclusion === "success" && job.key === objective.job));
   return structuredClone(analysis);
 }
 function describeDurations(report) {
@@ -68852,7 +69490,7 @@ ${report.jobs.length - 20} additional job distributions are available in JSON.`)
 Exclusions: ${[...counts].map(([reason, count]) => `${reason} (${count})`).join(", ")}.`);
   }
   if (report.unmatchedObjectives.length) lines.push(`
-${report.unmatchedObjectives.length} configured job budgets did not match an observed job; they were not assessed.`);
+${report.unmatchedObjectives.length} configured job budgets did not match an executed job; they were not assessed.`);
   lines.push("\nR7 quantiles describe eligible successful runs, not prediction bounds or guarantees. Budgets are explicit current configuration, not learned targets or historical SLO compliance. Runner labels do not establish identical hardware/cache state; workflow/job durations do not identify executed projects or causal benefits.");
   return lines.join("\n");
 }
@@ -69019,6 +69657,7 @@ async function processWorkflowRun(client, repo, run4, options = {}) {
     ...jobs.length ? { jobBaselines: jobs } : {},
     ...attribution ? { attribution } : {},
     ...attributionUnavailable ? { attributionUnavailable } : {},
+    ...options.dashboardHistory ? { dashboardHistory: history } : {},
     benchmark: benchmarkRun(snapshot, attribution, prior.at(-1), history),
     ...knowledge ? { knowledge } : {},
     ...knowledgeSkipped ? { knowledgeSkipped } : {}
@@ -69827,7 +70466,7 @@ function capComment(body, max2 = MAX_COMMENT_LENGTH) {
 }
 
 // src/review/project.ts
-var import_yaml51 = __toESM(require_dist(), 1);
+var import_yaml55 = __toESM(require_dist(), 1);
 var PROJECT_FILE = "project.yaml";
 var PROJECT_MAX_BYTES = 8 * 1024;
 var NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -69843,7 +70482,7 @@ function parseStrictYaml(text7, maxBytes, label2) {
   if (/^%/m.test(text7)) return { problems: [`${label2} must not contain YAML directives (lines starting with %).`] };
   let documents;
   try {
-    documents = (0, import_yaml51.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+    documents = (0, import_yaml55.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
   } catch (error63) {
     return { problems: [`${label2} is not valid YAML (${describeValue(error63 instanceof Error ? error63.message : String(error63))}).`] };
   }
@@ -69856,20 +70495,20 @@ function parseStrictYaml(text7, maxBytes, label2) {
   for (const issue2 of [...document.errors, ...document.warnings]) {
     problems.push(`${label2} is not valid YAML: ${issue2.code} at line ${issue2.linePos?.[0]?.line ?? "?"}.`);
   }
-  if (!(0, import_yaml51.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
-  (0, import_yaml51.visit)(document, {
+  if (!(0, import_yaml55.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
+  (0, import_yaml55.visit)(document, {
     Alias() {
       problems.push(`${label2} must not use YAML aliases (*name).`);
-      return import_yaml51.visit.BREAK;
+      return import_yaml55.visit.BREAK;
     },
     Node(_key, node2) {
       if (node2.anchor) problems.push(`${label2} must not use YAML anchors (&name).`);
       if (node2.tag) problems.push(`${label2} must not use YAML tags (${describeValue(node2.tag)}).`);
     },
     Pair(_key, pair) {
-      if (!(0, import_yaml51.isScalar)(pair.key) || typeof pair.key.value !== "string") {
+      if (!(0, import_yaml55.isScalar)(pair.key) || typeof pair.key.value !== "string") {
         problems.push(`${label2} keys must be plain strings.`);
-        return import_yaml51.visit.SKIP;
+        return import_yaml55.visit.SKIP;
       }
       if (pair.key.value === "<<") problems.push(`${label2} must not use YAML merge keys (<<).`);
       return void 0;
@@ -70065,6 +70704,7 @@ async function verifyConsent(client, project, options) {
 
 // src/review/report.ts
 var SENSITIVE_RULES = /* @__PURE__ */ new Set([
+  "hermeticity/actions-lock",
   "hermeticity/pin-actions",
   "hermeticity/pin-container-images",
   "hermeticity/docker-base-digest",
@@ -70860,37 +71500,37 @@ import { readFile as readFile8 } from "node:fs/promises";
 import { parseArgs as parseArgs11 } from "node:util";
 
 // src/formal/cache-key.ts
-var import_yaml52 = __toESM(require_dist(), 1);
+var import_yaml56 = __toESM(require_dist(), 1);
 var CONTEXTS = ["sha", "run_id", "run_number", "run_attempt", "ref", "event_name"];
 function extractCacheKey(source, job, step) {
-  const document = (0, import_yaml52.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
+  const document = (0, import_yaml56.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
   if (document.errors.length || document.warnings.length) throw new Error("Workflow YAML must parse without errors or warnings.");
-  (0, import_yaml52.visit)(document, (_key, node2) => {
-    if ((0, import_yaml52.isAlias)(node2)) throw new Error("YAML aliases are outside the extraction contract.");
-    if ((0, import_yaml52.isMap)(node2) && node2.items.some((pair) => (0, import_yaml52.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
+  (0, import_yaml56.visit)(document, (_key, node2) => {
+    if ((0, import_yaml56.isAlias)(node2)) throw new Error("YAML aliases are outside the extraction contract.");
+    if ((0, import_yaml56.isMap)(node2) && node2.items.some((pair) => (0, import_yaml56.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
   });
   const jobs = document.get("jobs", true);
-  if (!(0, import_yaml52.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
+  if (!(0, import_yaml56.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
   const selected = jobs.get(job, true);
-  if (!(0, import_yaml52.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
+  if (!(0, import_yaml56.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
   const steps2 = selected.get("steps", true);
-  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml52.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
+  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml56.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
   const action = steps2.items[step];
-  if (!(0, import_yaml52.isMap)(action)) throw new Error("Selected step is not a mapping.");
+  if (!(0, import_yaml56.isMap)(action)) throw new Error("Selected step is not a mapping.");
   const uses = action.get("uses", true);
-  if (!(0, import_yaml52.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
+  if (!(0, import_yaml56.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
     throw new Error("Selected step must use a literal actions/cache, actions/cache/restore or actions/cache/save reference.");
   }
   const inputs = action.get("with", true);
-  if (!(0, import_yaml52.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
+  if (!(0, import_yaml56.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
   const inputNames = inputs.items.map((pair) => {
-    if (!(0, import_yaml52.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
+    if (!(0, import_yaml56.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
     return pair.key.value.toLowerCase();
   });
   if (new Set(inputNames).size !== inputNames.length) throw new Error("Case-colliding cache input names are unsupported.");
   if (inputNames.includes("restore-keys") || inputNames.includes("enablecrossosarchive")) throw new Error("restore-keys and cross-OS archive inputs are outside this model.");
   const key2 = inputs.get("key", true);
-  if (!(0, import_yaml52.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
+  if (!(0, import_yaml56.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
   scalarString(key2.value);
   const [start2, end] = key2.range;
   return {
@@ -71155,11 +71795,11 @@ function decodeSourceBlob(value2) {
 }
 async function readCommittedBlob(repository, commit, path) {
   location2(commit, path);
-  const git2 = async (...args) => (await exec2("git", ["--no-pager", "--no-replace-objects", "-C", repository, ...args], { encoding: "buffer", maxBuffer: 2000100, timeout: 15e3 })).stdout;
-  if ((await git2("cat-file", "-t", commit)).toString("utf8").trim() !== "commit") throw new Error("Source id is not a commit.");
-  const blob = (await git2("rev-parse", "--verify", `${commit}:${path}`)).toString("utf8").trim();
-  if (!OID.test(blob) || (await git2("cat-file", "-t", blob)).toString("utf8").trim() !== "blob") throw new Error("Source path does not identify a Git blob.");
-  const bytes = await git2("cat-file", "blob", blob);
+  const git3 = async (...args) => (await exec2("git", ["--no-pager", "--no-replace-objects", "-C", repository, ...args], { encoding: "buffer", maxBuffer: 2000100, timeout: 15e3 })).stdout;
+  if ((await git3("cat-file", "-t", commit)).toString("utf8").trim() !== "commit") throw new Error("Source id is not a commit.");
+  const blob = (await git3("rev-parse", "--verify", `${commit}:${path}`)).toString("utf8").trim();
+  if (!OID.test(blob) || (await git3("cat-file", "-t", blob)).toString("utf8").trim() !== "blob") throw new Error("Source path does not identify a Git blob.");
+  const bytes = await git3("cat-file", "blob", blob);
   const content2 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
   if (!Buffer.from(content2, "utf8").equals(bytes)) throw new Error("Source must round-trip as UTF-8 bytes.");
   const source = { commit, path, blob, content: content2 };
@@ -71619,6 +72259,573 @@ async function ssdfCommand(args, io) {
   return 0;
 }
 
+// src/cli/doctor.ts
+import { parseArgs as parseArgs13 } from "node:util";
+
+// src/doctor/doctor.ts
+var import_yaml57 = __toESM(require_dist(), 1);
+import { execFile as execFile4 } from "node:child_process";
+import { constants } from "node:fs";
+import { lstat as lstat3, open as open5, realpath as realpath3 } from "node:fs/promises";
+import { join as join9, resolve as resolve5 } from "node:path";
+import { promisify as promisify4 } from "node:util";
+
+// src/agents/safety.ts
+var LIMITS = {
+  requestBytes: 256 * 1024,
+  outputBytes: 128 * 1024,
+  configBytes: 64 * 1024,
+  fileBytes: 256 * 1024,
+  workspaceBytes: 4 * 1024 * 1024,
+  files: 250,
+  entries: 2e4,
+  depth: 40,
+  sessions: 8,
+  operationMs: 3e4,
+  cleanupMs: 1e3,
+  httpMs: 1e4,
+  githubResponseBytes: 2 * 1024 * 1024,
+  githubTotalBytes: 16 * 1024 * 1024,
+  githubRequests: 256,
+  connections: 32,
+  userConnections: 4,
+  requests: 32,
+  userRequests: 8,
+  streams: 64,
+  userStreams: 12,
+  operations: 4,
+  userOperations: 2,
+  connectionMs: 10 * 6e4,
+  bufferedBytes: 256 * 1024,
+  outputStallMs: 5e3
+};
+var CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g;
+function sanitizeMarkdown(text7, max2 = 3e4) {
+  const clean2 = text7.replace(CONTROL, "");
+  const omittedCharacters = Math.max(0, clean2.length - max2);
+  return {
+    text: omittedCharacters ? `${clean2.slice(0, max2)}
+
+\u2026 (${omittedCharacters} characters omitted)` : clean2,
+    truncated: omittedCharacters > 0,
+    omittedCharacters
+  };
+}
+function escapeMarkdown(value2) {
+  return sanitizeMarkdown(value2, 4096).text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/[\\`*_{}[\]()#+.!|~-]/g, "\\$&").replace(/\r?\n/g, " ");
+}
+
+// src/doctor/doctor.ts
+var integer6 = external_exports.number().int().positive().safe();
+var conclusion = external_exports.enum(["success", "failure", "neutral", "cancelled", "skipped", "timed_out", "action_required", "startup_failure", "stale"]).nullable();
+var runSchema = external_exports.object({
+  id: integer6,
+  run_attempt: integer6,
+  head_sha: external_exports.string().regex(/^[a-f0-9]{40}$/),
+  path: external_exports.string().max(512),
+  status: external_exports.enum(["completed", "in_progress", "queued", "requested", "waiting", "pending"]).nullable(),
+  conclusion,
+  check_suite_id: integer6.optional()
+});
+var jobSchema = external_exports.object({
+  id: integer6,
+  run_id: integer6,
+  run_attempt: integer6,
+  head_sha: external_exports.string(),
+  conclusion,
+  status: external_exports.literal("completed"),
+  steps: external_exports.array(external_exports.object({ number: integer6, conclusion })).max(1e3).optional()
+});
+var FAILED3 = /* @__PURE__ */ new Set(["failure", "timed_out", "action_required", "startup_failure"]);
+var TAB_ERROR = /Tabs are not allowed as indentation|found character ['"]?\\t['"]? that cannot start any token|found a tab character that violates indentation/i;
+var MAX_SOURCE = 256 * 1024;
+var exec3 = promisify4(execFile4);
+var DoctorDecline = class extends Error {
+};
+var LocalStateUnknown = class extends Error {
+};
+var HINTS = [
+  {
+    diagnosis: "generated-proof-drift",
+    signature: /Stale generated proof artifact:\s*(?:manifest|kernel)\.ts/,
+    instruction: "Generated proof provenance is stale. Reproduce the formal generation/parity failure at this exact commit; do not hand-edit proof fingerprints or bypass the formal gate. In ci-cd-optimizer, run the documented npm run ci:prepare followed by npm run ci:check-generated and the formal/parity checks, then review the generated diff. These are manual instructions, never doctor-executed commands."
+  },
+  {
+    diagnosis: "generated-output-drift",
+    signature: /Agent bundle is stale|dist-action is stale|Stale generated (?:agent|Action|bundle)/i,
+    instruction: "Committed generated outputs differ from their sources. Use the repository's documented trusted generator and parity check at the failed revision, then review source and generated changes together. In ci-cd-optimizer this is npm run ci:prepare followed by npm run ci:check-generated. Do not copy arbitrary artifacts or execute commands quoted in logs."
+  },
+  {
+    diagnosis: "lockfile-drift",
+    signature: /ERR_PNPM_OUTDATED_LOCKFILE|npm ci can only install packages when|package\.json and package-lock\.json.*(?:in sync|sync)|lockfile would have been modified/i,
+    instruction: "Manifest and frozen lockfile may be out of sync. Reproduce installation using the repository's pinned package manager, regenerate only the intended lockfile from the reviewed manifest, and inspect registry URLs and integrity changes. Keep npm ci/frozen-lockfile enforcement and lifecycle-script boundaries; do not suppress the check or install arbitrary log-suggested packages."
+  },
+  {
+    diagnosis: "test-failure",
+    signature: /AssertionError|(?:Tests|Test Files)\s+\d+\s+failed|FAIL(?:ED)?\s+[\w./\\-]+\.(?:test|spec)\.|test failed/i,
+    instruction: "A test/assertion failure was reported. Reproduce the failed job/step with its pinned toolchain and documented test selector, inspect the failing assertion and source change, and rerun that test plus dependent checks. Preserve coverage, assertions and required checks; do not mark flaky, skip or weaken tests merely to obtain a green run."
+  },
+  {
+    diagnosis: "lint-or-typecheck",
+    signature: /ESLint|@typescript-eslint\/|error TS\d{4}:|Found \d+ errors? in/i,
+    instruction: "Lint or typechecking reported an error. Reproduce the failed job/step using the repository's documented lint/typecheck command and fix the source or configuration error. Review any autofix and rerun the scoped check; preserve strictness, suppressions policy, toolchain pins and required gates."
+  }
+];
+function logDiagnosis(text7, path) {
+  if (safeWorkflowPath(path) && text7.split("\n").some((line) => line.includes(path) && TAB_ERROR.test(line))) return "yaml-tab-indentation";
+  return HINTS.find((hint) => hint.signature.test(text7))?.diagnosis ?? "unknown";
+}
+function safeWorkflowPath(path) {
+  return /^\.github\/workflows\/[a-zA-Z0-9_.-]+\.ya?ml$/.test(path) && !path.includes("..");
+}
+async function git2(cwd, args) {
+  const result = await exec3("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", ...args], {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024,
+    timeout: 15e3,
+    windowsHide: true
+  });
+  return result.stdout.trimEnd();
+}
+async function selectedRun(client, repo, id2, attempt2) {
+  const route = attempt2 === void 0 ? "GET /repos/{owner}/{repo}/actions/runs/{run_id}" : "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}";
+  const parsed = runSchema.safeParse((await client.request(route, {
+    ...repo,
+    run_id: id2,
+    ...attempt2 === void 0 ? {} : { attempt_number: attempt2 }
+  })).data);
+  if (!parsed.success || parsed.data.id !== id2 || attempt2 !== void 0 && parsed.data.run_attempt !== attempt2) {
+    throw new Error("Run/attempt response has invalid or mismatched identity.");
+  }
+  return parsed.data;
+}
+function sameRun(a, b) {
+  return a.id === b.id && a.run_attempt === b.run_attempt && a.head_sha === b.head_sha && a.path === b.path && a.status === b.status && a.conclusion === b.conclusion && a.check_suite_id === b.check_suite_id;
+}
+async function latestFailure(client, repo, workflow) {
+  const route = workflow ? "GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs" : "GET /repos/{owner}/{repo}/actions/runs";
+  const seen = /* @__PURE__ */ new Set();
+  let total;
+  for (let page = 1; page <= 5; page++) {
+    const data = external_exports.object({ total_count: external_exports.number().int().nonnegative(), workflow_runs: external_exports.array(runSchema).max(100) }).parse(
+      (await client.request(route, {
+        ...repo,
+        status: "completed",
+        per_page: 100,
+        page,
+        ...workflow ? { workflow_id: workflow } : {}
+      })).data
+    );
+    if (total !== void 0 && total !== data.total_count) throw new Error("Run list changed during pagination.");
+    total = data.total_count;
+    for (const run4 of data.workflow_runs) {
+      if (seen.has(run4.id) || run4.status !== "completed") throw new Error("Run listing is inconsistent.");
+      seen.add(run4.id);
+      if (FAILED3.has(run4.conclusion ?? "")) return run4.id;
+    }
+    if (seen.size === total) return void 0;
+    if (data.workflow_runs.length < 100 || seen.size > total) throw new Error("Incomplete run listing.");
+  }
+  throw new Error("Latest failure search exceeded the 500-run budget. Select --run-id.");
+}
+async function startupAnnotations(client, repo, run4) {
+  if (!run4.check_suite_id || !safeWorkflowPath(run4.path)) return [];
+  if (run4.run_attempt !== 1 || !sameRun(run4, await selectedRun(client, repo, run4.id))) return [];
+  const checks = [];
+  const seen = /* @__PURE__ */ new Set();
+  let total;
+  for (let page = 1; page <= 5; page++) {
+    const data = external_exports.object({
+      total_count: external_exports.number().int().nonnegative(),
+      check_runs: external_exports.array(external_exports.object({
+        id: integer6,
+        head_sha: external_exports.string(),
+        check_suite: external_exports.object({ id: integer6 }),
+        app: external_exports.object({ slug: external_exports.string() }),
+        status: external_exports.string(),
+        conclusion
+      })).max(100)
+    }).parse((await client.request("GET /repos/{owner}/{repo}/check-suites/{check_suite_id}/check-runs", {
+      ...repo,
+      check_suite_id: run4.check_suite_id,
+      filter: "all",
+      per_page: 100,
+      page
+    })).data);
+    if (total !== void 0 && total !== data.total_count) throw new Error("Check list changed.");
+    total = data.total_count;
+    for (const check2 of data.check_runs) {
+      if (seen.has(check2.id)) throw new Error("Duplicate check identity.");
+      seen.add(check2.id);
+      if (check2.head_sha !== run4.head_sha || check2.check_suite.id !== run4.check_suite_id || check2.app.slug !== "github-actions" || check2.status !== "completed") throw new Error("Check identity is inconsistent.");
+      if (FAILED3.has(check2.conclusion ?? "")) checks.push(check2.id);
+    }
+    if (data.check_runs.length < 100) {
+      if ((page - 1) * 100 + data.check_runs.length !== total) throw new Error("Incomplete check listing.");
+      break;
+    }
+    if (page * 100 === total) break;
+    if (page === 5) throw new Error("Check list exceeds the collection budget.");
+  }
+  if (new Set(checks).size !== checks.length || checks.length > 5) throw new Error("Ambiguous or oversized failed check list.");
+  const result = [];
+  for (const id2 of checks) {
+    for (let page = 1; page <= 5; page++) {
+      const annotations = external_exports.array(external_exports.object({
+        path: external_exports.string().max(512),
+        start_line: integer6,
+        annotation_level: external_exports.enum(["notice", "warning", "failure"]),
+        message: external_exports.string().max(64 * 1024)
+      })).max(100).parse((await client.request("GET /repos/{owner}/{repo}/check-runs/{check_run_id}/annotations", {
+        ...repo,
+        check_run_id: id2,
+        per_page: 100,
+        page
+      })).data);
+      for (const annotation of annotations.filter((item) => item.annotation_level === "failure")) {
+        result.push({
+          checkId: id2,
+          line: annotation.start_line,
+          diagnosis: annotation.path === run4.path && (TAB_ERROR.test(annotation.message) || /error in your yaml syntax/i.test(annotation.message)) ? "yaml-syntax" : "unknown"
+        });
+      }
+      if (annotations.length < 100) break;
+      if (page === 5) throw new Error("Annotations exceed the collection budget.");
+    }
+  }
+  if (!sameRun(run4, await selectedRun(client, repo, run4.id))) throw new Error("Run was retried while collecting annotations.");
+  return result;
+}
+function tabIndentRepair(source) {
+  if (Buffer.byteLength(source) > MAX_SOURCE) return void 0;
+  const before = (0, import_yaml57.parseDocument)(source);
+  if (!before.errors.some((error63) => error63.code === "TAB_AS_INDENT") || /[|>][+-]?\d?[+-]?(?:\s+#.*)?\s*$/m.test(source) || /[&*]|^\s*<<:/m.test(source)) return void 0;
+  if (source.split(/\r?\n/).some((line) => /^ +\S|^[ \t]* [ \t]*\t|^\t+ +\S/.test(line))) return void 0;
+  const candidate = source.replace(/^[ \t]*\t[ \t]*(?=\S)/gm, (indent) => indent.replace(/\t/g, "  "));
+  if (candidate === source) return void 0;
+  const after2 = (0, import_yaml57.parseDocument)(candidate);
+  const lint3 = parseYaml(".github/workflows/doctor.yml", candidate);
+  if (after2.errors.length || after2.warnings.length || lint3.doc.errors.length || !(0, import_yaml57.isMap)(after2.contents) || !(0, import_yaml57.isMap)(after2.get("jobs", true)) || !after2.has("on")) return void 0;
+  let multiline = false;
+  (0, import_yaml57.visit)(after2, { Scalar(_key, node2) {
+    if (node2.range && /[\r\n]/.test(candidate.slice(node2.range[0], node2.range[1]))) multiline = true;
+  } });
+  if (multiline) return void 0;
+  const step = external_exports.object({
+    id: external_exports.unknown().optional(),
+    if: external_exports.unknown().optional(),
+    name: external_exports.unknown().optional(),
+    uses: external_exports.string().optional(),
+    run: external_exports.string().optional(),
+    "working-directory": external_exports.unknown().optional(),
+    shell: external_exports.unknown().optional(),
+    with: external_exports.unknown().optional(),
+    env: external_exports.unknown().optional(),
+    "continue-on-error": external_exports.unknown().optional(),
+    "timeout-minutes": external_exports.unknown().optional()
+  }).strict().refine((value2) => value2.uses !== void 0 !== (value2.run !== void 0));
+  const job = external_exports.object({
+    name: external_exports.unknown().optional(),
+    "runs-on": external_exports.unknown().optional(),
+    needs: external_exports.unknown().optional(),
+    if: external_exports.unknown().optional(),
+    permissions: external_exports.unknown().optional(),
+    environment: external_exports.unknown().optional(),
+    concurrency: external_exports.unknown().optional(),
+    outputs: external_exports.unknown().optional(),
+    env: external_exports.unknown().optional(),
+    defaults: external_exports.unknown().optional(),
+    steps: external_exports.array(step).min(1).optional(),
+    "timeout-minutes": external_exports.unknown().optional(),
+    "continue-on-error": external_exports.unknown().optional(),
+    strategy: external_exports.unknown().optional(),
+    container: external_exports.unknown().optional(),
+    services: external_exports.unknown().optional(),
+    uses: external_exports.string().optional(),
+    with: external_exports.unknown().optional(),
+    secrets: external_exports.unknown().optional()
+  }).strict().refine((value2) => value2.uses !== void 0 ? value2.steps === void 0 : value2.steps !== void 0 && value2["runs-on"] !== void 0);
+  const jobs = after2.get("jobs", true);
+  if (!(0, import_yaml57.isMap)(jobs) || !external_exports.record(external_exports.string(), job).safeParse(jobs.toJSON()).success) return void 0;
+  if (source.split(/\r?\n/).some((line) => /^[ \t]*\t/.test(line) && !/^[ \t]*(?:[A-Za-z_][\w-]*:|-\s+(?:name|run|uses|if|env|with):)/.test(line))) return void 0;
+  return candidate;
+}
+async function checkoutGuard(cwd, repo, run4, apiHost) {
+  const root = await realpath3(cwd);
+  if (resolve5(await git2(root, ["rev-parse", "--show-toplevel"])).toLowerCase() !== root.toLowerCase()) {
+    throw new DoctorDecline("Repair requires the repository root, not a subdirectory.");
+  }
+  if (await git2(root, ["rev-parse", "HEAD"]) !== run4.head_sha) throw new DoctorDecline("Checkout HEAD does not match the failed run.");
+  if (await git2(root, ["status", "--porcelain", "--untracked-files=all"])) throw new DoctorDecline("Checkout is dirty; no files were overwritten.");
+  const remote = await git2(root, ["remote", "get-url", "origin"]);
+  const normalized = remote.replace(/^git@([^:]+):/, "https://$1/");
+  let url2;
+  try {
+    url2 = new URL(normalized);
+  } catch {
+    throw new DoctorDecline("Origin is not a supported GitHub URL.");
+  }
+  if (!["https:", "ssh:"].includes(url2.protocol) || url2.hostname.toLowerCase() !== apiHost.toLowerCase() || url2.pathname.replace(/^\//, "").replace(/\.git$/, "").toLowerCase() !== `${repo.owner}/${repo.repo}`.toLowerCase()) {
+    throw new DoctorDecline("Checkout origin does not match the selected GitHub repository.");
+  }
+  let path = root;
+  for (const part2 of run4.path.split("/")) {
+    path = join9(path, part2);
+    const stat7 = await lstat3(path);
+    if (stat7.isSymbolicLink()) throw new DoctorDecline("Workflow path contains a symlink; repair declined.");
+  }
+  const mode = await git2(root, ["ls-files", "--stage", "--", run4.path]);
+  if (!/^100644 [a-f0-9]+ 0\t/.test(mode)) throw new DoctorDecline("Workflow must be a tracked regular non-executable file.");
+  return path;
+}
+async function repair(client, repo, run4, cwd, apiHost) {
+  if (!safeWorkflowPath(run4.path)) throw new DoctorDecline("External or unsafe workflow path; no repair attempted.");
+  const path = await checkoutGuard(cwd, repo, run4, apiHost);
+  const stat7 = await lstat3(path);
+  if (!stat7.isFile() || stat7.nlink !== 1 || stat7.size > MAX_SOURCE) throw new DoctorDecline("Workflow is oversized, hard-linked, or not a regular file.");
+  const file2 = await open5(path, constants.O_RDWR | (constants.O_NOFOLLOW ?? 0));
+  let mutationStarted = false;
+  try {
+    const opened = await file2.stat();
+    if (opened.ino !== stat7.ino || opened.dev !== stat7.dev) throw new DoctorDecline("Workflow changed while opening; repair declined.");
+    const raw = await file2.readFile();
+    const source = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(raw);
+    const upstream = await readFileAt(client, repo, run4.path, run4.head_sha);
+    if (upstream !== source) throw new DoctorDecline("Local workflow differs from the exact failed revision.");
+    const candidate = tabIndentRepair(source);
+    if (!candidate) throw new DoctorDecline("No unambiguous YAML-only tab repair validates; review indentation manually.");
+    if (!sameRun(run4, await selectedRun(client, repo, run4.id))) throw new DoctorDecline("Run changed or was rerun during diagnosis; repair declined.");
+    await checkoutGuard(cwd, repo, run4, apiHost);
+    const current = await lstat3(path);
+    const bytes = Buffer.alloc(Buffer.byteLength(source) + 1);
+    const read2 = await file2.read(bytes, 0, bytes.length, 0);
+    if (current.ino !== opened.ino || current.dev !== opened.dev || bytes.subarray(0, read2.bytesRead).toString("utf8") !== source) {
+      throw new DoctorDecline("Workflow changed before writing; no repair applied.");
+    }
+    const content2 = Buffer.from(candidate);
+    let offset = 0;
+    mutationStarted = true;
+    while (offset < content2.length) {
+      const written = await file2.write(content2, offset, content2.length - offset, offset);
+      if (!written.bytesWritten) throw new Error("Workflow write made no progress; inspect local changes.");
+      offset += written.bytesWritten;
+    }
+    await file2.truncate(content2.length);
+    await file2.sync();
+    const final = await lstat3(path);
+    const result = Buffer.alloc(content2.length + 1);
+    const actual = await file2.read(result, 0, result.length, 0);
+    if (final.ino !== opened.ino || final.dev !== opened.dev || actual.bytesRead !== content2.length || !result.subarray(0, actual.bytesRead).equals(content2) || parseYaml(run4.path, candidate).doc.errors.length || await git2(cwd, ["rev-parse", "HEAD"]) !== run4.head_sha) {
+      throw new Error("Post-write validation failed; inspect local changes. No remote action was taken.");
+    }
+    return "Strict YAML parse and repository workflow parser passed after rereading the exact repaired bytes; full CI has not run.";
+  } catch (error63) {
+    if (mutationStarted) throw new LocalStateUnknown("Local write or post-write validation failed; checkout may be modified. Inspect git diff before proceeding. No remote action was taken.");
+    throw error63;
+  } finally {
+    await closeWorkflow(file2, mutationStarted);
+  }
+}
+async function closeWorkflow(file2, mutationStarted) {
+  try {
+    await file2.close();
+  } catch {
+    if (mutationStarted) throw new LocalStateUnknown("Closing the repaired file failed; inspect local changes and filesystem health.");
+    throw new DoctorDecline("Closing the workflow failed; repair was not applied.");
+  }
+}
+async function diagnoseWorkflow(client, repo, options) {
+  const report = {
+    schema: "cicd-optimizer/doctor-v1",
+    repository: `${repo.owner}/${repo.repo}`,
+    mode: options.observe ? "observe" : "repair",
+    status: "unrepaired",
+    jobs: [],
+    annotations: [],
+    gaps: [],
+    repair: { action: "yaml-tab-indentation", state: "not-attempted", reason: "No supported evidence-backed repair identified." },
+    instructions: [
+      "This is a historical failed attempt, not a claim about current branch health; check for superseding successful runs before filing an issue.",
+      "Review the exact run attempt and failed step numbers below. Missing logs are not proof of a clean workflow.",
+      "Repair the root cause without disabling tests, assertions, required checks, permissions boundaries, toolchain pins or formal/parity gates.",
+      "Validate the resulting diff with the repository's documented scoped checks; commit/push/rerun only with separate authorization.",
+      "Before filing an issue, search for the stable issueKey below to avoid duplicate reports. Doctor never files issues."
+    ]
+  };
+  let stage = "run-selection";
+  try {
+    let id2 = options.runId;
+    if (id2 === void 0) {
+      id2 = await latestFailure(client, repo, options.workflow);
+      if (id2 === void 0) {
+        report.status = "no-failed-run";
+        report.instructions = ["GitHub returned no matching failed runs; this is not an attestation that queued, cancelled, or other workflows are healthy."];
+        return report;
+      }
+    }
+    const run4 = await selectedRun(client, repo, id2, options.attempt);
+    report.run = { ...run4, path: safeWorkflowPath(run4.path) ? run4.path : "[unsupported workflow path]" };
+    report.issueKey = `doctor:${repo.owner}/${repo.repo}:${run4.id}:${run4.run_attempt}`;
+    if (run4.status !== "completed" || !FAILED3.has(run4.conclusion ?? "")) {
+      report.gaps.push("Selected attempt is not a completed failure; queued, successful, skipped and cancelled runs are not repair evidence.");
+      return report;
+    }
+    stage = "jobs";
+    const jobs = await listRunJobs(client, repo, id2, run4.run_attempt);
+    if (!jobs.complete) report.gaps.push("Job pagination is incomplete or inconsistent; repair is blocked.");
+    const parsed = jobs.jobs.map((job) => jobSchema.parse(job));
+    if (parsed.some((job) => job.run_id !== id2 || job.run_attempt !== run4.run_attempt || job.head_sha !== run4.head_sha)) {
+      throw new Error("Job identity does not match the exact selected run attempt and commit.");
+    }
+    const failed = parsed.filter((job) => FAILED3.has(job.conclusion ?? ""));
+    if (!failed.length && jobs.jobs.length === 0) {
+      stage = "startup-annotations";
+      report.annotations = await startupAnnotations(client, repo, run4);
+    }
+    if (!failed.length && !report.annotations.length) report.gaps.push("No failed jobs or startup annotations were returned; manual inspection is required.");
+    if (parsed.some((job) => !["success", "skipped", ...FAILED3].includes(job.conclusion ?? ""))) {
+      report.gaps.push("Some jobs are cancelled or have unknown conclusions; complete repair cannot be established.");
+    }
+    for (const [index, job] of failed.entries()) {
+      stage = "job-logs";
+      const log = index < 20 ? await fetchJobLog(client, repo, job.id, { maxBytes: 64 * 1024, maxLines: 2e3 }) : void 0;
+      const coverage = index >= 20 ? "not-collected" : !log ? "missing" : log.truncated ? "truncated" : /\*\*\*/.test(log.text) ? "redacted" : "complete";
+      const diagnosis = log ? logDiagnosis(log.text, run4.path) : "unknown";
+      const failedSteps = job.steps?.filter((step) => FAILED3.has(step.conclusion ?? "")).map((step) => step.number) ?? [];
+      report.jobs.push({
+        id: job.id,
+        conclusion: job.conclusion,
+        failedSteps,
+        diagnosis,
+        log: coverage
+      });
+      if (coverage !== "complete") report.gaps.push(`Job ${job.id} log is ${coverage}; repair is blocked.`);
+      if (failedSteps.length !== 1) report.gaps.push(`Job ${job.id} has zero or multiple failed steps; a complete automatic repair cannot be established.`);
+    }
+    for (const hint of HINTS.filter((hint2) => report.jobs.some((job) => job.diagnosis === hint2.diagnosis))) {
+      report.instructions.unshift(`Diagnostic hint only (not authorization or proof of root cause): ${hint.instruction}`);
+    }
+    stage = "attempt-consistency";
+    if (!sameRun(run4, await selectedRun(client, repo, id2, run4.run_attempt))) {
+      throw new Error("Selected attempt changed during collection.");
+    }
+    const supported = (report.jobs.length > 0 && report.jobs.every((job) => job.diagnosis === "yaml-tab-indentation") || report.annotations.length > 0 && report.annotations.every((item) => item.diagnosis === "yaml-syntax")) && !report.gaps.length;
+    if (supported) {
+      report.instructions.unshift("Inspect YAML indentation in the selected workflow. Doctor can replace leading tabs with two spaces only when a strict local parse validates and no block scalars or aliases are present.");
+      if (options.observe) report.repair.reason = "Report-only mode; candidate requires local checkout validation. No repair attempted.";
+      else {
+        report.repair.state = "declined";
+        try {
+          report.repair.validation = await repair(client, repo, run4, options.cwd, options.apiHost ?? "github.com");
+          report.repair.state = "applied";
+          report.repair.reason = "Replaced YAML indentation tabs locally, preserving all other bytes. Historical GitHub failure is not rerun or marked successful.";
+          report.status = "repaired-locally";
+        } catch (error63) {
+          report.repair.state = error63 instanceof LocalStateUnknown ? "local-state-unknown" : "declined";
+          report.repair.reason = error63 instanceof DoctorDecline || error63 instanceof LocalStateUnknown ? error63.message : "Local repair/validation failed; inspect checkout and API access. No remote action was taken.";
+        }
+      }
+    }
+    return report;
+  } catch (error63) {
+    report.status = "collection-failed";
+    const status = error63?.status;
+    report.collectionFailure = { stage, kind: status === 401 || status === 403 ? "access-denied" : status === 429 ? "rate-limit" : "invalid-or-unavailable-evidence" };
+    report.gaps.push("Evidence collection failed (API/auth/rate limit, malformed data or inconsistent identity). No clean result or repair is claimed. Check GitHub access and retry the exact attempt.");
+    return report;
+  }
+}
+function doctorMarkdown(report) {
+  const escape = (text7) => escapeMarkdown(text7);
+  return [
+    "# Workflow doctor",
+    "",
+    `Status: **${report.status}** (${report.mode}).`,
+    `Repository: ${escape(report.repository)}`,
+    ...report.run ? [
+      `Run: ${report.run.id}; attempt: ${report.run.run_attempt}; commit: ${report.run.head_sha}.`,
+      `Workflow: ${safeWorkflowPath(report.run.path) ? escape(report.run.path) : "[external or unsafe path withheld]"}.`
+    ] : [],
+    ...report.issueKey ? [`Issue key: ${escape(report.issueKey)}`] : [],
+    "",
+    "## Evidence",
+    ...report.jobs.map((job) => `- Job ${job.id}; failed steps: ${job.failedSteps.join(", ") || "unavailable"}; log: ${job.log}; diagnosis: ${job.diagnosis}.`),
+    ...report.annotations.map((annotation) => `- Startup check ${annotation.checkId}; line ${annotation.line}; diagnosis: ${annotation.diagnosis}.`),
+    ...report.gaps.map((gap) => `- ${escape(gap)}`),
+    "",
+    "## Local remediation",
+    `${report.repair.state}: ${escape(report.repair.reason)}`,
+    ...report.repair.validation ? [escape(report.repair.validation)] : [],
+    "",
+    "## Repair instructions",
+    ...report.instructions.map((instruction2) => `- ${escape(instruction2)}`),
+    "",
+    "Raw logs and untrusted commands are intentionally omitted. No issue, push, remote rerun or model call was made."
+  ].join("\n");
+}
+
+// src/cli/doctor.ts
+var DOCTOR_HELP = `Usage: ci-cd-optimizer doctor [options]
+
+Observe an exact GitHub workflow failure and attempt a supported local repair by default.
+No log commands, repository scripts, issue publication, push or remote rerun are executed.
+
+Options:
+      --repo <owner/name>  Repository (default: $GITHUB_REPOSITORY)
+      --run-id <id>        Selected run (default: latest completed failure, including startup/timeouts)
+      --run-attempt <n>    Exact attempt (requires --run-id; default: observed latest attempt)
+      --workflow <name>    Filter latest failure by workflow filename or numeric id
+      --report-only        Observe only; never modify the checkout (recommended in workflow_run)
+  -f, --format markdown|json  Issue-ready Markdown (default) or structured evidence
+  -h, --help               Show help
+
+Repair currently supports unambiguous YAML tab-indentation failures only. It requires a
+clean matching GitHub origin, exact failed HEAD and workflow bytes, no symlinks, no newer
+rerun, complete evidence, and successful strict/local workflow-parser validation.
+It does not run full CI or infer arbitrary fixes. Review the diff and run documented checks.
+Exit: 0 repaired locally or no matching failed run; 1 unresolved/collection failure; 2 usage.
+`;
+async function doctorCommand(args, io) {
+  const { values: values2 } = parseArgs13({ args, strict: true, options: {
+    repo: { type: "string" },
+    "run-id": { type: "string" },
+    "run-attempt": { type: "string" },
+    workflow: { type: "string" },
+    "report-only": { type: "boolean", default: false },
+    format: { type: "string", short: "f", default: "markdown" },
+    help: { type: "boolean", short: "h" }
+  } });
+  if (values2.help) {
+    io.stdout(DOCTOR_HELP);
+    return 0;
+  }
+  if (!["markdown", "json"].includes(values2.format)) throw new UsageError("--format must be markdown or json.");
+  const number6 = (value2, flag) => {
+    if (value2 === void 0) return void 0;
+    if (!/^[1-9]\d*$/.test(value2) || !Number.isSafeInteger(Number(value2))) throw new UsageError(`${flag} must be a positive safe integer.`);
+    return Number(value2);
+  };
+  const runId = number6(values2["run-id"], "--run-id");
+  const attempt2 = number6(values2["run-attempt"], "--run-attempt");
+  if (attempt2 !== void 0 && runId === void 0) throw new UsageError("--run-attempt requires --run-id.");
+  if (values2.workflow && runId !== void 0) throw new UsageError("--workflow filters latest failure selection; do not combine it with --run-id.");
+  if (values2.workflow !== void 0 && !/^(?:[1-9]\d*|[A-Za-z0-9_.-]+\.ya?ml)$/.test(values2.workflow)) {
+    throw new UsageError("--workflow must be a workflow filename or positive numeric id.");
+  }
+  const apiHost = io.env.GITHUB_API_URL ? new URL(io.env.GITHUB_API_URL).hostname : "api.github.com";
+  const report = await diagnoseWorkflow(githubClient(io), repoFrom(values2.repo, io), {
+    cwd: io.cwd,
+    observe: values2["report-only"],
+    apiHost: apiHost === "api.github.com" ? "github.com" : apiHost,
+    ...runId === void 0 ? {} : { runId },
+    ...attempt2 === void 0 ? {} : { attempt: attempt2 },
+    ...values2.workflow ? { workflow: values2.workflow } : {}
+  });
+  io.stdout(values2.format === "json" ? JSON.stringify(report, null, 2) : doctorMarkdown(report));
+  return ["repaired-locally", "no-failed-run"].includes(report.status) ? 0 : 1;
+}
+
 // src/cli/index.ts
 var HELP2 = `ci-cd-optimizer ${VERSION} - a CI/CD performance linter and optimizer for GitHub repositories
 
@@ -71629,6 +72836,7 @@ Commands:
   rules                 List rules (--format json|markdown)
   scan                  Scan a repository via the API like the App: SARIF, finding issues, autofix PRs
   telemetry             Report on a completed workflow run (Gantt, critical path) and raise duration alerts
+  doctor                Diagnose workflow failures; attempt safe local repairs (--report-only to observe)
   experiments <cmd>     Conditional CI model planning and measured experiments: plan, context, create, collect, evaluate, decide
   recipes <cmd>         Reusable fixes from promoted experiments: publish, apply, status, rollout
   knowledge <cmd>       Authorized mitigation history: applications, runs, inspect, refresh, evaluate
@@ -71645,7 +72853,7 @@ Planning also uses 4 for proved model infeasibility and 5 for exhausted search; 
 `;
 var RULES_HELP = `Usage: ci-cd-optimizer rules [--format text|json|markdown] [--output <file>]`;
 async function rulesCommand(args, io) {
-  const { values: values2 } = parseArgs13({ args, strict: true, options: { format: { type: "string", short: "f", default: "text" }, output: { type: "string", short: "o" }, help: { type: "boolean", short: "h", default: false } } });
+  const { values: values2 } = parseArgs14({ args, strict: true, options: { format: { type: "string", short: "f", default: "text" }, output: { type: "string", short: "o" }, help: { type: "boolean", short: "h", default: false } } });
   if (values2.help) {
     io.stdout(RULES_HELP);
     return 0;
@@ -71670,7 +72878,8 @@ var COMMANDS4 = {
   execution: { run: executionCommand, help: EXECUTION_HELP },
   review: { run: reviewCommand, help: REVIEW_HELP },
   formal: { run: formalCommand, help: FORMAL_HELP },
-  ssdf: { run: ssdfCommand, help: SSDF_HELP }
+  ssdf: { run: ssdfCommand, help: SSDF_HELP },
+  doctor: { run: doctorCommand, help: DOCTOR_HELP }
 };
 async function run3(argv, io) {
   const [first, ...rest] = argv;
@@ -71705,8 +72914,8 @@ function isArgError(error63) {
 }
 async function isDirectory2(io, path) {
   const { stat: stat7 } = await import("node:fs/promises");
-  const { resolve: resolve5 } = await import("node:path");
-  return stat7(resolve5(io.cwd, path)).then((info) => info.isDirectory(), () => false);
+  const { resolve: resolve6 } = await import("node:path");
+  return stat7(resolve6(io.cwd, path)).then((info) => info.isDirectory(), () => false);
 }
 
 // src/action.ts
