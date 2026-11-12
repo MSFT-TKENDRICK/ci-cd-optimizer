@@ -38,9 +38,10 @@ Presets: `recommended`, `strict`, `agentic`, `github`, `insights`, `ssdf`, `all`
 | [`caching/pr-branch-cache-save`](#caching-pr-branch-cache-save) | insight | info | insights, strict |  | A workflow that only runs on `pull_request` saves caches no other pull request or branch can restore. |
 | [`caching/setup-cache`](#caching-setup-cache) | practice | warn | recommended, agentic | yes | Language setup actions should cache downloaded dependencies. |
 | [`caching/uncompressed-artifact-upload`](#caching-uncompressed-artifact-upload) | practice | info | recommended, agentic, strict |  | Artifacts that only contain already-compressed files should be uploaded with `compression-level: 0`. |
+| [`hermeticity/actions-lock`](#hermeticity-actions-lock) | practice | warn | strict |  | Use a verified workflow dependency lockfile as an alternative to SHA-pinning mutable action refs. |
 | [`hermeticity/docker-base-digest`](#hermeticity-docker-base-digest) | practice | warn | recommended, agentic, strict |  | Dockerfile base images should use pinned versions (and digests when required). |
 | [`hermeticity/frozen-lockfile`](#hermeticity-frozen-lockfile) | practice | error | recommended, agentic, strict | yes | CI installs must be locked to the committed lockfile. |
-| [`hermeticity/pin-actions`](#hermeticity-pin-actions) | practice | warn | strict |  | Third-party actions and reusable workflows should be pinned to a full commit SHA. |
+| [`hermeticity/pin-actions`](#hermeticity-pin-actions) | practice | warn | strict |  | Third-party actions and reusable workflows should use immutable references or a workflow dependency lockfile. |
 | [`hermeticity/pin-container-images`](#hermeticity-pin-container-images) | practice | warn | recommended, agentic, strict |  | Job containers and service containers should use pinned image versions. |
 | [`hermeticity/pin-runner`](#hermeticity-pin-runner) | practice | warn | recommended, agentic, strict | yes | Jobs should run on a pinned runner image label instead of `*-latest`. |
 | [`containers/apt-hygiene`](#containers-apt-hygiene) | practice | warn | recommended, agentic, strict | yes | apt and apk installs in Dockerfiles should skip recommended packages, update and install in one layer, and not leave package caches in the image. |
@@ -1094,6 +1095,40 @@ References:
 
 ## Ruleset: hermeticity
 
+<a id="hermeticity-actions-lock"></a>
+
+### hermeticity/actions-lock
+
+Use a verified workflow dependency lockfile as an alternative to SHA-pinning mutable action refs.
+
+**Why:** GitHub's generated actions.lock records commits for direct and transitive action dependencies and can replace mutable refs; full SHA pins remain a valid alternative. This rule checks direct workflow action refs against declared entries, not transitive closure, commit provenance, or runtime enforcement. Use the networked `gh actions-lock --verify` check and review lockfile diffs. The lockfile does not cover remote reusable workflows or container images.
+
+- Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
+- Kind: practice; default severity: warn; impact: low
+- Presets: `strict`
+
+Before:
+
+```yaml
+on: pull_request
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v7
+```
+
+After:
+
+```yaml
+Run `gh actions-lock` to generate `.github/workflows/actions.lock`, then run `gh actions-lock --verify` in CI.
+```
+
+References:
+
+- <https://docs.github.com/en/actions/concepts/security/workflow-dependency-lockfiles>
+- <https://docs.github.com/en/actions/how-tos/secure-your-work/lock-workflow-dependencies>
+- <https://github.com/github/gh-actions-lock>
+
 <a id="hermeticity-docker-base-digest"></a>
 
 ### hermeticity/docker-base-digest
@@ -1159,9 +1194,9 @@ References:
 
 ### hermeticity/pin-actions
 
-Third-party actions and reusable workflows should be pinned to a full commit SHA.
+Third-party actions and reusable workflows should use immutable references or a workflow dependency lockfile.
 
-**Why:** Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)
+**Why:** Tags and branches can be moved, so `@v4` may run different code tomorrow than today. Use a full-length commit SHA, or cover direct and transitive action dependencies in GitHub's workflow dependency lockfile. The lockfile does not cover reusable workflow calls or container images, and static analysis cannot verify provenance or reachability.
 
 - Assurance: Detector: heuristic, not formally proved. Recommendation: conditional, not a universal improvement guarantee. Severity precedence: machine-proved.
 - Kind: practice; default severity: warn; impact: low
@@ -1183,6 +1218,8 @@ After:
 References:
 
 - <https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions>
+- <https://docs.github.com/en/actions/concepts/security/workflow-dependency-lockfiles>
+- <https://github.com/github/gh-actions-lock>
 - <https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned-dependencies>
 - <https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot>
 

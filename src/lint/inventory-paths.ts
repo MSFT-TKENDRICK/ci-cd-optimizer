@@ -80,6 +80,7 @@ export const SKIP_DIRS: ReadonlySet<string> = new Set([".git", "node_modules", "
 export function isInventoryPath(path: string): boolean {
   if (path.split("/").slice(0, -1).some((part) => SKIP_DIRS.has(part))) return false;
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
+  if (path === ".github/workflows/actions.lock") return true;
   if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
   if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;
   if (/^(?:\.github\/|docs\/)?CODEOWNERS$/.test(path)) return true;

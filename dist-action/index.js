@@ -63,7 +63,7 @@ var require_identity = __commonJS({
     var isMap11 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === MAP;
     var isPair6 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === PAIR;
     var isScalar15 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SCALAR;
-    var isSeq8 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SEQ;
+    var isSeq9 = (node2) => !!node2 && typeof node2 === "object" && node2[NODE_TYPE] === SEQ;
     function isCollection(node2) {
       if (node2 && typeof node2 === "object")
         switch (node2[NODE_TYPE]) {
@@ -100,7 +100,7 @@ var require_identity = __commonJS({
     exports.isNode = isNode;
     exports.isPair = isPair6;
     exports.isScalar = isScalar15;
-    exports.isSeq = isSeq8;
+    exports.isSeq = isSeq9;
   }
 });
 
@@ -13907,6 +13907,9 @@ function classify(value2) {
   if (/^\$\{\{[\s\S]*\}\}$/.test(trimmed) && trimmed.indexOf("${{", 3) === -1) return "expression";
   return trimmed.includes("${{") ? "interpolated" : "literal";
 }
+function isMapNode(node2) {
+  return (0, import_yaml.isMap)(node2);
+}
 function parseErrors(source) {
   return source.doc.errors.map((error63) => ({
     line: error63.linePos?.[0]?.line ?? 1,
@@ -14399,6 +14402,17 @@ function commandsOf(step) {
   const script = step.run?.value;
   if (!script) return [];
   return splitShellCommands(script).map(({ command, offset }) => ({ command, line: runLine(step, offset) }));
+}
+function* runCommands(workflows) {
+  for (const workflow of workflows) {
+    for (const job of workflow.jobs) {
+      for (const step of job.steps) {
+        for (const { command, line } of commandsOf(step)) {
+          yield { workflow, job, step, command, line };
+        }
+      }
+    }
+  }
 }
 function* steps(workflows) {
   for (const workflow of workflows) {
@@ -19139,6 +19153,228 @@ var rules4 = [
   sleep_polling_health_check_default
 ];
 
+// src/lint/parsers/actions-lock.ts
+var import_yaml9 = __toESM(require_dist(), 1);
+var ACTIONS_LOCK_PATH = ".github/workflows/actions.lock";
+function isPositiveId(value2) {
+  if (typeof value2 === "number") return Number.isSafeInteger(value2) && value2 > 0;
+  return typeof value2 === "string" && /^[1-9]\d*$/.test(value2);
+}
+function normalizeActionRef(value2) {
+  const separator = value2.lastIndexOf("@");
+  if (separator < 0) return value2.toLowerCase();
+  return `${value2.slice(0, separator).toLowerCase()}@${value2.slice(separator + 1)}`;
+}
+function parseActionsLock(file2) {
+  const source = parseYaml(file2.path, file2.content);
+  const issues = parseErrors(source);
+  const workflows = /* @__PURE__ */ new Map();
+  const dependencies = /* @__PURE__ */ new Set();
+  const root = source.doc.contents;
+  if (issues.length > 0) return { issues, workflows, dependencies };
+  if (!isMapNode(root)) {
+    issues.push({ line: 1, message: "The actions lockfile must be a YAML mapping." });
+    return { issues, workflows, dependencies };
+  }
+  if (!stringValue(field(source, root, "version")?.value)) {
+    issues.push({ line: 1, message: "The actions lockfile must declare a non-empty `version`." });
+  }
+  const workflowField = field(source, root, "workflows");
+  if (!workflowField || !isMapNode(workflowField.value)) {
+    issues.push({ line: workflowField?.line ?? 1, message: "The actions lockfile must contain a `workflows` mapping." });
+  } else {
+    for (const entry2 of entries(source, workflowField.value)) {
+      const sequence = resolveNode(source, entry2.value).node;
+      if (!(0, import_yaml9.isSeq)(sequence)) {
+        issues.push({ line: entry2.line, message: `Lock entry for workflow \`${entry2.key}\` must be a list of action references.` });
+        continue;
+      }
+      const refs = /* @__PURE__ */ new Set();
+      for (const item of items(source, sequence)) {
+        const ref = stringValue(item);
+        if (!ref) {
+          issues.push({ line: entry2.line, message: `Lock entry for workflow \`${entry2.key}\` contains a non-string action reference.` });
+          continue;
+        }
+        refs.add(normalizeActionRef(ref));
+      }
+      workflows.set(entry2.key, { line: entry2.line, dependencies: refs });
+    }
+  }
+  const dependencyField = field(source, root, "dependencies");
+  if (!dependencyField || !isMapNode(dependencyField.value)) {
+    issues.push({ line: dependencyField?.line ?? 1, message: "The actions lockfile must contain a `dependencies` mapping." });
+  } else {
+    for (const entry2 of entries(source, dependencyField.value)) {
+      if (!isMapNode(entry2.value)) {
+        issues.push({ line: entry2.line, message: `Dependency \`${entry2.key}\` must have a metadata mapping.` });
+        continue;
+      }
+      const ref = stringValue(field(source, entry2.value, "ref")?.value);
+      const commit = stringValue(field(source, entry2.value, "commit")?.value);
+      const ownerId = scalarValue(field(source, entry2.value, "owner_id")?.value);
+      const repoId = scalarValue(field(source, entry2.value, "repo_id")?.value);
+      const separator = entry2.key.lastIndexOf("@");
+      if (separator <= 0 || !ref || entry2.key.slice(separator + 1) !== ref || !commit || !/^sha1-[0-9a-f]{40}$/i.test(commit) || !isPositiveId(ownerId) || !isPositiveId(repoId)) {
+        issues.push({
+          line: entry2.line,
+          message: `Dependency \`${entry2.key}\` must include a ref, a sha1 commit, and positive owner_id/repo_id values.`
+        });
+        continue;
+      }
+      dependencies.add(normalizeActionRef(entry2.key));
+    }
+  }
+  return { issues, workflows, dependencies };
+}
+function isActionLockCovered(lock, workflowPath2, actionRef) {
+  if (!lock || lock.issues.length > 0) return false;
+  const workflow = lock.workflows.get(workflowPath2);
+  const normalizedRef = normalizeActionRef(actionRef);
+  return workflow?.dependencies.has(normalizedRef) === true && lock.dependencies.has(normalizedRef);
+}
+
+// src/lint/rules/hermeticity/actions-lock.ts
+var VERIFY_SUGGESTION = "Run `gh actions-lock --verify` in a pull-request or push workflow; `--verify-local` checks coverage only, not provenance.";
+var UPDATE_SUGGESTION = "Run `gh actions-lock` from the repository root to update the generated lockfile, then review and commit it. Do not edit the file by hand.";
+function remoteActionSteps(workflow) {
+  return workflow.jobs.flatMap(
+    (job) => job.steps.flatMap((step) => {
+      const uses = step.uses;
+      return uses?.kind === "literal" && uses.action.kind === "remote" ? [{ step, ref: uses.value, shaPinned: uses.action.shaPinned }] : [];
+    })
+  );
+}
+function hasNetworkedVerification(workflows) {
+  for (const { workflow, command } of runCommands(workflows)) {
+    if (!hasTrigger(workflow, "pull_request", "pull_request_target", "merge_group", "push")) continue;
+    const normalized = command.trim().replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+)+/, "");
+    if (/^gh\s+actions-lock\s+--verify(?:\s|$)/i.test(normalized)) return true;
+  }
+  return false;
+}
+var actions_lock_default = defineRule({
+  meta: {
+    id: "hermeticity/actions-lock",
+    ruleset: "hermeticity",
+    description: "Use a verified workflow dependency lockfile as an alternative to SHA-pinning mutable action refs.",
+    rationale: "GitHub's generated actions.lock records commits for direct and transitive action dependencies and can replace mutable refs; full SHA pins remain a valid alternative. This rule checks direct workflow action refs against declared entries, not transitive closure, commit provenance, or runtime enforcement. Use the networked `gh actions-lock --verify` check and review lockfile diffs. The lockfile does not cover remote reusable workflows or container images.",
+    kind: "practice",
+    defaultSeverity: "warn",
+    presets: ["strict"],
+    requires: [],
+    defaultOptions: {},
+    references: [
+      "https://docs.github.com/en/actions/concepts/security/workflow-dependency-lockfiles",
+      "https://docs.github.com/en/actions/how-tos/secure-your-work/lock-workflow-dependencies",
+      "https://github.com/github/gh-actions-lock"
+    ],
+    impact: "low",
+    example: {
+      bad: "on: pull_request\njobs:\n  build:\n    steps:\n      - uses: actions/checkout@v7",
+      good: "Run `gh actions-lock` to generate `.github/workflows/actions.lock`, then run `gh actions-lock --verify` in CI."
+    }
+  },
+  check({ project, input: input3, isPathIgnored, report }) {
+    const completeInventory = input3.mode === "repository" && input3.inventoryComplete;
+    const lockFile = project.files.get(ACTIONS_LOCK_PATH);
+    for (const { workflow, command, line } of runCommands(project.workflows)) {
+      if (/\bgh\s+actions-lock\b/i.test(command) && /(?:^|\s)--accept-moved(?:\s|$)/i.test(command)) {
+        report({
+          path: workflow.path,
+          line,
+          key: "actions-lock.accept-moved",
+          message: "`gh actions-lock --accept-moved` can accept a moved or downgraded pin; do not use it in automation.",
+          suggestion: "Investigate the upstream ref movement and review the lockfile diff before updating it with the normal `gh actions-lock` command."
+        });
+      }
+    }
+    if (!lockFile) {
+      if (!completeInventory || isPathIgnored?.(ACTIONS_LOCK_PATH)) return;
+      for (const workflow of project.workflows) {
+        for (const { step, ref, shaPinned } of remoteActionSteps(workflow)) {
+          if (shaPinned) continue;
+          report({
+            path: workflow.path,
+            line: step.uses?.line ?? step.line,
+            key: `${step.key}.actions-lock`,
+            message: `Action \`${ref}\` is not covered by GitHub's workflow dependency lockfile.`,
+            suggestion: `${UPDATE_SUGGESTION} ${VERIFY_SUGGESTION}`
+          });
+        }
+      }
+      return;
+    }
+    const lock = parseActionsLock(lockFile);
+    for (const [index, issue2] of lock.issues.entries()) {
+      report({
+        path: ACTIONS_LOCK_PATH,
+        line: issue2.line,
+        key: `actions-lock.schema.${index}`,
+        message: issue2.message,
+        suggestion: UPDATE_SUGGESTION
+      });
+    }
+    if (lock.issues.length > 0) return;
+    for (const workflow of project.workflows) {
+      const actions = remoteActionSteps(workflow);
+      if (actions.length === 0) continue;
+      const lockedWorkflow = lock.workflows.get(workflow.path);
+      for (const { step, ref, shaPinned } of actions) {
+        if (shaPinned) continue;
+        const line = step.uses?.line ?? step.line;
+        if (!lockedWorkflow) {
+          report({
+            path: workflow.path,
+            line,
+            key: `${step.key}.actions-lock`,
+            message: `Workflow \`${workflow.path}\` is not onboarded in \`${ACTIONS_LOCK_PATH}\`; action \`${ref}\` is not locked.`,
+            suggestion: UPDATE_SUGGESTION
+          });
+        } else if (!lockedWorkflow.dependencies.has(normalizeActionRef(ref))) {
+          report({
+            path: workflow.path,
+            line,
+            key: `${step.key}.actions-lock`,
+            message: `Action \`${ref}\` is missing from this workflow's lockfile entry.`,
+            suggestion: UPDATE_SUGGESTION
+          });
+        } else if (!lock.dependencies.has(normalizeActionRef(ref))) {
+          report({
+            path: ACTIONS_LOCK_PATH,
+            line: lockedWorkflow.line,
+            key: `${step.key}.actions-lock-metadata`,
+            message: `Action \`${ref}\` has no valid dependency metadata in the lockfile.`,
+            suggestion: UPDATE_SUGGESTION
+          });
+        }
+      }
+    }
+    if (completeInventory) {
+      for (const [path, entry2] of lock.workflows) {
+        if (!project.files.has(path) && !isPathIgnored?.(path)) {
+          report({
+            path: ACTIONS_LOCK_PATH,
+            line: entry2.line,
+            key: `actions-lock.stale.${path}`,
+            message: `Lockfile entry refers to missing workflow \`${path}\`.`,
+            suggestion: "Run `gh actions-lock` without workflow path arguments so deleted workflow entries are pruned."
+          });
+        }
+      }
+      if (lock.workflows.size > 0 && !hasNetworkedVerification(project.workflows)) {
+        report({
+          path: ACTIONS_LOCK_PATH,
+          line: 1,
+          key: "actions-lock.verify",
+          message: "No pull-request or push workflow was found declaring the networked `gh actions-lock --verify` check.",
+          suggestion: VERIFY_SUGGESTION
+        });
+      }
+    }
+  }
+});
+
 // src/lint/parsers/dockerfile.ts
 function isDockerfilePath(path) {
   const name = path.split("/").pop() ?? path;
@@ -19400,7 +19636,7 @@ var frozen_lockfile_default = defineRule({
 });
 
 // src/lint/rules/hermeticity/pin-actions.ts
-var SUGGESTION2 = "Pin to the full 40-character commit SHA with a version comment, e.g. `uses: owner/repo@<sha> # v1.2.3`; Dependabot and Renovate keep SHA pins and their comments up to date.";
+var SUGGESTION2 = "Pin to the full 40-character commit SHA with a version comment, e.g. `uses: owner/repo@<sha> # v1.2.3`, or cover the action in `.github/workflows/actions.lock` and run `gh actions-lock --verify` in CI.";
 function describeRef(ref) {
   if (ref === void 0) return "has no ref";
   if (/^[0-9a-f]{7,39}$/i.test(ref)) return `uses a short SHA (\`${ref}\`) that can collide`;
@@ -19410,8 +19646,8 @@ var pin_actions_default = defineRule({
   meta: {
     id: "hermeticity/pin-actions",
     ruleset: "hermeticity",
-    description: "Third-party actions and reusable workflows should be pinned to a full commit SHA.",
-    rationale: "Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)",
+    description: "Third-party actions and reusable workflows should use immutable references or a workflow dependency lockfile.",
+    rationale: "Tags and branches can be moved, so `@v4` may run different code tomorrow than today. Use a full-length commit SHA, or cover direct and transitive action dependencies in GitHub's workflow dependency lockfile. The lockfile does not cover reusable workflow calls or container images, and static analysis cannot verify provenance or reachability.",
     kind: "practice",
     defaultSeverity: "warn",
     presets: ["strict"],
@@ -19420,6 +19656,8 @@ var pin_actions_default = defineRule({
     validateOptions: (options) => "ignoreOwners" in options && (!Array.isArray(options.ignoreOwners) || !options.ignoreOwners.every((owner) => typeof owner === "string")) ? ["ignoreOwners must be an array of strings"] : [],
     references: [
       "https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions",
+      "https://docs.github.com/en/actions/concepts/security/workflow-dependency-lockfiles",
+      "https://github.com/github/gh-actions-lock",
       "https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned-dependencies",
       "https://docs.github.com/en/code-security/dependabot/working-with-dependabot/keeping-your-actions-up-to-date-with-dependabot"
     ],
@@ -19430,6 +19668,8 @@ var pin_actions_default = defineRule({
     }
   },
   check({ project, options, report }) {
+    const lockFile = project.files.get(ACTIONS_LOCK_PATH);
+    const actionsLock = lockFile ? parseActionsLock(lockFile) : void 0;
     const ignored2 = new Set(options.ignoreOwners.map((owner) => owner.toLowerCase()));
     const skip2 = (owner) => owner !== void 0 && ignored2.has(owner);
     for (const workflow of [...project.workflows, ...project.actions]) {
@@ -19458,7 +19698,7 @@ var pin_actions_default = defineRule({
               message: `Docker action image \`${action.raw}\` is not pinned to an \`@sha256:\` digest.`,
               suggestion: "Pin the image by digest, e.g. `docker://alpine:3.22@sha256:<digest>`."
             });
-          } else if (action.kind === "remote" && !action.shaPinned && !skip2(action.owner)) {
+          } else if (action.kind === "remote" && !action.shaPinned && !isActionLockCovered(actionsLock, workflow.path, action.raw) && !skip2(action.owner)) {
             report({
               path: workflow.path,
               line: uses.line,
@@ -19522,7 +19762,7 @@ var pin_container_images_default = defineRule({
 });
 
 // src/lint/rules/hermeticity/pin-runner.ts
-var import_yaml9 = __toESM(require_dist(), 1);
+var import_yaml11 = __toESM(require_dist(), 1);
 var LATEST = /^(ubuntu|windows|macos)-latest$/i;
 var MATRIX_REF = /^\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}$/;
 function escapeRegExp(text7) {
@@ -19540,7 +19780,7 @@ function runsOnLabels(source, jobNode7, job) {
   let node2 = runsOn.value;
   let key2 = `${job.key}.runs-on`;
   let direct2 = runsOn.origin === "direct";
-  if ((0, import_yaml9.isMap)(node2)) {
+  if ((0, import_yaml11.isMap)(node2)) {
     if (field(source, node2, "group")) return void 0;
     const labels = field(source, node2, "labels");
     if (!labels?.value) return [];
@@ -19548,29 +19788,29 @@ function runsOnLabels(source, jobNode7, job) {
     key2 += ".labels";
     direct2 &&= labels.origin === "direct";
   }
-  if ((0, import_yaml9.isScalar)(node2)) {
+  if ((0, import_yaml11.isScalar)(node2)) {
     const value2 = stringValue(node2);
     return value2 === void 0 ? [] : [{ node: node2, value: value2, key: key2, direct: direct2 }];
   }
-  if (!(0, import_yaml9.isSeq)(node2)) return [];
+  if (!(0, import_yaml11.isSeq)(node2)) return [];
   return node2.items.flatMap((raw, index) => {
     const resolved = resolveNode(source, raw).node;
-    const value2 = (0, import_yaml9.isScalar)(resolved) ? stringValue(resolved) : void 0;
-    return resolved && value2 !== void 0 ? [{ node: resolved, value: value2, key: `${key2}[${index}]`, direct: direct2 && !(0, import_yaml9.isAlias)(raw) }] : [];
+    const value2 = (0, import_yaml11.isScalar)(resolved) ? stringValue(resolved) : void 0;
+    return resolved && value2 !== void 0 ? [{ node: resolved, value: value2, key: `${key2}[${index}]`, direct: direct2 && !(0, import_yaml11.isAlias)(raw) }] : [];
   });
 }
 function matrixValues(source, jobNode7, job, name) {
   const matrix = field(source, field(source, jobNode7, "strategy")?.value, "matrix")?.value;
   const result = [];
   const axis = field(source, matrix, name)?.value;
-  const axisNodes = (0, import_yaml9.isSeq)(resolveNode(source, axis).node) ? items(source, axis) : axis ? [axis] : [];
+  const axisNodes = (0, import_yaml11.isSeq)(resolveNode(source, axis).node) ? items(source, axis) : axis ? [axis] : [];
   axisNodes.forEach((node2, index) => {
-    const value2 = (0, import_yaml9.isScalar)(node2) ? stringValue(node2) : void 0;
+    const value2 = (0, import_yaml11.isScalar)(node2) ? stringValue(node2) : void 0;
     if (value2 !== void 0) result.push({ node: node2, value: value2, key: `${job.key}.strategy.matrix.${name}[${index}]`, direct: false });
   });
   items(source, field(source, matrix, "include")?.value).forEach((entry2, index) => {
     const node2 = field(source, entry2, name)?.value;
-    const value2 = (0, import_yaml9.isScalar)(node2) ? stringValue(node2) : void 0;
+    const value2 = (0, import_yaml11.isScalar)(node2) ? stringValue(node2) : void 0;
     if (node2 && value2 !== void 0) result.push({ node: node2, value: value2, key: `${job.key}.strategy.matrix.include[${index}].${name}`, direct: false });
   });
   return result;
@@ -19646,7 +19886,7 @@ var pin_runner_default = defineRule({
 });
 
 // src/lint/rules/hermeticity/index.ts
-var rules5 = [docker_base_digest_default, frozen_lockfile_default, pin_actions_default, pin_container_images_default, pin_runner_default];
+var rules5 = [actions_lock_default, docker_base_digest_default, frozen_lockfile_default, pin_actions_default, pin_container_images_default, pin_runner_default];
 
 // src/utils.ts
 function matchesGlob(path, glob) {
@@ -22849,7 +23089,7 @@ var fetchtarball_no_hash_default = defineRule({
 import { posix as posix3 } from "node:path";
 
 // src/lint/rules/toolchains/shared.ts
-var import_yaml12 = __toESM(require_dist(), 1);
+var import_yaml14 = __toESM(require_dist(), 1);
 function context(project, workflow, job) {
   const entries3 = expandedJobSteps(project, workflow, job);
   const commands = entries3.flatMap(
@@ -22977,13 +23217,13 @@ function effectiveEnv(ctx, entry2, command) {
   return env;
 }
 function child(node2, key2) {
-  if (!(0, import_yaml12.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml12.isPair)(item) && (0, import_yaml12.isScalar)(item.key) && String(item.key.value) === key2);
+  if (!(0, import_yaml14.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml14.isPair)(item) && (0, import_yaml14.isScalar)(item.key) && String(item.key.value) === key2);
   return pair?.value;
 }
 function keyLine(workflow, map2, key2) {
-  if (!(0, import_yaml12.isMap)(map2)) return void 0;
-  const pair = map2.items.find((item) => (0, import_yaml12.isPair)(item) && (0, import_yaml12.isScalar)(item.key) && String(item.key.value) === key2);
+  if (!(0, import_yaml14.isMap)(map2)) return void 0;
+  const pair = map2.items.find((item) => (0, import_yaml14.isPair)(item) && (0, import_yaml14.isScalar)(item.key) && String(item.key.value) === key2);
   return pair ? lineOfNode(workflow.source, pair.key) : void 0;
 }
 function envKeyLine(workflow, scope2, key2) {
@@ -22994,7 +23234,7 @@ function envKeyLine(workflow, scope2, key2) {
   if (!match2) return void 0;
   const parent = match2[1] !== void 0 ? child(child(root, "jobs"), match2[1]) : child(root, "runs");
   const stepsNode = child(parent, "steps");
-  if (!(0, import_yaml12.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml14.isSeq)(stepsNode)) return void 0;
   return keyLine(workflow, child(stepsNode.items[Number(match2[2])], "env"), key2);
 }
 function envSource(project, ctx, command, name) {
@@ -25334,7 +25574,7 @@ A restored store is another option; include platform and Nix compatibility in it
 });
 
 // src/lint/rules/nix/no-lock-update-automation.ts
-var import_yaml14 = __toESM(require_dist(), 1);
+var import_yaml16 = __toESM(require_dist(), 1);
 var DEPENDABOT = /^\.github\/dependabot\.ya?ml$/;
 var RENOVATE_CONFIG = /^(?:\.github\/|\.gitlab\/)?(?:renovate\.json5?|\.renovaterc(?:\.json5?)?)$/;
 var BUILT_IN_PRESETS = /* @__PURE__ */ new Set([
@@ -25477,7 +25717,7 @@ function manualUpdateWorkflow(workflows) {
 function dependabotNixCoverage(content2) {
   let config2;
   try {
-    config2 = (0, import_yaml14.parse)(content2);
+    config2 = (0, import_yaml16.parse)(content2);
   } catch {
     return "unknown";
   }
@@ -26983,7 +27223,7 @@ var version_drift_default = defineRule({
 var rules7 = [exports_map_default, files_allowlist_default, monolith_default, version_drift_default];
 
 // src/lint/rules/redundancy/shared.ts
-var import_yaml15 = __toESM(require_dist(), 1);
+var import_yaml17 = __toESM(require_dist(), 1);
 var SETUP_ACTIONS = {
   "actions/setup-node": { version: "node-version", versionFiles: ["node-version-file"] },
   "actions/setup-python": { version: "python-version", versionFiles: ["python-version-file"] },
@@ -27040,12 +27280,12 @@ function stepSignature(workflow, job, step) {
   ].join("\0");
 }
 function directChild2(node2, key2) {
-  if (!(0, import_yaml15.isMap)(node2)) return void 0;
-  return node2.items.find((item) => (0, import_yaml15.isPair)(item) && (0, import_yaml15.isScalar)(item.key) && String(item.key.value) === key2);
+  if (!(0, import_yaml17.isMap)(node2)) return void 0;
+  return node2.items.find((item) => (0, import_yaml17.isPair)(item) && (0, import_yaml17.isScalar)(item.key) && String(item.key.value) === key2);
 }
 function jobNode(workflow, job) {
   const node2 = directChild2(directChild2(workflow.source.doc.contents, "jobs")?.value, job.id)?.value;
-  return (0, import_yaml15.isMap)(node2) ? node2 : void 0;
+  return (0, import_yaml17.isMap)(node2) ? node2 : void 0;
 }
 function stepNode(workflow, step) {
   const match2 = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -27053,18 +27293,18 @@ function stepNode(workflow, step) {
   const root = workflow.source.doc.contents;
   const parent = match2[1] !== void 0 ? directChild2(directChild2(root, "jobs")?.value, match2[1])?.value : directChild2(root, "runs")?.value;
   const stepsNode = directChild2(parent, "steps")?.value;
-  if (!(0, import_yaml15.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml17.isSeq)(stepsNode)) return void 0;
   const node2 = stepsNode.items[Number(match2[2])];
-  return (0, import_yaml15.isMap)(node2) ? node2 : void 0;
+  return (0, import_yaml17.isMap)(node2) ? node2 : void 0;
 }
 function nestedPair(parent, mapKey, key2) {
   const map2 = directChild2(parent, mapKey)?.value;
-  if (!(0, import_yaml15.isMap)(map2)) return void 0;
+  if (!(0, import_yaml17.isMap)(map2)) return void 0;
   const pair = directChild2(map2, key2);
   return pair ? { map: map2, pair } : void 0;
 }
 function rawScalar(content2, node2) {
-  if (!(0, import_yaml15.isScalar)(node2) || !node2.range) return void 0;
+  if (!(0, import_yaml17.isScalar)(node2) || !node2.range) return void 0;
   const text7 = content2.slice(node2.range[0], node2.range[1]).trim();
   const quoted = /^(["'])([\s\S]*)\1$/.exec(text7);
   return quoted ? quoted[2] : text7;
@@ -27405,19 +27645,19 @@ var repeated_job_setup_default = defineRule({
 });
 
 // src/lint/rules/redundancy/shadowed-env.ts
-var import_yaml16 = __toESM(require_dist(), 1);
+var import_yaml18 = __toESM(require_dist(), 1);
 function entry(workflow, file2, parent, key2) {
   const found = nestedPair(parent, "env", key2);
-  if (!found || !(0, import_yaml16.isScalar)(found.pair.value)) return void 0;
+  if (!found || !(0, import_yaml18.isScalar)(found.pair.value)) return void 0;
   const raw = rawScalar(file2.content, found.pair.value);
   if (raw === void 0) return void 0;
-  const owner = (0, import_yaml16.isMap)(parent) ? parent.items.find((item) => item.value === found.map) : void 0;
+  const owner = (0, import_yaml18.isMap)(parent) ? parent.items.find((item) => item.value === found.map) : void 0;
   return { map: found.map, owner, pair: found.pair, raw, line: lineOfNode(workflow.source, found.pair.key) };
 }
 function removal(workflow, file2, inner) {
   if (inner.map.flow) return void 0;
   const value2 = inner.pair.value;
-  if (!(0, import_yaml16.isScalar)(value2) || !value2.range) return void 0;
+  if (!(0, import_yaml18.isScalar)(value2) || !value2.range) return void 0;
   if (lineOfNode(workflow.source, value2) !== inner.line) return void 0;
   const valueEnd = workflow.source.lineCounter.linePos(value2.range[1]).line;
   if (valueEnd !== inner.line) return void 0;
@@ -28129,7 +28369,7 @@ var github_npm_default = defineRule({
 var rules9 = [ghcr_default, github_npm_default];
 
 // src/lint/rules/security/shared.ts
-var import_yaml19 = __toESM(require_dist(), 1);
+var import_yaml21 = __toESM(require_dist(), 1);
 var PRIVILEGED_TRIGGERS = ["pull_request_target", "workflow_run", "issue_comment"];
 function isPrivileged(workflow) {
   return workflow.kind === "workflow" && hasTrigger(workflow, ...PRIVILEGED_TRIGGERS);
@@ -28268,9 +28508,9 @@ function executesWorkspace(step) {
   }
 }
 function directChild3(node2, key2) {
-  if (!(0, import_yaml19.isMap)(node2)) return void 0;
-  const pair = node2.items.find((item) => (0, import_yaml19.isPair)(item) && (0, import_yaml19.isScalar)(item.key) && String(item.key.value) === key2);
-  return pair && !(0, import_yaml19.isAlias)(pair.value) ? pair.value : void 0;
+  if (!(0, import_yaml21.isMap)(node2)) return void 0;
+  const pair = node2.items.find((item) => (0, import_yaml21.isPair)(item) && (0, import_yaml21.isScalar)(item.key) && String(item.key.value) === key2);
+  return pair && !(0, import_yaml21.isAlias)(pair.value) ? pair.value : void 0;
 }
 function directStep(workflow, step) {
   const match2 = /^(?:jobs\.([^.]+)\.steps|runs\.steps)\[(\d+)\]$/.exec(step.key);
@@ -28278,10 +28518,10 @@ function directStep(workflow, step) {
   const root = rootNode2(workflow);
   const parent = match2[1] !== void 0 ? directChild3(directChild3(root, "jobs"), match2[1]) : directChild3(root, "runs");
   const stepsNode = directChild3(parent, "steps");
-  if (!(0, import_yaml19.isSeq)(stepsNode)) return void 0;
+  if (!(0, import_yaml21.isSeq)(stepsNode)) return void 0;
   const node2 = stepsNode.items[Number(match2[2])];
-  if (!(0, import_yaml19.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
-  if (node2.items.some((pair) => !(0, import_yaml19.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
+  if (!(0, import_yaml21.isMap)(node2) || node2.flow || lineOfNode(workflow.source, node2) !== step.line) return void 0;
+  if (node2.items.some((pair) => !(0, import_yaml21.isScalar)(pair.key) || pair.key.value === "<<")) return void 0;
   return node2;
 }
 
@@ -28647,9 +28887,9 @@ var mutable_remote_ref_default = defineRule({
 });
 
 // src/lint/rules/security/persisted-credentials.ts
-var import_yaml21 = __toESM(require_dist(), 1);
+var import_yaml23 = __toESM(require_dist(), 1);
 var UPLOAD_ACTIONS = ["actions/upload-artifact", "actions/upload-artifact/merge"];
-var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml21.Scalar.PLAIN, import_yaml21.Scalar.QUOTE_DOUBLE, import_yaml21.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE = /* @__PURE__ */ new Set([import_yaml23.Scalar.PLAIN, import_yaml23.Scalar.QUOTE_DOUBLE, import_yaml23.Scalar.QUOTE_SINGLE]);
 var WORKSPACE_ROOT = /^(?:\.\/?|\$\{\{\s*github\.workspace\s*\}\}\/?)$/;
 function uploadsGitDirectory(step, file2) {
   if (!usesAction(step, ...UPLOAD_ACTIONS)) return false;
@@ -28673,7 +28913,7 @@ function addPersistCredentials(file2, workflow, step) {
   const description = "Set persist-credentials: false";
   if (step.with.size > 0 || step.uses?.kind !== "literal") {
     const withNode = directWith(workflow, step);
-    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value !== "<<");
+    const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml23.isScalar)(pair.key) && pair.key.value !== "<<");
     const first = pairs[0];
     const last = pairs[pairs.length - 1];
     if (!first || !last) return void 0;
@@ -28681,14 +28921,14 @@ function addPersistCredentials(file2, workflow, step) {
     const indent2 = indentOf(file2.content, firstLine);
     const lastLine = lineOfNode(workflow.source, last.key);
     const value2 = last.value;
-    const endsOnKeyLine = (0, import_yaml21.isScalar)(value2) && SINGLE_LINE.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
+    const endsOnKeyLine = (0, import_yaml23.isScalar)(value2) && SINGLE_LINE.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
     const line = `${indent2}persist-credentials: false`;
     return fix(description, insertLinesAfter(file2, endsOnKeyLine ? lastLine : firstLine - 1, [line]));
   }
   const node2 = directStep(workflow, step);
-  if (!node2 || node2.items.some((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
-  const usesPair = node2.items.find((pair) => (0, import_yaml21.isScalar)(pair.key) && pair.key.value === "uses");
-  if (!usesPair || !(0, import_yaml21.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
+  if (!node2 || node2.items.some((pair) => (0, import_yaml23.isScalar)(pair.key) && pair.key.value === "with")) return void 0;
+  const usesPair = node2.items.find((pair) => (0, import_yaml23.isScalar)(pair.key) && pair.key.value === "uses");
+  if (!usesPair || !(0, import_yaml23.isScalar)(usesPair.value) || !SINGLE_LINE.has(usesPair.value.type)) return void 0;
   const usesLine = lineOfNode(workflow.source, usesPair.key);
   const text7 = lineText(file2.content, usesLine);
   const match2 = /^(\s*)(-\s+)?uses\s*:/.exec(text7);
@@ -29677,7 +29917,7 @@ var tool_incremental_cache_default = defineRule({
 });
 
 // src/lint/rules/testing/unconditional-debug-upload.ts
-var import_yaml24 = __toESM(require_dist(), 1);
+var import_yaml26 = __toESM(require_dist(), 1);
 var DEBUG_PATH = /(^|[/\\])(?:playwright-report|test-results|traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)/i;
 var HEAVY_PATH = /(^|[/\\])(?:traces?|videos?|screenshots?|cypress\/(?:videos|screenshots))([/\\*]|$)|\.(?:zip|webm|mp4|png)$/i;
 var MACHINE_READABLE = /junit|\.(?:xml|json|trx|sarif|lcov)$|coverage/i;
@@ -29751,7 +29991,7 @@ var unconditional_debug_upload_default = defineRule({
         const file2 = project.files.get(workflow.path);
         const first = file2 ? lineText(file2.content, step.line) : "";
         const dash = /^(\s*)-\s+[\w-]+:/.exec(first);
-        if (file2 && dash && (0, import_yaml24.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
+        if (file2 && dash && (0, import_yaml26.isMap)(node2) && !node2.flow && lineOfNode(workflow.source, node2) === step.line && !/[|>][-+0-9]*\s*(#.*)?$/.test(first)) {
           applied = fix("Upload only when the job fails", insertLinesAfter(file2, step.line, [`${dash[1] ?? ""}  if: failure()`]));
         }
       }
@@ -32119,9 +32359,9 @@ var rules14 = [
 ];
 
 // src/lint/rules/workflow/artifact-retention.ts
-var import_yaml31 = __toESM(require_dist(), 1);
+var import_yaml33 = __toESM(require_dist(), 1);
 var UPLOAD_ACTIONS2 = /* @__PURE__ */ new Set(["actions/upload-artifact", "actions/upload-artifact/merge"]);
-var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml31.Scalar.PLAIN, import_yaml31.Scalar.QUOTE_DOUBLE, import_yaml31.Scalar.QUOTE_SINGLE]);
+var SINGLE_LINE2 = /* @__PURE__ */ new Set([import_yaml33.Scalar.PLAIN, import_yaml33.Scalar.QUOTE_DOUBLE, import_yaml33.Scalar.QUOTE_SINGLE]);
 function retentionDays(value2) {
   if (typeof value2 === "number") return value2;
   if (typeof value2 === "string" && /^\s*\d+\s*$/.test(value2)) return Number(value2);
@@ -32129,7 +32369,7 @@ function retentionDays(value2) {
 }
 function addRetention(file2, workflow, step, days) {
   const withNode = directWith(workflow, step);
-  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml31.isScalar)(pair.key) && pair.key.value !== "<<");
+  const pairs = (withNode?.items ?? []).filter((pair) => (0, import_yaml33.isScalar)(pair.key) && pair.key.value !== "<<");
   const first = pairs[0];
   const last = pairs[pairs.length - 1];
   if (!first || !last) return void 0;
@@ -32137,7 +32377,7 @@ function addRetention(file2, workflow, step, days) {
   const indent = indentOf(file2.content, firstLine);
   const lastLine = lineOfNode(workflow.source, last.key);
   const value2 = last.value;
-  const endsOnKeyLine = (0, import_yaml31.isScalar)(value2) && SINGLE_LINE2.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
+  const endsOnKeyLine = (0, import_yaml33.isScalar)(value2) && SINGLE_LINE2.has(value2.type) && value2.range !== void 0 && value2.range !== null && workflow.source.lineCounter.linePos(Math.max(value2.range[0], value2.range[1] - 1)).line === lastLine;
   const line = `${indent}retention-days: ${days}`;
   return fix(
     `Set retention-days: ${days}`,
@@ -32586,7 +32826,7 @@ var larger_runner_unjustified_default = defineRule({
 });
 
 // src/lint/rules/workflow/matrix-explosion.ts
-var import_yaml35 = __toESM(require_dist(), 1);
+var import_yaml37 = __toESM(require_dist(), 1);
 var LIMIT = 256;
 var ENUMERATION_CAP = 5e4;
 var isPrimitive2 = (value2) => value2 === null || ["string", "number", "boolean"].includes(typeof value2);
@@ -32598,7 +32838,7 @@ function records2(value2) {
 }
 function scalarTexts(source, content2, node2) {
   const nodes = items(source, node2);
-  const texts = nodes.map((item) => (0, import_yaml35.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
+  const texts = nodes.map((item) => (0, import_yaml37.isScalar)(item) && item.range ? content2.slice(item.range[0], item.range[1]) : void 0);
   const flowSafe = (text7) => text7 !== void 0 && !text7.includes("\n") && (/^["']/.test(text7) || !/[,[\]{}]/.test(text7));
   return texts.every(flowSafe) ? texts : void 0;
 }
@@ -33100,7 +33340,7 @@ Inspect ${tool2.rangeFiles.join(" and ")} before reusing them: constraints may a
 });
 
 // src/lint/rules/workflow/unnecessary-needs-serialization.ts
-var import_yaml38 = __toESM(require_dist(), 1);
+var import_yaml40 = __toESM(require_dist(), 1);
 var DEPLOY = /deploy|release|publish|promote|rollout|ship/i;
 var GATE = /test|lint|build|check|verify|validat|typecheck|compile|scan|audit|\bci\b|e2e|smoke|format|fmt|analy|codeql|security|review|approv|gate|guard|preflight|sanity|wait|lock|migrat|provision|setup-env|infra/i;
 var STANDARD_RUNNER = /^(ubuntu|windows|macos)-(latest|\d[\w.]*)(-arm|-intel)?$/;
@@ -33156,7 +33396,7 @@ function needsLine(workflow, job, dependency) {
   const source = workflow.source;
   const needs = field(source, jobNode6(workflow, job), "needs");
   if (!needs) return job.line;
-  const item = items(source, needs.value).find((node2) => (0, import_yaml38.isScalar)(node2) && String(node2.value) === dependency);
+  const item = items(source, needs.value).find((node2) => (0, import_yaml40.isScalar)(node2) && String(node2.value) === dependency);
   return item ? lineOfNode(source, item) : needs.line;
 }
 function standardHosted(job) {
@@ -33770,6 +34010,23 @@ var RULE_ASSURANCE = {
       "optionalModelCertificates": []
     },
     {
+      "id": "hermeticity/actions-lock",
+      "metadataSha256": "efd22beb8a127a67ccfc99acab8e3854f55f6524dd761f040a0f79f97217afbf",
+      "detector": {
+        "assurance": "heuristic-not-formally-proved",
+        "claim": "Use a verified workflow dependency lockfile as an alternative to SHA-pinning mutable action refs."
+      },
+      "recommendation": {
+        "assurance": "conditional-not-universally-proved",
+        "rationale": "GitHub's generated actions.lock records commits for direct and transitive action dependencies and can replace mutable refs; full SHA pins remain a valid alternative. This rule checks direct workflow action refs against declared entries, not transitive closure, commit provenance, or runtime enforcement. Use the networked `gh actions-lock --verify` check and review lockfile diffs. The lockfile does not cover remote reusable workflows or container images."
+      },
+      "autofix": "not-provided",
+      "engineContracts": [
+        "severity-last-assignment-wins"
+      ],
+      "optionalModelCertificates": []
+    },
+    {
       "id": "hermeticity/docker-base-digest",
       "metadataSha256": "0315481c809df21356dd5fd7985c1b56c16e05d813979912cab7ed7247adf3a7",
       "detector": {
@@ -33805,14 +34062,14 @@ var RULE_ASSURANCE = {
     },
     {
       "id": "hermeticity/pin-actions",
-      "metadataSha256": "428a509988c70abef3b8ea941952d3929df6d906cae55412ee2e4a8a0a1c22ac",
+      "metadataSha256": "c57bea354d3c12551f1a8c9ff2ac7d9bc7573ea65a1a31a8b4d3ab94f22c719e",
       "detector": {
         "assurance": "heuristic-not-formally-proved",
-        "claim": "Third-party actions and reusable workflows should be pinned to a full commit SHA."
+        "claim": "Third-party actions and reusable workflows should use immutable references or a workflow dependency lockfile."
       },
       "recommendation": {
         "assurance": "conditional-not-universally-proved",
-        "rationale": "Tags and branches can be moved, so `@v4` may run different code tomorrow than today, which breaks reproducibility and is a supply-chain risk. A full-length commit SHA is immutable. (OpenSSF Scorecard also treats a tag backed by an immutable release as pinned, but most action tags are not immutable releases and this cannot be verified offline.)"
+        "rationale": "Tags and branches can be moved, so `@v4` may run different code tomorrow than today. Use a full-length commit SHA, or cover direct and transitive action dependencies in GitHub's workflow dependency lockfile. The lockfile does not cover reusable workflow calls or container images, and static analysis cannot verify provenance or reachability."
       },
       "autofix": "not-provided",
       "engineContracts": [
@@ -35519,7 +35776,7 @@ function assuranceText(id2) {
 }
 
 // src/lint/config.ts
-var import_yaml40 = __toESM(require_dist(), 1);
+var import_yaml42 = __toESM(require_dist(), 1);
 
 // node_modules/bignumber.js/bignumber.mjs
 var isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
@@ -40265,7 +40522,7 @@ function validateConfig(input3, rules16) {
 function parseConfigText(text7, rules16, path = CONFIG_PATHS[0] ?? "config") {
   let raw;
   try {
-    raw = (0, import_yaml40.parse)(text7, { maxAliasCount: 100 });
+    raw = (0, import_yaml42.parse)(text7, { maxAliasCount: 100 });
   } catch (error63) {
     return {
       config: structuredClone(DEFAULT_CONFIG),
@@ -40377,6 +40634,7 @@ var SKIP_DIRS = /* @__PURE__ */ new Set([".git", "node_modules", ".pnpm-store", 
 function isInventoryPath(path) {
   if (path.split("/").slice(0, -1).some((part2) => SKIP_DIRS.has(part2))) return false;
   if (/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(path)) return true;
+  if (path === ".github/workflows/actions.lock") return true;
   if (/^\.github\/ci-cd-optimizer\.ya?ml$/.test(path)) return true;
   if (/^\.github\/(dependabot\.ya?ml|renovate\.json5?)$/.test(path)) return true;
   if (/^(?:\.github\/|docs\/)?CODEOWNERS$/.test(path)) return true;
@@ -40689,7 +40947,7 @@ function renderRulesMarkdown(rules16) {
 var VERSION = "0.2.0";
 
 // src/cli/experiments.ts
-var import_yaml46 = __toESM(require_dist(), 1);
+var import_yaml48 = __toESM(require_dist(), 1);
 import { appendFile, readdir as readdir3, readFile as readFile4, stat as stat5 } from "node:fs/promises";
 import { join as join7 } from "node:path";
 import { parseArgs as parseArgs3 } from "node:util";
@@ -41073,7 +41331,7 @@ function decodeCiEvidence(value2) {
 }
 
 // src/experiments/manifest.ts
-var import_yaml42 = __toESM(require_dist(), 1);
+var import_yaml44 = __toESM(require_dist(), 1);
 var EXPERIMENT_PREFIX = "experiments/";
 var TRUNK = "trunk";
 var NAME2 = /^[a-z0-9][a-z0-9-]{1,47}$/;
@@ -41171,13 +41429,13 @@ function validateManifest(input3, options = {}) {
 }
 function parseManifest2(text7, options = {}) {
   try {
-    return validateManifest((0, import_yaml42.parse)(text7), options);
+    return validateManifest((0, import_yaml44.parse)(text7), options);
   } catch (error63) {
     return { problems: [{ path: "experiment.yml", message: error63.message }] };
   }
 }
 function serializeManifest(manifest) {
-  return (0, import_yaml42.stringify)(manifest, { lineWidth: 0 });
+  return (0, import_yaml44.stringify)(manifest, { lineWidth: 0 });
 }
 function scoreRubric(scores, rubric) {
   const total = rubric.criteria.reduce((sum2, criterion) => sum2 + criterion.weight, 0) || 1;
@@ -41265,7 +41523,7 @@ function reduceCandidates(candidates2, minimum, influence, running, expired) {
 }
 
 // src/experiments/config.ts
-var import_yaml43 = __toESM(require_dist(), 1);
+var import_yaml45 = __toESM(require_dist(), 1);
 var HILL_CLIMB_CONFIG_PATH = ".github/hill-climb.yml";
 var CORPUS_METRICS = ["precision", "recall", "f1", "fixRate", "durationMs"];
 var DEFAULT_RUBRIC = {
@@ -41390,7 +41648,7 @@ function validateHillClimbConfig(input3) {
 function parseHillClimbConfig(text7) {
   if (text7 === void 0) return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [] };
   try {
-    const raw = (0, import_yaml43.parse)(text7);
+    const raw = (0, import_yaml45.parse)(text7);
     return validateHillClimbConfig(raw ?? {});
   } catch (error63) {
     return { config: structuredClone(DEFAULT_HILL_CLIMB_CONFIG), problems: [{ path: HILL_CLIMB_CONFIG_PATH, message: error63.message }] };
@@ -41724,7 +41982,7 @@ function mergeMeasurement(measurements, update2) {
 }
 
 // src/experiments/corpus.ts
-var import_yaml44 = __toESM(require_dist(), 1);
+var import_yaml46 = __toESM(require_dist(), 1);
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join as join2, relative as relative2, sep } from "node:path";
 var ratio = (numerator, denominator) => denominator === 0 ? 1 : numerator / denominator;
@@ -41832,7 +42090,7 @@ async function walk(root, directory = root) {
   return files.flat().sort();
 }
 function parseCase(id2, text7, files) {
-  const raw = (0, import_yaml44.parse)(text7) ?? {};
+  const raw = (0, import_yaml46.parse)(text7) ?? {};
   const expected = Array.isArray(raw.expected) ? raw.expected.map((entry2) => {
     const item = entry2;
     if (typeof item.rule !== "string" || typeof item.path !== "string") throw new Error(`${id2}: expected entries need rule and path`);
@@ -42555,7 +42813,7 @@ function parseMeasurements(text7) {
 }
 
 // src/experiments/propose.ts
-var import_yaml45 = __toESM(require_dist(), 1);
+var import_yaml47 = __toESM(require_dist(), 1);
 
 // src/formal/generated/manifest.ts
 var PROOF_BUILD = {
@@ -42567,7 +42825,7 @@ var PROOF_BUILD = {
   "translatorOutputSha256": "5ecf8ba65e344f559afd725db29c7758cc3c6ac915db5226dd57b22619868492",
   "generatedSha256": "4671d663638a25d876371283bc8f947c63218c0d8846fa348fe8db3cfa2c3aa7",
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
-  "implementationSha256": "6afe44f53111ac1a120dbf97c94a5027d893243d8cfed214c76b523a5504a2f6",
+  "implementationSha256": "77264370b1d4e5eb0f5a91863f2312ec329d2464dd4f9550f7f39eb7cfd8c9b2",
   "generatorSha256": "ea737477f2d148397dbd83697441713e2f12a542ce95f706181ff9563fb64699",
   "dependenciesSha256": "39c33e3b1d17aaf0a88b203b52a4df8464f100affdc3ad9f79e6766914e13f3f"
 };
@@ -42729,7 +42987,7 @@ function validateProposal(text7, options) {
   const expiresAt = new Date(now2.getTime() + options.config.selection.maxAgeDays * DAY2).toISOString();
   let raw;
   try {
-    raw = (0, import_yaml45.parse)(text7);
+    raw = (0, import_yaml47.parse)(text7);
   } catch (error63) {
     return { errors: [`manifest: ${error63.message}`] };
   }
@@ -43779,7 +44037,7 @@ function structured(value2) {
   try {
     return JSON.parse(value2);
   } catch {
-    return (0, import_yaml46.parse)(value2);
+    return (0, import_yaml48.parse)(value2);
   }
 }
 async function measurementFiles(io, path) {
@@ -45009,7 +45267,7 @@ function classifyIssueOutcome(issue2) {
 }
 
 // src/recipes/recipe.ts
-var import_yaml47 = __toESM(require_dist(), 1);
+var import_yaml49 = __toESM(require_dist(), 1);
 var RECIPES_DIR = "recipes";
 var RECIPE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 var MAX_PATCH_CHARS = 6e4;
@@ -45101,7 +45359,7 @@ function buildRecipe(options) {
   return { recipe, changed: serializeRecipe(recipe) !== serializeRecipe(previous2) };
 }
 function serializeRecipe(recipe) {
-  return (0, import_yaml47.stringify)(recipe, { lineWidth: 0 });
+  return (0, import_yaml49.stringify)(recipe, { lineWidth: 0 });
 }
 var isRecord4 = (value2) => typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 var strings2 = (value2) => Array.isArray(value2) ? value2.filter((item) => typeof item === "string") : [];
@@ -45109,7 +45367,7 @@ var num = (value2) => typeof value2 === "number" && Number.isFinite(value2) ? va
 function parseRecipe(text7) {
   let raw;
   try {
-    raw = (0, import_yaml47.parse)(text7, { maxAliasCount: 100 });
+    raw = (0, import_yaml49.parse)(text7, { maxAliasCount: 100 });
   } catch (error63) {
     return { problems: [`Invalid YAML: ${error63.message}`] };
   }
@@ -45342,7 +45600,7 @@ function recipeIssue(recipe, plan, options) {
 
 // src/knowledge/extract.ts
 init_identity();
-var import_yaml48 = __toESM(require_dist(), 1);
+var import_yaml50 = __toESM(require_dist(), 1);
 var packageName3 = /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 var managers = /* @__PURE__ */ new Set(["npm", "pnpm", "yarn", "bun"]);
 var toolFiles = {
@@ -45473,7 +45731,7 @@ function extractKnowledge(repository, revision, input3, options = {}) {
   if (pnpm && truncated.has(pnpm.path)) problem(pnpm.path, "truncated-workspace-config");
   else if (pnpm) {
     try {
-      const parsed = (0, import_yaml48.parseDocument)(pnpm.content, { uniqueKeys: true });
+      const parsed = (0, import_yaml50.parseDocument)(pnpm.content, { uniqueKeys: true });
       if (parsed.errors.length) throw new Error("Invalid workspace YAML");
       const value2 = parsed.toJS();
       addWorkspace(record4(value2) ? value2.packages : void 0, pnpm, "/packages");
@@ -45872,14 +46130,14 @@ async function recipeStatus(client, target, recipe, server = "https://github.com
 }
 
 // src/recipes/rollout.ts
-var import_yaml49 = __toESM(require_dist(), 1);
+var import_yaml51 = __toESM(require_dist(), 1);
 var DEFAULT_ROLLOUT = { waves: [1, 3, "25%", "100%"], minSamples: 5, minCompatibility: 0.7 };
 var REPO_NAME = /^[\w.-]+\/[\w.-]+$/;
 function parseRolloutTargets(text7) {
   const problems = [];
   let raw;
   try {
-    raw = (0, import_yaml49.parse)(text7);
+    raw = (0, import_yaml51.parse)(text7);
   } catch (error63) {
     return { repositories: [], canaries: [], config: DEFAULT_ROLLOUT, problems: [`Invalid YAML: ${error63.message}`] };
   }
@@ -68472,7 +68730,7 @@ function escapeCell(value2) {
 }
 
 // src/telemetry/snapshot.ts
-var import_yaml50 = __toESM(require_dist(), 1);
+var import_yaml52 = __toESM(require_dist(), 1);
 init_history();
 function isExternalCheckRun(job, key2) {
   return key2 === void 0 && !job.runner_id && !job.runner_name && !job.steps?.length && typeof job.html_url === "string" && !/\/actions\/runs\/\d+\/job\/\d+/.test(job.html_url);
@@ -68483,7 +68741,7 @@ function workflowPath(path) {
 function parseJobDefinitions(text7) {
   let document;
   try {
-    document = (0, import_yaml50.parse)(text7);
+    document = (0, import_yaml52.parse)(text7);
   } catch {
     return /* @__PURE__ */ new Map();
   }
@@ -69827,7 +70085,7 @@ function capComment(body, max2 = MAX_COMMENT_LENGTH) {
 }
 
 // src/review/project.ts
-var import_yaml51 = __toESM(require_dist(), 1);
+var import_yaml53 = __toESM(require_dist(), 1);
 var PROJECT_FILE = "project.yaml";
 var PROJECT_MAX_BYTES = 8 * 1024;
 var NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -69843,7 +70101,7 @@ function parseStrictYaml(text7, maxBytes, label2) {
   if (/^%/m.test(text7)) return { problems: [`${label2} must not contain YAML directives (lines starting with %).`] };
   let documents;
   try {
-    documents = (0, import_yaml51.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
+    documents = (0, import_yaml53.parseAllDocuments)(text7, { uniqueKeys: true, merge: false, version: "1.2", prettyErrors: true });
   } catch (error63) {
     return { problems: [`${label2} is not valid YAML (${describeValue(error63 instanceof Error ? error63.message : String(error63))}).`] };
   }
@@ -69856,20 +70114,20 @@ function parseStrictYaml(text7, maxBytes, label2) {
   for (const issue2 of [...document.errors, ...document.warnings]) {
     problems.push(`${label2} is not valid YAML: ${issue2.code} at line ${issue2.linePos?.[0]?.line ?? "?"}.`);
   }
-  if (!(0, import_yaml51.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
-  (0, import_yaml51.visit)(document, {
+  if (!(0, import_yaml53.isMap)(document.contents)) problems.push(`${label2} must be a YAML mapping at the top level.`);
+  (0, import_yaml53.visit)(document, {
     Alias() {
       problems.push(`${label2} must not use YAML aliases (*name).`);
-      return import_yaml51.visit.BREAK;
+      return import_yaml53.visit.BREAK;
     },
     Node(_key, node2) {
       if (node2.anchor) problems.push(`${label2} must not use YAML anchors (&name).`);
       if (node2.tag) problems.push(`${label2} must not use YAML tags (${describeValue(node2.tag)}).`);
     },
     Pair(_key, pair) {
-      if (!(0, import_yaml51.isScalar)(pair.key) || typeof pair.key.value !== "string") {
+      if (!(0, import_yaml53.isScalar)(pair.key) || typeof pair.key.value !== "string") {
         problems.push(`${label2} keys must be plain strings.`);
-        return import_yaml51.visit.SKIP;
+        return import_yaml53.visit.SKIP;
       }
       if (pair.key.value === "<<") problems.push(`${label2} must not use YAML merge keys (<<).`);
       return void 0;
@@ -70065,6 +70323,7 @@ async function verifyConsent(client, project, options) {
 
 // src/review/report.ts
 var SENSITIVE_RULES = /* @__PURE__ */ new Set([
+  "hermeticity/actions-lock",
   "hermeticity/pin-actions",
   "hermeticity/pin-container-images",
   "hermeticity/docker-base-digest",
@@ -70860,37 +71119,37 @@ import { readFile as readFile8 } from "node:fs/promises";
 import { parseArgs as parseArgs11 } from "node:util";
 
 // src/formal/cache-key.ts
-var import_yaml52 = __toESM(require_dist(), 1);
+var import_yaml54 = __toESM(require_dist(), 1);
 var CONTEXTS = ["sha", "run_id", "run_number", "run_attempt", "ref", "event_name"];
 function extractCacheKey(source, job, step) {
-  const document = (0, import_yaml52.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
+  const document = (0, import_yaml54.parseDocument)(source.content, { uniqueKeys: true, keepSourceTokens: true });
   if (document.errors.length || document.warnings.length) throw new Error("Workflow YAML must parse without errors or warnings.");
-  (0, import_yaml52.visit)(document, (_key, node2) => {
-    if ((0, import_yaml52.isAlias)(node2)) throw new Error("YAML aliases are outside the extraction contract.");
-    if ((0, import_yaml52.isMap)(node2) && node2.items.some((pair) => (0, import_yaml52.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
+  (0, import_yaml54.visit)(document, (_key, node2) => {
+    if ((0, import_yaml54.isAlias)(node2)) throw new Error("YAML aliases are outside the extraction contract.");
+    if ((0, import_yaml54.isMap)(node2) && node2.items.some((pair) => (0, import_yaml54.isScalar)(pair.key) && pair.key.value === "<<")) throw new Error("YAML merge keys are outside the extraction contract.");
   });
   const jobs = document.get("jobs", true);
-  if (!(0, import_yaml52.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
+  if (!(0, import_yaml54.isMap)(jobs)) throw new Error("Workflow must have a literal jobs mapping.");
   const selected = jobs.get(job, true);
-  if (!(0, import_yaml52.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
+  if (!(0, import_yaml54.isMap)(selected)) throw new Error(`Unknown workflow job: ${job}`);
   const steps2 = selected.get("steps", true);
-  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml52.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
+  if (!Number.isSafeInteger(step) || step < 0 || !(0, import_yaml54.isSeq)(steps2)) throw new Error("Step must be a nonnegative index in a literal steps array.");
   const action = steps2.items[step];
-  if (!(0, import_yaml52.isMap)(action)) throw new Error("Selected step is not a mapping.");
+  if (!(0, import_yaml54.isMap)(action)) throw new Error("Selected step is not a mapping.");
   const uses = action.get("uses", true);
-  if (!(0, import_yaml52.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
+  if (!(0, import_yaml54.isScalar)(uses) || typeof uses.value !== "string" || !/^actions\/cache(?:\/(?:restore|save))?@[a-zA-Z0-9._/-]+$/.test(uses.value)) {
     throw new Error("Selected step must use a literal actions/cache, actions/cache/restore or actions/cache/save reference.");
   }
   const inputs = action.get("with", true);
-  if (!(0, import_yaml52.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
+  if (!(0, import_yaml54.isMap)(inputs)) throw new Error("Cache inputs must be a literal mapping.");
   const inputNames = inputs.items.map((pair) => {
-    if (!(0, import_yaml52.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
+    if (!(0, import_yaml54.isScalar)(pair.key) || typeof pair.key.value !== "string") throw new Error("Cache input names must be literal strings.");
     return pair.key.value.toLowerCase();
   });
   if (new Set(inputNames).size !== inputNames.length) throw new Error("Case-colliding cache input names are unsupported.");
   if (inputNames.includes("restore-keys") || inputNames.includes("enablecrossosarchive")) throw new Error("restore-keys and cross-OS archive inputs are outside this model.");
   const key2 = inputs.get("key", true);
-  if (!(0, import_yaml52.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
+  if (!(0, import_yaml54.isScalar)(key2) || typeof key2.value !== "string" || !key2.range) throw new Error("Cache key must be a literal YAML string containing only supported expressions.");
   scalarString(key2.value);
   const [start2, end] = key2.range;
   return {

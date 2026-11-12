@@ -116,6 +116,8 @@ describe("runIntake", () => {
     expect(outcome.report?.status).toBe("ok");
     expect(outcome.report?.redacted.rules).toContain("hermeticity/pin-actions");
     expect(outcome.report?.findings.some((finding) => finding.ruleId === "hermeticity/pin-actions")).toBe(false);
+    expect(outcome.report?.redacted.rules).toContain("hermeticity/actions-lock");
+    expect(outcome.report?.findings.some((finding) => finding.ruleId === "hermeticity/actions-lock")).toBe(false);
     expect(outcome.report?.findings.length).toBeGreaterThan(0);
     expect(outcome.markdown).toContain("<!-- ci-cd-optimizer-review:widget -->");
     expect(outcome.markdown).not.toContain("actions/checkout");
