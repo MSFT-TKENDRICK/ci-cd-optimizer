@@ -1,5 +1,18 @@
 # CI/CD Optimizer
 
+[![CI](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/ci.yml)
+[![Container](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/container.yml/badge.svg?branch=main)](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/container.yml)
+[![Daily self-apply](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/cicd-optimizer-daily.yml/badge.svg)](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/cicd-optimizer-daily.yml)
+[![Telemetry](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/cicd-optimizer-telemetry.yml/badge.svg)](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/actions/workflows/cicd-optimizer-telemetry.yml)
+[![Release](https://img.shields.io/github/v/release/MSFT-TKENDRICK/ci-cd-optimizer?sort=semver)](https://github.com/MSFT-TKENDRICK/ci-cd-optimizer/releases)
+[![License: MIT](https://img.shields.io/github/license/MSFT-TKENDRICK/ci-cd-optimizer)](LICENSE)
+[![Node.js 22+](https://img.shields.io/badge/node-%3E%3D22-339933?logo=nodedotjs&logoColor=white)](.nvmrc)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](agents/maf/)
+
+[![Install the GitHub Action](https://img.shields.io/badge/GitHub%20Action-install-2ea44f?logo=githubactions&logoColor=white)](#add-the-github-action)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FMSFT-TKENDRICK%2Fci-cd-optimizer%2Fmain%2Finfra%2Fazure%2Fazuredeploy.json)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/MSFT-TKENDRICK/ci-cd-optimizer)
+
 CI/CD Optimizer is Dependabot for build and release performance. It lints GitHub Actions workflows, Dockerfiles,
 Nix expressions and flakes, and package/toolchain configuration for declared build practices and potential improvements:
 hermeticity, caching, dependency layers,
@@ -28,6 +41,8 @@ reviews other projects' CI/CD from a pull request and publishes signed daily rep
 | — | Telemetry reports: Gantt timeline, job dependency graph, critical path, slowest steps, and bounded log-backed bottleneck evidence with coverage gaps |
 
 - [Ways to use it](#ways-to-use-it)
+  - [Add the GitHub Action](#add-the-github-action)
+  - [Deploy the agent to Azure](#deploy-the-agent-to-azure)
 - [Scanning pull requests](#scanning-pull-requests)
 - [Reviewing other projects, OSS-Fuzz style](#reviewing-other-projects-oss-fuzz-style)
 - [What it finds](#what-it-finds)
@@ -48,6 +63,7 @@ reviews other projects' CI/CD from a pull request and publishes signed daily rep
 |---|---|---|---|
 | **Developer-agent plugin** | Canonical optimization/triage/run-analysis skills and a bundled read-only MCP server | [Install the plugin](docs/agents.md#canonical-plugin-and-skills); Node.js 22+, no build needed | [agents.md](docs/agents.md) |
 | **MCP / ACP** | Local workspace tools/commands and exact previews; opt-in GitHub reads and authenticated hosted ACP | `cicd-mcp --root <workspace>`, `cicd-acp`, or [hosted configuration](docs/agents.md#hosted-acp-on-your-own-app-deployment) | [agents.md](docs/agents.md) |
+| **Microsoft Agent Framework agent** | The plugin's agent on MAF with Agent Lightning tracing: chat, an authenticated HTTP service, benchmarks, and three hill-climbing tracks | `python -m cicd_agent chat` in `agents/maf`, or [Deploy to Azure](#deploy-the-agent-to-azure) | [maf-agent.md](docs/maf-agent.md) |
 | **`cicd-lint`** | Offline linter for a checkout: paths, globs, stdin, `--base` diffs, `--fix`, SARIF, suppressions, local rules | `cicd-lint` after [installing the CLI](#install-the-cli) | [linter.md](docs/linter.md) |
 | **`ci-cd-optimizer` CLI** | Every command in the [table below](#cli-commands), from a terminal or any CI system | `ci-cd-optimizer <command>`, or `npm run cli -- <command>` in a clone | `ci-cd-optimizer help <command>` |
 | **GitHub Action** | Any CLI command as a workflow step, selected with `command:` (default `lint`) | `uses: MSFT-TKENDRICK/ci-cd-optimizer@<full commit SHA>` | [action.yml](action.yml), [examples](examples/workflows/) |
@@ -60,8 +76,49 @@ reviews other projects' CI/CD from a pull request and publishes signed daily rep
 | **Review program** | OSS-Fuzz-style registration of a public repository, an intake review on the pull request, and signed daily re-reviews | a pull request that adds `projects/<name>/project.yaml` | [review program](docs/review-program/README.md) |
 | **Experiments and recipes** | Agentic hill climbing on rules and pipelines, and wave rollout of winning fixes to other repositories | the workflows in [.github/workflows](.github/workflows/) | [experiments.md](docs/experiments.md), [recipes.md](docs/recipes.md) |
 
-There is no public hosted App and the package is not published to npm. Run the App on your own infrastructure, and
-install the CLI from a clone.
+There is no public hosted App or agent, and the package is not published to npm. Run the App on your own
+infrastructure, deploy the agent to your own Azure subscription, and install the CLI from a clone.
+
+### Add the GitHub Action
+
+Copy [`cicd-optimizer-lint.yml`](examples/workflows/cicd-optimizer-lint.yml) to `.github/workflows/` in any
+repository. It reports only the findings a pull request introduces, as inline annotations, and needs no App or
+secrets:
+
+```yaml
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - uses: MSFT-TKENDRICK/ci-cd-optimizer@v0 # or pin a full commit SHA
+        with:
+          args: >-
+            --base ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+            --format github
+            --fail-on error
+```
+
+The Action is not listed on the GitHub Marketplace; reference it by repository. `v0` predates several features, so
+see [Versions and pinning](#versions-and-pinning). Other ready-made workflows (scheduled scan, run telemetry, SARIF
+upload) are in [examples/workflows](examples/workflows/).
+
+### Deploy the agent to Azure
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FMSFT-TKENDRICK%2Fci-cd-optimizer%2Fmain%2Finfra%2Fazure%2Fazuredeploy.json)
+
+The button deploys the [Microsoft Agent Framework agent](docs/maf-agent.md) to Azure Container Apps in a resource
+group you choose. It builds the image from this repository with ACR Tasks, creates (or reuses) an Azure OpenAI
+deployment reached with a managed identity, and serves `/chat` behind a bearer API key that you supply. It creates
+billable resources; see [Deploy to Azure](docs/maf-agent.md#deploy-to-azure) for parameters, outputs, quota and
+cost notes.
 
 ### Install the CLI
 
@@ -406,6 +463,8 @@ What is exercised continuously in this repository, and what is not yet:
 | Recipe publish and rollout | Not yet run here: no promoted pipeline experiment exists. |
 | Review intake from a fork | Designed for it (fail-closed trusted status), not yet exercised with an outside submission. |
 | MCP App setup panel | Works in the stand-in host (`npm run preview:mcp`); not yet validated in Copilot Desktop. |
+| Microsoft Agent Framework agent | Unit, benchmark-harness and template contract tests run in CI, and the container is built and smoke-tested for health and authentication. Live benchmark results on Azure OpenAI are in [maf-agent.md](docs/maf-agent.md#results). |
+| Deploy to Azure | The ARM template is compiled from Bicep and checked for drift in CI. An ARM preflight and an end-to-end portal deployment have not been run from this repository. |
 | npm package | Not published; [install from a clone](#install-the-cli). |
 
 ## Tokens and permissions
@@ -445,6 +504,9 @@ npm run formal:setup    # install the SHA-256-pinned Dafny/Z3 distribution
 npm run formal:check    # verify theorems and check deterministic source/runtime regeneration
 npm run cli -- experiments evaluate --engine dist/lint/api.js --corpus corpus   # benchmark
 ```
+
+The Microsoft Agent Framework agent needs Python 3.12; its tests, benchmarks and the `npm run azure:template:check`
+drift check are described in [maf-agent.md › Development](docs/maf-agent.md#development).
 
 Postgres integration tests run when `DATABASE_URL` is set. Use only a disposable test database: they create/drop
 isolated schemas, and readiness permission tests create a temporary NOLOGIN role (requiring `CREATEROLE`) and remove

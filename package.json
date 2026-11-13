@@ -32,6 +32,8 @@
     "check:ui": "node scripts/build-setup-ui.mjs --check",
     "bundle": "node scripts/bundle.mjs action",
     "bundle:agents": "node scripts/bundle.mjs agents",
+    "azure:template": "node scripts/azure-template.mjs",
+    "azure:template:check": "node scripts/azure-template.mjs --check",
     "ci:prepare": "npm run build:dashboard && npm run assurance:generate && npm run formal:generate && npm run bundle:agents && npm run bundle && npm run build:ui",
     "ci:check-generated": "npm run assurance:check && npm run formal:check && node scripts/build-dashboard-ui.mjs --check && node scripts/bundle.mjs all --check && npm run check:ui",
     "cli": "tsx src/bin.ts",

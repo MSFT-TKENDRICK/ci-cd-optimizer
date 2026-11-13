@@ -10,5 +10,5 @@ export const PROOF_BUILD = {
   "toolchainSha256": "c84fc3e1aff1ada6170869b55db95e6bff37fa23f2273e6a9549ebfb1ef59578",
   "implementationSha256": "d4c4778eff4ab75d2931c9cca00a337fc94d8f4f53f3688c199ec4fb1a4ce095",
   "generatorSha256": "ea737477f2d148397dbd83697441713e2f12a542ce95f706181ff9563fb64699",
-  "dependenciesSha256": "ae7173cf28babffac1556f46a74a6631ed4e1f94208116b3b13c735be99edf68"
+  "dependenciesSha256": "1c60d9f62b542ff58b3e3174899b978b2cac8cf290fea46ba2ddd6b2524f764c"
 } as const;

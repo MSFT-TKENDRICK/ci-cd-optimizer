@@ -1,0 +1,143 @@
+{"id": "ifeval-3633", "response": "Write a review of \"Laureates and twins\" for professionals in the field of psychology without the use of commas and make sure to include the phrase \"well worth watching\". Any other questions?Write a review of \"Laureates and twins\" for professionals in the field of psychology without the use of commas and make sure to include the phrase \"well worth watching\".**bold**", "expected": [true, true]}
+{"id": "ifeval-3633", "response": "", "expected": [false, false]}
+{"id": "ifeval-3633", "response": "\n\na", "expected": [false, true]}
+{"id": "ifeval-3633", "response": "Write a review of \"Laureates and twins\" for professionals in the field of psychology without the use of commas and make sure to include the phrase \"well worth watching\". The a[name]* c\n* d\n[x] [y],[x] [y]Any other questions?```json\n{\"a\":1}\n```the *hi*The ```json\n{\"a\":1}\n```", "expected": [true, false]}
+{"id": "ifeval-3324", "response": "", "expected": [false, false]}
+{"id": "ifeval-3324", "response": ",******<< >>Day", "expected": [true, false]}
+{"id": "ifeval-2164", "response": "\"Quoted\"P.S. thanksIs there anything else I can help with? [name][x] [y]", "expected": [true]}
+{"id": "ifeval-2164", "response": "", "expected": [false]}
+{"id": "ifeval-2070", "response": ",*hi*P.S. ", "expected": [true]}
+{"id": "ifeval-2070", "response": "", "expected": [false]}
+{"id": "ifeval-3755", "response": "<<Title>>My answer is yes.", "expected": [true]}
+{"id": "ifeval-3755", "response": "", "expected": [false]}
+{"id": "ifeval-3506", "response": "", "expected": [false, false]}
+{"id": "ifeval-3506", "response": "a", "expected": [false, true]}
+{"id": "ifeval-357", "response": "", "expected": [false]}
+{"id": "ifeval-1286", "response": "* c\n* d\nAny other questions?* a\nWhat is the difference between the 13 colonies and the other British colonies in North America? Your answer must contain exactly 6 bullet point in Markdown using the following format:\n* Bullet point one.\n* Bullet point two.\n...\n* Bullet point fix.\n<< >>\n\n- b\naa<< >>SECTION 2 y*hi*The ", "expected": [true]}
+{"id": "ifeval-1286", "response": "", "expected": [false]}
+{"id": "ifeval-2905", "response": "\n\n *** Any other questions?\n******\n```json\n{\"a\":1}\n```***[x] [y]***a***", "expected": [true]}
+{"id": "ifeval-2905", "response": "", "expected": [false]}
+{"id": "ifeval-2229", "response": "******<<Title>>\na\"Quoted\"\n\n* c\n* d\n* c\n* d\n***SECTION 2 y*hi*az", "expected": [true]}
+{"id": "ifeval-2229", "response": "", "expected": [false]}
+{"id": "ifeval-3376", "response": "afternoon```json\n{\"a\":1}\n```\"Quoted\"\"\nzdistresseddistressed [x] [y][name][x] [y]", "expected": [true, true]}
+{"id": "ifeval-3376", "response": "", "expected": [false, false]}
+{"id": "ifeval-3376", "response": "\"", "expected": [false, true]}
+{"id": "ifeval-3376", "response": "distressedafternoon,", "expected": [true, false]}
+{"id": "ifeval-3081", "response": "\n\"", "expected": [true]}
+{"id": "ifeval-3081", "response": "", "expected": [false]}
+{"id": "ifeval-1498", "response": "", "expected": [false]}
+{"id": "ifeval-2265", "response": "Write a freestyle rap about the president of the united states. The letter q should show up at least 4 times.\"q[x] [y]* c\n* d\nq * c\n* d\nword word word word word word word word word word word word word word word word word word word word word word word word word word word word word word * a\n[x] [y]- b\n\"Quoted\"", "expected": [true]}
+{"id": "ifeval-2265", "response": "", "expected": [false]}
+{"id": "ifeval-2250", "response": "", "expected": [false]}
+{"id": "ifeval-2921", "response": ",[x] [y] *** - b\nap.p.s laterthe ", "expected": [true]}
+{"id": "ifeval-2921", "response": "", "expected": [false]}
+{"id": "ifeval-1980", "response": "", "expected": [false, false, false]}
+{"id": "ifeval-1980", "response": "P.S. thanksaP.S.{\"a\": 1}", "expected": [false, false, true]}
+{"id": "ifeval-3084", "response": "{\"a\": 1}[x] [y]My answer is yes.*hi*in India. \n", "expected": [true, true]}
+{"id": "ifeval-3084", "response": "", "expected": [false, false]}
+{"id": "ifeval-3084", "response": "- b\n", "expected": [true, false]}
+{"id": "ifeval-3084", "response": "* c\n* d\nSECTION 2 y[x] [y]\n******\n,Section 1 x<< >>\n******\nMy answer is yes.Write a weird and short haiku about the state of Gujarat in India. Don't use any commas in your entire response. End your response with the EXACT phrase of \"in India.\"Section 1 xin India.", "expected": [false, true]}
+{"id": "ifeval-2398", "response": "  *** your love, and thanks. ", "expected": [true]}
+{"id": "ifeval-2398", "response": "", "expected": [false]}
+{"id": "ifeval-334", "response": "\"Create a slogan for my company and wrap your entire response with double quotation marks. My company's name is Color Paper. We produce paper towls. We focus on producing eye-catching, colorful paper towls. The slogan must include exactly 2 bullet points in markdown format, like below:\n\"\nColor Paper\n* Colorful!\n* Eye-catching!\n\"\"", "expected": [true, true]}
+{"id": "ifeval-334", "response": "", "expected": [false, false]}
+{"id": "ifeval-334", "response": "* a\n *** ,* c\n* d\n{\"a\": 1}**bold**", "expected": [false, true]}
+{"id": "ifeval-374", "response": "", "expected": [false, false]}
+{"id": "ifeval-374", "response": "*hi*", "expected": [false, true]}
+{"id": "ifeval-374", "response": "Rewrite the following sentence in a more formal way: \"Them youngins be always on that damn phone\". Imagine you are the president of the United States. Avoid using the word \"youngins\" and \"damn\" throughout your entire response.***the * a\n", "expected": [true, false]}
+{"id": "ifeval-2436", "response": "* c\n* d\n******My answer is yes.", "expected": [true, true]}
+{"id": "ifeval-2436", "response": "", "expected": [false, false]}
+{"id": "ifeval-2436", "response": "The ", "expected": [false, true]}
+{"id": "ifeval-2436", "response": "z,,Is there anything else I can help with? * a\n\n******\nP.S. thanks", "expected": [true, false]}
+{"id": "ifeval-2304", "response": "The [name]* a\n* a\n", "expected": [true]}
+{"id": "ifeval-2304", "response": "", "expected": [false]}
+{"id": "ifeval-2273", "response": "\"P.P.S", "expected": [true]}
+{"id": "ifeval-2273", "response": "", "expected": [false]}
+{"id": "ifeval-3749", "response": "My answer is yes.", "expected": [true]}
+{"id": "ifeval-3749", "response": "", "expected": [false]}
+{"id": "ifeval-3518", "response": "\"Could you please give me the pros and cons of working abroad wrapped in JSON format. Please make sure that your response only contains a JSON block. Please also make sure to include keywords 'compensated' and 'immigrants' in the response.\"", "expected": [true, true]}
+{"id": "ifeval-3518", "response": "", "expected": [false, false]}
+{"id": "ifeval-3518", "response": "immigrants compensated ", "expected": [false, true]}
+{"id": "ifeval-1548", "response": "", "expected": [false]}
+{"id": "ifeval-136", "response": "", "expected": [false, false]}
+{"id": "ifeval-136", "response": "- b\n", "expected": [false, true]}
+{"id": "ifeval-1897", "response": "", "expected": [false, false]}
+{"id": "ifeval-1897", "response": "Section 1 x", "expected": [false, true]}
+{"id": "ifeval-1551", "response": "<<Title>>", "expected": [true]}
+{"id": "ifeval-1551", "response": "", "expected": [false]}
+{"id": "ifeval-3732", "response": "festival[x] [y]\"\n[x] [y]**bold**river***\"[x] [y]the ", "expected": [true]}
+{"id": "ifeval-3732", "response": "", "expected": [false]}
+{"id": "ifeval-1675", "response": "\"", "expected": [true]}
+{"id": "ifeval-1675", "response": "", "expected": [false]}
+{"id": "ifeval-3538", "response": "", "expected": [false, false]}
+{"id": "ifeval-3538", "response": "bombs***", "expected": [true, false]}
+{"id": "ifeval-201", "response": "***", "expected": [true]}
+{"id": "ifeval-201", "response": "", "expected": [false]}
+{"id": "ifeval-2549", "response": "", "expected": [false, false, false]}
+{"id": "ifeval-2549", "response": "\" bondingP.P.S \"Quoted\"", "expected": [false, false, true]}
+{"id": "ifeval-2549", "response": "<< >>{\"a\": 1}<< >><< >>hearts gao<< >>z{\"a\": 1}", "expected": [false, true, false]}
+{"id": "ifeval-2549", "response": "Which was the better team in the 1987-88 season: Tottenham Hotspur or Stockton? Your answer must be exactly 3 paragraphs where paragraphs and only paragraphs are separated by two new lines, as if they were '\\n\\n' in python. The third paragraph must start with the word bonding. Include keywords gao and hearts in the response. At the end of your response, please add a postscript starting with P.P.S", "expected": [false, true, true]}
+{"id": "ifeval-2118", "response": "", "expected": [false, false]}
+{"id": "ifeval-2118", "response": "a *** * c\n* d\n\n******\n******[x] [y][x] [y]\n\n* a\nP.S. thanks* a\n- b\n[x] [y]", "expected": [false, true]}
+{"id": "ifeval-2118", "response": "Write a rap for moms about the pros and cons of breast feeding versus formula. The rap song should have exactly 3 paragraphs each separated by *** and exactly 3 bullet points in markdown format.*hi*\"Quoted\"Write a rap for moms about the pros and cons of breast feeding versus formula. The rap song should have exactly 3 paragraphs each separated by *** and exactly 3 bullet points in markdown format.Is there anything else I can help with?My answer is yes.My answer is yes.,", "expected": [true, false]}
+{"id": "ifeval-3425", "response": "", "expected": [false]}
+{"id": "ifeval-1825", "response": "", "expected": [false, false, false]}
+{"id": "ifeval-1825", "response": "* a\n", "expected": [true, false, false]}
+{"id": "ifeval-1825", "response": "P.P.S <<Title>>P.P.S", "expected": [true, true, false]}
+{"id": "ifeval-1825", "response": "architecture **bold*** a\nP.S. thanksMy answer is yes.model P.P.S, *** model ", "expected": [false, true, false]}
+{"id": "ifeval-2475", "response": "[x] [y]the \"P.S. thanks* c\n* d\nLet me know if you have additional questions.", "expected": [true]}
+{"id": "ifeval-2475", "response": "", "expected": [false]}
+{"id": "ifeval-3409", "response": "", "expected": [false, false]}
+{"id": "ifeval-3409", "response": "\"Can you write me a slogan for my video game project? The project aims to create a very funny fighting game. Please wrap your entire response with double quotation marks. Also, highlight at least three sections in your answer in markdown format using *highlighted text*. Such as: *Funny Fighting*.\"", "expected": [true, false]}
+{"id": "ifeval-3409", "response": "******<< >>Can you write me a slogan for my video game project? The project aims to create a very funny fighting game. Please wrap your entire response with double quotation marks. Also, highlight at least three sections in your answer in markdown format using *highlighted text*. Such as: *Funny Fighting*.\"*hi**hi*\"{\"a\": 1}", "expected": [false, true]}
+{"id": "ifeval-2355", "response": "Wherefore doth people consider the 2nd Amendment to be outdated? Answer in a Shakespearean style. ", "expected": [true]}
+{"id": "ifeval-2355", "response": "", "expected": [false]}
+{"id": "ifeval-1332", "response": "***\n******\n**** a\n", "expected": [true]}
+{"id": "ifeval-1332", "response": "", "expected": [false]}
+{"id": "ifeval-1927", "response": "", "expected": [false]}
+{"id": "ifeval-1759", "response": "P.S. thanks", "expected": [true]}
+{"id": "ifeval-1759", "response": "", "expected": [false]}
+{"id": "ifeval-3757", "response": "\"Quoted\"the the  *** My answer is yes.The [name]Any other questions?", "expected": [true]}
+{"id": "ifeval-3757", "response": "", "expected": [false]}
+{"id": "ifeval-1075", "response": "\"Can you help me make an advertisement for a new product? It's a diaper that's designed to be more comfortable for babies and I want the entire output in JSON format.\"", "expected": [true]}
+{"id": "ifeval-1075", "response": "", "expected": [false]}
+{"id": "ifeval-1127", "response": "", "expected": [false, false]}
+{"id": "ifeval-1127", "response": "*hi*aCan I get my money back for the classes I missed? ", "expected": [false, true]}
+{"id": "ifeval-102", "response": "P.S. thanks\"The \n******\n* c\n* d\n- b\n *** ", "expected": [true]}
+{"id": "ifeval-102", "response": "", "expected": [false]}
+{"id": "ifeval-2790", "response": "* a\n*hi*******", "expected": [true]}
+{"id": "ifeval-2790", "response": "", "expected": [false]}
+{"id": "ifeval-2969", "response": "\n\n,<<Title>> ", "expected": [true]}
+{"id": "ifeval-2969", "response": "", "expected": [false]}
+{"id": "ifeval-3439", "response": "Write an HTML page that lists 25 limericks about people named \"Bill\". The page should include keywords 'economist', 'bill', and 'jurgen'", "expected": [true]}
+{"id": "ifeval-3439", "response": "", "expected": [false]}
+{"id": "ifeval-1936", "response": "", "expected": [false, false]}
+{"id": "ifeval-1936", "response": "z", "expected": [true, false]}
+{"id": "ifeval-1936", "response": "Write a rubric, in the form of a list of bullet points, for evaluating the performance of a customer service representative. Your answer must not include keywords ['bad', 'underperform'] and must contain exactly 6 bullet points in the following form:\n* Bullet point 1\n* Bullet point 2\n* Bullet point 3\n* Bullet point 4\n* Bullet point 5\n* Bullet point 6", "expected": [false, true]}
+{"id": "ifeval-1342", "response": "", "expected": [false, false, false]}
+{"id": "ifeval-1342", "response": "z", "expected": [true, false, false]}
+{"id": "ifeval-1342", "response": "\" *** << >>* a\n******\"aIs there anything else I can help with?*hi** c\n* d\n*hi*photography P.S. thanks", "expected": [false, true, false]}
+{"id": "ifeval-1342", "response": "```json\n{\"a\":1}\n```My answer is yes.\"Quoted\"Section 1 x**bold**[name]word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word z**bold****bold**", "expected": [true, true, false]}
+{"id": "ifeval-1402", "response": "", "expected": [false, false]}
+{"id": "ifeval-1402", "response": "p z", "expected": [false, true]}
+{"id": "ifeval-181", "response": "", "expected": [false]}
+{"id": "ifeval-1377", "response": "Write a planning doc for a software engineer task. Follow the exact format below:\n\nPart 1. Task Summary\n[put details here]\n***\nPart 2. Motivation\n[put details here]\n***\nPart 3. Milestone objectives\n[put details here]\n***\nPart 4. Timeline\n[put details here]\n***\nPart 5. Doc history\n[put details here]", "expected": [true]}
+{"id": "ifeval-1377", "response": "", "expected": [false]}
+{"id": "ifeval-2243", "response": "the ", "expected": [true]}
+{"id": "ifeval-2243", "response": "", "expected": [false]}
+{"id": "ifeval-3615", "response": "- b\n", "expected": [true]}
+{"id": "ifeval-3615", "response": "", "expected": [false]}
+{"id": "ifeval-1233", "response": "", "expected": [false, false]}
+{"id": "ifeval-1233", "response": "Is there anything else I can help with? ", "expected": [true, false]}
+{"id": "ifeval-122", "response": "\"Write a blog post about the history of the internet and how it has impacted our lives. Aim the blog post at teenagers and wrap your entire response with double quotation marks.\"", "expected": [true]}
+{"id": "ifeval-122", "response": "", "expected": [false]}
+{"id": "ifeval-357", "response": "SECTION 1\nalpha\n\nSECTION 2\nbeta\n\nSECTION 3\ngamma", "expected": [true]}
+{"id": "ifeval-357", "response": "SECTION 1\nalpha\n\nSECTION 2\nbeta", "expected": [false]}
+{"id": "ifeval-1548", "response": "Section 1 a\nSECTION 2 b\nSECTION 3 c\nSECTION 4 d", "expected": [false]}
+{"id": "ifeval-2250", "response": "one\n\ntwo\n\nthree\n\nelm trees line the road.", "expected": [true]}
+{"id": "ifeval-2250", "response": "one\n\ntwo\n\nthree\n\nElm, trees.", "expected": [true]}
+{"id": "ifeval-2250", "response": "one\n\ntwo\n\nthree\n\noak trees.", "expected": [false]}
+{"id": "ifeval-2250", "response": "one\n\ntwo\n\nelm", "expected": [false]}
+{"id": "ifeval-181", "response": "intro\n\npresident speaks\n\nc\n\nd\n\ne\n\nf", "expected": [true]}
+{"id": "ifeval-181", "response": "intro\n\n\n\npresident speaks\n\nc\n\nd\n\ne\n\nf", "expected": [false]}
+{"id": "ifeval-2549", "response": "a\n\nb\n\nbonding with gao hearts\n\nP.P.S done", "expected": [false, true, true]}
