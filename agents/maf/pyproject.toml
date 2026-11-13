@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cicd-agent"
+version = "0.2.0"
+description = "CI/CD Optimizer agent on Microsoft Agent Framework, traced and rewarded with Agent Lightning."
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+  "agent-framework-core==1.25.0",
+  "agent-framework-openai==1.18.1",
+  "agentlightning==1.0.3",
+  "azure-identity==1.27.0",
+  "httpx==0.28.1",
+  "mcp==2.3.0",
+  "openai==3.46.0",
+  "pydantic==2.14.3",
+  "starlette==1.10.0",
+  "uvicorn==0.54.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.2.0"]
+
+[project.scripts]
+cicd-agent = "cicd_agent.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["cicd_agent*"]
+
+[tool.setuptools.package-data]
+"cicd_agent.benchmarks" = ["data/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

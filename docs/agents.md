@@ -11,6 +11,7 @@ write access. The shipped interfaces are:
 | GitHub App `/acp` | Opt-in ACP v1 HTTP/SSE | Authenticated repository scans, run reports, and built-in rule documentation; **no server-local filesystem access** |
 | GitHub App `/mcp` | Opt-in stateless MCP over HTTP | Authenticated read-only repository tools; **no server-local filesystem access** |
 | [Agent plugin](../plugins/ci-cd-optimizer/) | Bundled MCP server, skills, and custom agent | The canonical developer-agent integration, requiring Node.js 22+ but no dependency installation or build |
+| [MAF agent](maf-agent.md) | Python CLI, or HTTP with an API key | The plugin's agent hosted on Microsoft Agent Framework with Agent Lightning tracing, benchmarks and hill-climbing tracks; deployable to your own Azure subscription |
 
 These are implemented transports, not a public hosted service. There is **no public deployment or npm registry
 release**. Build/install a checkout, use its committed plugin bundle, or enable an endpoint on infrastructure you operate.
@@ -672,6 +673,24 @@ deployment's local workspace or installation credentials; each repository read r
 and pinned ID. Browser-origin requests, query parameters, batches and other HTTP methods are rejected. The MCP UI
 communicates through the host bridge, not by sending credentials from the iframe. The endpoint must not share the
 webhook path. In-process quotas are not a substitute for reverse-proxy limits.
+
+## Microsoft Agent Framework host
+
+[`agents/maf`](../agents/maf/) hosts the plugin's custom agent on Microsoft Agent Framework. It loads the same
+instructions and skills, and calls the same bundled read-only MCP server, so it adds no tools of its own. Its policy
+file runs as function middleware (tool allowlist, call, iteration and time budgets, result clipping, root
+confinement), and Agent Lightning records every model call, tool call and reward.
+
+It adds what the plugin alone does not have:
+
+- `chat` and an HTTP service (`/chat`, bearer API key) that you can [deploy to Azure](maf-agent.md#deploy-to-azure);
+- graded benchmarks: `behavior` and `grounding` for this agent's own procedures, and pinned IFEval and CRUXEval-O
+  subsets for chat instruction following and code understanding;
+- three separate hill-climbing tracks (`skill`, `agent`, `harness`) with held-out test splits, A/A noise floors and
+  paired sign tests. Climbs stage proposals; they never edit maintained files.
+
+Results, limits and commands are in [maf-agent.md](maf-agent.md). They are separate from the
+[skill-activation and feedback evaluations](#evaluate-skill-activation) above, which run the Copilot CLI.
 
 ## Bounds, cancellation, and interpretation
 

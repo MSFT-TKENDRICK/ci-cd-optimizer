@@ -8,4 +8,5 @@ formal/** text eol=lf
 formal/rule-assurance.json linguist-generated=true
 src/formal/generated/** linguist-generated=true text eol=lf
 scripts/formal*.mjs text eol=lf
+infra/azure/azuredeploy.json linguist-generated=true text eol=lf
 test/telemetry/fixtures/** text eol=lf whitespace=-blank-at-eol

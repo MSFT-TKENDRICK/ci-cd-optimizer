@@ -6,3 +6,6 @@ coverage
 .env
 *.pem
 *.log
+.agent-artifacts
+**/__pycache__
+**/.pytest_cache

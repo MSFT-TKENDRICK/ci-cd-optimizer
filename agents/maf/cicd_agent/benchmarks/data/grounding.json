@@ -1,0 +1,62 @@
+[
+ {
+  "files": {
+   ".github/workflows/ci.yml": "name: CI\non:\n  push:\n  pull_request:\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n      - run: npm install\n      - run: npm test\n",
+   "package-lock.json": "{\"name\":\"demo\",\"version\":\"1.0.0\",\"lockfileVersion\":3,\"requires\":true,\"packages\":{\"\":{\"name\":\"demo\",\"version\":\"1.0.0\"}}}\n",
+   "package.json": "{\"name\":\"demo\",\"version\":\"1.0.0\",\"scripts\":{\"test\":\"node --test\"}}\n"
+  },
+  "id": "train-node-ci",
+  "note": "Node CI without caching, timeouts or concurrency",
+  "split": "train"
+ },
+ {
+  "files": {
+   ".github/workflows/image.yml": "name: Image\non:\n  push:\n    branches: [main]\npermissions:\n  contents: read\n  packages: write\njobs:\n  image:\n    runs-on: ubuntu-latest\n    timeout-minutes: 30\n    steps:\n      - uses: actions/checkout@v4\n      - uses: docker/setup-buildx-action@v3\n      - uses: docker/build-push-action@v6\n        with:\n          context: .\n          push: true\n          tags: ghcr.io/example/app:latest\n",
+   "Dockerfile": "FROM node:20\nWORKDIR /app\nCOPY . .\nRUN npm install\nRUN npm run build\nCMD [\"node\", \"dist/index.js\"]\n",
+   "package.json": "{\"name\":\"svc\",\"version\":\"1.0.0\",\"scripts\":{\"build\":\"tsc\"}}\n"
+  },
+  "id": "train-docker",
+  "note": "Container build without layer caching or dependency layer ordering",
+  "split": "train"
+ },
+ {
+  "files": {
+   ".github/workflows/test.yml": "name: Test\non: [pull_request]\npermissions:\n  contents: read\nconcurrency:\n  group: test-${{ github.event.pull_request.number }}\n  cancel-in-progress: true\njobs:\n  pytest:\n    runs-on: ubuntu-22.04\n    timeout-minutes: 20\n    strategy:\n      matrix:\n        python: [\"3.10\", \"3.11\", \"3.12\"]\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: ${{ matrix.python }}\n      - run: pip install -r requirements.txt\n      - run: pytest -q\n",
+   "requirements.txt": "requests\npytest\n"
+  },
+  "id": "val-python",
+  "note": "Python matrix without pip caching or pinned requirements",
+  "split": "val"
+ },
+ {
+  "files": {
+   ".github/workflows/ci.yml": "name: CI\non:\n  pull_request:\npermissions:\n  contents: read\nconcurrency:\n  group: ci-${{ github.event.pull_request.number }}\n  cancel-in-progress: true\njobs:\n  test:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 15\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6\n      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6\n        with:\n          node-version-file: .nvmrc\n          cache: npm\n      - run: npm ci\n      - run: npm test\n",
+   ".nvmrc": "22\n",
+   "package-lock.json": "{\"name\":\"tidy\",\"version\":\"1.0.0\",\"lockfileVersion\":3,\"requires\":true,\"packages\":{\"\":{\"name\":\"tidy\",\"version\":\"1.0.0\"}}}\n",
+   "package.json": "{\"name\":\"tidy\",\"version\":\"1.0.0\",\"scripts\":{\"test\":\"node --test\"}}\n"
+  },
+  "id": "val-pinned",
+  "note": "Mostly well-configured workflow; few or no findings",
+  "split": "val"
+ },
+ {
+  "files": {
+   ".github/workflows/apps.yml": "name: Apps\non:\n  pull_request:\n  push:\n    branches: [main]\njobs:\n  web:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: pnpm/action-setup@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n      - run: pnpm install\n      - run: pnpm --filter web build\n  api:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: pnpm/action-setup@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n      - run: pnpm install\n      - run: pnpm --filter api build\n",
+   "package.json": "{\"name\":\"mono\",\"private\":true,\"packageManager\":\"pnpm@9.12.0\"}\n",
+   "pnpm-lock.yaml": "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
+   "pnpm-workspace.yaml": "packages:\n  - apps/*\n"
+  },
+  "id": "test-monorepo",
+  "note": "pnpm monorepo with duplicated install jobs",
+  "split": "test"
+ },
+ {
+  "files": {
+   ".github/workflows/release.yml": "name: Release\non:\n  push:\n    tags: ['v*']\npermissions: write-all\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@main\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n          registry-url: https://registry.npmjs.org\n      - run: npm install\n      - run: npm publish\n        env:\n          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}\n      - run: curl -sSL https://example.com/install.sh | bash\n",
+   "package.json": "{\"name\":\"lib\",\"version\":\"2.0.0\"}\n"
+  },
+  "id": "test-release",
+  "note": "Release workflow with broad permissions and unpinned installers",
+  "split": "test"
+ }
+]

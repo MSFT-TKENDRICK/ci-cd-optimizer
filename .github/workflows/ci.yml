@@ -109,6 +109,68 @@ jobs:
       - name: Exercise model adapters, immutable sources, adversarial certificates and production selection
         run: npx vitest run test/formal test/experiments/formal-integration.test.ts
 
+  maf:
+    # The Microsoft Agent Framework agent (docs/maf-agent.md): unit, benchmark-scoring and deploy-template checks.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: agents/maf/requirements*.txt
+      - run: pip install -r agents/maf/requirements.txt -r agents/maf/requirements-dev.txt
+      - name: Agent, server, policy, benchmark scorers, climb engine and template contract
+        run: python -m pytest -q
+        working-directory: agents/maf
+      - name: Behavior grading and skill evolution
+        run: python -m pytest -q evals/feedback/test_behavior.py evals/feedback/test_evolve.py
+        env:
+          PYTHONPATH: agents/maf:evals/feedback
+      # The template check needs only Node built-ins and the SHA-256-pinned Bicep CLI, not npm dependencies.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .agent-artifacts/tools
+          key: bicep-${{ runner.os }}-${{ hashFiles('scripts/azure-template.mjs') }}
+      - name: Deploy to Azure template matches main.bicep
+        run: node scripts/azure-template.mjs --check
+
+  maf-image:
+    # Builds the agent image the Deploy to Azure template runs and checks it serves health and enforces auth.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: ${{ runner.environment != 'github-hosted' }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: agents/maf/Dockerfile
+          load: true
+          push: false
+          tags: cicd-maf-agent:smoke
+          cache-from: type=gha,scope=maf-image
+          cache-to: type=gha,mode=max,scope=maf-image
+      - name: Healthy without a model call, and /chat rejects a missing bearer token
+        run: |
+          docker run -d --name maf-smoke -p 8000:8000 -e CICD_AGENT_API_KEY="$(openssl rand -hex 24)" cicd-maf-agent:smoke
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8000/healthz && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/healthz
+          status=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"message":"hi"}' http://127.0.0.1:8000/chat)
+          test "$status" = 401 || { echo "expected 401 from /chat without a token, got $status"; exit 1; }
+      - name: Container log
+        if: always()
+        run: docker logs maf-smoke || true
+
   lint-reusable:
     # Dogfoods the reusable linter workflow at this commit; callers pin `uses:` and `tool-ref` to a SHA.
     uses: ./.github/workflows/lint-reusable.yml

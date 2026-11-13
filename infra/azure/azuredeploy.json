@@ -1,0 +1,450 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.44.1.10279",
+      "templateHash": "12179036093001836899"
+    },
+    "description": "Deploys the CI/CD Optimizer Microsoft Agent Framework (MAF) agent to Azure Container Apps. ACR Tasks builds agents/maf/Dockerfile from source unless containerImage is set; the app reaches Azure OpenAI through a user-assigned managed identity (no model keys)."
+  },
+  "parameters": {
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "cicdagent",
+      "minLength": 3,
+      "maxLength": 12,
+      "metadata": {
+        "description": "Lowercase letters and digits used to name every resource."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Region for the container app, registry and logs."
+      }
+    },
+    "apiKey": {
+      "type": "securestring",
+      "minLength": 32,
+      "metadata": {
+        "description": "Bearer token callers send to POST /chat (at least 32 characters). Stored only as a Container Apps secret."
+      }
+    },
+    "containerImage": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional prebuilt public image. Leave empty to build agents/maf/Dockerfile from sourceRepository with ACR Tasks."
+      }
+    },
+    "sourceRepository": {
+      "type": "string",
+      "defaultValue": "https://github.com/MSFT-TKENDRICK/ci-cd-optimizer.git",
+      "metadata": {
+        "description": "Public Git repository that ACR Tasks builds when containerImage is empty."
+      }
+    },
+    "sourceBranch": {
+      "type": "string",
+      "defaultValue": "main",
+      "metadata": {
+        "description": "Branch, tag or commit of sourceRepository to build."
+      }
+    },
+    "buildTag": {
+      "type": "string",
+      "defaultValue": "[utcNow('yyyyMMddHHmmss')]",
+      "metadata": {
+        "description": "Image tag for the source build; the default rebuilds and rolls a new revision on every deployment."
+      }
+    },
+    "azureOpenAiEndpoint": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional existing Azure OpenAI endpoint. Leave empty to create an account and deployment; otherwise grant the output identity 'Cognitive Services OpenAI User' on that account."
+      }
+    },
+    "openAiLocation": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Region for the new Azure OpenAI account; it must offer modelName with modelSku."
+      }
+    },
+    "modelDeploymentName": {
+      "type": "string",
+      "defaultValue": "gpt-5.2",
+      "metadata": {
+        "description": "Model deployment name the agent calls (created when azureOpenAiEndpoint is empty)."
+      }
+    },
+    "modelName": {
+      "type": "string",
+      "defaultValue": "gpt-5.2",
+      "metadata": {
+        "description": "Azure OpenAI model; gpt-5.2 is the model the repository's evaluations used."
+      }
+    },
+    "modelVersion": {
+      "type": "string",
+      "defaultValue": "2025-12-11",
+      "metadata": {
+        "description": "Model version for modelName."
+      }
+    },
+    "modelSku": {
+      "type": "string",
+      "defaultValue": "GlobalStandard",
+      "allowedValues": [
+        "GlobalStandard",
+        "DataZoneStandard",
+        "Standard"
+      ],
+      "metadata": {
+        "description": "Deployment type for the new model deployment."
+      }
+    },
+    "modelCapacity": {
+      "type": "int",
+      "defaultValue": 50,
+      "minValue": 1,
+      "metadata": {
+        "description": "Model capacity in thousands of tokens per minute; requires matching quota."
+      }
+    },
+    "minReplicas": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "maxValue": 10,
+      "metadata": {
+        "description": "0 scales to zero when idle; the first request then waits for a cold start."
+      }
+    },
+    "maxReplicas": {
+      "type": "int",
+      "defaultValue": 3,
+      "minValue": 1,
+      "maxValue": 30,
+      "metadata": {
+        "description": "Upper bound for HTTP-driven scale-out."
+      }
+    },
+    "maxConcurrency": {
+      "type": "int",
+      "defaultValue": 2,
+      "minValue": 1,
+      "maxValue": 16,
+      "metadata": {
+        "description": "Concurrent /chat requests per replica; extra requests receive 429 and the HTTP scale rule adds replicas."
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id, parameters('namePrefix'))]",
+    "buildImage": "[empty(parameters('containerImage'))]",
+    "createOpenAi": "[empty(parameters('azureOpenAiEndpoint'))]",
+    "imageRepository": "cicd-maf-agent",
+    "port": 8000,
+    "acrPullRoleId": "7f951dda-4ed3-4680-a7ca-43fe172d538d",
+    "openAiUserRoleId": "5e0bd9bd-7b93-4f28-af87-19fc36ad61bd"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2025-02-01",
+      "name": "[format('{0}-logs-{1}', parameters('namePrefix'), variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2024-11-30",
+      "name": "[format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "condition": "[variables('buildImage')]",
+      "type": "Microsoft.ContainerRegistry/registries",
+      "apiVersion": "2025-04-01",
+      "name": "[format('{0}acr{1}', parameters('namePrefix'), variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Basic"
+      },
+      "properties": {
+        "adminUserEnabled": false,
+        "anonymousPullEnabled": false,
+        "publicNetworkAccess": "Enabled"
+      }
+    },
+    {
+      "condition": "[variables('buildImage')]",
+      "type": "Microsoft.ContainerRegistry/registries/taskRuns",
+      "apiVersion": "2025-03-01-preview",
+      "name": "[format('{0}/{1}', format('{0}acr{1}', parameters('namePrefix'), variables('suffix')), 'build-agent')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "forceUpdateTag": "[parameters('buildTag')]",
+        "runRequest": {
+          "type": "DockerBuildRequest",
+          "dockerFilePath": "agents/maf/Dockerfile",
+          "imageNames": [
+            "[format('{0}:{1}', variables('imageRepository'), parameters('buildTag'))]",
+            "[format('{0}:latest', variables('imageRepository'))]"
+          ],
+          "isPushEnabled": true,
+          "noCache": false,
+          "platform": {
+            "os": "Linux",
+            "architecture": "amd64"
+          },
+          "sourceLocation": "[format('{0}#{1}', parameters('sourceRepository'), parameters('sourceBranch'))]",
+          "timeout": 3600
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ContainerRegistry/registries', format('{0}acr{1}', parameters('namePrefix'), variables('suffix')))]"
+      ]
+    },
+    {
+      "condition": "[variables('buildImage')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.ContainerRegistry/registries', format('{0}acr{1}', parameters('namePrefix'), variables('suffix')))]",
+      "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', format('{0}acr{1}', parameters('namePrefix'), variables('suffix'))), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))), variables('acrPullRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('acrPullRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))), '2024-11-30').principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix')))]",
+        "[resourceId('Microsoft.ContainerRegistry/registries', format('{0}acr{1}', parameters('namePrefix'), variables('suffix')))]"
+      ]
+    },
+    {
+      "condition": "[variables('createOpenAi')]",
+      "type": "Microsoft.CognitiveServices/accounts",
+      "apiVersion": "2025-06-01",
+      "name": "[format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix'))]",
+      "location": "[parameters('openAiLocation')]",
+      "kind": "OpenAI",
+      "sku": {
+        "name": "S0"
+      },
+      "properties": {
+        "customSubDomainName": "[format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix'))]",
+        "disableLocalAuth": true,
+        "publicNetworkAccess": "Enabled"
+      }
+    },
+    {
+      "condition": "[variables('createOpenAi')]",
+      "type": "Microsoft.CognitiveServices/accounts/deployments",
+      "apiVersion": "2025-06-01",
+      "name": "[format('{0}/{1}', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix')), parameters('modelDeploymentName'))]",
+      "sku": {
+        "name": "[parameters('modelSku')]",
+        "capacity": "[parameters('modelCapacity')]"
+      },
+      "properties": {
+        "model": {
+          "format": "OpenAI",
+          "name": "[parameters('modelName')]",
+          "version": "[parameters('modelVersion')]"
+        },
+        "versionUpgradeOption": "NoAutoUpgrade"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.CognitiveServices/accounts', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix')))]"
+      ]
+    },
+    {
+      "condition": "[variables('createOpenAi')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.CognitiveServices/accounts', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix')))]",
+      "name": "[guid(resourceId('Microsoft.CognitiveServices/accounts', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix'))), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))), variables('openAiUserRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('openAiUserRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))), '2024-11-30').principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix')))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2025-01-01",
+      "name": "[format('{0}-env-{1}', parameters('namePrefix'), variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs-{1}', parameters('namePrefix'), variables('suffix'))), '2025-02-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs-{1}', parameters('namePrefix'), variables('suffix'))), '2025-02-01').primarySharedKey]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs-{1}', parameters('namePrefix'), variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2025-01-01",
+      "name": "[format('{0}-app', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))))]": {}
+        }
+      },
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env-{1}', parameters('namePrefix'), variables('suffix')))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": "[variables('port')]",
+            "transport": "auto",
+            "allowInsecure": false
+          },
+          "secrets": [
+            {
+              "name": "api-key",
+              "value": "[parameters('apiKey')]"
+            }
+          ],
+          "registries": "[if(variables('buildImage'), createArray(createObject('server', reference(resourceId('Microsoft.ContainerRegistry/registries', format('{0}acr{1}', parameters('namePrefix'), variables('suffix'))), '2025-04-01').loginServer, 'identity', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))))), createArray())]"
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "agent",
+              "image": "[if(variables('buildImage'), format('{0}/{1}:{2}', reference(resourceId('Microsoft.ContainerRegistry/registries', format('{0}acr{1}', parameters('namePrefix'), variables('suffix'))), '2025-04-01').loginServer, variables('imageRepository'), parameters('buildTag')), parameters('containerImage'))]",
+              "resources": {
+                "cpu": "[json('1.0')]",
+                "memory": "2Gi"
+              },
+              "env": [
+                {
+                  "name": "CICD_AGENT_API_KEY",
+                  "secretRef": "api-key"
+                },
+                {
+                  "name": "CICD_AGENT_MAX_CONCURRENCY",
+                  "value": "[string(parameters('maxConcurrency'))]"
+                },
+                {
+                  "name": "AZURE_CLIENT_ID",
+                  "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))), '2024-11-30').clientId]"
+                },
+                {
+                  "name": "AZURE_OPENAI_ENDPOINT",
+                  "value": "[if(variables('createOpenAi'), reference(resourceId('Microsoft.CognitiveServices/accounts', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix'))), '2025-06-01').endpoint, parameters('azureOpenAiEndpoint'))]"
+                },
+                {
+                  "name": "AZURE_OPENAI_DEPLOYMENT",
+                  "value": "[parameters('modelDeploymentName')]"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "Startup",
+                  "httpGet": {
+                    "path": "/healthz",
+                    "port": "[variables('port')]"
+                  },
+                  "periodSeconds": 5,
+                  "failureThreshold": 24
+                },
+                {
+                  "type": "Readiness",
+                  "httpGet": {
+                    "path": "/healthz",
+                    "port": "[variables('port')]"
+                  },
+                  "periodSeconds": 10
+                },
+                {
+                  "type": "Liveness",
+                  "httpGet": {
+                    "path": "/healthz",
+                    "port": "[variables('port')]"
+                  },
+                  "periodSeconds": 30,
+                  "failureThreshold": 3
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('minReplicas')]",
+            "maxReplicas": "[parameters('maxReplicas')]",
+            "rules": [
+              {
+                "name": "http-concurrency",
+                "http": {
+                  "metadata": {
+                    "concurrentRequests": "[string(parameters('maxConcurrency'))]"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', format('{0}acr{1}', parameters('namePrefix'), variables('suffix'))), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', format('{0}acr{1}', parameters('namePrefix'), variables('suffix'))), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))), variables('acrPullRoleId')))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix')))]",
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env-{1}', parameters('namePrefix'), variables('suffix')))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts/deployments', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix')), parameters('modelDeploymentName'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix')))]",
+        "[extensionResourceId(resourceId('Microsoft.CognitiveServices/accounts', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix'))), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.CognitiveServices/accounts', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix'))), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))), variables('openAiUserRoleId')))]",
+        "[resourceId('Microsoft.ContainerRegistry/registries', format('{0}acr{1}', parameters('namePrefix'), variables('suffix')))]",
+        "[resourceId('Microsoft.ContainerRegistry/registries/taskRuns', format('{0}acr{1}', parameters('namePrefix'), variables('suffix')), 'build-agent')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "agentUrl": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.App/containerApps', format('{0}-app', parameters('namePrefix'))), '2025-01-01').configuration.ingress.fqdn)]"
+    },
+    "healthUrl": {
+      "type": "string",
+      "value": "[format('https://{0}/healthz', reference(resourceId('Microsoft.App/containerApps', format('{0}-app', parameters('namePrefix'))), '2025-01-01').configuration.ingress.fqdn)]"
+    },
+    "chatUrl": {
+      "type": "string",
+      "value": "[format('https://{0}/chat', reference(resourceId('Microsoft.App/containerApps', format('{0}-app', parameters('namePrefix'))), '2025-01-01').configuration.ingress.fqdn)]"
+    },
+    "azureOpenAiEndpoint": {
+      "type": "string",
+      "value": "[if(variables('createOpenAi'), reference(resourceId('Microsoft.CognitiveServices/accounts', format('{0}-aoai-{1}', parameters('namePrefix'), variables('suffix'))), '2025-06-01').endpoint, parameters('azureOpenAiEndpoint'))]"
+    },
+    "identityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-id-{1}', parameters('namePrefix'), variables('suffix'))), '2024-11-30').principalId]"
+    },
+    "image": {
+      "type": "string",
+      "value": "[if(variables('buildImage'), format('{0}/{1}:{2}', reference(resourceId('Microsoft.ContainerRegistry/registries', format('{0}acr{1}', parameters('namePrefix'), variables('suffix'))), '2025-04-01').loginServer, variables('imageRepository'), parameters('buildTag')), parameters('containerImage'))]"
+    }
+  }
+}
