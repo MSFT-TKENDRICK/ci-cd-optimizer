@@ -1,0 +1,36 @@
+name: shorten-formal-job
+title: Shorten the formal verification job in CI
+hypothesis: The `formal` job serially runs npm ci, assurance check, a fresh download+unzip of the SHA-256-pinned Dafny/Z3 distribution (scripts/formal-toolchain.mjs, which already reuses a verified .proof-tools/(version) directory when present), Dafny verification, and a vitest run. Persisting the pinned toolchain between runs, or splitting the serial steps across parallel jobs, should cut the job duration and thereby CI wall-clock when it sits on the critical path.
+kind: pipeline
+metrics:
+  - ciWallClock
+  - ciTestJob
+rubric:
+  scores:
+    impact: 3
+    evidence: 3
+    safety: 4
+    generality: 4
+    measurability: 4
+  rationale: "Impact 3: the formal job (15 min timeout, four serial stages) is a plausible critical-path contributor, but the previous experiment targeted the app smoke job, so the savings here are uncertain. Evidence 3: derived from reading ci.yml and scripts/formal-toolchain.mjs (the script already supports toolchain reuse, no cache is configured) rather than measured telemetry; no CI telemetry was supplied. Safety 4: the toolchain stays SHA-256 verified by checkToolchain on reuse, and the change is confined to ci.yml and easy to revert. Generality 4: caching downloaded verified tool distributions and splitting serial checks transfers to other repositories. Measurability 4: ciWallClock and ciTestJob from ci.yml runs capture it."
+arms:
+  - name: cache-proof-tools
+    title: Cache .proof-tools keyed on formal/toolchain.json
+    approach: "In .github/workflows/ci.yml, job `formal` only: add an actions/cache step (reuse the SHA-pinned actions/cache ref already used in the `maf` job) before \"Install SHA-256-pinned Dafny and Z3\", with path `.proof-tools` and key `proof-tools-${{ runner.os }}-${{ hashFiles('formal/toolchain.json') }}`. Do not change scripts/formal-toolchain.mjs; it re-verifies hashes on reuse. Do not touch other jobs, corpus/, .github/hill-climb.yml or experiments/*/experiment.yml."
+  - name: parallel-formal-jobs
+    title: Split formal into parallel jobs
+    approach: "In .github/workflows/ci.yml, split job `formal` into two parallel jobs with the same runner and timeouts: one running `npm run assurance:check` and the vitest run over test/formal and test/experiments/formal-integration.test.ts, the other running `npm run formal:setup` and `npm run formal:check`. Both use the existing ./.github/actions/setup composite action and SHA-pinned checkout. Keep every command and the job name `formal` for the Dafny job so existing required checks still match; name the new job `formal-tests`. Do not touch other jobs, corpus/, .github/hill-climb.yml or experiments/*/experiment.yml."
+createdAt: 2026-11-16T18:57:04.354Z
+expiresAt: 2026-11-30T18:57:04.354Z
+status: running
+applicability:
+  rules:
+    - caching/build-tool-cache
+    - redundancy/rebuild-per-job
+  files:
+    - .github/workflows/*.yml
+  description: Workflows that download a pinned verification toolchain on every run or serialize independent checks within one job.
+source:
+  findings:
+    - redundancy/rebuild-per-job
+  notes: Based on .github/workflows/ci.yml (formal job) and scripts/formal-toolchain.mjs reuse logic; no telemetry available.
