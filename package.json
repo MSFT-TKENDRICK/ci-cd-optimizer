@@ -68,10 +68,10 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^2.4.0",
+    "@agentclientprotocol/sdk": "^2.7.0",
     "@modelcontextprotocol/server": "^2.4.0",
     "bignumber.js": "11.1.5",
-    "postgres": "^4.1.0",
+    "postgres": "^4.1.1",
     "probot": "^14.3.7",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
