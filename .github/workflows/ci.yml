@@ -73,7 +73,7 @@ jobs:
           push: false
           tags: ci-cd-optimizer:smoke
           cache-from: type=gha,scope=ci-smoke
-          cache-to: type=gha,mode=max,scope=ci-smoke
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,mode=max,scope=ci-smoke' || '' }}
       - name: Direct and durable production image
         run: |
           node test/service/container-postgres.mjs ready
@@ -158,7 +158,7 @@ jobs:
           push: false
           tags: cicd-maf-agent:smoke
           cache-from: type=gha,scope=maf-image
-          cache-to: type=gha,mode=max,scope=maf-image
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,mode=max,scope=maf-image' || '' }}
       - name: Healthy without a model call, and /chat rejects a missing bearer token
         run: |
           docker run -d --name maf-smoke -p 8000:8000 -e CICD_AGENT_API_KEY="$(openssl rand -hex 24)" cicd-maf-agent:smoke
