@@ -1,0 +1,41 @@
+name: gate-buildcache-export-main
+title: Stop exporting BuildKit GHA cache on pull-request runs
+hypothesis: The app job (critical path, 1m45s) spends 21s exporting a mode=max GHA build cache and maf-image spends 31s doing the same. Caches written by pull requests are only restorable by that PR, while main already read/writes the shared scope, so exporting on PR runs is pure overhead. Restricting or shrinking the export removes ~20s from app and, since maf-image has only 18s of slack, keeps it off the critical path too.
+kind: pipeline
+metrics:
+  - ciWallClock
+  - ciTestJob
+rubric:
+  scores:
+    impact: 3
+    evidence: 5
+    safety: 5
+    generality: 4
+    measurability: 4
+  rationale: "Impact 3: ~18-21s of a 1m51s run on the critical path (app), bounded by maf-image slack. Evidence 5: telemetry shows cache-to export 21.4s in app and 30.6s in maf-image, with refs/heads/main read/write scope and the CI bottleneck table's own upper bounds. Safety 5: only cache-to behavior changes; image contents, tests and required checks are untouched and revert is one line. Generality 4: applies to any repo using type=gha cache-to on PR builds (rules containers/gha-cache-mode-min, caching/pr-branch-cache-save). Measurability 4: ciWallClock and the app/maf-image step durations directly reflect it, though ciTestJob is mostly unaffected. New angle versus rejected shorten-app-smoke-job - this targets cache export on both container jobs by event type, not the smoke job body."
+arms:
+  - name: export-on-main-only
+    title: Export cache only on default-branch pushes
+    approach: "In .github/workflows/ci.yml, for the docker/build-push-action steps in the app job (scope=ci-smoke) and the maf-image job (scope=maf-image), make cache-to conditional: cache-to: $\\{\\{ github.ref == 'refs/heads/main' && 'type=gha,mode=max,scope=ci-smoke' || '' }} (and equivalent for maf-image). Keep cache-from unchanged. Verify the workflow still triggers on push to main so the cache is refreshed. Do not change other jobs, action pins, or Dockerfiles."
+  - name: mode-min-everywhere
+    title: Use mode=min cache export on all runs
+    approach: In .github/workflows/ci.yml change cache-to for the app (scope=ci-smoke) and maf-image (scope=maf-image) build steps from mode=max to mode=min so only final-stage layers are exported. Keep scopes and cache-from unchanged. Do not touch other files.
+  - name: main-max-pr-min
+    title: mode=max on main, mode=min on pull requests
+    approach: "In .github/workflows/ci.yml set cache-to for the app and maf-image build steps with an expression: on refs/heads/main use type=gha,mode=max,scope=(existing scope); otherwise use type=gha,mode=min,scope=(existing scope). Keep cache-from unchanged. Do not touch other files."
+createdAt: 2026-11-23T20:35:43.701Z
+expiresAt: 2026-12-07T20:35:43.701Z
+status: running
+applicability:
+  rules:
+    - containers/gha-cache-mode-min
+    - caching/pr-branch-cache-save
+    - caching/docker-layer-cache
+  files:
+    - .github/workflows/*.yml
+  description: Workflows using docker/build-push-action with cache-to type=gha,mode=max on pull-request runs.
+source:
+  findings:
+    - containers/cache-mount
+    - redundancy/rebuild-per-job
+  notes: CI run 43353319015 bottleneck table - app cache export 21.4s (critical path), maf-image cache export 30.6s with 18s slack.
